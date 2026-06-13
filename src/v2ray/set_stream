@@ -1,0 +1,516 @@
+V2raySetStreamTransport()
+{
+    echo
+    stream_transport_options=( 'TCP' 'WebSocket' 'mKCP' 'gRPC' 'QUIC' 'Meek' 'HTTPUpgrade' 'Hysteria2' )
+    stream_transports=( 'tcp' 'ws' 'kcp' 'grpc' 'quic' 'meek' 'httpupgrade' 'hysteria' )
+    inquirer list_input_index "选择传输层协议" stream_transport_options stream_transports_index
+    stream_transport=${stream_transports[stream_transports_index]}
+}
+
+V2raySetTcpProxyProtocol()
+{
+    echo
+    inquirer list_input_yn "是否接收 Proxy Protocol" ft_options tcp_accept_proxy_protocol
+}
+
+V2raySetWebSocketAcceptProxyProtocol()
+{
+    echo
+    inquirer list_input_yn "是否接收 Proxy Protocol" ft_options ws_accept_proxy_protocol
+}
+
+V2raySetWebSocketPath()
+{
+    echo
+    inquirer text_input "输入 WebSocket 所使用的 HTTP 协议路径" ws_path /
+}
+
+V2raySetWebSocketHeaders()
+{
+    ws_headers='{}'
+    while true 
+    do
+        echo
+        inquirer text_input "输入自定义 HTTP 头的名称: " ws_header_name "$i18n_blank"
+        if [ "$ws_header_name" == "$i18n_blank" ] 
+        then
+            break
+        fi
+        echo
+        inquirer text_input "输入自定义 HTTP 头 $ws_header_name 的值: " ws_header_value "$i18n_blank"
+        if [ "$ws_header_value" == "$i18n_blank" ] 
+        then
+            ws_header_value=""
+        fi
+        JQs merge ws_headers --arg header_name "$ws_header_name" \
+        --arg header_value "$ws_header_value" '. * {
+            $header_name: $header_value
+        }'
+        echo
+        inquirer list_input_index "是否继续添加" ny_options ny_index
+        if [ "$ny_index" -eq 0 ] 
+        then
+            break
+        fi
+    done
+}
+
+V2raySetWebsocketInboundMaxEarlyData()
+{
+    echo
+    inquirer list_input_yn "启用前置数据支持" oz_options ws_max_early_data
+}
+
+V2raySetWebsocketOutboundMaxEarlyData()
+{
+    echo
+    inquirer text_input "输入发送的前置数据的最长长度" ws_max_early_data 0
+}
+
+V2raySetWebsocketUseBrowserForwarding()
+{
+    echo
+    inquirer list_input_yn "启用浏览器转发" tf_options ws_use_browser_forwarding
+}
+
+V2raySetWebsocketEarlyDataHeaderName()
+{
+    echo
+    inquirer text_input "发送的前置数据的 HTTP 头的名字" ws_early_data_header_name "$i18n_blank"
+
+    if [ "$ws_early_data_header_name" == "$i18n_blank" ] 
+    then
+        ws_early_data_header_name=""
+    fi
+}
+
+V2raySetMkcpMtuValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]{2,3}+$ ]] && [ "$1" -ge 576 ] && [ "$1" -le 1460 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetMkcpTtiValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]{2,3}+$ ]] && [ "$1" -ge 10 ] && [ "$1" -le 100 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetMkcpLinkCapacityValidator()
+{
+    if [ "$1" == "0" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetMkcpBufferSizeValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetGrpcServiceNameValidator()
+{
+    if [ "$1" == "$i18n_random" ] || [[ "$1" =~ ^[0-9A-Za-z_.]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetHysteria2CongestionMbpsValidator()
+{
+    if [ "$1" == "0" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetStreamSocketMarkValidator()
+{
+    if [ "$1" == "0" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetStreamSocketTFOQLValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetStreamSocketTcpKeepAliveIntervalValidator()
+{
+    if [ "$1" == "0" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetMkcpMtu()
+{
+    Println "$tip 介于 576 ~ 1460"
+    inquirer text_input "输入最大传输单元: " mkcp_mtu 1350 V2raySetMkcpMtuValidator
+}
+
+V2raySetMkcpTti()
+{
+    Println "$tip 介于 10 ~ 100"
+    inquirer text_input "输入传输时间间隔(毫秒): " mkcp_tti 50 V2raySetMkcpTtiValidator
+}
+
+V2raySetMkcpUplinkCapacity()
+{
+    Println "$tip 即主机发出数据所用的最大带宽, 0 表示一个非常小的带宽"
+    inquirer text_input "上行链路容量(MB/s): " mkcp_uplink_capacity 5 V2raySetMkcpLinkCapacityValidator
+}
+
+V2raySetMkcpDownlinkCapacity()
+{
+    Println "$tip 即主机接收数据所用的最大带宽, 0 表示一个非常小的带宽"
+    inquirer text_input "下行链路容量(MB/s): " mkcp_downlink_capacity 20 V2raySetMkcpLinkCapacityValidator
+}
+
+V2raySetMkcpCongestion()
+{
+    Println "$tip 开启后, 当丢包严重时, 会自动降低吞吐量; 当网络畅通时, 也会适当增加吞吐量"
+    inquirer list_input_ny "启用拥塞控制" ft_options mkcp_congestion
+}
+
+V2raySetMkcpReadBufferSize()
+{
+    echo
+    inquirer text_input "单个连接的读取缓冲区大小(MB): " mkcp_read_buffer_size 2 V2raySetMkcpBufferSizeValidator
+}
+
+V2raySetMkcpWriteBufferSize()
+{
+    echo
+    inquirer text_input "单个连接的写入缓冲区大小(MB): " mkcp_write_buffer_size 2 V2raySetMkcpBufferSizeValidator
+}
+
+V2raySetMkcpSeed()
+{
+    echo
+    inquirer text_input "输入混淆密码: " mkcp_seed "$i18n_blank"
+}
+
+V2raySetGrpcServiceName()
+{
+    echo
+    inquirer text_input "输入 gRPC 服务的名称: " grpc_service_name "$i18n_random" V2raySetGrpcServiceNameValidator "名称格式错误"
+
+    if [ "$grpc_service_name" == "$i18n_random" ] 
+    then
+        grpc_service_name=$(RandStr)
+        Println "  gRPC 服务的名称: ${green} $grpc_service_name ${normal}"
+    fi
+}
+
+V2raySetMeekUrl()
+{
+    echo
+    inquirer text_input "输入 Meek 流传输服务器地址链接: " meek_url "$i18n_blank"
+}
+
+V2raySetHttpupgradePath()
+{
+    echo
+    inquirer text_input "输入 HTTPUpgrade 流传输路径: " httpupgrade_path "$i18n_blank"
+}
+
+V2raySetHttpupgradeHost()
+{
+    echo
+    inquirer text_input "输入 HTTPUpgrade 流传输主机域名: " httpupgrade_host "$i18n_blank"
+}
+
+V2raySetHysteria2Password()
+{
+    echo
+    inquirer text_input "输入 Hysteria2 Stream 认证密码，留空为不认证: " hysteria2_password "$i18n_blank"
+}
+
+V2raySetHysteria2Udp()
+{
+    Println "$tip 不代理 UDP 时，无需启用"
+    inquirer list_input_ny "Hysteria2 启用 UDP" ft_options hysteria2_use_udp_extension
+}
+
+V2raySetHysteria2CongestionType()
+{
+    echo
+    hysteria2_congestion_type_options=( bbr brutal )
+    inquirer list_input "Hysteria2 拥塞算法" hysteria2_congestion_type_options hysteria2_congestion_type
+}
+
+V2raySetHysteria2CongestionUpMbps()
+{
+    Println "$tip 选择 brutal 时，必填, 留空或 0 时转换成 bbr"
+    inquirer text_input "Hysteria2 本机的上传速度(Mbit/s): " hysteria2_congestion_up_mbps "$i18n_blank" V2raySetHysteria2CongestionMbpsValidator
+}
+
+V2raySetHysteria2CongestionDownMbps()
+{
+    Println "$tip 选择 brutal 时，必填, 留空或 0 时转换成 bbr"
+    inquirer text_input "Hysteria2 本机的下传速度(Mbit/s): " hysteria2_congestion_down_mbps "$i18n_blank" V2raySetHysteria2CongestionMbpsValidator
+}
+
+V2raySetHysteria2Congestion()
+{
+    hysteria2_congestion='{}'
+
+    V2raySetHysteria2CongestionType
+    V2raySetHysteria2CongestionUpMbps
+    V2raySetHysteria2CongestionDownMbps
+
+    if [ "$hysteria2_congestion_type" == "brutal" ] && { [ -z "$hysteria2_congestion_up_mbps" ] || [ "$hysteria2_congestion_up_mbps" -eq 0 ] || [ -z "$hysteria2_congestion_down_mbps" ] || [ "$hysteria2_congestion_down_mbps" -eq 0 ]; }
+    then
+        hysteria2_congestion_type="bbr"
+    fi
+
+    JQs merge_c hysteria2_congestion --arg type "$hysteria2_congestion_type" \
+    --arg up_mbps "$hysteria2_congestion_up_mbps" \
+    --arg down_mbps "$hysteria2_congestion_down_mbps" '. * {
+        "type": "$type",
+        "up_mbps": "$up_mbps" | tonumber,
+        "down_mbps": "$down_mbps" | tonumber
+    }'
+}
+
+V2raySetStreamSecurity()
+{
+    Println "$tip 仅可以在 TCP, WebSocket 传输方式中使用 uTLS"
+    stream_security_options=( none tls utls )
+    inquirer list_input "选择 stream 安全协议" stream_security_options stream_security
+}
+
+V2raySetStreamTlsServerName()
+{
+    echo
+    inquirer text_input "stream tls 指定服务器端证书的域名: " stream_tls_server_name "$i18n_blank"
+}
+
+V2raySetStreamTlsAlpn()
+{
+    Println "$tip 多个 ALPN 值用空格分隔"
+    inquirer text_input "stream tls 指定 ALPN 值: " stream_tls_next_protocol "h2 http/1.1"
+    stream_tls_next_protocol=$(StringToList stream_tls_next_protocol)
+}
+
+V2raySetStreamTlsDisableSystemRoot()
+{
+    echo
+    inquirer list_input_ny "stream tls 禁用操作系统自带的 CA 证书" ft_options stream_tls_disable_system_root
+}
+
+V2raySetStreamTlsChainSha256()
+{
+    Println "$tip 多个数值用空格分隔"
+    inquirer text_input "stream tls 使用 Base64 标准编码格式表示的远程服务器的证书链的SHA256散列值: " stream_tls_chain_sha256 "i18n_blank"
+    stream_tls_chain_sha256=$(StringToList stream_tls_chain_sha256)
+}
+
+V2raySetStreamTlsAllowInsecure()
+{
+    echo
+    inquirer list_input_ny "stream tls 禁用 TLS 证书验证" ft_options stream_tls_allow_insecure
+}
+
+V2raySetStreamTlsVerifyClientCertificate()
+{
+    echo
+    inquirer list_input_yn "在连接时进行客户端证书认证" tf_options stream_tls_verify_client_certificate
+}
+
+V2raySetStreamTlsCertificateUsage()
+{
+    echo
+    stream_tls_certificate_usage_options=(
+        ENCIPHERMENT
+        AUTHORITY_VERIFY
+        AUTHORITY_VERIFY_CLIENT
+        AUTHORITY_ISSUE
+    )
+    inquirer list_input "stream tls 选择证书用途" stream_tls_certificate_usage_options stream_tls_certificate_usage
+}
+
+V2raySetStreamTlsCertificateCert()
+{
+    echo
+    inquirer text_input "stream tls 输入 PEM 格式的证书: " stream_tls_certificate_cert "$i18n_blank"
+}
+
+V2raySetStreamTlsCertificateKey()
+{
+    echo
+    inquirer text_input "stream tls 输入 PEM 格式的私钥: " stream_tls_certificate_key "$i18n_blank"
+}
+
+V2raySetStreamTlsCertificateCertFile()
+{
+    Println "$tip 如使用 OpenSSL 生成，后缀名为 .crt"
+    inquirer text_input "stream tls 输入证书文件路径: " stream_tls_certificate_cert_file "$i18n_blank"
+}
+
+V2raySetStreamTlsCertificateKeyFile()
+{
+    Println "$tip 如使用 OpenSSL 生成，后缀名为 .key"
+    inquirer text_input "stream tls 输入密钥文件路径: " stream_tls_certificate_key_file "$i18n_blank"
+}
+
+V2raySetStreamTlsCertificate()
+{
+    stream_tls_certificate='{}'
+
+    V2raySetStreamTlsCertificateUsage
+    V2raySetStreamTlsCertificateCert
+    V2raySetStreamTlsCertificateKey
+    V2raySetStreamTlsCertificateCertFile
+    V2raySetStreamTlsCertificateKeyFile
+
+    JQs merge_c stream_tls_certificate --arg usage "$stream_tls_certificate_usage" \
+    --arg Certificate "$stream_tls_certificate_cert" \
+    --arg Key "$stream_tls_certificate_key" \
+    --arg certificateFile "$stream_tls_certificate_cert_file" \
+    --arg keyFile "$stream_tls_certificate_key_file" \
+    '. * {
+        "usage": "$usage",
+        "Certificate": "$Certificate",
+        "Key": "$Key",
+        "certificateFile": "$certificateFile",
+        "keyFile": "$keyFile"
+    }'
+}
+
+V2raySetStreamUtlsImitate()
+{
+    echo
+    stream_utls_imitate_options=(
+        randomized
+        randomizedalpn
+        randomizednoalpn
+        firefox_auto
+        firefox_55
+        firefox_56
+        firefox_63
+        firefox_65
+        firefox_99
+        firefox_102
+        firefox_105
+        chrome_auto
+        chrome_58
+        chrome_62
+        chrome_70
+        chrome_72
+        chrome_83
+        chrome_87
+        chrome_96
+        chrome_100
+        chrome_102
+        ios_auto
+        ios_11_1
+        ios_12_1
+        ios_13
+        ios_14
+        android_11_okhttp
+        edge_auto
+        edge_85
+        edge_106
+        safari_auto
+        safari_16_0
+        360_auto
+        360_7_5
+        360_11_0
+        qq_auto
+        qq_11_1
+    )
+    inquirer list_input "stream utls 想要模拟的 TLS 客户端握手包指纹" stream_utls_imitate_options stream_utls_imitate
+}
+
+V2raySetStreamUtlsNoSNI()
+{
+    echo
+    inquirer list_input_ny "stream utls 不发送服务器名称指示" ft_options stream_utls_noSNI
+}
+
+V2raySetStreamUtlsForceAlpn()
+{
+    echo
+    stream_utls_force_alpn_options=(
+        TRANSPORT_PREFERENCE_TAKE_PRIORITY
+        NO_ALPN
+        UTLS_PRESET
+    )
+    inquirer list_input "stream utls ALPN 数据来源" stream_utls_force_alpn_options stream_utls_force_alpn
+}
+
+V2raySetStreamSocketMark()
+{
+    Println "$tip 当其值非零时，在出站连接上标记 SO_MARK"
+    inquirer text_input "输入 socket mark: " stream_socket_mark 0 V2raySetStreamSocketMarkValidator
+}
+
+V2raySetStreamSocketTFO()
+{
+    Println "$tip 强制开启 TFO 或强制关闭 TFO"
+    inquirer list_input_yn "启用 TCP Fast Open" tf_options stream_socket_tfo
+}
+
+V2raySetStreamSocketTFOQL()
+{
+    echo
+    inquirer text_input "入站连接的 TCP Fast Open 队列长度: " stream_socket_tfoql 4096 V2raySetStreamSocketTFOQLValidator
+}
+
+V2raySetStreamSocketTproxy()
+{
+    echo
+    stream_socket_tproxy_options=( off redirect tproxy )
+    inquirer list_input "透明代理" stream_socket_tproxy_options stream_socket_tproxy
+}
+
+V2raySetStreamSocketTcpKeepAliveInterval()
+{
+    Println "$tip 0 代表保持默认值"
+    inquirer text_input "TCP 保持活跃的数据包的发送间隔(秒): " stream_socket_tcp_keep_alive_interval 0 V2raySetStreamSocketTcpKeepAliveIntervalValidator
+}
+
+V2raySetStreamSocketBindToDevice()
+{
+    echo
+    inquirer text_input "将连接绑定到指定的网络设备: " stream_socket_bind_to_device "$i18n_blank"
+}
+
+V2raySetStreamSocketMptcp()
+{
+    echo
+    inquirer list_input_ny "启用多路径TCP" ft_options stream_socket_mptcp
+}

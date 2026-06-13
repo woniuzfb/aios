@@ -146,11 +146,6 @@ RcloneSyncAdd()
     echo
     inquirer text_input "输入同步参数" rclone_sync_args "$i18n_blank"
 
-    if [ "$rclone_sync_args" == "$i18n_blank" ] 
-    then
-        rclone_sync_args=""
-    fi
-
     rclone_sync=$(
         $JQ_FILE -c -n --arg rsync "$rclone_sync_rsync" --arg source "$rclone_sync_source" --arg target "$rclone_sync_target" \
         --arg args "$rclone_sync_args" --argjson exclude_before "$(ToJsonArray rclone_sync_excludes_before)" --argjson include "$(ToJsonArray rclone_sync_includes)" --argjson exclude_after "$(ToJsonArray rclone_sync_excludes_after)" \
@@ -352,11 +347,6 @@ RcloneSyncEdit()
         2) 
             echo
             inquirer text_input "输入同步参数" rclone_sync_args "$i18n_blank"
-
-            if [ "$rclone_sync_args" == "$i18n_blank" ] 
-            then
-                rclone_sync_args=""
-            fi
 
             if [ "$rclone_sync_args" != "${rclone_syncs_args[rclone_syncs_index]}" ] 
             then

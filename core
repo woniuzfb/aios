@@ -40,6 +40,59 @@ ToJsonArray()
     echo $json_array
 }
 
+ToQuoteArray()
+{
+    local var=("$1"[@])
+
+    if [[ -z "${!var:-}" ]] 
+    then
+        return 0
+    fi
+
+    local arr=("${!var}")
+    local quoted_ele ele i
+    eval "$1=()"
+
+    for((i=0;i<"${#arr[@]}";i++));
+    do
+        quoted_ele=$(printf '%s' "${arr[i]}" | sed 's/"/\\"/g')
+        quoted_ele="\"$quoted_ele\""
+        eval "$1[$i]=\"\$quoted_ele\""
+    done
+
+    return
+}
+
+ArrayToList()
+{
+    ToQuoteArray "$@"
+
+    local var=("$1"[@])
+
+    if [[ -z "${!var:-}" ]] 
+    then
+        return 0
+    fi
+
+    local arr=("${!var}")
+
+    JoinByChar , "${arr[@]}"
+}
+
+StringToList()
+{
+    local text="${!1}"
+
+    if [ -z "${text:-}" ] 
+    then
+        return 0
+    fi
+
+    IFS=" " read -r -a array_to_list <<< "$text"
+
+    ArrayToList array_to_list
+}
+
 shopt -s extglob
 
 EleInArray()
@@ -296,6 +349,7 @@ WaitTerm()
 }
 
 Include utils/system "$@"
+Include utils/i18n "$@"
 Include utils/build "$@"
 Include utils/inquirer "$@"
 Include utils/spinner "$@"

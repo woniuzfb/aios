@@ -14,6 +14,10 @@ RcloneMountView()
     IFS="${delimiters[1]}" read -r -a rclone_remote_paths <<< "${rclone_remotes_path[rclone_remotes_index]}"
     IFS="${delimiters[1]}" read -r -a rclone_remote_mount_paths <<< "${rclone_remotes_mount_path[rclone_remotes_index]}"
 
+    new_flag=("${rclone_remote_paths[@]//*/}")
+    flag_if_null=$(JoinByChar "${delimiters[1]}" "${new_flag[@]}")
+    IFS="${delimiters[1]}" read -r -a rclone_remote_mount_flags <<< "${rclone_remotes_mount_flag[rclone_remotes_index]:-$flag_if_null}${delimiters[1]}"
+
     rclone_remote_mount_count=${#rclone_remote_paths[@]}
 
     rclone_remote_mount_options=()
@@ -23,10 +27,10 @@ RcloneMountView()
     do
         if ServiceControl is-active "${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
         then
-            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]} ${green}(已挂载)${normal}\n\n"
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]} ${green}(已挂载)${normal}\n挂载命令: ${rclone_remote_mount_flags[i]:-无}\n\n"
             rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]} ${green}(已挂载)${normal}")
         else
-            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]}\n\n"
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]}\n挂载命令: ${rclone_remote_mount_flags[i]:-无}\n\n"
             rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}")
         fi
     done
@@ -41,18 +45,23 @@ RcloneMountAdd()
     echo
     inquirer list_input_index "选择远端" rclone_remotes_options rclone_remotes_index
 
-    echo
-    ExitOnText "输入远端地址" rclone_remote_path
+    Println "$tip 比如 /夸克"
+    ExitOnText "输入远端路径" rclone_remote_path
 
     echo
     ExitOnText "输入挂载点" rclone_remote_mount_path
     RemoveQuotes rclone_remote_mount_path
 
+    Println "$tip 比如 --allow-other --allow-non-empty --vfs-cache-mode writes --vfs-cache-max-size 1G"
+    inquirer text_input "输入额外的挂载命令" rclone_remote_mount_flag "$i18n_blank"
+
     new_mount=$(
     $JQ_FILE -n --arg path "$rclone_remote_path" --arg mount_path "$rclone_remote_mount_path" \
+    --arg flag "$rclone_remote_mount_flag" \
         '{
             path: $path,
-            mount_path: $mount_path
+            mount_path: $mount_path,
+            flags: $flag
         }'
     )
 
@@ -68,7 +77,7 @@ RcloneMountEdit()
 
     inquirer checkbox_input_indices "选择修改的挂载" rclone_remote_mount_options rclone_remote_mount_indices
 
-    rclone_remote_mount_edit_options=( '远端路径' '挂载点' )
+    rclone_remote_mount_edit_options=( '远端路径' '挂载点' '额外的挂载命令' )
 
     for rclone_remote_mount_index in "${rclone_remote_mount_indices[@]}"
     do
@@ -88,14 +97,25 @@ RcloneMountEdit()
                 JQ update "$SERVICES_CONFIG" "$rclone_remote_path"
                 Println "$info 远端路径修改成功\n"
             fi
-        else
+        elif [ "$rclone_remote_mount_edit_options_index" == "1" ] 
+        then
             echo
             inquirer text_input "输入新挂载点" rclone_remote_mount_path "${rclone_remote_mount_paths[rclone_remote_mount_index]}"
+            RemoveQuotes rclone_remote_mount_path
             if [ "$rclone_remote_mount_path" != "${rclone_remote_mount_paths[rclone_remote_mount_index]}" ] 
             then
                 jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount",'"$rclone_remote_mount_index"',"mount_path"]'
                 JQ update "$SERVICES_CONFIG" "$rclone_remote_mount_path"
                 Println "$info 挂载点修改成功\n"
+            fi
+        else
+            Println "$tip 比如 --allow-other --allow-non-empty --vfs-cache-mode writes --vfs-cache-max-size 1G"
+            inquirer text_input "输入额外的挂载命令" rclone_remote_mount_flag "$i18n_blank"
+            if [ "$rclone_remote_mount_flag" != "${rclone_remote_mount_flags[rclone_remote_mount_index]}" ] 
+            then
+                jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount",'"$rclone_remote_mount_index"',"flags"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_remote_mount_flag"
+                Println "$info 挂载命令修改成功\n"
             fi
         fi
     done
@@ -203,9 +223,11 @@ RcloneMountExc()
             continue
         fi
 
-        service_commands=( $(command -v rclone) mount ${rclone_remotes_name[rclone_remotes_index]}:$rclone_remote_path "$rclone_remote_mount_path" --allow-non-empty )
+        mkdir -p "$rclone_remote_mount_path"
 
-        if ! err_msg=$(ServiceControl start "$service_name" service_commands)
+        service_commands=( $(command -v rclone) mount ${rclone_remotes_name[rclone_remotes_index]}:$rclone_remote_path "$rclone_remote_mount_path" ${rclone_remote_mount_flags[rclone_remote_mount_index]})
+
+        if ! err_msg=$(ServiceControl start "$service_name" service_commands update)
         then
             Println "$error 挂载 $rclone_mount_list 失败, $err_msg\n"
             continue
@@ -234,14 +256,14 @@ RcloneMountDeExc()
             continue
         fi
 
-        Println "$info 正在取消挂载 $rclone_mount_list"
+        Println "$info 卸载 $rclone_mount_list"
 
         if ! err_msg=$(ServiceControl stop "$service_name")
         then
-            Println "$error 取消挂载 $rclone_mount_list 失败, $err_msg\n"
+            Println "$error 卸载 $rclone_mount_list 失败, 资源被占用? 请手动卸载\n$err_msg\n"
             continue
         fi
 
-        Println "$info 取消挂载 $rclone_mount_list 成功\n"
+        Println "$info 卸载 $rclone_mount_list 成功\n"
     done
 }

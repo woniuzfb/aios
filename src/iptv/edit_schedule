@@ -82,11 +82,6 @@ EditChannelSchedule()
         then
             inquirer text_input "输入频道名称" schedule_channel_name "$i18n_blank"
 
-            if [ "$schedule_channel_name" == "$i18n_blank" ] 
-            then
-                schedule_channel_name=""
-            fi
-
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"channel_name"]'
             JQ update "$CHANNELS_FILE" "$schedule_channel_name"
 

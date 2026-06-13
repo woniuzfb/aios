@@ -1252,9 +1252,9 @@ StartChannel()
                     inquirer list_input_index "选择 FFmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
                     if [ "$ffmpeg_c_options_index" -eq 0 ] 
                     then
-                        if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
+                        if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o "$AIOS_PREFIX"/bin/ffmpeg_c
                         then
-                            chmod +x /usr/local/bin/ffmpeg_c
+                            chmod +x "$AIOS_PREFIX"/bin/ffmpeg_c
                         else
                             Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
                             exit 1

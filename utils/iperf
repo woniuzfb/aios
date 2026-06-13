@@ -38,13 +38,13 @@ IperfInstall()
         ;;
     esac
 
-    if ! curl -s -L -o /usr/local/bin/iperf3 https://raw.githubusercontent.com/masonr/yet-another-bench-script/master/bin/iperf/iperf3_${iperf_arch} && ! curl -s -L -o /usr/local/bin/iperf3 "$FFMPEG_MIRROR_LINK"/iperf/iperf3_${iperf_arch}
+    if ! curl -s -L -o "$IPERF3_FILE" https://raw.githubusercontent.com/masonr/yet-another-bench-script/master/bin/iperf/iperf3_${iperf_arch} && ! curl -s -L -o "$IPERF3_FILE" "$FFMPEG_MIRROR_LINK"/iperf/iperf3_${iperf_arch}
     then
         Println "$error iperf3 ${install}失败\n"
         return 1
     fi
 
-    chmod +x /usr/local/bin/iperf3
+    chmod +x "$IPERF3_FILE"
 
     Println "$info iperf3 ${install}成功\n"
 }
@@ -116,11 +116,6 @@ IperfAdd()
     echo
     inquirer text_input "输入服务名称" iperf_name "$i18n_blank"
 
-    if [ "$iperf_name" == "$i18n_blank" ] 
-    then
-        iperf_name=""
-    fi
-
     if [ "$iperf_type_index" -eq 1 ] 
     then
         iperf_target_options=( '输入目标地址' )
@@ -149,11 +144,6 @@ IperfAdd()
 
     echo
     inquirer text_input "输入 iperf3 参数" iperf_args "$i18n_blank"
-
-    if [ "$iperf_args" == "$i18n_blank" ] 
-    then
-        iperf_args=""
-    fi
 
     iperf_service=$(
         $JQ_FILE -n \
@@ -210,10 +200,7 @@ IperfEdit()
             '名称') 
                 echo
                 inquirer text_input "输入服务名称" iperf_name "${iperf_name[iperf_indices[iperf_options_index]]:-$i18n_blank}"
-                if [ "$iperf_name" == "$i18n_blank" ] 
-                then
-                    iperf_name=""
-                fi
+
                 jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"name"]'
                 JQ update "$SERVICES_CONFIG" "$iperf_name"
             ;;
@@ -232,10 +219,6 @@ IperfEdit()
                 then
                     echo
                     inquirer text_input "输入目标地址" iperf_target "${iperf_target[iperf_indices[iperf_options_index]]:-$i18n_blank}"
-                    if [ "$iperf_target" == "$i18n_blank" ] 
-                    then
-                        iperf_target=""
-                    fi
                 else
                     iperf_target="${iperf_target_options[iperf_target_index]}"
                 fi
@@ -245,10 +228,7 @@ IperfEdit()
             *) 
                 echo
                 inquirer text_input "输入 iperf3 参数" iperf_args "${iperf_args[iperf_indices[iperf_options_index]]:-$i18n_blank}"
-                if [ "$iperf_args" == "$i18n_blank" ] 
-                then
-                    iperf_args=""
-                fi
+
                 jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"args"]'
                 JQ update "$SERVICES_CONFIG" "$iperf_args"
             ;;
@@ -347,7 +327,7 @@ IperfStart()
             iperf_commands+=( -c "$iperf_target")
         fi
         iperf_commands+=(${iperf_args[iperf_indices[iperf_start_index]]})
-        iperf3 "${iperf_commands[@]}"
+        "$IPERF3_FILE" "${iperf_commands[@]}"
     done
 
     Println "$info 启动成功\n"

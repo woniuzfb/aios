@@ -2,6 +2,11 @@ i18nInstall()
 {
     local sh_locale=${1:-zh_CN}
 
+    if [ "$dist" == "mac" ] && [[ "$sh_locale" =~ ^en ]] && [ ! -d "$TEXTDOMAINDIR/$sh_locale" ]
+    then
+        ln -s "$TEXTDOMAINDIR/en_GB" "$TEXTDOMAINDIR"/en
+    fi
+
     Println "$info You can always use command ${green}tv c <en|ru|de|zh_CN...>${normal} to change/update language!"
     Println "Downloading ${green}$sh_locale${normal} language file...\n"
 
@@ -15,10 +20,10 @@ i18nInstall()
     fi
 
     trap '
-        rm -f "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo"
+        rm -f "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo"
     ' EXIT
 
-    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/iptv.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo
+    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/aios.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo
     then
         trap - EXIT
         echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
@@ -238,69 +243,6 @@ eval_gettext()
     gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
 }
 
-DistCheck
-
-TEXTDOMAIN=iptv
-
-if [ "$dist" == "mac" ] 
-then
-    TEXTDOMAINDIR=/usr/local/share/locale
-
-    BrewInstall
-
-    ArchCheck
-
-    if [ "$arch" == "arm64" ] 
-    then
-        HOMEBREW_PREFIX="/opt/homebrew"
-        if [ "${add_homebrew_path:-false}" = true ] 
-        then
-            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-        fi
-        if ! grep -q homebrew <<< "$PATH"
-        then
-            export PATH="/opt/homebrew/bin:$PATH"
-        fi
-    else
-        HOMEBREW_PREFIX="/usr/local"
-    fi
-
-    DepInstall gsed
-    DepInstall gdate
-    DepInstall ggrep
-
-    AIOS_PREFIX="$HOMEBREW_PREFIX"
-
-sed()
-{
-    gsed "$@"
-}
-
-date()
-{
-    gdate "$@"
-}
-
-grep()
-{
-    ggrep "$@"
-}
-
-base64()
-{
-    gbase64 "$@"
-}
-
-else
-    TEXTDOMAINDIR=/usr/share/locale
-fi
-
-export TEXTDOMAIN TEXTDOMAINDIR
-
-DepInstall gettext
-
-# [ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
-
 if [ -s "$i18n_FILE" ] 
 then
     # shellcheck source=/dev/null
@@ -334,7 +276,7 @@ else
         echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
     fi
 
-    if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo" ] 
+    if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo" ] 
     then
         i18nInstall "$sh_locale"
     fi

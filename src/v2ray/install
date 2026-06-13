@@ -112,7 +112,14 @@ V2rayConfigUpdate()
     if [ ! -e "$V2_CONFIG" ] 
     then
         Println "$error $v2ray_name 未安装...\n"
-        exit 1
+        return 1
+    fi
+
+    if [[ $($v2ray_name -version | head -1 | cut -d' ' -f2) =~ ^4 ]]
+    then
+        v2ray_v4=true
+    else
+        v2ray_v4=false
     fi
 
     if ! outbounds=$($JQ_FILE '.outbounds' "$V2_CONFIG" 2> /dev/null) || [ "$outbounds" == "null" ]

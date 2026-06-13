@@ -1,13 +1,31 @@
-V2rayInboundProtocol()
+Include src/v2ray/proxy "$@"
+Include src/v2ray/stream "$@"
+
+V2rayInboundProxyProtocol()
 {
     echo
-    inbound_protocols=( 'vmess' 'vless' 'vliteu' 'http' 'socks' 'shadowsocks' 'dokodemo-door' 'trojan' )
-    inquirer list_input "选择入站代理协议" inbound_protocols inbound_protocol
-}
-
-V2rayInboundSettings()
-{
-    return
+    inbound_proxy_protocols=( 
+        vmess
+        vless
+        vliteu
+        http
+        socks
+        shadowsocks
+        dokodemo-door
+        trojan
+    )
+    inbound_proxy_protocol_options=(
+        VMess
+        VLESS
+        VLite
+        HTTP
+        SOCKS
+        Shadowsocks
+        Dokodemo
+        Trojan
+    )
+    inquirer list_input_index "选择入站代理协议" inbound_proxy_protocol_options inbound_proxy_protocols_index
+    inbound_proxy_protocol="${inbound_proxy_protocols[$inbound_proxy_protocols_index]}"
 }
 
 V2rayInboundPortValidator()
@@ -120,10 +138,91 @@ V2rayInboundSniffing()
     }')
 }
 
-V2rayInboundAdd()
+V2rayAllocateStrategy()
 {
-    V2rayInboundProtocol
-    V2rayInboundSettings
+    echo
+    allocate_strategy_options=( 'always' 'random' )
+    inquirer list_input "端口分配策略" allocate_strategy_options allocate_strategy
+}
+
+V2rayAllocateRefresh()
+{
+    Println "随机端口刷新间隔(分钟)"
+    while read -p "(默认: 5): " allocate_refresh
+    do
+        case "$allocate_refresh" in
+            "")
+                allocate_refresh=5
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [>1]\n"
+            ;;
+            *)
+                if [ "$allocate_refresh" -ge 2 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [>1]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  刷新间隔: ${green} $allocate_refresh ${normal}"
+}
+
+V2rayAllocateConcurrency()
+{
+    Println "随机端口数量, 最大值为端口范围的三分之一"
+    while read -p "(默认: 3): " allocate_concurrency
+    do
+        case "$allocate_concurrency" in
+            "")
+                allocate_concurrency=3
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [>0]\n"
+            ;;
+            *)
+                if [ "$allocate_concurrency" -ge 1 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [>0]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  随机端口数量: ${green} $allocate_concurrency ${normal}"
+}
+
+V2rayInbound()
+{
+    V2rayInboundProxyProtocol
+
+    proxy_protocol_settings='{}'
+
+    case $inbound_proxy_protocols_index in
+        0) V2rayProxyVmessSettings inbound
+        ;;
+        1) V2rayProxyVlessSettings inbound
+        ;;
+        2) V2rayProxyVliteSettings inbound
+        ;;
+        3) V2rayProxyHttpSettings inbound
+        ;;
+        4) V2rayProxySocksSettings inbound
+        ;;
+        5) V2rayProxyShadowsocksSettings inbound
+        ;;
+        6) V2rayProxyDokodemoSettings inbound
+        ;;
+        7) V2rayProxyTrojanSettings inbound
+        ;;
+        *) return
+    esac
+
     V2rayInboundPort
     V2rayInboundListen
     V2rayInboundTag
@@ -133,7 +232,7 @@ V2rayInboundAdd()
     new_inbound=$(
     $JQ_FILE -n --arg listen "$inbound_listen" \
         --arg port "$inbound_port" \
-        --arg protocol "$inbound_protocol" \
+        --arg protocol "$inbound_proxy_protocol" \
         --argjson settings "$inbound_settings" \
         --argjson streamSettings "$new_stream" \
         --argjson sniffing "$new_sniffing" \
@@ -148,240 +247,25 @@ V2rayInboundAdd()
         "tag": $tag
     }')
 
-    if [ -n "$sockopt_tfo" ] 
+    if [[ ! "$port" =~ ^[0-9]+$ ]] && [ "$v2ray_v4" = true ]
     then
-        if [ "$sockopt_tfo" = true ] || [ "$sockopt_tfo" = false ]
-        then
-            new_inbound=$(
-            $JQ_FILE --arg tcpFastOpen "$sockopt_tfo" \
-            '. * 
-            {
-                "streamSettings": {
-                    "sockopt": {
-                        "tcpFastOpen": $tcpFastOpen | test("true")
-                    }
-                }
-            }' <<< "$new_inbound")
-        else
-            new_inbound=$(
-            $JQ_FILE --arg tcpFastOpen "$sockopt_tfo" \
-            '. * 
-            {
-                "streamSettings": {
-                    "sockopt": {
-                        "tcpFastOpen": $tcpFastOpen | tonumber
-                    }
-                }
-            }' <<< "$new_inbound")
-        fi
-    fi
-
-    if [[ ! "$port" =~ ^[0-9]+$ ]] 
-    then
-        SetV2rayAllocateStrategy
+        V2rayAllocateStrategy
         if [ "$allocate_strategy" == "random" ] 
         then
-            SetV2rayAllocateRefresh
-            SetV2rayAllocateConcurrency
-            new_inbound=$(
-            $JQ_FILE --arg strategy "$allocate_strategy" --arg refresh "$allocate_refresh" \
-            --arg concurrency "$allocate_concurrency" \
-            '. * 
-            {
+            V2rayAllocateRefresh
+            V2rayAllocateConcurrency
+            JQs merge_c new_inbound --arg strategy "$allocate_strategy" --arg refresh "$allocate_refresh" \
+            --arg concurrency "$allocate_concurrency" '. * {
                 "allocate": {
                     "strategy": $strategy,
                     "refresh": $refresh | tonumber,
                     "concurrency": $concurrency | tonumber
                 }
-            }' <<< "$new_inbound")
+            }'
         fi
     fi
 
-    if [ "$security" == "tls" ] 
-    then
-        V2rayTlsServerName
-
-        if [ -n "$tls_server_name" ] 
-        then
-            new_inbound=$(
-            $JQ_FILE --arg serverName "$tls_server_name" \
-            '. * 
-            {
-                "streamSettings": {
-                    "tlsSettings": {
-                        "serverName": $serverName
-                    }
-                }
-            }' <<< "$new_inbound")
-        fi
-
-        V2rayTlsAlpn
-        V2rayTlsDisableSystemRoot
-        V2rayTlsVerifyClientCertificate
-
-        new_inbound=$(
-        $JQ_FILE --argjson alpn "[$tls_alpn]" --arg disableSystemRoot "$tls_disable_system_root" \
-            --arg verifyClientCertificate "$tls_verify_client_certificate" \
-        '. * 
-        {
-            "streamSettings": {
-                "tlsSettings": {
-                    "alpn": $alpn,
-                    "disableSystemRoot": $disableSystemRoot | test("true"),
-                    "verifyClientCertificate": $verifyClientCertificate | test("true")
-                }
-            }
-        }' <<< "$new_inbound")
-
-        while true 
-        do
-            if [ "$tls_disable_system_root" = false ] 
-            then
-                echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
-                if [ "$continue_yn" == "$i18n_no" ] 
-                then
-                    break
-                fi
-            fi
-            Println "$info 设置证书"
-            V2rayCertificates
-            merge=$(
-            $JQ_FILE -n --argjson certificates "[$certificate]" \
-            '{
-                "streamSettings": {
-                    "tlsSettings": {
-                        "certificates": $certificates
-                    }
-                }
-            }')
-            JQs merge new_inbound "$merge"
-            if [ "$tls_disable_system_root" = true ] 
-            then
-                echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
-                if [ "$continue_yn" == "$i18n_no" ] 
-                then
-                    break
-                fi
-            fi
-        done
-    elif [ "$security" == "xtls" ] 
-    then
-        V2rayTlsServerName
-
-        if [ -n "$tls_server_name" ] 
-        then
-            new_inbound=$(
-            $JQ_FILE --arg serverName "$tls_server_name" \
-            '. * 
-            {
-                "streamSettings": {
-                    "xtlsSettings": {
-                        "serverName": $serverName
-                    }
-                }
-            }' <<< "$new_inbound")
-        fi
-
-        V2rayTlsAlpn
-        V2rayTlsDisableSystemRoot
-        V2rayTlsMinVersion
-        V2rayTlsMaxVersion
-        V2rayTlsPreferServerCipherSuites
-        V2rayTlsCipherSuites
-        V2rayTlsRejectUnknownSni
-
-        new_inbound=$(
-        $JQ_FILE --argjson alpn "[$tls_alpn]" --arg minVersion "$tls_min_version" \
-            --arg maxVersion "$tls_max_version" --arg preferServerCipherSuites "$tls_prefer_server_cipher_suites" \
-            --arg cipherSuites "$tls_cipher_suites" --arg disableSystemRoot "$tls_disable_system_root" \
-            --arg rejectUnknownSni "$tls_reject_unknown_sni" \
-        '. * 
-        {
-            "streamSettings": {
-                "xtlsSettings": {
-                    "alpn": $alpn,
-                    "minVersion": $minVersion,
-                    "maxVersion": $maxVersion,
-                    "preferServerCipherSuites": $preferServerCipherSuites | test("true"),
-                    "cipherSuites": $cipherSuites,
-                    "disableSystemRoot": $disableSystemRoot | test("true"),
-                    "rejectUnknownSni": $rejectUnknownSni | test("true")
-                }
-            }
-        }' <<< "$new_inbound")
-
-        while true 
-        do
-            if [ "$tls_disable_system_root" = false ] 
-            then
-                echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
-                if [ "$continue_yn" == "$i18n_no" ] 
-                then
-                    break
-                fi
-            fi
-            Println "$info 设置证书"
-            V2rayCertificates
-            merge=$(
-            $JQ_FILE -n --argjson certificates "[$certificate]" \
-            '{
-                "streamSettings": {
-                    "xtlsSettings": {
-                        "certificates": $certificates
-                    }
-                }
-            }')
-            JQs merge new_inbound "$merge"
-            if [ "$tls_disable_system_root" = true ] 
-            then
-                echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
-                if [ "$continue_yn" == "$i18n_no" ] 
-                then
-                    break
-                fi
-            fi
-        done
-    fi
-
-    if [ "$protocol" == "vmess" ] 
-    then
-        V2rayDisableInsecureEncryption
-
-        new_inbound=$(
-        $JQ_FILE --arg disableInsecureEncryption "$disable_insecure_encryption" \
-        '. * 
-        {
-            "settings": {
-                "clients": [],
-                "disableInsecureEncryption":$disableInsecureEncryption | test("true")
-            }
-        }' <<< "$new_inbound")
-
-        V2rayDetourTo
-
-        if [ "$detour_to" != "$i18n_blank" ] 
-        then
-            V2rayDetourDefault
-            new_inbound=$(
-            $JQ_FILE --arg level "$level" --arg alterId "$alter_id" --arg to "$detour_to" \
-            '. * 
-            {
-                "settings": {
-                    "default": {
-                        "level": $level | tonumber,
-                        "alterId": $alterId | tonumber
-                    },
-                    "detour": {
-                        "to": $to
-                    }
-                }
-            }' <<< "$new_inbound")
-        fi
-    elif [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
+    if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
     then
         new_inbound=$(
         $JQ_FILE \

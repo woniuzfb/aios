@@ -45,7 +45,7 @@ RcloneRemoteAdd()
     echo
     inquirer checkbox_input_indices "选择远端类型" rclone_remote_types rclone_remote_types_index
 
-    Println "$tip 比如 https://domain.com"
+    Println "$tip 比如 https://domain.com/dav"
     ExitOnText "输入远端地址" rclone_remote_url
 
     rclone_remote_vendors=( rclone other )
@@ -61,7 +61,7 @@ RcloneRemoteAdd()
     new_remote=$(
     $JQ_FILE -n --arg name "$rclone_remote_name" --arg type "${rclone_remote_types[rclone_remote_types_index]}" \
     --arg url "$rclone_remote_url" --arg vendor "${rclone_remote_vendors[rclone_remote_vendors_index]}" \
-    --arg user "$rclone_remote_user" --arg pass $(rclone obscure "$rclone_remote_pass") \
+    --arg user "$rclone_remote_user" --arg pass "$(rclone obscure ${rclone_remote_pass})" \
         '{
             name: $name,
             type: $type,
@@ -157,7 +157,7 @@ RcloneRemoteEdit()
                     if [ "$rclone_remote_pass" != "$rclone_remote_pass_decrypted" ] 
                     then
                         jq_path='["rclone","remote",'"$rclone_remotes_index"',"pass"]'
-                        JQ update "$SERVICES_CONFIG" $(rclone obscure "$rclone_remote_pass")
+                        JQ update "$SERVICES_CONFIG" "$(rclone obscure ${rclone_remote_pass})"
                         Println "$info 密码修改成功\n"
                     fi
                 ;;

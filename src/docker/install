@@ -23,6 +23,7 @@ DockerInstall()
 
     DepInstall curl
     DepInstall ca-certificates
+    DepInstall gpg
 
     case $dist in
         ubu) 
@@ -94,6 +95,16 @@ DockerInstall()
             return 1
         ;;
     esac
+
+    if [ ! -f /etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf ] 
+    then
+cat > /etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf <<EOF
+[Service]
+MountFlags=shared
+EOF
+        systemctl daemon-reload
+        systemctl restart docker
+    fi
 
     Println "$info docker 安装成功\n"
 }

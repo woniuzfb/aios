@@ -1,0 +1,39 @@
+TestCoreQuoteArray()
+{
+    echo
+    test_array=( a 'b "c' d)
+    ToQuoteArray test_array
+    printf '%s\n' "${test_array[@]}"
+}
+
+TestCoreJoinByChar()
+{
+    echo
+    test_array=( a 'b "c' d)
+    ToQuoteArray test_array
+    list=$(JoinByChar , "${test_array[@]}")
+    echo "$list"
+}
+
+TestCore()
+{
+    test_core_options=( 
+        '1. quote an array'
+        '2. array -> list'
+    )
+
+    test_core_actions=(
+        TestCoreQuoteArray
+        TestCoreJoinByChar
+    )
+
+    echo
+    inquirer checkbox_input_indices "选择测试项目" test_core_options test_core_options_indices
+
+    for test_core_options_index in "${test_core_options_indices[@]}"
+    do
+        ${test_core_actions[test_core_options_index]}
+    done
+
+    return
+}

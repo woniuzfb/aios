@@ -6,7 +6,7 @@ NginxInputArgs()
         Println "$tip 空字符用 '' 表示"
         inquirer text_input "输入单个指令值: " arg "$i18n_blank"
 
-        if [ "$arg" == "$i18n_blank" ] 
+        if [ -z "$arg" ] 
         then
             break
         fi

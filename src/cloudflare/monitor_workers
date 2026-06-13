@@ -412,8 +412,8 @@ CloudflareWorkersMonitorGetRequests()
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
     '[.success + "\u0002",
-    (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
-    (.result|if (.|type == "string") then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
+    (.errors|if type == "object" then . else {} end).message + "\u0002",
+    (.result|if type == "object" then . else {} end).id + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ "$success" = false ] 
     then
@@ -459,8 +459,8 @@ CloudflareWorkersMonitorGetRequests()
     IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -H 'Content-Type: application/json' -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     --data "$(echo $PAYLOAD)" https://api.cloudflare.com/client/v4/graphql)" '' \
-    '[((.data|if (.|type == "string") then {} else . end).viewer.accounts.workersInvocationsAdaptive|if (.|type == "string") then {} else . end).sum.requests + "\u0002",
-    (.errors|if (.|type == "string") then {} else . end).message + "\u0002"]|@tsv' "${delimiters[@]}")
+    '[((.data|if type == "object" then . else {} end).viewer.accounts.workersInvocationsAdaptive|if type == "object" then . else {} end).sum.requests + "\u0002",
+    (.errors|if type == "object" then . else {} end).message + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ -z "$cf_workers_requests" ] 
     then

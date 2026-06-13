@@ -1,5 +1,3 @@
-[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
-
 if [[ ! -x $(command -v curl) ]] 
 then
     DepsCheck
@@ -308,11 +306,11 @@ else
     Println "$error jq.json 下载出错, 无法连接 github ?"
 fi
 
-if curl -s -L "https://api.github.com/repos/alist-org/alist/releases/latest" -o "$FFMPEG_MIRROR_ROOT/alist.json_tmp"
+if curl -s -L "https://api.github.com/repos/OpenListTeam/OpenList/releases/latest" -o "$FFMPEG_MIRROR_ROOT/openlist.json_tmp"
 then
-    mv "$FFMPEG_MIRROR_ROOT/alist.json_tmp" "$FFMPEG_MIRROR_ROOT/alist.json"
+    mv "$FFMPEG_MIRROR_ROOT/openlist.json_tmp" "$FFMPEG_MIRROR_ROOT/openlist.json"
 else
-    Println "$error alist.json 下载出错, 无法连接 github ?"
+    Println "$error openlist.json 下载出错, 无法连接 github ?"
 fi
 
 if curl -s -L "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
@@ -376,7 +374,7 @@ fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" ] 
 then
-    if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp"
+    if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp"
     then
         mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
     else
@@ -384,14 +382,14 @@ then
     fi
 fi
 
-if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp"
+if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch"
 else
     Println "$error Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch 下载出错, 无法连接 github ?"
 fi
 
-if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp"
+if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp" "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch"
 else
@@ -463,11 +461,11 @@ mkdir -p "$FFMPEG_MIRROR_ROOT/locale/po/"
 for locale in "${locale_options[@]}"
 do
     Println "$info 下载 $locale 语言文件 ..."
-    if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/main/i18n/po/iptv.sh-$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo_tmp"
+    if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/i18n/po/${TEXTDOMAIN}.sh-$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo_tmp"
     then
-        mv "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo"
+        mv "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo"
     else
-        Println "$error iptv.sh-$locale.mo 下载出错, 无法连接 github ?"
+        Println "$error ${TEXTDOMAIN}.sh-$locale.mo 下载出错, 无法连接 github ?"
     fi
 done
 

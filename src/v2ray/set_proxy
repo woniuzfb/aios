@@ -1,0 +1,543 @@
+Include src/v2ray/list_policy "$@"
+
+V2raySetVliteuHandshakeMaskingPaddingSizeValidator()
+{
+    if [ "$1" == "0" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetHttpPortValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetSocksPortValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetShadowsocksPortValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetDokodemoPortValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetTrojanPortValidator()
+{
+    if [[ "$1" =~ ^[1-9][0-9]*$ ]] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetUserLevelValidator()
+{
+    if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -gt 0 ] && [ "$1" -le $((policy_levels_count+1)) ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetUserAlterIdValidator()
+{
+    if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 0 ] && [ "$1" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+V2raySetUserId()
+{
+    Println "$tip 必须为合法的 UUID"
+    inquirer text_input "输入用户 ID: " user_id "$i18n_random"
+
+    if [ "$user_id" == "$i18n_random" ] 
+    then
+        user_id=$($V2CTL_FILE uuid)
+        Println "  id: ${green} $user_id ${normal}"
+    fi
+}
+
+V2raySetUserLevel()
+{
+    V2rayListPolicy
+
+    echo
+    inquirer text_input "选择用户等级" user_level 1 V2raySetUserLevelValidator
+
+    user_level=$((user_level-1))
+}
+
+V2raySetUserAlterId()
+{
+    Println "$tip 0 代表启用 VMessAEAD, 最大值 65535"
+    inquirer text_input "输入用户 alterId: " user_alter_id 0 V2raySetUserAlterIdValidator
+}
+
+V2raySetUserEmail()
+{
+    echo
+    inquirer text_input "输入用户邮箱: " user_email "$i18n_random"
+
+    if [ "$user_email" == "$i18n_random" ] 
+    then
+        user_email="$(RandStr)@localhost"
+        Println "  邮箱: ${green} $user_email ${normal}"
+    fi
+}
+
+V2raySetVmessUser()
+{
+    V2raySetUserId
+    V2raySetUserLevel
+    V2raySetUserAlterId
+    V2raySetUserEmail
+
+    vmess_user=$(
+        $JQ_FILE --arg id "$user_id" --arg level "$user_level" --arg alterId "$user_alter_id" \
+        --arg email "$user_email" '{
+            "id": $id,
+            "level": $level | tonumber,
+            "alterId": $alterId | tonumber,
+            "email": $email
+        }'
+    )
+}
+
+V2raySetProxyDisableInsecureEncryption()
+{
+    Println "$tip 当客户端使用 none / aes-128-cfb 加密方式时, 服务器会主动断开连接"
+    inquirer list_input_ny "是否禁用不安全的加密方式" ft_options proxy_disable_insecure_encryption
+}
+
+V2raySetProxyDetourTo()
+{
+    echo
+    inquirer text_input "输入对应的出站协议使用另一个入站的标签: " proxy_detour_to "$i18n_blank"
+}
+
+V2raySetUserDefaultLevel()
+{
+    V2rayListPolicy
+
+    echo
+    inquirer text_input "输入用户默认等级: " user_default_level 1 V2raySetUserLevelValidator
+
+    user_default_level=$((user_default_level-1))
+}
+
+V2raySetUserDefaultAlterId()
+{
+    Println "$tip 0 代表启用 VMessAEAD, 最大值 65535"
+    inquirer text_input "输入用户默认alterId: " user_default_alter_id 0 V2raySetVmessUserAlterIdValidator
+}
+
+V2raySetUserDefault()
+{
+    V2raySetUserDefaultLevel
+    V2raySetUserDefaultAlterId
+
+    user_default=$(
+        $JQ_FILE --arg level "$user_default_level" --arg alterId "$user_default_alter_id" \
+        '{
+            "level": $level | tonumber,
+            "alterId": $alterId | tonumber
+        }'
+    )
+}
+
+V2raySetUsers()
+{
+    Println "$tip 必须为合法的 UUID, 多个 UUID 用空格分隔"
+    inquirer text_input "输入用户 ID: " users "$i18n_blank"
+    users=$(StringToList users)
+}
+
+V2raySetServerAddress()
+{
+    Println "$tip 支持 IP 地址或者域名"
+    inquirer text_input "输入服务器地址: " server_address "$i18n_blank"
+}
+
+V2raySetServerPort()
+{
+    echo
+    inquirer text_input "输入服务器端口号: " server_port "$i18n_blank"
+}
+
+V2raySetVlessUser()
+{
+    V2raySetUserId
+    V2raySetUserLevel
+    V2raySetUserEmail
+
+    vless_user=$(
+        $JQ_FILE --arg id "$user_id" --arg level "$user_level" \
+        --arg email "$user_email" '{
+            "id": $id,
+            "level": $level | tonumber,
+            "alterId": $alterId | tonumber,
+            "email": $email
+        }'
+    )
+}
+
+V2raySetProxyDecryption()
+{
+    echo
+    proxy_decryption_options=( none )
+    inquirer list_input "选择解密方式" proxy_decryption_options proxy_decryption
+}
+
+V2raySetProxyFallbacks()
+{
+    Println "$tip 只能用于 TCP+TLS 传输组合"
+    inquirer list_input_ny "是否配置协议回落" ft_options continue_yn
+
+    if [ "$continue_yn" = false ] 
+    then
+        proxy_fallbacks="[]"
+        return
+    fi
+
+    proxy_fallbacks=$(
+    $JQ_FILE -n --arg alpn "" --arg path "" \
+    --arg dest 80 --arg xver 0 \
+    '[{
+        "alpn": $alpn,
+        "path": $path,
+        "dest": $dest | tonumber,
+        "xver": $xver | tonumber
+    }]')
+
+    while true 
+    do
+        Println "$tip 请输入单个, 比如 http/1.1 或 h2"
+        inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "$i18n_blank"
+        if [ "$v2ray_fallback_alpn" == "h2" ] && [[ ! $tls_alpn =~ h2 ]]
+        then
+            Println "$error 协议回落存在 h2 时, $tls_name 需设置 h2 http/1.1\n"
+            exit 1
+        fi
+        Println "$tip 非空则必须以 / 开头, 不支持 h2c"
+        inquirer text_input "输入尝试匹配首包 HTTP PATH: " v2ray_fallback_path "任意"
+        if [ "$v2ray_fallback_path" == "任意" ] 
+        then
+            v2ray_fallback_path=""
+        fi
+        Println "$tip 格式为 addr:port 或 /dev/shm/domain.socket, 若填写域名, 也将直接发起 TCP 连接(而不走内置的 DNS)"
+        inquirer text_input "输入 $tls_name 解密后 TCP 流量的去向: " v2ray_fallback_dest
+        if [ -z "$v2ray_fallback_dest" ] 
+        then
+            Println "$error $i18n_canceled...\n"
+            exit 1
+        fi
+        Println "$tip 如果配置 nginx 的 PROXY protocol 记得设置 set_real_ip_from"
+        v2ray_fallback_proxy_protocol_options=( '不发送' '版本1' '版本2' )
+        inquirer list_input "选择 PROXY protocol" v2ray_fallback_proxy_protocol_options v2ray_fallback_proxy_protocol
+        if [ "$v2ray_fallback_proxy_protocol" == "不发送" ] 
+        then
+            v2ray_fallback_proxy_protocol=0
+        elif [ "$v2ray_fallback_proxy_protocol" == "版本1" ] 
+        then
+            v2ray_fallback_proxy_protocol=1
+        else
+            v2ray_fallback_proxy_protocol=2
+        fi
+        if [[ $v2ray_fallback_dest =~ ^[0-9]+$ ]] 
+        then
+            v2ray_fallback=$(
+            $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+            --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+            '{
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest | tonumber,
+                "xver": $xver | tonumber
+            }')
+        else
+            v2ray_fallback=$(
+            $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+            --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+            '{
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest,
+                "xver": $xver | tonumber
+            }')
+        fi
+
+        v2ray_fallbacks=$(
+        $JQ_FILE --argjson fallback "[$v2ray_fallback]" \
+        '. + $fallback' <<< "$v2ray_fallbacks")
+        echo
+        inquirer list_input "回落添加成功, 是否继续添加新的回落" ny_options v2ray_fallbacks_yn
+        if [ "$v2ray_fallbacks_yn" == "$i18n_no" ] 
+        then
+            break
+        fi
+    done
+
+    return
+}
+
+V2raySetVliteuAddress()
+{
+    Println "$tip 支持 IP 地址或者域名"
+    inquirer text_input "vliteu 输入服务器地址: " vliteu_address "$i18n_blank"
+}
+
+V2raySetVliteuPort()
+{
+    echo
+    inquirer text_input "vliteu 输入服务器端口号: " vliteu_port "$i18n_blank"
+}
+
+V2raySetVliteuPassword()
+{
+    echo
+    inquirer text_input "vliteu 输入目标服务器密码: " vliteu_password "$i18n_blank"
+}
+
+V2raySetVliteuScramblePacket()
+{
+    echo
+    inquirer list_input_yn "vliteu 启用数据包混淆" tf_options vliteu_scramble_packet
+}
+
+V2raySetVliteuEnableFec()
+{
+    echo
+    inquirer list_input_yn "vliteu 启用前向纠错" tf_options vliteu_enable_fec
+}
+
+V2raySetVliteuEnableStabilization()
+{
+    echo
+    inquirer list_input_yn "vliteu 启用通用连接稳定机制" tf_options vliteu_enable_stabilization
+}
+
+V2raySetVliteuEnableRenegotiation()
+{
+    echo
+    inquirer list_input_yn "vliteu 启用通用连接稳定重协议协商机制" tf_options vliteu_enable_renegotiation
+}
+
+V2raySetVliteuHandshakeMaskingPaddingSize()
+{
+    echo
+    inquirer text_input "vliteu 输入握手数据包填充至的长度: " vliteu_handshake_masking_padding_size 0 V2raySetVliteuHandshakeMaskingPaddingSizeValidator
+}
+
+V2raySetHttpAddress()
+{
+    echo
+    inquirer text_input "http 输入服务器地址: " http_address "$i18n_blank"
+}
+
+V2raySetHttpPort()
+{
+    echo
+    inquirer text_input "http 输入服务器端口号: " http_port 80 V2raySetHttpPortValidator
+}
+
+V2raySetHttpH1SkipWaitForReply()
+{
+    echo
+    inquirer list_input_ny "http 在服务器回复前发送连接数据" ft_options http_h1_skip_wait_for_reply
+}
+
+V2raySetSocksAddressInbound()
+{
+    echo
+    inquirer text_input "socks 指定客户端发包的目标地址: " socks_address_inbound "$i18n_blank"
+}
+
+V2raySetSocksUdpEnabled()
+{
+    echo
+    inquirer list_input_ny "socks 启用 UDP 支持" ft_options socks_udp_enabled
+}
+
+V2raySetSocksPacketEncoding()
+{
+    echo
+    socks_packet_encoding_options=(
+        None
+        Packet
+    )
+    inquirer list_input "socks UDP包编码方式" socks_packet_encoding_options socks_packet_encoding
+}
+
+V2raySetSocksAddressOutbound()
+{
+    Println "$tip 仅支持连接到 Socks 5 服务器"
+    inquirer text_input "socks 服务器地址: " socks_address_outbound "$i18n_blank"
+}
+
+V2raySetSocksPort()
+{
+    echo
+    inquirer text_input "socks 服务器端口号: " socks_port 1080 V2raySetSocksPortValidator
+}
+
+V2raySetShadowsocksMethod()
+{
+    Println "$tip none 不加密方式下，服务器端不会验证密码"
+    shadowsocks_method_options=(
+        aes-256-gcm
+        aes-128-gcm
+        chacha20-poly1305
+        none
+    )
+    inquirer list_input "shadowsocks 加密方式" shadowsocks_method_options shadowsocks_method
+}
+
+V2raySetShadowsocksPasswordInbound()
+{
+    Println "$tip 建议使用 16 字符或更长的密码"
+    inquirer text_input "shadowsocks 密码: " shadowsocks_password "$i18n_random"
+
+    if [ "$shadowsocks_password" == "$i18n_random" ] 
+    then
+        shadowsocks_password=$(RandStr 16)
+        Println "  shadowsocks 密码: ${green}$shadowsocks_password${normal}"
+    fi
+}
+
+V2raySetShadowsocksNetworks()
+{
+    echo
+    shadowsocks_networks_options=(
+        tcp
+        udp
+        tcp,udp
+    )
+    inquirer list_input "shadowsocks 传输协议" shadowsocks_networks_options shadowsocks_networks
+}
+
+V2raySetShadowsocksPacketEncoding()
+{
+    echo
+    shadowsocks_packet_encoding_options=(
+        None
+        Packet
+    )
+    inquirer list_input "shadowsocks UDP包编码方式" shadowsocks_packet_encoding_options shadowsocks_packet_encoding
+}
+
+V2raySetShadowsocksAddress()
+{
+    Println "$tip 支持 IP 地址或者域名"
+    inquirer text_input "shadowsocks 服务器地址: " shadowsocks_address "$i18n_blank"
+}
+
+V2raySetShadowsocksPort()
+{
+    echo
+    inquirer text_input "shadowsocks 服务器端口号: " shadowsocks_port 1080 V2raySetShadowsocksPortValidator
+}
+
+V2raySetShadowsocksPasswordOutbound()
+{
+    echo
+    inquirer text_input "shadowsocks 服务器密码: " shadowsocks_password "$i18n_blank"
+}
+
+V2raySetDokodemoAddress()
+{
+    Println "$tip 支持 IP 地址或者域名, followRedirect 为 true 时此项可为空"
+    inquirer text_input "dokodemo-door 将流量转发到此地址: " dokodemo_address "$i18n_blank"
+}
+
+V2raySetDokodemoPort()
+{
+    echo
+    inquirer text_input "dokodemo-door 将流量转发到目标地址的指定端口: " dokodemo_port 1080 V2raySetDokodemoPortValidator
+}
+
+V2raySetDokodemoNetworks()
+{
+    echo
+    dokodemo_networks_options=(
+        tcp
+        udp
+        tcp,udp
+    )
+    inquirer list_input "dokodemo-door 可接收的网络协议类型" dokodemo_networks_options dokodemo_networks
+}
+
+V2raySetDokodemoFollowRedirect()
+{
+    echo
+    inquirer list_input_ny "dokodemo-door 识别 iptables 转发来的数据，并转发到相应的目标地址" ft_options dokodemo_follow_redirect
+}
+
+V2raySetTrojanUsers()
+{
+    Println "$tip 多个密码用空格分隔"
+    inquirer text_input "trojan 输入用户密码: " trojan_users "$i18n_blank"
+    trojan_users=$(StringToList trojan_users)
+}
+
+V2raySetTrojanPacketEncoding()
+{
+    echo
+    trojan_packet_encoding_options=(
+        None
+        Packet
+    )
+    inquirer list_input "trojan UDP包编码方式" trojan_packet_encoding_options trojan_packet_encoding
+}
+
+V2raySetTrojanAddress()
+{
+    Println "$tip 支持 IP 地址或者域名"
+    inquirer text_input "trojan 服务器地址: " trojan_address "$i18n_blank"
+}
+
+V2raySetTrojanPort()
+{
+    echo
+    inquirer text_input "trojan 服务器端口号: " trojan_port 443 V2raySetTrojanPortValidator
+}
+
+V2raySetTrojanPassword()
+{
+    echo
+    inquirer text_input "trojan 服务器用户的密码: " trojan_password "$i18n_blank"
+}

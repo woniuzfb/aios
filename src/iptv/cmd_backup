@@ -115,7 +115,7 @@ else
 fi
 
 systemd_includes=(
-    /alist.service
+    /openlist.service
     /aria2.service
     /dnscrypt-proxy.service
     /mmproxy-'*'.service

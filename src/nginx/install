@@ -16,13 +16,12 @@ NginxPackageInstall()
             DepInstall gpg
             if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
             then
+                curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/ubuntu \
                     ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
                 else
-                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu \
                     ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
                 fi
@@ -41,13 +40,12 @@ NginxPackageInstall()
             DepInstall gpg
             if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
             then
+                curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/debian \
                     ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
                 else
-                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian \
                     ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
                 fi
@@ -536,7 +534,7 @@ NginxUninstall()
         else
             apt-get -y --purge remove "$nginx_name"* || true
         fi
-        rm -f /usr/local/bin/"$nginx_name"*
+        rm -f "$AIOS_PREFIX"/bin/"$nginx_name"*
     elif [ "$dist" == "mac" ] 
     then
         brew uninstall "$nginx_name"

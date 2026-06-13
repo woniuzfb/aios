@@ -1,0 +1,328 @@
+Include src/v2ray/set_proxy "$@"
+
+V2rayProxyVmessSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        if [ "$v2ray_v4" = true ] 
+        then
+            vmess_clients='[]'
+
+            while true 
+            do
+                echo
+                inquirer list_input_ny "是否继续添加Vmess用户" ft_options continue_yn
+
+                if [ "$continue_yn" = false ] 
+                then
+                    break
+                fi
+
+                V2raySetVmessUser
+
+                JQs merge_c vmess_clients --argjson user "$vmess_user" '. + [$user]'
+            done
+
+            V2raySetProxyDisableInsecureEncryption
+
+            JQs merge_c proxy_protocol_settings --argjson clients "$vmess_clients" \
+            --arg disableInsecureEncryption "$proxy_disable_insecure_encryption" '. * {
+                "clients": $clients,
+                "disableInsecureEncryption": $disableInsecureEncryption | test("true")
+            }'
+
+            V2raySetProxyDetourTo
+
+            if [ -n "$proxy_detour_to" ] 
+            then
+                V2raySetUserDefault
+
+                JQs merge_c proxy_protocol_settings --argjson default "$user_default" \
+                --arg to "$proxy_detour_to" '. * {
+                    "default": $default,
+                    "detour": {
+                        "to": $to
+                    }
+                }'
+            fi
+
+            return
+        fi
+
+        V2raySetUsers
+
+        JQs merge_c proxy_protocol_settings --argjson users "[$users]" '. * {
+            "users": $users
+        }'
+
+        return
+    fi
+
+    V2raySetServerAddress
+    V2raySetServerPort
+    V2raySetUserId
+
+    JQs merge_c proxy_protocol_settings --arg address "$server_address" \
+    --arg port "$server_port" --arg uuid "$user_id" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "uuid": $uuid
+    }'
+}
+
+V2rayProxyVlessSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        if [ "$v2ray_v4" = true ] 
+        then
+            vless_clients='[]'
+
+            while true 
+            do
+                echo
+                inquirer list_input_ny "是否继续添加Vless用户" ft_options continue_yn
+
+                if [ "$continue_yn" = false ] 
+                then
+                    break
+                fi
+
+                V2raySetVlessUser
+
+                JQs merge_c vless_clients --argjson user "$vless_user" '. + [$user]'
+            done
+
+            V2raySetProxyDecryption
+            V2raySetProxyFallbacks
+
+            JQs merge_c proxy_protocol_settings --argjson clients "$vmess_clients" \
+            --arg disableInsecureEncryption "$disable_insecure_encryption" '. * {
+                "clients": $clients,
+                "disableInsecureEncryption": $disableInsecureEncryption | test("true")
+            }'
+
+            V2rayDetourTo
+
+            if [ -n "$detour_to" ] 
+            then
+                V2raySetVmessUserDefault
+
+                JQs merge_c proxy_protocol_settings --argjson default "$vmess_user_default" \
+                --arg to "$detour_to" '. * {
+                    "default": $default,
+                    "detour": {
+                        "to": $to
+                    }
+                }'
+            fi
+
+            return
+        fi
+
+        V2raySetVlessUsers
+
+        JQs merge_c proxy_protocol_settings --argjson users "[$vless_users]" '. * {
+            "users": $users
+        }'
+        return
+    fi
+
+    V2raySetVlessAddress
+    V2raySetVlessPort
+    V2raySetVlessUuid
+
+    JQs merge_c proxy_protocol_settings --arg address "$vless_address" \
+    --arg port "$vless_port" --arg uuid "$vless_uuid" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "uuid": $uuid
+    }'
+}
+
+V2rayProxyVliteuSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        V2raySetVliteuPassword
+        V2raySetVliteuScramblePacket
+        V2raySetVliteuEnableFec
+        V2raySetVliteuEnableStabilization
+        V2raySetVliteuEnableRenegotiation
+        V2raySetVliteuHandshakeMaskingPaddingSize
+
+        JQs merge_c proxy_protocol_settings --arg password "$vliteu_password" \
+        --arg scramblePacket "$vliteu_scramble_packet" --arg enableFec "$vliteu_enable_fec" \
+        --arg enableStabilization "$vliteu_enable_stabilization" \
+        --arg enableRenegotiation "$vliteu_enable_renegotiation" \
+        --arg handshakeMaskingPaddingSize "$vliteu_handshake_masking_padding_size" '. * {
+            "password": $password,
+            "scramblePacket": $scramblePacket | test("true"),
+            "enableFec": $enableFec | test("true"),
+            "enableStabilization": $enableStabilization | test("true"),
+            "enableRenegotiation": $enableRenegotiation | test("true"),
+            "handshakeMaskingPaddingSize": $handshakeMaskingPaddingSize | tonumber
+        }'
+        return
+    fi
+
+    V2raySetVliteuAddress
+    V2raySetVliteuPort
+    V2raySetVliteuPassword
+    V2raySetVliteuScramblePacket
+    V2raySetVliteuEnableFec
+    V2raySetVliteuEnableStabilization
+    V2raySetVliteuEnableRenegotiation
+    V2raySetVliteuHandshakeMaskingPaddingSize
+
+    JQs merge_c proxy_protocol_settings --arg address "$vliteu_address" --arg port "$vliteu_port" \
+    --arg password "$vliteu_password" --arg scramblePacket "$vliteu_scramble_packet" \
+    --arg enableFec "$vliteu_enable_fec" --arg enableStabilization "$vliteu_enable_stabilization" \
+    --arg enableRenegotiation "$vliteu_enable_renegotiation" \
+    --arg handshakeMaskingPaddingSize "$vliteu_handshake_masking_padding_size" '. * {
+        "password": $password,
+        "scramblePacket": $scramblePacket | test("true"),
+        "enableFec": $enableFec | test("true"),
+        "enableStabilization": $enableStabilization | test("true"),
+        "enableRenegotiation": $enableRenegotiation | test("true"),
+        "handshakeMaskingPaddingSize": $handshakeMaskingPaddingSize | tonumber
+    }'
+}
+
+V2rayProxyHttpSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        return
+    fi
+
+    V2raySetHttpAddress
+    V2raySetHttpPort
+    V2raySetHttpH1SkipWaitForReply
+
+    JQs merge_c proxy_protocol_settings --arg address "$http_address" --arg port "$http_port" \
+    --arg h1SkipWaitForReply "$http_h1SkipWaitForReply" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "h1SkipWaitForReply": $h1SkipWaitForReply | test("true")
+    }'
+}
+
+V2rayProxySocksSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        V2raySetSocksAddressInbound
+        V2raySetSocksUdpEnabled
+        V2raySetSocksPacketEncoding
+
+        JQs merge_c proxy_protocol_settings --arg address "$socks_address_inbound" \
+        --arg udpEnabled "$socks_udp_enabled" \
+        --arg packetEncoding "$socks_packet_encoding" '. * {
+            "address": $address,
+            "udpEnabled": $udpEnabled | test("true"),
+            "packetEncoding": $packetEncoding
+        }'
+
+        return
+    fi
+
+    V2raySetSocksAddressOutbound
+    V2raySetSocksPort
+
+    JQs merge_c proxy_protocol_settings --arg address "$socks_address_outbound" \
+    --arg port "$socks_port" '. * {
+        "address": $address,
+        "port": $port | tonumber
+    }'
+}
+
+V2rayProxyShadowsocksSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        V2raySetShadowsocksMethod
+        if [ "$shadowsocks_packet_encoding" != "None" ] 
+        then
+            V2raySetShadowsocksPasswordInbound
+        else
+            shadowsocks_password=""
+        fi
+        V2raySetShadowsocksNetworks
+        V2raySetShadowsocksPacketEncoding
+
+        JQs merge_c proxy_protocol_settings --arg method "$shadowsocks_method" \
+        --arg password "$shadowsocks_password" --arg networks "$shadowsocks_networks" \
+        --arg packetEncoding "$shadowsocks_packet_encoding" '. * {
+            "method": $method,
+            "password": $password,
+            "networks": $networks,
+            "packetEncoding": $packetEncoding
+        }'
+        return
+    fi
+
+    V2raySetShadowsocksAddress
+    V2raySetShadowsocksPort
+    V2raySetShadowsocksMethod
+
+    if [ "$shadowsocks_packet_encoding" != "None" ] 
+    then
+        V2raySetShadowsocksPasswordOutbound
+    else
+        shadowsocks_password=""
+    fi
+
+    JQs merge_c proxy_protocol_settings --arg address "$shadowsocks_address" \
+    --arg port "$shadowsocks_port" --arg method "$shadowsocks_method" \
+    --arg password "$shadowsocks_password" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "method": $method,
+        "password": $password
+    }'
+}
+
+V2rayProxyDokodemoSettings()
+{
+    V2raySetDokodemoAddress
+    V2raySetDokodemoPort
+    V2raySetDokodemoNetworks
+    V2raySetDokodemoFollowRedirect
+
+    JQs merge_c proxy_protocol_settings --arg address "$dokodemo_address" \
+    --arg port "$dokodemo_port" --arg networks "$dokodemo_networks" \
+    --arg followRedirect "$dokodemo_follow_redirect" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "networks": $networks,
+        "followRedirect": $followRedirect | test("true")
+    }'
+}
+
+V2rayProxyTrojanSettings()
+{
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        V2raySetTrojanUsers
+        V2raySetTrojanPacketEncoding
+
+        JQs merge_c proxy_protocol_settings --argjson users "$trojan_users" \
+        --arg packetEncoding "$trojan_packet_encoding" '. * {
+            "users": $users,
+            "packetEncoding": $packetEncoding
+        }'
+        return
+    fi
+
+    V2raySetTrojanAddress
+    V2raySetTrojanPort
+    V2raySetTrojanPassword
+
+    JQs merge_c proxy_protocol_settings --arg address "$trojan_address" \
+    --arg port "$trojan_port" --arg password "$trojan_password" '. * {
+        "address": $address,
+        "port": $port | tonumber,
+        "password": $password
+    }'
+}

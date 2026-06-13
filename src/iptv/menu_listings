@@ -2615,12 +2615,12 @@ ScheduleRestoreBackup()
 
 ScheduleEnableCron()
 {
-    if crontab -l | grep -q "/usr/local/bin/tv s" 2> /dev/null
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
     then
         Println "$error 计划任务已开启 !\n"
     else
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-        printf '%s\n' "0 0 * * * /usr/local/bin/tv s -" >> "$IPTV_ROOT/cron_tmp"
+        printf '%s\n' "0 0 * * * $AIOS_PREFIX/bin/tv s -" >> "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
         Println "$info 计划任务开启成功 !\n"
@@ -2629,7 +2629,7 @@ ScheduleEnableCron()
 
 ScheduleDisableCron()
 {
-    if crontab -l | grep -q "/usr/local/bin/tv s" 2> /dev/null
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
     then
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
         sed -i "/\/usr\/local\/bin\/tv s/d" "$IPTV_ROOT/cron_tmp"

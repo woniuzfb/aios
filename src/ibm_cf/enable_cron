@@ -1,13 +1,13 @@
 IbmEnableCfAppCron()
 {
-    if crontab -l | grep -q "/usr/local/bin/ibm cron" 2> /dev/null
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/ibm cron" 2> /dev/null
     then
         Println "$error 定时重启任务已开启 !\n"
     else
         IFS=" " read -r cron_days cron_hour cron_min < <($JQ_FILE -r '.cf.cron|[.days,.hour,.min]|join(" ")' "$IBM_CONFIG")
         [ -z "$cron_days" ] && Println "$error 请先设置定时重启任务\n" && exit 1
         crontab -l > "$IBM_APPS_ROOT/cron_tmp" 2> /dev/null || true
-        printf '%s\n' "$cron_min $cron_hour */$cron_days * * /usr/local/bin/ibm cron" >> "$IBM_APPS_ROOT/cron_tmp"
+        printf '%s\n' "$cron_min $cron_hour */$cron_days * * $AIOS_PREFIX/bin/ibm cron" >> "$IBM_APPS_ROOT/cron_tmp"
         if ! grep -q 'PATH=' < "$IBM_APPS_ROOT/cron_tmp"
         then
             cron=$(< "$IBM_APPS_ROOT/cron_tmp")

@@ -1,3 +1,5 @@
+Include src/v2ray/get_policy "$@"
+
 V2rayListPolicy()
 {
     V2rayGetPolicy

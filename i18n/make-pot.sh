@@ -7,14 +7,20 @@
 
 if [ "$(uname -s)" = "Darwin" ]
 then
+  export HOMEBREW_NO_ASK=1
   GSED="gsed"
+  GAWK="gawk"
   if [ -z "$(which $GSED)" ]
   then
     brew install gnu-sed || exit 1
   fi
-  if [ -z "$(which gettext)" ]
+  if [ -z "$(which xgettext)" ]
   then
     brew install gettext
+  fi
+  if [ -z "$(which $GAWK)" ]
+  then
+    brew install gawk
   fi
 else
   GSED="sed"
@@ -37,18 +43,18 @@ then
   exit 1
 fi
 
-PACKAGE_NAME=iptv.sh # iptv.sh, v2.sh, x.sh, nx.sh, or.sh, cf.sh, ibm.sh, arm.sh, pve.sh
+PACKAGE_NAME=aios.sh # aios.sh, v2.sh, x.sh, nx.sh, or.sh, cf.sh, ibm.sh, arm.sh, pve.sh
 PACKAGE_POT_LANGUAGE=$1 # en, zh_CN
 PACKAGE_PO_LANGUAGE=$2 # ru, de ...
 
 XSRC=../docs/$PACKAGE_NAME
 
-PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |awk -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
+PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |$GAWK -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
 PACKAGE_TITLE="Locale ${PACKAGE_PO_LANGUAGE:-en} For $PACKAGE_NAME v$PACKAGE_VERSION"
 
 if [ "$1" == "b" ] && [ -e "po/$PACKAGE_NAME-en.po" ]
 then
-  awk '$1 == "msgstr" { s=$0; sub(/msgstr/, "msgid", s); print s; print "msgstr \"\""; next }
+  $GAWK '$1 == "msgstr" { s=$0; sub(/msgstr/, "msgid", s); print s; print "msgstr \"\""; next }
     $1 == "msgid" { next }
     1' "po/$PACKAGE_NAME-en.po" > "$PACKAGE_NAME.pot"
   $GSED -i '
@@ -83,7 +89,7 @@ IENC=UTF-8
 OENC=UTF-8
 
 PACKAGE_COPYRIGHT="GPL Version 3 License"
-PACKAGE_FIRST_POT_AUTHOR="MTimer https://github.com/woniuzfb/iptv"
+PACKAGE_FIRST_POT_AUTHOR="AIOS https://github.com/woniuzfb/aios"
 PACKAGE_POT_CREATION_TZ="UTC"
 PACKAGE_CHARSET="$OENC"
 PACKAGE_POT_BUGS_ADDRESS="tg @woniuzfb"
@@ -113,10 +119,10 @@ scan_source_file() # $1-filepath $2-potfile...-xgettext-options
   shift
   echo >&2 "scan_source_file $f"
   env TZ="$PACKAGE_POT_CREATION_TZ" \
-    xgettext ${IENC:+--from-code=$IENC} -L Shell "$@" --no-wrap -o "$o"  \
+    $GSED "s/\\$'\\\x80'-\\$'\\\xFF'//g" "$f" | xgettext ${IENC:+--from-code=$IENC} -L Shell "$@" --no-wrap -o "$o"  \
       --package-name="$PACKAGE_NAME" \
       --package-version="$PACKAGE_VERSION" \
-      --msgid-bugs-address="$PACKAGE_POT_BUGS_ADDRESS" "$f"
+      --msgid-bugs-address="$PACKAGE_POT_BUGS_ADDRESS" -
   $GSED -i '
   {
     s~SOME DESCRIPTIVE TITLE~'"$PACKAGE_TITLE"'~
@@ -125,12 +131,13 @@ scan_source_file() # $1-filepath $2-potfile...-xgettext-options
     s~FIRST AUTHOR.*$~'"$PACKAGE_FIRST_POT_AUTHOR"'~
     s~Language: ~&'"$PACKAGE_PO_LANGUAGE"'~
     s~=CHARSET~='"$PACKAGE_CHARSET"'~
+    s~'"$(printf '\xE2\x81\xA8')"'standard input'"$(printf '\xE2\x81\xA9')"'~'"$PACKAGE_NAME"'~g
   }' "$o"
 }
 
 if [ -e "po/$FPO" ] && [ -e "$FPOT" ]
 then
-  po_new=$(awk 'NR==FNR{ if($1 == "msgid") {arr[FNR]= $0};next}{ if($1 == "msgid") {$0=arr[FNR]}; print $0}' "$FPOT" "po/$FPO")
+  po_new=$($GAWK 'NR==FNR{ if($1 == "msgid") {arr[FNR]= $0};next}{ if($1 == "msgid") {$0=arr[FNR]}; print $0}' "$FPOT" "po/$FPO")
   echo "$po_new" > "po/$FPO"
 fi
 

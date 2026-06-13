@@ -28,15 +28,17 @@ SetIsHls()
 
 SetMapValidate()
 {
+    if [ -z "${1:-}" ] 
+    then
+        indices_input=""
+        return 0
+    fi
+
     IFS=" " read -r -a maps <<< "$1"
 
     for map in "${maps[@]}"
     do
         case "$map" in
-            "$i18n_blank") 
-                indices_input=""
-                return 0
-            ;;
             *[!0-9]*) 
                 return 1
             ;;
@@ -99,18 +101,13 @@ SetSubtitle()
         Println "$tip 比如 简体中文"
         inquirer text_input "新增字幕语言名称" subtitle_name "$i18n_blank"
 
-        if [ "$subtitle_name" == "$i18n_blank" ] 
+        if [ -z "$subtitle_name" ] 
         then
             break
         fi
 
         Println "$tip 比如 chi"
         inquirer text_input "设置字幕语言标识" subtitle_language "$i18n_blank"
-
-        if [ "$subtitle_language" == "$i18n_blank" ] 
-        then
-            subtitle_language=""
-        fi
 
         if [ "$subtitle_default" = true ] 
         then
@@ -187,7 +184,7 @@ SetDrawtext()
 {
     Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=yourdomain.com"
     inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-$i18n_blank}"
-    if [ "$draw_text" == "omit" ] || [ "$draw_text" == "$i18n_blank" ]
+    if [ "$draw_text" == "omit" ]
     then
         draw_text=""
     fi
@@ -224,7 +221,7 @@ SetProxy()
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555 : " proxy "${d_proxy:-$i18n_blank}"
 
-    if [ "$proxy" == "omit" ] || [ "$proxy" == "$i18n_blank" ]
+    if [ "$proxy" == "omit" ]
     then
         proxy=""
     fi
@@ -242,7 +239,7 @@ SetXtreamCodesProxy()
     Println "$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 xtream codes 代理: " xc_proxy "${d_xc_proxy:-$i18n_blank}"
 
-    if [ "$xc_proxy" == "omit" ] || [ "$xc_proxy" == "$i18n_blank" ]
+    if [ "$xc_proxy" == "omit" ]
     then
         xc_proxy=""
     fi
@@ -259,7 +256,7 @@ SetUserAgent()
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg 的 user agent: " user_agent "${d_user_agent:-$i18n_blank}"
 
-    if [ "$user_agent" == "omit" ] || [ "$user_agent" == "$i18n_blank" ]
+    if [ "$user_agent" == "omit" ]
     then
         user_agent=""
     fi
@@ -276,7 +273,7 @@ SetHeaders()
     Println "$tip 多个 header 用 \\\r\\\n 分隔, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg headers: " headers "${d_headers:-$i18n_blank}"
 
-    if [ "$headers" == "omit" ] || [ "$headers" == "$i18n_blank" ]
+    if [ "$headers" == "omit" ]
     then
         headers=""
     fi
@@ -303,7 +300,7 @@ SetCookies()
     Println "$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg cookies: " cookies "${d_cookies:-$i18n_blank}"
 
-    if [ "$cookies" == "omit" ] || [ "$cookies" == "$i18n_blank" ]
+    if [ "$cookies" == "omit" ]
     then
         cookies=""
     fi
@@ -353,7 +350,7 @@ SetSegDirName()
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "${d_seg_dir_name:-$i18n_blank}"
 
-    if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "$i18n_blank" ]
+    if [ "$seg_dir_name" == "omit" ]
     then
         seg_dir_name=""
     fi
@@ -528,11 +525,11 @@ SetQuality()
     while true 
     do
         inquirer text_input "请输入 crf 值: " quality "${d_quality:-$i18n_blank}"
+        if [ -z "$quality" ] 
+        then
+            break
+        fi
         case "$quality" in
-            "$i18n_blank")
-                quality=""
-                break
-            ;;
             *[!0-9]*)
                 Println "$error $i18n_input_correct_number [0-63]\n"
             ;;
@@ -554,7 +551,7 @@ SetBitrate()
 
     inquirer text_input "请输入码率: " bitrate "${d_bitrate:-$i18n_blank}"
 
-    if [ "$bitrate" == "omit" ] || [ "$bitrate" == "$i18n_blank" ] 
+    if [ "$bitrate" == "omit" ]
     then
         bitrate=""
     fi
@@ -566,7 +563,7 @@ SetResolution()
 
     inquirer text_input "请输入分辨率: " resolution "${d_resolution:-$i18n_blank}"
 
-    if [ "$resolution" == "omit" ] || [ "$resolution" == "$i18n_blank" ] 
+    if [ "$resolution" == "omit" ]
     then
         resolution=""
     fi
@@ -773,7 +770,7 @@ SetInputFlags()
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg 额外的输入参数: " input_flags "${d_input_flags:-$i18n_blank}"
 
-    if [ "$input_flags" == "omit" ] || [ "$input_flags" == "$i18n_blank" ]
+    if [ "$input_flags" == "omit" ]
     then
         input_flags=""
     fi
@@ -787,7 +784,7 @@ SetOutputFlags()
     fi
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "请输入 FFmpeg 额外的输出参数: " output_flags "${d_output_flags:-$i18n_blank}"
-    if [ "$output_flags" == "omit" ] || [ "$output_flags" == "$i18n_blank" ]
+    if [ "$output_flags" == "omit" ]
     then
         output_flags=""
     fi
@@ -831,7 +828,7 @@ SetSyncFile()
     Println "$tip 多个文件用空格分隔, 可以输入 omit 省略此选项"
     inquirer text_input "设置默认 sync_file: " sync_file "${d_sync_file:-$i18n_blank}"
 
-    if [ "$sync_file" == "omit" ] || [ "$sync_file" == "${d_sync_file:-$i18n_blank}" ]
+    if [ "$sync_file" == "omit" ] || [ "$sync_file" == "$d_sync_file" ]
     then
         sync_file=""
     fi
@@ -842,7 +839,7 @@ SetSyncIndex()
     Println "$tip 多个 sync_index 用空格分隔, 可以输入 omit 省略此选项"
     inquirer text_input "设置默认 sync_index: " sync_index "${d_sync_index:-$i18n_blank}"
 
-    if [ "$sync_index" == "omit" ] || [ "$sync_index" == "${d_sync_index:-$i18n_blank}" ]
+    if [ "$sync_index" == "omit" ] || [ "$sync_index" == "$d_sync_index" ]
     then
         sync_index=""
     fi
@@ -853,7 +850,7 @@ SetSyncPairs()
     Println "$tip 多个 sync_pairs 用空格分隔, 可以输入 omit 省略此选项"
     inquirer text_input "设置默认 sync_pairs: " sync_pairs "${d_sync_pairs:-$i18n_blank}"
 
-    if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "${d_sync_pairs:-$i18n_blank}" ]
+    if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "$d_sync_pairs" ]
     then
         sync_pairs=""
     fi
@@ -863,7 +860,7 @@ SetScheduleFile()
 {
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "设置节目表文件绝对路径: " schedule_file "${d_schedule_file:-$i18n_blank}"
-    if [ "$schedule_file" == "omit" ] || [ "$schedule_file" == "$i18n_blank" ]
+    if [ "$schedule_file" == "omit" ]
     then
         schedule_file=""
     fi
@@ -1358,9 +1355,9 @@ SetFlvH265()
             inquirer list_input_index "选择 FFmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
             if [ "$ffmpeg_c_options_index" -eq 0 ] 
             then
-                if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
+                if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o "$AIOS_PREFIX"/bin/ffmpeg_c
                 then
-                    chmod +x /usr/local/bin/ffmpeg_c
+                    chmod +x "$AIOS_PREFIX"/bin/ffmpeg_c
                 else
                     Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
                     exit 1
@@ -1407,7 +1404,7 @@ SetFlvPullLink()
     fi
     Println "$tip 比如 http://domain.com/flv?app=flv&stream=xxx 监控会验证此链接来确定是否重启频道, 如果不确定可以先留空, 可以输入 omit 省略此选项"
     inquirer text_input "请输入拉流(播放)地址: " flv_pull_link "${d_flv_pull_link:-$i18n_blank}"
-    if [ "$flv_pull_link" == "omit" ] || [ "$flv_pull_link" == "$i18n_blank" ]
+    if [ "$flv_pull_link" == "omit" ]
     then
         flv_pull_link=""
     fi

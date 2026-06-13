@@ -74,7 +74,7 @@ case $armbian_num in
             sed -i '/docker-ce/d' /etc/apt/sources.list
         fi
         AptUpdate
-        apt-get -y install ca-certificates
+        apt-get -y install ca-certificates gpg
         if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
         then
             if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
@@ -652,7 +652,7 @@ EOF
         fi
 
         Println "$info openwrt ${green}旁路由${normal} 安装成功, 地址: $openwrt_ip, 是 ${red}主路由${normal} 负责(拨号)联网\n"
-        Println "$tip 具体配置参考 https://github.com/woniuzfb/iptv/wiki/openwrt\n"
+        Println "$tip 具体配置参考 https://github.com/woniuzfb/aios/wiki/openwrt\n"
 
         nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
         nmcli con down hMACvLAN > /dev/null 2>&1 || true
@@ -824,10 +824,9 @@ EOF
 
         echo
         inquirer text_input "输入当前配置保存名称: " config_name "$i18n_blank"
-        if [ "$config_name" == "$i18n_blank" ] 
+
+        if [ -n "$config_name" ] 
         then
-            config_name=""
-        else
             config_name="-$config_name"
         fi
 

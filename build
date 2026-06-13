@@ -1,3 +1,5 @@
+shopt -s extglob
+
 ReplaceInclude()
 {
     local replace_path="$DEV_PATH"
@@ -6,9 +8,11 @@ ReplaceInclude()
     if [ "$replace_name" == "build" ] 
     then
         return
-    elif [ "$replace_name" == "src/\$self" ] 
+    fi
+
+    if [ "$replace_name" == "src/\$self" ] 
     then
-        echo "${2:-}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ]"
+        echo "${2:-}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ] || [ \"\$self\" == \"aios\" ]"
         echo "${2:-}then"
         ReplaceInclude src/tv "    ${2:-}"
         bins=(v2 x nx or pve arm ibm cf cx ali lhh rc cw dr ha)
@@ -24,6 +28,13 @@ ReplaceInclude()
         echo "${2:-}fi"
         return
     fi
+
+#    if [[ "$replace_name" == @($(JoinByChar '|' "${replace_files[@]//|/\\|}")) ]] 
+#    then
+#        return
+#    fi
+
+    replace_files+=("$replace_name")
 
     while [[ $replace_name =~ \/ ]] 
     do
@@ -70,11 +81,13 @@ ReplaceInclude()
 
 BuildShFile()
 {
-    ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$DEV_PATH/iptv.sh"
+    replace_files=()
+
+    ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$DEV_PATH/aios.sh"
 
     if [ "$INSTALL_SH" = true ] 
     then
-        cp -f "$DEV_PATH/iptv.sh" "$SH_FILE"
+        cp -f "$DEV_PATH/aios.sh" "$SH_FILE"
     fi
 }
 
@@ -85,8 +98,8 @@ else
     INSTALL_SH=false
 fi
 
-Spinner "Building iptv.sh" BuildShFile
+Spinner "Building aios.sh" BuildShFile
 
-Println "$info new iptv.sh created! For devs only!!\n"
+Println "$info new aios.sh created! For devs only!!\n"
 
 exit 0

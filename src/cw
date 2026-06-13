@@ -7,7 +7,7 @@ Include src/service/browse "$@"
 Include utils/python "$@"
 Include utils/imagemagick "$@"
 
-calibre_options=( 'kcc' '安装/更新 calibre' '开启 Calibre Web' '关闭 Calibre Web' '重启 Calibre Web' '查看 Calibre Web' '安装/更新 Calibre Web' )
+calibre_options=( 'kcc' '安装/更新 calibre' '开启 Calibre Web' '关闭 Calibre Web' '重启 Calibre Web' '查看 Calibre Web' '安装/更新 Calibre Web' 'Patch Calibre Web' )
 echo
 inquirer list_input_index "请选择" calibre_options calibre_options_index
 
@@ -25,5 +25,7 @@ case $calibre_options_index in
     5) CalibreWebView
     ;;
     6) CalibreWebInstall
+    ;;
+    7) CalibreWebPatch
     ;;
 esac

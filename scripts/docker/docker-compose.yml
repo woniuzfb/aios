@@ -144,3 +144,53 @@ services:
     environment:
       TZ: Asia/Shanghai
     command: /bin/sh -c 'redis-server --appendonly yes --requirepass "$$(< /run/secrets/SESSION_REDIS_PASSWORD)"'
+
+  mi-gpt:
+    image: idootop/mi-gpt:latest
+    container_name: mi-gpt
+    networks:
+      - net
+    volumes:
+      - ${PWD}/data/mi-gpt/.migpt.js:/app/.migpt.js
+    env_file: data/mi-gpt/.env
+    labels:
+      - traefik.enable=false
+
+  gpt4free:
+    image: hlohaus789/g4f:latest
+    container_name: gpt4free
+    shm_size: '2gb'
+    networks:
+      - net
+    expose:
+      - 1337
+    ports:
+      - 8081:8080
+      - 1337:1337
+      - 7900:7900
+    volumes:
+      - ${PWD}/data/gpt4free/har_and_cookies:/app/har_and_cookies
+      - ${PWD}/data/gpt4free/generated_images:/app/generated_images
+    environment:
+      TZ: Asia/Shanghai
+      CHROME_FLAGS: --no-sandbox
+    labels:
+      - traefik.enable=false
+
+  # Try Rclone(rc) instead!
+  # clouddrive2:
+  #   image: cloudnas/clouddrive2
+  #   container_name: clouddrive2
+  #   network_mode: host
+  #   volumes:
+  #     - /CloudNAS:/CloudNAS:shared
+  #     - ${PWD}/data/clouddrive2:/Config
+  #     - /usr/local/share/ca-certificates:/usr/local/share/ca-certificates
+  #   environment:
+  #     TZ: Asia/Shanghai
+  #     CLOUDDRIVE_HOME: /Config
+  #   devices:
+  #     - /dev/fuse:/dev/fuse
+  #   restart: unless-stopped
+  #   pid: host
+  #   privileged: true

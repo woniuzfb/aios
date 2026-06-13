@@ -1,3 +1,5 @@
+Include src/test/core
 Include src/test/inquirer
 
+TestCore
 TestInquirer

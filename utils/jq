@@ -12,7 +12,11 @@ JQInstall()
     DepsCheck
     ArchCheck
 
-    if grep -q "arm" <<< "$arch" 
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall jq check
+        return 0
+    elif grep -q "arm" <<< "$arch" 
     then
         if ! /usr/local/bin/jq -V > /dev/null 2>&1 
         then
@@ -36,11 +40,6 @@ JQInstall()
         Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
     else
         Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
-        if [ "$dist" == "mac" ] 
-        then
-            DepInstall jq
-            return 0
-        fi
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
         if ! jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then

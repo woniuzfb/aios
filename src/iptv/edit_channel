@@ -95,7 +95,7 @@ EditStreamLink()
                 stream_link="${chnl_stream_links[chnl_stream_links_index]//${chnl_stream_links[chnl_stream_links_index]##*|}/$new_mac}"
             fi
 
-            if [ "$stream_link" == "$i18n_blank" ] 
+            if [ -z "$stream_link" ] 
             then
                 continue
             fi

@@ -14,7 +14,7 @@
   - [快捷键](#快捷键)
   - [参数详解](#参数详解)
   - [举例](#举例)
-- [Alist](#alist)
+- [OpenList](#openlist)
 - [Rclone](#rclone)
 - [Calibre](#calibre)
 - [LianHuanHua](#lianhuanhua)
@@ -28,7 +28,7 @@
 ## V2ray
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
+wget https://woniuzfb.github.io/aios/v2.sh && bash v2.sh
 ```
 
 `v2` 打开 v2ray 管理面板
@@ -38,7 +38,7 @@ wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 ## Xray
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
+wget https://woniuzfb.github.io/aios/x.sh && bash x.sh
 ```
 
 `x` 打开 xray 管理面板
@@ -48,7 +48,7 @@ wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 ## Nginx
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
+wget https://woniuzfb.github.io/aios/nx.sh && bash nx.sh
 ```
 
 <details>
@@ -72,7 +72,7 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 ## Openresty
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
+wget https://woniuzfb.github.io/aios/or.sh && bash or.sh
 ```
 
 <details>
@@ -86,7 +86,7 @@ wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 ## Armbian
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
+wget https://woniuzfb.github.io/aios/arm.sh && bash arm.sh
 ```
 
 <details>
@@ -108,7 +108,7 @@ wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 ## Proxmox VE
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
+wget https://woniuzfb.github.io/aios/pve.sh && bash pve.sh
 ```
 
 <details>
@@ -128,7 +128,7 @@ wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 ## IBM Cloud Foundry
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
+wget https://woniuzfb.github.io/aios/ibm.sh && bash ibm.sh
 ```
 
 <details>
@@ -146,7 +146,7 @@ wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 ## Cloudflare partner,workers
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
+wget https://woniuzfb.github.io/aios/cf.sh && bash cf.sh
 ```
 
 <details>
@@ -173,7 +173,7 @@ wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 ## FFmpeg
 
 ``` bash
-wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
+wget https://woniuzfb.github.io/aios/aios.sh && bash aios.sh
 ```
 
 <details>
@@ -287,7 +287,7 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 </details>
 
-## Alist
+## OpenList
 
 ```bash
 ./debug ali
@@ -344,6 +344,8 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 - traefik
 - authelia
+- mi-gpt
+- gpt4free
 - postgresql
 - yq
 

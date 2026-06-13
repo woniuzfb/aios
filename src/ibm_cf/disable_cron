@@ -1,6 +1,6 @@
 IbmDisableCfAppCron()
 {
-    if crontab -l | grep -q "/usr/local/bin/ibm cron" 2> /dev/null
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/ibm cron" 2> /dev/null
     then
         crontab -l > "$IBM_APPS_ROOT/cron_tmp" 2> /dev/null || true
         sed -i "/\/usr\/local\/bin\/ibm cron/d" "$IBM_APPS_ROOT/cron_tmp"

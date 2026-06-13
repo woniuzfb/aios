@@ -5,11 +5,11 @@ NginxGetConfig()
     level_2_directive level_2_args level_3_directive level_3_args \
     level_4_directive level_4_args level_5_directive level_5_args < <(
     JQs flat_c "$parse_out" '' \
-    '(.config.parsed|if (.|type == "string") then {} else . end) as $level_1 |
-    ($level_1.block|if (.|type == "string") then {} else . end) as $level_2 |
-    ($level_2.block|if (.|type == "string") then {} else . end) as $level_3 |
-    ($level_3.block|if (.|type == "string") then {} else . end) as $level_4 |
-    ($level_4.block|if (.|type == "string") then {} else . end) as $level_5 |
+    '(.config.parsed|if type == "object" then . else {} end) as $level_1 |
+    ($level_1.block|if type == "object" then . else {} end) as $level_2 |
+    ($level_2.block|if type == "object" then . else {} end) as $level_3 |
+    ($level_3.block|if type == "object" then . else {} end) as $level_4 |
+    ($level_4.block|if type == "object" then . else {} end) as $level_5 |
     [.status + "\u0007",
     (.errors|if . == "" then {} else . end).error + "\u0007",
     ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",

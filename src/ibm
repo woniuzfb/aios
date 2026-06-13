@@ -108,27 +108,6 @@ ShFileCheck
 
 JQInstall
 
-if [ -d "$IPTV_ROOT" ]
-then
-    IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
-
-    if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
-    then
-        mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
-    fi
-
-    IBM_CONFIG="$IBM_CONFIG_NEW"
-
-    IBM_APPS_ROOT_NEW="$IPTV_ROOT/${IBM_APPS_ROOT##*/}"
-
-    if [ -d "$IBM_APPS_ROOT" ] && [ ! -d "$IBM_APPS_ROOT_NEW" ]
-    then
-        mv "$IBM_APPS_ROOT" "$IPTV_ROOT/"
-    fi
-
-    IBM_APPS_ROOT="$IBM_APPS_ROOT_NEW"
-fi
-
 if [ "${1:-}" == "v2" ] 
 then
     v2ray_name="v2ray"

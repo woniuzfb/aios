@@ -159,26 +159,27 @@ ZhLhh()
 
     jq_input=$($JQ_FILE -c 'del(.books.hdlz)' "$LIANHUANHUA_CONFIG")
 
-IFS=$'\003\t' read -r default_save_dir m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
+    IFS=$'\003\t' read -r default_save_dir m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
     m_muludir m_original m_p m_publish m_yd m_downloaded m_fav < <(JQs flat "$jq_input" '' \
-'(.default // ""| if (.|type == "string") then {} else . end) as $default |
-(.books.zhlhh | if . == "" then {} else . end) as $zhlhh |
-reduce ({save_dir}|keys_unsorted[]) as $key ([];
-    $default[$key] as $val | if $val then
-        . + [$val + "\u0003"]
-    else
-        . + ["\u0003"]
-    end
-) + 
-reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
-    yd,downloaded,fav}|keys_unsorted[]) as $key ([];
-        $zhlhh[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
+    'if type == "object" then . else {} end |
+    (.default | if type == "object" then . else {} end) as $default |
+    (.books.zhlhh | if type == "object" then . else {} end) as $zhlhh |
+    reduce ({save_dir}|keys_unsorted[]) as $key ([];
+        $default[$key] as $val | if $val then
+            . + [$val + "\u0003"]
         else
             . + ["\u0003"]
         end
-    )
-|@tsv' "${delimiters[@]}")
+    ) + 
+    reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
+        yd,downloaded,fav}|keys_unsorted[]) as $key ([];
+            $zhlhh[$key] as $val | if $val then
+                . + [$val + "\u0002\u0003"]
+            else
+                . + ["\u0003"]
+            end
+        )
+    |@tsv' "${delimiters[@]}")
 
     IFS="${delimiters[1]}" read -r -a books_adapter <<< "$m_adapter"
     IFS="${delimiters[1]}" read -r -a books_addtime <<< "$m_addtime"
@@ -651,24 +652,25 @@ HdlzLhh()
 
     SetDelimiters
 
-IFS=$'\003\t' read -r default_save_dir m_source m_id m_title m_cover m_excerpt m_behot_time m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
-'(.default // ""| if (.|type == "string") then {} else . end) as $default |
-(.books.hdlz | if . == "" then {} else . end) as $hdlz |
-reduce ({save_dir}|keys_unsorted[]) as $key ([];
-    $default[$key] as $val | if $val then
-        . + [$val + "\u0003"]
-    else
-        . + ["\u0003"]
-    end
-) + 
-reduce ({source,id,title,cover,excerpt,behot_time,downloaded,fav}|keys_unsorted[]) as $key ([];
-        $hdlz[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
+    IFS=$'\003\t' read -r default_save_dir m_source m_id m_title m_cover m_excerpt m_behot_time m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
+    'if type == "object" then . else {} end |
+    (.default | if type == "object" then . else {} end) as $default |
+    (.books.hdlz | if type == "object" then . else {} end) as $hdlz |
+    reduce ({save_dir}|keys_unsorted[]) as $key ([];
+        $default[$key] as $val | if $val then
+            . + [$val + "\u0003"]
         else
             . + ["\u0003"]
         end
-    )
-|@tsv' "${delimiters[@]}")
+    ) + 
+    reduce ({source,id,title,cover,excerpt,behot_time,downloaded,fav}|keys_unsorted[]) as $key ([];
+            $hdlz[$key] as $val | if $val then
+                . + [$val + "\u0002\u0003"]
+            else
+                . + ["\u0003"]
+            end
+        )
+    |@tsv' "${delimiters[@]}")
 
     IFS="${delimiters[1]}" read -r -a books_source <<< "$m_source"
     IFS="${delimiters[1]}" read -r -a books_id <<< "$m_id"
@@ -1219,24 +1221,25 @@ DangCloud()
 
     SetDelimiters
 
-IFS=$'\003\t' read -r default_save_dir m_id m_title m_cover m_start m_end m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
-'(.default // ""| if (.|type == "string") then {} else . end) as $default |
-(.books.dang | if . == "" then {} else . end) as $dang |
-reduce ({save_dir}|keys_unsorted[]) as $key ([];
-    $default[$key] as $val | if $val then
-        . + [$val + "\u0003"]
-    else
-        . + ["\u0003"]
-    end
-) + 
-reduce ({id,title,cover,start,end,downloaded,fav}|keys_unsorted[]) as $key ([];
-        $dang[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
+    IFS=$'\003\t' read -r default_save_dir m_id m_title m_cover m_start m_end m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
+    'if type == "object" then . else {} end |
+    (.default | if type == "object" then . else {} end) as $default |
+    (.books.dang | if type == "object" then . else {} end) as $dang |
+    reduce ({save_dir}|keys_unsorted[]) as $key ([];
+        $default[$key] as $val | if $val then
+            . + [$val + "\u0003"]
         else
             . + ["\u0003"]
         end
-    )
-|@tsv' "${delimiters[@]}")
+    ) + 
+    reduce ({id,title,cover,start,end,downloaded,fav}|keys_unsorted[]) as $key ([];
+            $dang[$key] as $val | if $val then
+                . + [$val + "\u0002\u0003"]
+            else
+                . + ["\u0003"]
+            end
+        )
+    |@tsv' "${delimiters[@]}")
 
     IFS="${delimiters[1]}" read -r -a books_id <<< "$m_id"
     IFS="${delimiters[1]}" read -r -a books_title <<< "$m_title"

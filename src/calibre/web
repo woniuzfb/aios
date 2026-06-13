@@ -1,3 +1,64 @@
+CalibreWebPatch()
+{
+    if [ ! -d "$CALIBRE_ROOT/web" ] 
+    then
+        Println "$error 请先安装 Calibre Web\n"
+        return 1
+    fi
+
+    local d
+
+    for d in "$CALIBRE_ROOT"/web/cps/translations/*
+    do
+        if TMP_FILE=$(mktemp -q) 
+        then
+            chmod +r "$TMP_FILE"
+        else
+            printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+        fi
+
+        trap '
+            rm -f "$TMP_FILE"
+        ' EXIT
+
+        awk '
+            BEGIN {
+                in_relevant_block = 0;
+            }
+
+            /#:/ {
+                in_relevant_block = ($0 ~ /helper\.py/) ? 1 : 0;
+            }
+
+            /^msgid/ && in_relevant_block {
+                gsub(/Calibre-Web/, "Epub.Fun");
+            }
+
+            /^msgstr/ && in_relevant_block {
+                gsub(/Calibre-Web/, "Epub.Fun");
+            }
+
+            { print }
+        ' "$d"/LC_MESSAGES/messages.po > "$TMP_FILE"
+
+        mv "$TMP_FILE" "$d"/LC_MESSAGES/messages.po
+
+        trap - EXIT
+
+        sed -i 's/please restart Calibre-Web/please restart/g' "$d"/LC_MESSAGES/messages.po
+        sed -i 's/to hide it in Calibre-Web/to hide it/g' "$d"/LC_MESSAGES/messages.po
+        sed -i 's/Calibre-Web Instance/Instance/g' "$d"/LC_MESSAGES/messages.po
+        msgfmt -o "$d"/LC_MESSAGES/messages.mo "$d"/LC_MESSAGES/messages.po
+    done
+
+    sed -i '20,$s/Calibre-Web/Epub.Fun/g' "$CALIBRE_ROOT"/web/cps/helper.py
+    sed -i '20,$s/ Calibre-Web//g' "$CALIBRE_ROOT"/web/cps/search.py
+    sed -i 's/ in Calibre-Web//g' "$CALIBRE_ROOT"/web/cps/templates/detail.html
+    sed -i 's/Calibre-Web //g' "$CALIBRE_ROOT"/web/cps/templates/http_error.html
+
+    return 0
+}
+
 CalibreWebInstall()
 {
     if [ -d "$CALIBRE_ROOT/web" ] 

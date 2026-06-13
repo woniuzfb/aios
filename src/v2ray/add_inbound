@@ -339,7 +339,7 @@ V2rayAddInbound()
 
         V2raySetDetourTo
 
-        if [ "$detour_to" != "$i18n_blank" ] 
+        if [ -n "$detour_to" ] 
         then
             V2raySetDetourDefault
             new_inbound=$(

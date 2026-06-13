@@ -15,7 +15,7 @@ GetDefault()
     d_anti_ddos_syn_flood_seconds d_anti_ddos d_anti_ddos_seconds d_anti_ddos_level \
     d_anti_leech d_anti_leech_restart_nums d_anti_leech_restart_flv_changes \
     d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r --arg delimiter "${delimiters[0]}" '
-    .default as $default | 
+    .default | if type == "object" then . else {} end | .as $default |
     reduce ({proxy,xc_proxy,user_agent,headers,cookies,playlist_name,seg_dir_name,seg_name,seg_length,
     seg_count,video_codec,audio_codec,video_audio_shift,draw_text,quality,bitrate,resolution,const,
     const_cbr,encrypt,encrypt_session,keyinfo_name,key_name,input_flags,output_flags,sync,sync_file,sync_index,

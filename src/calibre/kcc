@@ -91,10 +91,6 @@ KccConfig()
         kcc_process=true
         echo
         inquirer text_input "输入额外参数" kcc_args "$i18n_blank"
-        if [ "$kcc_args" == "$i18n_blank" ] 
-        then
-            kcc_args=""
-        fi
     fi
 
     echo
@@ -186,10 +182,7 @@ KccConfigEdit()
             2)
                 echo
                 inquirer text_input "输入额外参数" new_kcc_args "$i18n_blank"
-                if [ "$new_kcc_args" == "$i18n_blank" ] 
-                then
-                    new_kcc_args=""
-                fi
+
                 if [ "$new_kcc_args" != "$kcc_args" ] 
                 then
                     jq_path='["kcc","args"]'
@@ -213,7 +206,7 @@ KccConfigEdit()
                 do
                     echo
                     inquirer text_input "输入源图片目录" new_kcc_source "$i18n_blank"
-                    if [ "$new_kcc_source" == "$i18n_blank" ] 
+                    if [ -z "$new_kcc_source" ] 
                     then
                         break
                     fi
@@ -257,7 +250,7 @@ KccConfigEdit()
                     do
                         echo
                         inquirer text_input "修改源图片目录 ${kcc_sources[kcc_sources_index]}" new_kcc_source "$i18n_blank"
-                        if [ "$new_kcc_source" == "$i18n_blank" ] 
+                        if [ -z "$new_kcc_source" ] 
                         then
                             continue 2
                         fi

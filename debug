@@ -31,6 +31,11 @@ Include ver
 
 Include env
 
+if [ "$sh_debug" = true ]
+then
+    set -x
+fi
+
 Include core "$@"
 
 Include utils/i18n "$@"
@@ -71,7 +76,7 @@ then
         echo
         inquirer text_input "输入参数" args_input "$i18n_blank"
 
-        if [ "$args_input" == "$i18n_blank" ] 
+        if [ -z "$args_input" ] 
         then
             args=()
         else
@@ -84,4 +89,4 @@ else
     args=("${@:-}")
 fi
 
-Include src/"$self" "${args[@]}"
+Include src/"$self" "${args[@]:-}"

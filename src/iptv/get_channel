@@ -27,7 +27,7 @@ GetChannel()
     chnl_subtitle_auto_select chnl_subtitle_map chnl_schedule_start_time chnl_schedule_end_time chnl_schedule_loop \
     chnl_schedule_auto_remove chnl_schedule_hls_change chnl_schedule_hls_change_once chnl_schedule_channel_name \
     chnl_schedule_status < <($JQ_FILE -c -r --arg delimiter "${delimiters[0]}" --arg select_index "$select_index" --argjson select_json "$select_json" '
-    .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
+    (.channels | if type == "array" then . else [] end)[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
     ($channel.subtitle // [] | if . == "" then [] else . end) as $subtitle |
     ($channel.schedule // [] | if . == "" then [] else . end) as $schedule |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,

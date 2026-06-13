@@ -96,11 +96,6 @@ RcloneServeAdd()
     echo
     inquirer text_input "输入服务参数" rclone_serve_args "$i18n_blank"
 
-    if [ "$rclone_serve_args" == "$i18n_blank" ] 
-    then
-        rclone_serve_args=""
-    fi
-
     new_serve=$(
     $JQ_FILE -n --arg remote "$rclone_serve_remote" --arg protocol "$rclone_serve_protocol" \
     --argjson addr "$(ToJsonArray rclone_serve_addrs)" --arg htpasswd "$rclone_serve_htpasswd" \

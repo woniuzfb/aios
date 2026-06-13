@@ -1,4 +1,4 @@
-// Stream Proxy For https://github.com/woniuzfb/iptv
+// Stream Proxy For https://github.com/woniuzfb/aios
 const VERSION = "0.1.0"
 
 // Empty: flexible upstream domain, e.g. http://yourworker-domain.dev/PROXY_ENDPOINT/https://any.upstream-domain.com/upstream-path
@@ -57,7 +57,7 @@ const INDEX_PAGE = `
   <!DOCTYPE html>
   <html>
   <body>
-    <h1>Stream Proxy For <a target="_blank" href="https://github.com/woniuzfb/iptv">IPTV</a></h1>
+    <h1>Stream Proxy For <a target="_blank" href="https://github.com/woniuzfb/aios">AIOS</a></h1>
   </body>
   </html>`
 

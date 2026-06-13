@@ -127,6 +127,7 @@ BrewInstall()
 {
     if [[ ! -x $(command -v brew) ]]
     then
+        export NONINTERACTIVE=1
         Println "${green}[info]${normal} 安装 Homebrew ...\n"
         if ! curl -s -S -Lm 20 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
         then
@@ -150,9 +151,12 @@ BrewInstall()
 
 DepInstall()
 {
-    local dependency=$1
+    local dependency=$1 check=${2:-}
 
-    [[ -x $(command -v $dependency) ]] && return 0
+    if [ -z "$check" ] && [[ -x $(command -v $dependency) ]]
+    then
+        return 0
+    fi
 
     if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ] || [ "$dependency" == "gsed" ] || [ "$dependency" == "gdate" ] || [ "$dependency" == "ggrep" ]
     then
@@ -494,3 +498,69 @@ EOF
     #    echo -e "mongodb soft nproc 64000\nmongodb hard nproc 64000" > /etc/security/limits.d/99-mongodb-nproc.conf
     #fi
 }
+
+DistCheck
+
+if [ "$dist" == "mac" ] 
+then
+    export HOMEBREW_NO_ASK=1
+
+    BrewInstall
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        HOMEBREW_PREFIX="/opt/homebrew"
+        if [ "${add_homebrew_path:-false}" = true ] 
+        then
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+        fi
+        if ! grep -q homebrew <<< "$PATH"
+        then
+            export PATH="/opt/homebrew/bin:$PATH"
+        fi
+    else
+        HOMEBREW_PREFIX="/usr/local"
+    fi
+
+    DepInstall gsed
+    DepInstall gdate
+    DepInstall ggrep
+
+    if [ ! -d "$AIOS_PREFIX"/bin ]
+    then
+
+        AIOS_PREFIX="$HOMEBREW_PREFIX"
+        Include env
+    fi
+
+    TEXTDOMAINDIR="$HOMEBREW_PREFIX"/share/locale
+
+sed()
+{
+    gsed "$@"
+}
+
+date()
+{
+    gdate "$@"
+}
+
+grep()
+{
+    ggrep "$@"
+}
+
+base64()
+{
+    gbase64 "$@"
+}
+
+fi
+
+export TEXTDOMAIN TEXTDOMAINDIR
+
+DepInstall gettext
+
+# [ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1

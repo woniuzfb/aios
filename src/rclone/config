@@ -12,6 +12,7 @@ RcloneConfigUpdate()
         do
             rclone_config="${rclone_config}[${rclone_remotes_name[i]}]\ntype = ${rclone_remotes_type[i]}\nurl = ${rclone_remotes_url[i]}\nvendor = ${rclone_remotes_vendor[i]}\nuser = ${rclone_remotes_user[i]}\npass = ${rclone_remotes_pass[i]}\n\n"
         done
+        mkdir -p "$HOME/.config/rclone"
         echo -ne "$rclone_config" > "$HOME/.config/rclone/rclone.conf"
     fi
 }

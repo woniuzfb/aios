@@ -894,6 +894,6 @@ EOF
     make $nproc
     #make install
     #hash -r
-    mv ffmpeg /usr/local/bin/ffmpeg_c
+    mv ffmpeg "$AIOS_PREFIX"/bin/ffmpeg_c
     Println "`eval_gettext \"\\\$info FFmpeg 编译成功\"`\n"
 }

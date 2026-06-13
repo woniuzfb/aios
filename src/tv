@@ -393,7 +393,7 @@ then
         d)
             Include src/iptv/cmd_default "$@"
         ;;
-        ffmpeg|FFmpeg) 
+        ffmpeg|FFmpeg|mirror) 
             Include utils/mirror "$@"
         ;;
         ts) 

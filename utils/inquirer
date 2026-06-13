@@ -1,4 +1,3 @@
-# based on https://raw.githubusercontent.com/tanhauhau/Inquirer.sh/master/dist/inquirer.sh
 inquirer()
 {
     DepInstall tput
@@ -1659,7 +1658,13 @@ inquirer()
 
     inquirer:on_text_input_enter() {
         local validate_failed_msg
+
         text_input=${text_input:-$text_default}
+
+        if [ "$text_default" == "$i18n_blank" ] && [ "$text_input" == "$i18n_blank" ]
+        then
+            text_input=""
+        fi
 
         tput civis
         tput cub "$(tput cols)"
@@ -1671,7 +1676,7 @@ inquirer()
             tput cuu $((1+failed_count*3))
             tput cuf $((prompt_width+3))
             inquirer:print "${bg_black}${cyan}"
-            inquirer:print_input "${text_input}"
+            inquirer:print_input "${text_input:-$text_default}"
             inquirer:print "${normal}"
             tput rc
             break_keypress=true
@@ -1680,7 +1685,7 @@ inquirer()
             tput cud1
             inquirer:print "${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n"
             tput cud1
-            if [ "$text_input" == "$text_default" ] 
+            if [ "$text_input:-$text_default" == "$text_default" ] 
             then
                 text_input=""
                 current_pos=0
@@ -1811,19 +1816,32 @@ inquirer()
 
         trap inquirer:control_c EXIT
 
-        read -e text_input
+        # stty -echo
+        # tput cnorm
+        # inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
 
-        until validate_failed_msg=$($text_input_validator "$text_input") 
+        # read -r ${var_name?} <<< "$text_input"
+
+        while true 
         do
-            inquirer:print "\n${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n\n"
             read -e text_input
+
+            text_input=${text_input:-$text_default}
+
+            if [ "$text_default" == "$i18n_blank" ] && [ "$text_input" == "$i18n_blank" ]
+            then
+                text_input=""
+            fi
+
+            if validate_failed_msg=$($text_input_validator "$text_input")  
+            then
+                break
+            fi
+
+            inquirer:print "\n${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n\n"
         done
 
-        #stty -echo
-        #tput cnorm
-        #inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
-
-        read -r ${var_name?} <<< "${text_input:-$text_default}"
+        read -r ${var_name?} <<< "$text_input"
 
         inquirer:cleanup
 

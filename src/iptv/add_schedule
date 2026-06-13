@@ -226,11 +226,6 @@ AddChannelsSchedule()
             echo
             inquirer text_input "输入频道名称" schedule_channel_name "$i18n_blank"
 
-            if [ "$schedule_channel_name" == "$i18n_blank" ] 
-            then
-                schedule_channel_name=""
-            fi
-
             chnl_schedule=$(
                 $JQ_FILE -n --arg start_time "$schedule_start_time" \
                     --arg end_time "$schedule_end_time" \

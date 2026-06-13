@@ -90,37 +90,6 @@ ShFileCheck
 
 JQInstall
 
-if [ -d "$IPTV_ROOT" ]
-then
-    CF_CONFIG_NEW="$IPTV_ROOT/${CF_CONFIG##*/}"
-    if [ -e "$CF_CONFIG" ] && [ ! -e "$CF_CONFIG_NEW" ]
-    then
-        mv "$CF_CONFIG" "$CF_CONFIG_NEW"
-    fi
-    CF_CONFIG="$CF_CONFIG_NEW"
-
-    CF_WORKERS_ROOT_NEW="$IPTV_ROOT/${CF_WORKERS_ROOT##*/}"
-    if [ -d "$CF_WORKERS_ROOT" ] && [ ! -d "$CF_WORKERS_ROOT_NEW" ]
-    then
-        mv "$CF_WORKERS_ROOT" "$IPTV_ROOT/"
-    fi
-    CF_WORKERS_ROOT="$CF_WORKERS_ROOT_NEW"
-
-    IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
-    if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
-    then
-        mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
-    fi
-    IBM_CONFIG="$IBM_CONFIG_NEW"
-
-    CF_WORKERS_FILE_NEW="$CF_WORKERS_ROOT/${CF_WORKERS_FILE##*/}"
-    if [ -e "$CF_WORKERS_FILE" ] && [ ! -e "$CF_WORKERS_FILE_NEW" ]
-    then
-        mv "$CF_WORKERS_FILE" "$CF_WORKERS_FILE_NEW"
-    fi
-    CF_WORKERS_FILE="$CF_WORKERS_FILE_NEW"
-fi
-
 cf_use_api=1
 
 if [ "${1:-}" == "w" ] 

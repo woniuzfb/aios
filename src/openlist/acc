@@ -1,0 +1,187 @@
+OpenListAccAdd()
+{
+    ServiceGet openlist
+
+    if [ "$openlists_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 OpenList\n"
+        exit 1
+    fi
+
+    openlists_options=()
+    for((i=0;i<openlists_count;i++));
+    do
+        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+    done
+
+    echo
+    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+
+    for openlists_index in "${openlists_indices[@]}"
+    do
+        openlist_prompt="OpenList - ${openlists_name[openlists_index]:-${openlists_url[openlists_index]}}"
+
+        if [ -n "${openlists_acc_username[openlists_index]}" ] 
+        then
+            IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+
+            new_arr=("${openlist_accs_username[@]//*/}")
+            openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
+
+            IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+            IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+
+            openlist_accs_count=${#openlist_accs_username[@]}
+
+            openlist_accs_txt=""
+            for((i=0;i<openlist_accs_count;i++));
+            do
+                openlist_accs_txt="$openlist_accs_txt\n${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n"
+            done
+
+            Println "$openlist_accs_txt\n"
+        fi
+
+        echo
+        ExitOnText "输入登录名" openlist_acc_username
+
+        echo
+        inquirer text_input "输入密码" openlist_acc_password "$i18n_blank"
+
+        new_acc=$(
+        $JQ_FILE -n --arg username "$openlist_acc_username" --arg password "$openlist_acc_password" \
+            '{
+                username: $username,
+                password: $password
+            }'
+        )
+
+        jq_path='["openlist",'"$openlists_index"',"accs"]'
+        JQ add "$SERVICES_CONFIG" "[$new_acc]"
+
+        Println "$info 账号添加成功\n"
+    done
+
+    return 0
+}
+
+OpenListAccLogin()
+{
+    DepInstall curl
+
+    ServiceGet openlist
+
+    if [ "$openlists_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 OpenList\n"
+        exit 1
+    fi
+
+    openlists_options=()
+    for((i=0;i<openlists_count;i++));
+    do
+        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+    done
+
+    echo
+    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+
+    for openlists_index in "${openlists_indices[@]}"
+    do
+        openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
+
+        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        then
+            openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n"
+
+            Println "$openlist_txt\n"
+
+            continue
+        fi
+
+        IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+
+        new_arr=("${openlist_accs_username[@]//*/}")
+        openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
+
+        IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+        IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+
+        openlist_accs_count=${#openlist_accs_username[@]}
+
+        openlist_txt="$openlist_txt${green}账号:${normal}\n"
+        openlist_accs_options=()
+
+        for((i=0;i<openlist_accs_count;i++));
+        do
+            openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n\n"
+            openlist_accs_options+=("账号$((i+1))")
+        done
+
+        Println "$openlist_txt"
+
+        inquirer checkbox_input_indices "选择登陆的账号" openlist_accs_options openlist_accs_indices
+
+        for openlist_accs_index in $openlist_accs_indices
+        do
+            openlist_acc_username="${openlist_accs_username[openlist_accs_index]}"
+            openlist_acc_password="${openlist_accs_password[openlist_accs_index]}"
+
+            OpenList.auth.login || continue
+        done
+    done
+
+    return 0
+}
+
+OpenListAccView()
+{
+    ServiceGet openlist
+
+    if [ "$openlists_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 OpenList\n"
+        exit 1
+    fi
+
+    openlists_options=()
+    for((i=0;i<openlists_count;i++));
+    do
+        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+    done
+
+    echo
+    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+
+    for openlists_index in "${openlists_indices[@]}"
+    do
+        openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
+
+        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        then
+            openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
+        else
+            IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+
+            new_arr=("${openlist_accs_username[@]//*/}")
+            openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
+
+            IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+            IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+
+            openlist_accs_count=${#openlist_accs_username[@]}
+
+            openlist_txt="$openlist_txt${green}账号:${normal}\n"
+
+            for((i=0;i<openlist_accs_count;i++));
+            do
+                openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n\n"
+            done
+        fi
+
+        Println "$openlist_txt"
+    done
+
+    return 0
+}
+

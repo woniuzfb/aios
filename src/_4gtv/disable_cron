@@ -1,6 +1,6 @@
 Disable4gtvCron()
 {
-    if crontab -l | grep -q "/usr/local/bin/tv 4g -" 2> /dev/null
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv 4g -" 2> /dev/null
     then
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
         sed -i "/\/usr\/local\/bin\/tv 4g -/d" "$IPTV_ROOT/cron_tmp"

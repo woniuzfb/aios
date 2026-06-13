@@ -17,8 +17,10 @@ indent_6='\r\033[6C'
 indent_20='\r\033[20C'
 
 # files
-SH_LINK=https://woniuzfb.github.io/iptv/iptv.sh
-AIOS_PREFIX=/usr/local
+SH_LINK=https://woniuzfb.github.io/aios/aios.sh
+
+# $AIOS_PREFIX/bin must exist
+AIOS_PREFIX=${AIOS_PREFIX:-/usr/local}
 SH_FALLBACK=cn.epub.fun
 SH_FILE="$AIOS_PREFIX"/bin/tv
 i18n_FILE="$AIOS_PREFIX"/bin/tv-i18n
@@ -27,29 +29,26 @@ NX_FILE="$AIOS_PREFIX"/bin/nx
 XC_FILE="$AIOS_PREFIX"/bin/cx
 ARM_FILE="$AIOS_PREFIX"/bin/arm
 PVE_FILE="$AIOS_PREFIX"/bin/pve
-LOG_FILE="$HOME"/iptv.log
 JQ_FILE="$AIOS_PREFIX"/bin/jq
 YQ_FILE="$AIOS_PREFIX"/bin/yq
 FFMPEG_FILE="$AIOS_PREFIX"/bin/ffmpeg
 FFPROBE_FILE="$AIOS_PREFIX"/bin/ffprobe
 CURL_IMPERSONATE_FILE="$AIOS_PREFIX"/bin/curl-impersonate
+TEXTDOMAINDIR=/usr/share/locale
+TEXTDOMAIN=aios
 
-# backup
-BACKUP_ROOT="$HOME"/iptv_sh_backup
-
-# FFmpeg
-FFMPEG_ROOT="$HOME"
-
-# node
-NODE_ROOT="$HOME"/iptv_sh_node
-NODE_SCRIPTS_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts
+# aios
+AIOS_ROOT="$AIOS_PREFIX"/aios
+FFMPEG_ROOT="$AIOS_ROOT"/ffmpeg
+LOG_FILE="$AIOS_ROOT"/aios.log
+BACKUP_ROOT="$AIOS_ROOT"/backup
+NODE_ROOT="$AIOS_ROOT"/nodes
+NODE_SCRIPTS_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts
 NODE_TOUTIAO_VER=1.0.0
-
-# iptv
-IPTV_ROOT="$AIOS_PREFIX"/iptv
-FFMPEG_LOG_ROOT="$IPTV_ROOT"/ffmpeg
+FFMPEG_LOG_ROOT="$FFMPEG_ROOT"/log
 FFMPEG_MIRROR_LINK=http://pngquant.com/ffmpeg
-FFMPEG_MIRROR_ROOT="$IPTV_ROOT"/ffmpeg
+FFMPEG_MIRROR_ROOT="$AIOS_ROOT"/mirror
+IPTV_ROOT="$AIOS_ROOT"/iptv
 LOCK_FILE="$IPTV_ROOT"/lock
 CHANNELS_FILE="$IPTV_ROOT"/channels.json
 MONITOR_LOG="$IPTV_ROOT"/monitor.log
@@ -67,7 +66,7 @@ VIP_ROOT="$IPTV_ROOT"/vip
 VIP_USERS_ROOT="$VIP_ROOT"/users
 C_ROOT="$IPTV_ROOT"/c
 MD5SUM_FILE="$C_ROOT"/md5sum
-MD5SUM_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/md5sum.c
+MD5SUM_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/md5sum.c
 MD5SUM_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/md5sum.c
 DEFAULT_DEMOS=default.json
 TS_CHANNELS=channels.json
@@ -89,34 +88,34 @@ X_CONFIG="$AIOS_PREFIX"/etc/xray/config.json
 
 # cloudflare
 CF_FILE="$AIOS_PREFIX"/bin/cf
-CF_CONFIG="$HOME"/cloudflare.json
-CF_WORKERS_ROOT="$HOME"/workers
+CF_WORKERS_ROOT="$AIOS_ROOT"/workers
+CF_CONFIG="$CF_WORKERS_ROOT"/cloudflare.json
 CF_WORKERS_FILE="$CF_WORKERS_ROOT"/cloudflare_workers.py
-CF_WORKERS_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/cloudflare_workers.py
+CF_WORKERS_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/cloudflare_workers.py
 CF_WORKERS_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/cloudflare_workers.py
-STREAM_PROXY_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/stream_proxy.js
+STREAM_PROXY_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/stream_proxy.js
 STREAM_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/stream_proxy.js
-XTREAM_CODES_PROXY_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/xtream_codes_proxy.js
+XTREAM_CODES_PROXY_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/xtream_codes_proxy.js
 XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/xtream_codes_proxy.js
 
 # ibm cf
 IBM_FILE="$AIOS_PREFIX"/bin/ibm
-IBM_APPS_ROOT="$HOME"/ibm_apps
-IBM_CONFIG="$HOME"/ibm.json
+IBM_APPS_ROOT="$AIOS_ROOT"/ibm_apps
+IBM_CONFIG="$IBM_APPS_ROOT"/ibm.json
 
 # Services
-SERVICES_ROOT="$HOME"/iptv_sh_services
+SERVICES_ROOT="$AIOS_ROOT"/services
 SERVICES_CONFIG="$SERVICES_ROOT"/config.json
 
 # depends
 DEPENDS_ROOT="$SERVICES_ROOT"/depends
-AIOS_LINK=https://github.com/woniuzfb/iptv
+AIOS_LINK=https://github.com/woniuzfb/aios
 
-# Alist
-ALIST_FILE="$AIOS_PREFIX"/bin/ali
-ALIST_ROOT="$SERVICES_ROOT"/alist
-ALIST_LINK=https://github.com/alist-org/alist
-ALIST_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/alist
+# OpenList
+OPENLIST_FILE="$AIOS_PREFIX"/bin/ali
+OPENLIST_ROOT="$SERVICES_ROOT"/openlist
+OPENLIST_LINK=https://github.com/OpenListTeam/OpenList
+OPENLIST_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/openlist
 
 # LianHuanHua
 LIANHUANHUA_FILE="$AIOS_PREFIX"/bin/lhh
@@ -135,10 +134,13 @@ CALIBRE_ROOT="$SERVICES_ROOT"/calibre
 KCC_ROOT="$CALIBRE_ROOT"/kcc
 KCC_FILE="$KCC_ROOT"/kcc-c2e.py
 
-# docker
+# Docker
 DOCKER_FILE="$AIOS_PREFIX"/bin/dr
 DOCKER_ROOT="$SERVICES_ROOT"/docker
 DOCKER_CONFIG="$SERVICES_ROOT"/docker/docker-compose.yml
 
 # HAProxy
 HAPROXY_FILE="$AIOS_PREFIX"/bin/ha
+
+# Iperf3
+IPERF3_FILE="$AIOS_PREFIX"/bin/iperf3

@@ -1,6 +1,8 @@
 #!/bin/bash
-# Docker / LianHuanHua / HAProxy / Rclone / Alist / Calibre / FFmpeg / Nginx / Openresty / V2ray / Xray / Cloudflare / IBM Cloud Foundry / Armbian / Proxmox VE / ...
-# Copyright (C) 2019-2024
+# Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg / 
+# Nginx / Openresty / V2ray / Xray / Armbian / PVE / 
+# Samba / LianHuanHua / ...
+# Copyright (C) 2019-2026
 # Released under GPL Version 3 License
 
 set -euo pipefail
@@ -35,8 +37,6 @@ Include ver
 Include env
 
 Include core "$@"
-
-Include utils/i18n "$@"
 
 Include build "$@"
 

@@ -1,79 +1,4 @@
-V2raySetTcpProxyProtocol()
-{
-    echo
-    inquirer list_input_yn "是否接收 Proxy Protocol" ft_options tcp_accept_proxy_protocol
-}
 
-V2raySetWebSocketAcceptProxyProtocol()
-{
-    echo
-    inquirer list_input_yn "是否接收 Proxy Protocol" ft_options ws_accept_proxy_protocol
-}
-
-V2raySetWebSocketPath()
-{
-    echo
-    inquirer text_input "输入 WebSocket 所使用的 HTTP 协议路径" ws_path /
-}
-
-V2raySetWebSocketHeaders()
-{
-    ws_headers='{}'
-    while true 
-    do
-        echo
-        inquirer text_input "输入自定义 HTTP 头的名称: " ws_header_name "$i18n_blank"
-        if [ "$ws_header_name" == "$i18n_blank" ] 
-        then
-            break
-        fi
-        echo
-        inquirer text_input "输入自定义 HTTP 头 $ws_header_name 的值: " ws_header_value "$i18n_blank"
-        if [ "$ws_header_value" == "$i18n_blank" ] 
-        then
-            ws_header_value=""
-        fi
-        JQs merge ws_headers --arg header_name "$ws_header_name" \
-        --arg header_value "$ws_header_value" '. * {
-            $header_name: $header_value
-        }'
-        echo
-        inquirer list_input_index "是否继续添加" ny_options ny_index
-        if [ "$ny_index" -eq 0 ] 
-        then
-            break
-        fi
-    done
-}
-
-V2raySetWebsocketInboundMaxEarlyData()
-{
-    echo
-    inquirer list_input_yn "启用前置数据支持" oz_options ws_max_early_data
-}
-
-V2raySetWebsocketOutboundMaxEarlyData()
-{
-    echo
-    inquirer text_input "输入发送的前置数据的最长长度" ws_max_early_data 0
-}
-
-V2raySetWebsocketUseBrowserForwarding()
-{
-    echo
-    inquirer list_input_yn "启用浏览器转发" tf_options ws_use_browser_forwarding
-}
-
-V2raySetWebsocketEarlyDataHeaderName()
-{
-    echo
-    inquirer text_input "发送的前置数据的 HTTP 头的名字" ws_early_data_header_name "$i18n_blank"
-
-    if [ "$ws_early_data_header_name" == "$i18n_blank" ] 
-    then
-        ws_early_data_header_name=""
-    fi
-}
 
 
 
@@ -280,10 +205,6 @@ V2raySetTlsServerName()
 {
     Println "$tip 在连接由 IP 建立时有用"
     inquirer text_input "指定服务器端证书的域名" tls_server_name "$i18n_blank"
-    if [ "$tls_server_name" == "$i18n_blank" ] 
-    then
-        tls_server_name=""
-    fi
 }
 
 V2raySetTlsAllowInsecure()
@@ -335,22 +256,12 @@ V2raySetTlsMinVersion()
 {
     echo
     inquirer text_input "输入可接受的最小 TLS 版本: " tls_min_version "$i18n_blank"
-
-    if [ "$tls_min_version" == "$i18n_blank" ] 
-    then
-        tls_min_version=""
-    fi
 }
 
 V2raySetTlsMaxVersion()
 {
     echo
     inquirer text_input "输入可接受的最大 TLS 版本: " tls_max_version "$i18n_blank"
-
-    if [ "$tls_max_version" == "$i18n_blank" ] 
-    then
-        tls_max_version=""
-    fi
 }
 
 V2raySetTlsPreferServerCipherSuites()
@@ -370,11 +281,6 @@ V2raySetTlsCipherSuites()
 {
     Println "$tip 每个套件名称之间用:进行分隔"
     inquirer text_input "输入密码套件" tls_cipher_suites "$i18n_blank"
-
-    if [ "$tls_cipher_suites" == "$i18n_blank" ] 
-    then
-        tls_cipher_suites=""
-    fi
 }
 
 V2raySetTlsEnableSessionResumption()
@@ -393,7 +299,7 @@ V2raySetTlsEnableSessionResumption()
 V2raySetTlsFingerprint()
 {
     echo
-    tls_fingerprint_options=( '不设置' 'chrome' 'firefox' 'safari' 'randomized' )
+    tls_fingerprint_options=( "$i18n_blank" 'chrome' 'firefox' 'safari' 'randomized' )
     inquirer list_input "指定 TLS Client Hello 的指纹" tls_fingerprint_options tls_fingerprint
 
     if [ "$tls_fingerprint" == "$i18n_blank" ] 
@@ -432,11 +338,6 @@ V2raySetTlsPinnedPeerCertificateChainSha256()
 {
     echo
     inquirer text_input "证书链的SHA256散列值" tls_pinned_peer_certificate_chain_sha256 "$i18n_blank"
-
-    if [ "$tls_pinned_peer_certificate_chain_sha256" == "$i18n_blank" ] 
-    then
-        tls_pinned_peer_certificate_chain_sha256=""
-    fi
 }
 
 V2raySetCertificateFile()
@@ -709,11 +610,6 @@ V2raySetSockoptDialerProxy()
 {
     Println "$tip 此选项可用于支持底层传输方式的链式转发"
     inquirer text_input "出站代理的标识: " sockopt_dialer_proxy "$i18n_blank"
-
-    if [ "$sockopt_dialer_proxy" == "$i18n_blank" ] 
-    then
-        sockopt_dialer_proxy=""
-    fi
 }
 
 V2raySetSockoptAcceptProxyProtocol()
@@ -747,13 +643,13 @@ V2raySetWsHeaders()
     do
         echo
         inquirer text_input "输入自定义 HTTP 头的名称: " ws_header_name "$i18n_blank"
-        if [ "$ws_header_name" == "$i18n_blank" ] 
+        if [ -z "$ws_header_name" ] 
         then
             break
         fi
         echo
         inquirer text_input "输入自定义 HTTP 头 $ws_header_name 的值: " ws_header_value "$i18n_blank"
-        if [ "$ws_header_value" == "$i18n_blank" ] 
+        if [ -z "$ws_header_value" ] 
         then
             break
         fi
@@ -791,11 +687,6 @@ V2raySetEarlyDataHeaderName()
 {
     Println "$tip 当且仅当 HTTP 头的名字为 Sec-WebSocket-Protocol 时可以启用基于 HTTP 头的前置数据浏览器转发功能"
     inquirer text_input "输入发送的前置数据的 HTTP 头的名字: " early_data_header_name "$i18n_blank"
-
-    if [ "$early_data_header_name" == "$i18n_blank" ] 
-    then
-        earlyDataHeaderName=""
-    fi
 }
 
 V2raySetUseBrowserForwarding()
@@ -824,7 +715,7 @@ V2raySetHttpHeaders()
     do
         echo
         inquirer text_input "输入自定义 HTTP 头的名称: " http_header_name "$i18n_blank"
-        if [ "$http_header_name" == "$i18n_blank" ] 
+        if [ -z "$http_header_name" ] 
         then
             break
         fi
@@ -837,10 +728,8 @@ V2raySetHttpHeaders()
             echo
             inquirer text_input "输入自定义 HTTP 头 $http_header_name 的值: " http_header_value "$i18n_blank"
 
-            if [ "$http_header_value" == "$i18n_blank" ] 
+            if [ -n "$http_header_value" ] 
             then
-                http_header_value=""
-            else
                 http_header_value=${http_header_value//\\/\\\\}
                 http_header_value=${http_header_value//\"/\\\"}
             fi
@@ -1178,7 +1067,7 @@ V2raySetDetourTo()
 {
     Println "$tip 指定的入站协议必须是 VMess"
     inquirer text_input "使用另一个入站的出站(输入指定的另一个入站的标签): " detour_to "$i18n_blank"
-    Println "  指定的另一个入站: ${green} $detour_to ${normal}"
+    Println "  指定的另一个入站: ${green} ${detour_to:-$i18n_blank} ${normal}"
 }
 
 V2raySetDetourDefault()
@@ -1231,14 +1120,14 @@ V2raySetHeaderType()
         do
             echo
             inquirer text_input "输入自定义 HTTP 请求头的名称: " header_name "$i18n_blank"
-            if [ "$header_name" == "$i18n_blank" ] 
+            if [ -z "$header_name" ] 
             then
                 break
             fi
 
             Println "$tip 多个值用 | 分隔"
             inquirer text_input "输入自定义 HTTP 请求头 $header_name 的值: " header_value "$i18n_blank"
-            if [ "$header_value" == "$i18n_blank" ] 
+            if [ -z "$header_value" ] 
             then
                 break
             fi
@@ -1295,14 +1184,14 @@ V2raySetHeaderType()
         do
             echo
             inquirer text_input "输入自定义 HTTP 响应头的名称: " header_name "$i18n_blank"
-            if [ "$header_name" == "$i18n_blank" ] 
+            if [ -z "$header_name" ] 
             then
                 break
             fi
 
             Println "$tip 多个值用|分隔"
             inquirer text_input "输入自定义 HTTP 响应头 $header_name 的值: " header_value "$i18n_blank"
-            if [ "$header_value" == "$i18n_blank" ] 
+            if [ -z "$header_value" ] 
             then
                 break
             fi
@@ -1400,11 +1289,6 @@ V2raySetKcpSeed()
 {
     echo
     inquirer text_input "输入混淆密码: " kcp_write_buffer_size "$i18n_blank"
-
-    if [ "$kcp_write_buffer_size" == "$i18n_blank" ] 
-    then
-        kcp_write_buffer_size=""
-    fi
 }
 
 V2raySetHttpHost()
@@ -1459,10 +1343,8 @@ V2raySetSniffingDomainsExcluded()
 {
     Println "$tip 多个域名用空格分隔"
     inquirer text_input "输入排除流量探测的域名: " sniffing_domains_excluded "$i18n_blank"
-    if [ "$sniffing_domains_excluded" == "$i18n_blank" ] 
+    if [ -n "$sniffing_domains_excluded" ] 
     then
-        sniffing_domains_excluded=""
-    else
         IFS=" " read -r -a sniffing_domains <<< "$sniffing_domains_excluded"
         printf -v sniffing_domains_excluded ',"%s"' "${sniffing_domains[@]}"
         sniffing_domains_excluded=${sniffing_domains_excluded:1}
@@ -1538,10 +1420,6 @@ V2raySetProxyTag()
 {
     Println "$tip 如果指定另一个出站协议, 当前协议发出的数据, 将从指定的出站协议发出"
     inquirer text_input "输入指定的另一个出站协议的标签: " proxy_tag "$i18n_blank"
-    if [ "$proxy_tag" == "$i18n_blank" ] 
-    then
-        proxy_tag=""
-    fi
 }
 
 V2raySetProxyTransportLayer()
@@ -1592,10 +1470,6 @@ V2raySetFreedomRedirect()
 {
     Println "例如 127.0.0.1:80, :1234 - 不改变原先的目标地址, v2ray.com:0 - 不改变原先的端口"
     inquirer text_input "强制将所有数据发送到指定地址: " freedom_redirect "$i18n_blank"
-    if [ "$freedom_redirect" == "$i18n_blank" ] 
-    then
-        freedom_redirect=""
-    fi
 }
 
 V2raySetFallbacks()
@@ -1633,19 +1507,12 @@ V2raySetFallbacks()
             then
                 Println "$tip 一般不用设置"
                 inquirer text_input "输入 SNI 分流匹配值: " v2ray_fallback_name "$i18n_blank"
-                if [ "$v2ray_fallback_name" == "$i18n_blank" ] 
-                then
-                    v2ray_fallback_name=""
-                fi
             else
                 v2ray_fallback_name=""
             fi
             Println "$tip 请输入单个, 比如 http/1.1 或 h2"
             inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "$i18n_blank"
-            if [ "$v2ray_fallback_alpn" == "$i18n_blank" ] 
-            then
-                v2ray_fallback_alpn=""
-            elif [ "$v2ray_fallback_alpn" == "h2" ] && [[ ! $tls_alpn =~ h2 ]]
+            if [ "$v2ray_fallback_alpn" == "h2" ] && [[ ! $tls_alpn =~ h2 ]]
             then
                 Println "$error 协议回落存在 h2 时, $tls_name 需设置 h2 http/1.1\n"
                 exit 1

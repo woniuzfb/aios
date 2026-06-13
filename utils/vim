@@ -1,11 +1,6 @@
 VimConfig()
 {
-    if [[ ! -x $(command -v vim) ]] 
-    then
-        Println "$info 安装 vim ..."
-        AptUpdate
-        apt-get -y install vim
-    fi
+    DepInstall vim
 
     if [ -e ~/.vimrc ] 
     then

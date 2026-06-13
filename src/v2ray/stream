@@ -1,178 +1,11 @@
-Include src/v2ray/set_bound "$@"
-
-V2raySecurity()
-{
-    echo
-    stream_security_options=( 'none' 'tls' 'utls' )
-    inquirer list_input_index "选择传输层协议设置" stream_security_options stream_security_options_index
-
-    case $stream_security_options_index in
-        1) V2rayTlsSettings
-        ;;
-        2) V2rayUtlsSettings
-        ;;
-        *) return
-        ;;
-    esac
-
-    return
-}
-
-V2raySocketMark()
-{
-    socket_mark=0
-
-    if [ "$dist" = "mac" ] || [ "$v2ray_inbound" = true ]
-    then
-        return
-    fi
-
-    Println "$tip 当其值非零时，在出站连接上标记 SO_MARK"
-    inquirer text_input "设置标记" socket_mark 0
-}
-
-V2raySocketTcpFastOpen()
-{
-    echo
-    socket_tfo_options=( '系统默认' '强制开启' '强制关闭' )
-    inquirer list_input_index "TCP Fast Open" socket_tfo_options socket_tfo_options_index
-
-    unset socket_tfo_length
-
-    if [ "$socket_tfo_options_index" -eq 2 ] 
-    then
-        socket_tfo=false
-        return
-    fi
-
-    if [ "$socket_tfo_options_index" -eq 0 ] 
-    then
-        socket_tfo=""
-    else
-        socket_tfo=true
-    fi
-
-    if [ "$dist" != "mac" ] && [ "$v2ray_inbound" = true ] 
-    then
-        echo
-        inquirer text_input "入站连接的 TCP Fast Open 队列长度" socket_tfo_length 4096
-    fi
-}
-
-V2raySocketTproxy()
-{
-    unset socket_tproxy
-
-    if [ "$dist" = "mac" ]
-    then
-        rerturn
-    fi
-
-    echo
-    socket_tproxy_options=( 'off' 'redirect' 'tproxy' )
-    inquirer list_input "设置透明代理模式" socket_tproxy_options socket_tproxy
-}
-
-V2raySocketTcpKeepAliveInterval()
-{
-    unset socket_tcp_keep_alive_interval
-
-    if [ "$dist" = "mac" ]
-    then
-        rerturn
-    fi
-
-    Println "$tip 0 代表保持默认值"
-    inquirer text_input "TCP 保持活跃的数据包发送间隔(秒): " socket_tcp_keep_alive_interval 0
-}
-
-V2raySocketBindToDevice()
-{
-    echo
-    inquirer text_input "将连接绑定到指定的网络设备" socket_bind_to_device "$i18n_blank"
-
-    if [ "$socket_bind_to_device" == "$i18n_blank" ] 
-    then
-        socket_bind_to_device=""
-    fi
-}
-
-V2raySocket()
-{
-    V2raySocketMark
-    V2raySocketTcpFastOpen
-    V2raySocketTproxy
-    V2raySocketTcpKeepAliveInterval
-    V2raySocketBindToDevice
-
-    new_socket='{}'
-
-    if [ "$socket_mark" -ne 0 ] 
-    then
-        JQs merge_c new_socket --arg mark "$socket_mark" '. * {
-            "mark": $mark | tonumber
-        }'
-    fi
-
-    if [ -n "${socket_tfo:-}" ] 
-    then
-        new_socket=$(
-        $JQ_FILE --arg tcpFastOpen "$socket_tfo" \
-        '. * 
-        {
-            "tcpFastOpen": $tcpFastOpen | test("true")
-        }' <<< "$new_socket")
-    fi
-
-    if [ -n "${socket_tfo_length:-}" ] 
-    then
-        new_socket=$(
-        $JQ_FILE --arg tcpFastOpenQueueLength "$socket_tfo_length" \
-        '. * 
-        {
-            "tcpFastOpenQueueLength": $tcpFastOpenQueueLength | tonumber
-        }' <<< "$new_socket")
-    fi
-
-    if [ -n "${socket_tproxy:-}" ] 
-    then
-        new_socket=$(
-        $JQ_FILE --arg tproxy "$socket_tproxy" \
-        '. * 
-        {
-            "tproxy": $tproxy
-        }' <<< "$new_socket")
-    fi
-
-    if [ -n "${socket_tcp_keep_alive_interval:-}" ] 
-    then
-        new_socket=$(
-        $JQ_FILE --arg tcpKeepAliveInterval "$socket_tcp_keep_alive_interval" \
-        '. * 
-        {
-            "tcpKeepAliveInterval": $tcpKeepAliveInterval | tonumber
-        }' <<< "$new_socket")
-    fi
-
-    if [ -n "${socket_bind_to_device:-}" ] 
-    then
-        new_socket=$(
-        $JQ_FILE --arg bindToDevice "$socket_bind_to_device" \
-        '. * 
-        {
-            "bindToDevice": $bindToDevice
-        }' <<< "$new_socket")
-    fi
-}
+Include src/v2ray/set_stream "$@"
 
 V2rayStreamTransport()
 {
-    echo
-    stream_transport_options=( 'tcp' 'websocket' 'mkcp' 'grpc' 'quic' 'meek' 'httpupgrade' 'hysteria2' )
-    inquirer list_input "选择传输层协议" stream_transport_options stream_transport
+    V2raySetStreamTransport
 }
 
-V2rayTcpSettings()
+V2rayStreamTcpSettings()
 {
     if [ "${1:-inbound}" != "inbound" ] 
     then
@@ -186,7 +19,7 @@ V2rayTcpSettings()
     }'
 }
 
-V2rayWebSocketSettings()
+V2rayStreamWebSocketSettings()
 {
     V2raySetWebSocketPath
 
@@ -231,6 +64,314 @@ V2rayWebSocketSettings()
     fi
 }
 
+V2rayStreamMkcpSettings()
+{
+    V2raySetMkcpMtu
+    V2raySetMkcpTti
+    V2raySetMkcpUplinkCapacity
+    V2raySetMkcpDownlinkCapacity
+    V2raySetMkcpCongestion
+    V2raySetMkcpReadBufferSize
+    V2raySetMkcpWriteBufferSize
+    V2raySetMkcpSeed
+
+    JQs merge_c stream_transport_settings --arg mtu "$mkcp_mtu" \
+    --arg tti "$mkcp_tti" --arg uplinkCapacity "$mkcp_uplink_capacity" \
+    --arg downlinkCapacity "$mkcp_downlink_capacity" --arg congestion "$mkcp_congestion" \
+    --arg readBufferSize "$mkcp_read_buffer_size" --arg writeBufferSize "$mkcp_write_buffer_size" \
+    --arg seed "$mkcp_seed" '. * {
+        "mtu": $mtu | tonumber,
+        "tti": $tti | tonumber,
+        "uplinkCapacity": $uplinkCapacity | tonumber,
+        "downlinkCapacity": $downlinkCapacity | tonumber,
+        "congestion": $congestion | test("true"),
+        "readBufferSize": $readBufferSize | tonumber,
+        "writeBufferSize": $writeBufferSize | tonumber,
+        "seed": "$seed"
+    }'
+}
+
+V2rayStreamGrpcSettings()
+{
+    V2raySetGrpcServiceName
+
+    JQs merge_c stream_transport_settings --arg serviceName "$grpc_service_name" '. * {
+        "serviceName": "$serviceName"
+    }'
+}
+
+V2rayStreamQuicSettings()
+{
+    return
+}
+
+V2rayStreamMeekSettings()
+{
+    V2raySetMeekUrl
+    JQs merge_c stream_transport_settings --arg url "$meek_url" '. * {
+        "url": "$url"
+    }'
+}
+
+V2rayStreamHttpupgradeSettings()
+{
+    V2raySetHttpupgradePath
+    V2raySetHttpupgradeHost
+
+    JQs merge_c stream_transport_settings --arg path "$httpupgrade_path" \
+    --arg host "$httpupgrade_host" '. * {
+        "path": "$path",
+        "host": "$host"
+    }'
+}
+
+V2rayStreamHysteria2Settings()
+{
+    V2raySetHysteria2Password
+    V2raySetHysteria2Udp
+    V2raySetHysteria2Congestion
+
+    JQs merge_c stream_transport_settings --arg password "$hysteria2_password" \
+    --arg use_udp_extension "$hysteria2_use_udp_extension" \
+    --argjson congestion "$hysteria2_congestion" '. * {
+        "password": "$password",
+        "use_udp_extension": "$use_udp_extension" | test("true"),
+        "congestion": "$congestion"
+    }'
+}
+
+V2rayStreamSecurity()
+{
+    V2raySetStreamSecurity
+}
+
+V2rayStreamTlsSettings()
+{
+    V2raySetStreamTlsServerName
+    V2raySetStreamTlsAlpn
+    V2raySetStreamTlsDisableSystemRoot
+    V2raySetStreamTlsChainSha256
+
+    if [ -z "${stream_tls_chain_sha256:-}" ] 
+    then
+        stream_tls_allow_insecure=false
+    else
+        V2raySetStreamTlsAllowInsecure
+    fi
+
+    while true 
+    do
+        if [ "$stream_tls_disable_system_root" = false ] 
+        then
+            echo
+            inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
+            if [ "$continue_yn" = false ] 
+            then
+                break
+            fi
+        fi
+
+        Println "$info 设置证书"
+        V2raySetStreamTlsCertificate
+
+        JQs merge_c stream_security_settings --argjson certificates "[$stream_tls_certificate]" \
+        '. * {
+                "certificates": $certificates
+            }
+        }'
+
+        if [ "$stream_tls_disable_system_root" = true ] 
+        then
+            echo
+            inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
+            if [ "$continue_yn" = false ] 
+            then
+                break
+            fi
+        fi
+    done
+
+    if [ "$v2ray_v4" = true ] 
+    then
+        V2raySetStreamTlsVerifyClientCertificate
+
+        JQs merge_c stream_security_settings --arg serverName "$stream_tls_server_name" \
+        --argjson alpn "[$stream_tls_next_protocol]" \
+        --arg allowInsecure "$stream_tls_allow_insecure" \
+        --arg disableSystemRoot "$stream_tls_disable_system_root" \
+        --arg verifyClientCertificate "$stream_tls_verify_client_certificate" \
+        --argjson pinnedPeerCertificateChainSha256 "[$stream_tls_chain_sha256]" '. * {
+            "serverName": "$serverName",
+            "alpn": "$alpn",
+            "allowInsecure": "$allowInsecure" | test("true"),
+            "disableSystemRoot": "$disableSystemRoot" | test("true"),
+            "verifyClientCertificate": $verifyClientCertificate | test("true"),
+            "pinnedPeerCertificateChainSha256": "$pinnedPeerCertificateChainSha256"
+        }'
+
+        return
+    fi
+
+    JQs merge_c stream_security_settings --arg serverName "$stream_tls_server_name" \
+    --argjson nextProtocol "[$stream_tls_next_protocol]" \
+    --arg disableSystemRoot "$stream_tls_disable_system_root" \
+    --argjson pinnedPeerCertificateChainSha256 "[$stream_tls_chain_sha256]" \
+    --arg allowInsecureIfPinnedPeerCertificate "$stream_tls_allow_insecure" '. * {
+        "serverName": "$serverName",
+        "nextProtocol": "$nextProtocol",
+        "disableSystemRoot": "$disableSystemRoot" | test("true"),
+        "pinnedPeerCertificateChainSha256": "$pinnedPeerCertificateChainSha256",
+        "allowInsecureIfPinnedPeerCertificate": "$allowInsecureIfPinnedPeerCertificate" | test("true")
+    }'
+}
+
+V2rayStreamUtlsTlsConfig()
+{
+    Println "$info 以下为嵌入的 TLS 设置，只有部分内容会被应用到 uTLS"
+
+    V2rayStreamTlsSettings
+
+    stream_utls_tls_config="$stream_security_settings"
+    stream_security_settings='{}'
+}
+
+V2rayStreamUtlsImitate()
+{
+    V2raySetStreamUtlsImitate
+}
+
+V2rayStreamUtlsNoSNI()
+{
+    V2raySetStreamUtlsNoSNI
+}
+
+V2rayStreamUtlsForceAlpn()
+{
+    V2raySetStreamUtlsForceAlpn
+}
+
+V2rayStreamUtlsSettings()
+{
+    V2rayStreamUtlsTlsConfig
+    V2rayStreamUtlsImitate
+    V2rayStreamUtlsNoSNI
+    V2rayStreamUtlsForceAlpn
+
+    JQs merge_c stream_security_settings --argjson tlsConfig "$stream_utls_tls_config" \
+    --arg imitate "$stream_utls_imitate" \
+    --arg noSNI "$stream_utls_noSNI" \
+    --arg forceAlpn "$stream_utls_force_alpn" \
+    --arg allowInsecureIfPinnedPeerCertificate "$stream_tls_allow_insecure" \
+    --argjson certificate "$stream_tls_certificate" '. * {
+        "tlsConfig": "$tlsConfig",
+        "imitate": "$imitate",
+        "noSNI": "$noSNI" | test("true"),
+        "forceAlpn": "$forceAlpn"
+    }'
+}
+
+V2rayStreamSocketMark()
+{
+    V2raySetStreamSocketMark
+}
+
+V2rayStreamSocketTFO()
+{
+    echo
+    inquirer list_input_yn "socket TCP Fast Open 使用系统默认设置" tf_options stream_socket_tfo_system
+
+    if [ "$stream_socket_tfo_system" = false ] 
+    then
+        V2raySetStreamSocketTFO
+    fi
+}
+
+V2rayStreamSocketTFOQL()
+{
+    V2raySetStreamSocketTFOQL
+}
+
+V2rayStreamSocketTproxy()
+{
+    V2raySetStreamSocketTproxy
+}
+
+V2rayStreamSocketTcpKeepAliveInterval()
+{
+    V2raySetStreamSocketTcpKeepAliveInterval
+}
+
+V2rayStreamSocketBindToDevice()
+{
+    V2raySetStreamSocketBindToDevice
+}
+
+V2rayStreamSocketMptcp()
+{
+    echo
+    inquirer list_input_yn "socket 多路径 TCP 使用系统默认设置" tf_options stream_socket_mptcp_system
+
+    if [ "$stream_socket_mptcp_system" = false ] 
+    then
+        V2raySetStreamSocketMptcp
+    fi
+}
+
+V2rayStreamSocketSettings()
+{
+    stream_socket_settings='{}'
+
+    if [ "$dist" != "mac" ] 
+    then
+        V2rayStreamSocketMark
+
+        JQs merge_c stream_socket_settings --arg mark "$stream_socket_mark" '. * {
+            "mark": "$mark" | tonumber
+        }'
+    fi
+
+    V2rayStreamSocketTFO
+
+    if [ "$stream_socket_tfo_system" = false ] 
+    then
+        JQs merge_c stream_socket_settings --arg tcpFastOpen "$stream_socket_tfo" '. * {
+            "tcpFastOpen": "$tcpFastOpen" | test("true")
+        }'
+    fi
+
+    if [ "$dist" != "mac" ] 
+    then
+        V2rayStreamSocketTFOQL
+        V2rayStreamSocketTproxy
+        V2rayStreamSocketTcpKeepAliveInterval
+
+        JQs merge_c stream_socket_settings --arg tcpFastOpenQueueLength "$stream_socket_tfoql" \
+        --arg tproxy "$stream_socket_tproxy" --arg tcpKeepAliveInterval "$stream_socket_tcp_keep_alive_interval" '. * {
+            "tcpFastOpenQueueLength": "$tcpFastOpenQueueLength" | tonumber,
+            "$tproxy": "$tproxy",
+            "$tcpKeepAliveInterval": "$tcpKeepAliveInterval" | tonumber
+        }'
+    fi
+
+    V2rayStreamSocketBindToDevice
+
+    JQs merge_c stream_socket_settings --arg bindToDevice "$stream_socket_bind_to_device" '. * {
+        "bindToDevice": "$bindToDevice"
+    }'
+
+    if [ "$dist" != "mac" ] 
+    then
+        V2rayStreamSocketMptcp
+
+        if [ "$stream_socket_mptcp_system" = false ] 
+        then
+            JQs merge_c stream_socket_settings --arg mptcp "$stream_socket_mptcp" '. * {
+                "mptcp": "$mptcp" | test("true")
+            }'
+        fi
+    fi
+}
+
 V2rayStream()
 {
     V2rayStreamTransport
@@ -238,42 +379,58 @@ V2rayStream()
     stream_transport_settings='{}'
 
     case $stream_transport_options in
-        0) V2rayTcpSettings "$@"
+        0) V2rayStreamTcpSettings "$@"
         ;;
-        1) V2rayWebSocketSettings "$@"
+        1) V2rayStreamWebSocketSettings "$@"
         ;;
-        2) V2rayMkcpSettings "$@"
+        2) V2rayStreamMkcpSettings "$@"
         ;;
-        3) V2rayGrpcSettings "$@"
+        3) V2rayStreamGrpcSettings "$@"
         ;;
-        4) V2rayQuicSettings "$@"
+        4) V2rayStreamQuicSettings "$@"
         ;;
-        5) V2rayMeekSettings "$@"
+        5) V2rayStreamMeekSettings "$@"
         ;;
-        6) V2rayHttpupgradeSettings "$@"
+        6) V2rayStreamHttpupgradeSettings "$@"
         ;;
-        7) V2rayHysteria2Settings "$@"
+        7) V2rayStreamHysteria2Settings "$@"
         ;;
         *) return
         ;;
     esac
 
-    V2raySecurity
-    V2raySocket
+    V2rayStreamSecurity
 
-    new_stream=$(
-    $JQ_FILE -n --arg transport "$stream_transport" \
+    stream_security_settings='{}'
+
+    case $stream_security in
+        tls) V2rayStreamTlsSettings
+        ;;
+        utls)
+            if [ "$stream_transport_options" -gt 1 ] 
+            then
+                Println "$error 仅可以在 TCP, WebSocket 传输方式中使用 uTLS\n"
+            fi
+            V2rayStreamUtlsSettings
+        ;;
+        *) 
+        ;;
+    esac
+
+    V2rayStreamSocketSettings
+
+    new_stream='{}'
+
+    JQs merge_c new_stream --arg transport "$stream_transport" \
         --argjson transportSettings "$stream_transport_settings" \
         --arg security "$stream_security" \
         --argjson securitySettings "$stream_security_settings" \
-        --argjson socketSettings "$new_socket" \
+        --argjson socketSettings "$stream_socket_settings" \
     '{
         "transport": $transport,
         "transportSettings": $transportSettings,
         "security": $security,
         "securitySettings": $securitySettings,
         "socketSettings": $socketSettings
-    }')
-
-    return
+    }'
 }
