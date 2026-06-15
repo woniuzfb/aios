@@ -387,6 +387,11 @@ JQs()
             read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
             jq_path=""
         ;;
+        "gets") 
+            $JQ_FILE -r --argjson paths "$jq_path" '
+                $paths[] as $p | "jq_\($p | join("_")): \(getpath($p)? // "")"' <<< "${!2}"
+            jq_path=""
+        ;;
         "add") 
             if [ "${4:-}" == "pre" ] 
             then
@@ -446,215 +451,64 @@ JQs()
                 jq_input="$2"
             fi
 
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;b;c;d;e;f;g):
-                (a // [{}]) as $a | (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
-                        if ($type == "object") then
-                            if ($type2 == "object") then
-                                flat([$val2,$val];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val == {}) then
-                                    $val2 + c
-                                else
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val];b;c;d;e;f;g)
-                                end
-                            elif ($val == {}) then
-                                ""
-                            else
-                                flat([$val];b;c;d;e;f;g)
-                            end
-                        elif ($type == "array") then
-                            flat($val;b;c;d;e;f;g) as $val3 | 
-                            if ($type2 == "object") then
-                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val3 == {}) then
-                                    $val2 + c
-                                elif ($val3 | type == "object") then
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val3];c;d;e;f;g;b)
-                                else
-                                    $val2 + c + $val3
-                                end
-                            elif ($val3 == {}) then
-                                ""
-                            else
-                                $val3
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                flat([$val2,{}];c;d;e;f;g;b)
-                            elif ($val2) then
-                                $val2 + c
-                            else
-                                ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
-                            else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
-                elif ($a == [""]) then
-                    "\"\""
-                elif ($a == [{}]) then
-                    {}
+            $JQ_FILE --argjson delims "$json_delimiters" -r -c '
+
+            def structural_merge:
+                type as $type
+                | if $type == "object" then
+                    with_entries(.value |= structural_merge)
+                elif $type == "array" then
+                    if length == 0 then []
+                    elif (map(type == "object") | any) then
+                    ( [ .[] | select(. != null) | keys[] ] | unique ) as $all_keys
+                    | map(. as $obj 
+                    | if $obj == null or type != "object" then 
+                        $all_keys | map({key: ., value: null}) | from_entries 
+                    else  
+                        $all_keys | map({key: ., value: $obj[.]}) | from_entries 
+                    end)
+                    | [ .[] | to_entries[] ] 
+                    | group_by(.key)
+                    | map({
+                        key: .[0].key,
+                        value: (map(.value) | structural_merge)
+                    })
+                    | from_entries
+                    else
+                        map(structural_merge)
+                        | if (map(type == "object") | any) then structural_merge else . end
+                    end
                 else
-                    a|join(b)
+                    .
                 end;
-            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
-        ;;
-        "flat_c")
-            if [[ $2 =~ ^/ ]] 
-            then
-                jq_input=$(< $2)
-            else
-                jq_input="$2"
-            fi
 
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;x;b;c;d;e;f;g):
-                a as $a | (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | 
-
-                    (reduce a[] as $item ({};
-                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
-                            if ($val and $val != [] and $val != {}) then
-                                if ($val2 and ($val2|.[-1:]) == [""]) then
-                                    $val2
-                                else
-                                    ($val2 // []) + [""]
-                                end
-                            else
-                                if ($val2) then
-                                    if ($val2|.[-1:] == [""]) then
-                                        $val2
-                                    else
-                                        $val2 + [{}]
-                                    end
-                                else
-                                    [{}]
-                                end
-                            end
-                        )
-                    )) as $blank | (reduce($keys[]) as $key ({};
-                        .[$key] = ($blank[$key] | .[:-1])
-                    )) as $blank |
-
-                    reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
-                    .[$key] = 
-                        if ($type == "object") then
-                            if ($val2) then
-                                if ($type2 == "object") then
-                                    if (x == [""]) then
-                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
-                                    else
-                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
-                                    end
-                                elif ($val == {}) then
-                                    $val2 + c
-                                else
-                                    if (x|.[-1:] == [1]) then
-                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
-                                    else
-                                        flat(($x + [$val]);[];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val == {}) then
-                                    ""
-                                elif (x == [""]) then
-                                    $val
-                                else
-                                    flat([$val];[];b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "array") then
-                            if ($val[0] | type == "object") then
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        ($a|index($item)) as $index | 
-                                        if ($a|length - $index == 1) then
-                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
-                                        else
-                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
-                                                if ($obj[$key] and $obj[$key] != []) then
-                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                                else
-                                                    . + [{}]
-                                                end
-                                            );[""];c;d;e;f;g;b)
-                                        end
-                                    end
-                                else
-                                    ($a|index($item)) as $index | 
-                                    if ($a|length - $index == 1) then
-                                        flat($val;$x;b;c;d;e;f;g)
-                                    else
-                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
-                                            if ($obj[$key] and $obj[$key] != []) then
-                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                            else
-                                                . + [{}]
-                                            end
-                                        );[""];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
-                                    end
-                                else
-                                    flat($val;$x;b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                if (x != [""] and (x|.[-1:] != [1])) then
-                                    $val2
-                                else
-                                    flat([$val2,{}];x;c;d;e;f;g;b)
-                                end
-                            elif ($val2) then
-                                $val2 + c
-                            else
+            def finalize_strings($layer):
+                type as $type
+                | if $type == "object" then
+                    with_entries(.value |= finalize_strings($layer + 1))
+                elif $type == "array" then
+                    if length == 0 then ""
+                    elif length == 1 and (.[0] | type) == "array" then
+                        .[0] | finalize_strings($layer)
+                    else
+                        map(
+                            (if type == "array" then
+                                finalize_strings($layer + 1)
+                            elif type == "null" or . == "" then
                                 ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
                             else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
-                elif ($a == [""]) then
-                    "\"\""
+                                tostring
+                            end) + ($delims[$layer] // "|")
+                        ) 
+                        | join("")
+                    end
+                elif $type == "null" or . == "" then
+                    ""
                 else
-                    a|join(b)
+                    tostring
                 end;
-            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+
+            '"${3:-.}"' | structural_merge | finalize_strings(0)' <<< "$jq_input"
         ;;
     esac
 }

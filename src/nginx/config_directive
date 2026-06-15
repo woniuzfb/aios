@@ -12,7 +12,7 @@ NginxConfigDirective()
 
                     if [ -n "${level_1_args_arr[level_1_index]}" ] 
                     then
-                        IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
+                        IFS="${delimiters[4]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
                         for arg in "${args[@]}"
                         do
                             level_1_option="$level_1_option ${arg:-''}"
@@ -94,13 +94,13 @@ NginxConfigDirective()
                     level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                     level_2_args_d1=${level_2_args_arr[level_1_index]}
 
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}${delimiters[1]}"
-                    IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}${delimiters[1]}"
+                    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}"
+                    IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}"
 
                     if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                     then
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
                     fi
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -109,7 +109,7 @@ NginxConfigDirective()
 
                         if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
                         then
-                            IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
+                            IFS="${delimiters[6]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}"
                             for arg in "${args[@]}"
                             do
                                 level_2_option="$level_2_option ${arg:-''}"
@@ -203,25 +203,25 @@ NginxConfigDirective()
                     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                     level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
-                    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}${delimiters[2]}"
+                    IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
+                    IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}"
 
                     if [ -n "${level_3_directive_d1_arr[level_2_index]}" ] 
                     then
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}"
+                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}"
 
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                         then
                             level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                            IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
+                            IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
                             if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                             then
                                 level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                                IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
                             fi
                         fi
 
@@ -231,7 +231,7 @@ NginxConfigDirective()
 
                             if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
                             then
-                                IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                IFS="${delimiters[8]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}"
                                 for arg in "${args[@]}"
                                 do
                                     level_3_option="$level_3_option ${arg:-''}"
@@ -326,37 +326,37 @@ NginxConfigDirective()
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                     level_4_args_d1=${level_4_args_arr[level_1_index]}
 
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
-                    IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
+                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
+                    IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}"
 
                     if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] 
                     then
                         level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                         level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
-                        IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
+                        IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
+                        IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}"
 
                         if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                         then
                             level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                             level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
 
-                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+                            IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}"
+                            IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}"
 
                             if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                             then
                                 level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                                IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                                IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
                                 if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                                 then
                                     level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                                    IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
                                     if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                                     then
                                         level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                                        IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                        IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
                                     fi
                                 fi
                             fi
@@ -367,7 +367,7 @@ NginxConfigDirective()
 
                                 if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
                                 then
-                                    IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
+                                    IFS="${delimiters[10]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}"
                                     for arg in "${args[@]}"
                                     do
                                         level_4_option="$level_4_option ${arg:-''}"
@@ -463,32 +463,32 @@ NginxConfigDirective()
                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
                     level_5_args_d1=${level_5_args_arr[level_1_index]}
 
-                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
-                    IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
+                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
+                    IFS="${delimiters[8]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}"
 
                     if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                     then
                         level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
                         level_5_args_d2=${level_5_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
-                        IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
+                        IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
+                        IFS="${delimiters[9]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}"
 
                         if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                         then
                             level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
                             level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
-                            IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
-                            IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
+                            IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
+                            IFS="${delimiters[10]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}"
 
                             if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                             then
                                 level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
                                 level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
 
-                                IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
-                                IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+                                IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}"
+                                IFS="${delimiters[11]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}"
 
                                 for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                 do
@@ -496,7 +496,7 @@ NginxConfigDirective()
 
                                     if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
                                     then
-                                        IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
+                                        IFS="${delimiters[12]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}"
                                         for arg in "${args[@]}"
                                         do
                                             level_5_option="$level_5_option ${arg:-''}"

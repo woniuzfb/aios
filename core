@@ -36,7 +36,7 @@ ToJsonArray()
         return 0
     fi
     local arr=("${!var}")
-    local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s .)
+    local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s -c .)
     echo $json_array
 }
 
@@ -170,12 +170,14 @@ SetDelimiters()
 {
     [ -n "${delimiters:-}" ] && return 0
 
-    if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
-    then
-        delimiters=( $'μ' $'\002' $'\003' $'\004' $'\005' $'\006' )
-    else
-        delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
-    fi
+    delimiters=(
+        $'\x02' $'\x03' $'\x04' $'\x05' $'\x06'
+        $'\x11' $'\x12' $'\x13' $'\x14' $'\x15'
+        $'\x16' $'\x17' $'\x18' $'\x19' $'\x1A'
+        $'\x1B' $'\x1C' $'\x1D' $'\x1E' $'\x1F'
+    )
+
+    json_delimiters="$(ToJsonArray delimiters)"
 }
 
 RandStr()

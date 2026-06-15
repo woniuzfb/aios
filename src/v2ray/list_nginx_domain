@@ -75,11 +75,11 @@ V2rayNginxListDomain()
                 if [ "$level_3_directive" == "listen" ] 
                 then
                     [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
-                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
                 elif [ "$level_3_directive" == "server_name" ] 
                 then
                     [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
-                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
                 elif [ "$level_3_directive" == "location" ] 
                 then
                     if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
@@ -89,7 +89,7 @@ V2rayNginxListDomain()
                         IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
                         IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
 
-                        if [[ ${level_3_args} =~ ^=${delimiters[0]}(.+) ]] 
+                        if [[ ${level_3_args} =~ ^=${delimiters[8]}(.+) ]] 
                         then
                             v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));

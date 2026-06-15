@@ -13,7 +13,7 @@ OpenListAct()
     for((openlists_index=0;openlists_index<openlists_count;openlists_index++));
     do
         openlists_options+=("OpenList $((openlists_index+1))")
-        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
             openlist_accs_count=0
         else
@@ -28,7 +28,7 @@ OpenListAct()
     echo
     inquirer list_input_index "选择 OpenList" openlists_options openlists_index
 
-    if [ -z "${openlists_acc_username[openlists_index]}" ] 
+    if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
     then
         Println "$error 请先添加账号\n"
         exit 1

@@ -61,7 +61,7 @@ NginxAddDirective()
 
                 if [ -n "$level_2_directive_d1" ] 
                 then
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
                     level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
                 fi
 
@@ -113,7 +113,7 @@ NginxAddDirective()
                 level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
 
                 level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
 
                 level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
 
@@ -121,7 +121,7 @@ NginxAddDirective()
 
                 if [ -n "$level_3_directive_d2" ] 
                 then
-                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
                     level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
                 fi
 
@@ -174,10 +174,10 @@ NginxAddDirective()
                 level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
 
                 level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
 
                 level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
 
                 level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
 
@@ -185,7 +185,7 @@ NginxAddDirective()
 
                 if [ -n "$level_4_directive_d3" ] 
                 then
-                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                    IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
                     level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
                 fi
 
@@ -239,13 +239,13 @@ NginxAddDirective()
                 level_4_index=${level_4_add_indices[directive_i]:-${level_4_add_indices[0]}}
 
                 level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+                IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1"
 
                 level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+                IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2"
 
                 level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+                IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3"
 
                 level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
 
@@ -253,7 +253,7 @@ NginxAddDirective()
 
                 if [ -n "$level_5_directive_d4" ] 
                 then
-                    IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                    IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4"
                     level_5_directive_d4_arr_count=${#level_5_directive_d4_arr[@]}
                 fi
 

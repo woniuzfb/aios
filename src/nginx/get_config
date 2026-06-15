@@ -1,32 +1,45 @@
 NginxGetConfig()
 {
     SetDelimiters
-    IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
-    level_2_directive level_2_args level_3_directive level_3_args \
-    level_4_directive level_4_args level_5_directive level_5_args < <(
-    JQs flat_c "$parse_out" '' \
-    '(.config.parsed|if type == "object" then . else {} end) as $level_1 |
-    ($level_1.block|if type == "object" then . else {} end) as $level_2 |
-    ($level_2.block|if type == "object" then . else {} end) as $level_3 |
-    ($level_3.block|if type == "object" then . else {} end) as $level_4 |
-    ($level_4.block|if type == "object" then . else {} end) as $level_5 |
-    [.status + "\u0007",
-    (.errors|if . == "" then {} else . end).error + "\u0007",
-    ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",
-    ($level_1.args|if . != null then (. + $d2) else . end) + "\u0007",
-    ($level_2.directive|if . != null then (. + $d3) else . end) + "\u0007",
-    ($level_2.args|if . != null then (. + $d3) else . end) + "\u0007",
-    ($level_3.directive|if . != null then (. + $d4) else . end) + "\u0007",
-    ($level_3.args|if . != null then (. + $d4) else . end) + "\u0007",
-    ($level_4.directive|if . != null then (. + $d5) else . end) + "\u0007",
-    ($level_4.args|if . != null then (. + $d5) else . end) + "\u0007",
-    ($level_5.directive|if . != null then (. + $d6) else . end) + "\u0007",
-    ($level_5.args|if . != null then (. + $d6) else . end) + "\u0007"
-    ]|@tsv' "${delimiters[@]}")
+
+    jq_payload=$(JQs flat "$parse_out")
+
+    jq_path='[
+        ["status"],
+        ["errors","error"],
+        ["config","parsed","directive"],
+        ["config","parsed","args"],
+        ["config","parsed","block","directive"],
+        ["config","parsed","block","args"],
+        ["config","parsed","block","block","directive"],
+        ["config","parsed","block","block","args"],
+        ["config","parsed","block","block","block","directive"],
+        ["config","parsed","block","block","block","args"],
+        ["config","parsed","block","block","block","block","directive"],
+        ["config","parsed","block","block","block","block","args"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    status="$jq_status"
+    error_message="$jq_errors_error"
+    level_1_directive="$jq_config_parsed_directive"
+    level_1_args="$jq_config_parsed_args"
+    level_2_directive="$jq_config_parsed_block_directive"
+    level_2_args="$jq_config_parsed_block_args"
+    level_3_directive="$jq_config_parsed_block_block_directive"
+    level_3_args="$jq_config_parsed_block_block_args"
+    level_4_directive="$jq_config_parsed_block_block_block_directive"
+    level_4_args="$jq_config_parsed_block_block_block_args"
+    level_5_directive="$jq_config_parsed_block_block_block_block_directive"
+    level_5_args="$jq_config_parsed_block_block_block_block_args"
 
     if [ "$status" == "failed" ] 
     then
-        Println "$error ${error_message//$'\002'/$'\n'}\n"
+        Println "$error ${error_message//$'\x02'/$'\n'}\n"
         exit 1
     fi
 
@@ -47,8 +60,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[1]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
-    IFS="${delimiters[1]}" read -r -a level_1_args_arr <<< "$level_1_args"
+    IFS="${delimiters[3]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
+    IFS="${delimiters[3]}" read -r -a level_1_args_arr <<< "$level_1_args"
 
     level_1_count=${#level_1_directive_arr[@]}
 
@@ -57,8 +70,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[2]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
-    IFS="${delimiters[2]}" read -r -a level_2_args_arr <<< "$level_2_args"
+    IFS="${delimiters[4]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
+    IFS="${delimiters[4]}" read -r -a level_2_args_arr <<< "$level_2_args"
 
     level_2_d1_count=${#level_2_directive_arr[@]}
 
@@ -67,8 +80,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[3]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
-    IFS="${delimiters[3]}" read -r -a level_3_args_arr <<< "$level_3_args"
+    IFS="${delimiters[5]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
+    IFS="${delimiters[5]}" read -r -a level_3_args_arr <<< "$level_3_args"
 
     level_3_d1_count=${#level_3_directive_arr[@]}
 
@@ -77,8 +90,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[4]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
-    IFS="${delimiters[4]}" read -r -a level_4_args_arr <<< "$level_4_args"
+    IFS="${delimiters[6]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
+    IFS="${delimiters[6]}" read -r -a level_4_args_arr <<< "$level_4_args"
 
     level_4_d1_count=${#level_4_directive_arr[@]}
 
@@ -87,8 +100,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[5]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
-    IFS="${delimiters[5]}" read -r -a level_5_args_arr <<< "$level_5_args"
+    IFS="${delimiters[7]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
+    IFS="${delimiters[7]}" read -r -a level_5_args_arr <<< "$level_5_args"
 
     level_5_d1_count=${#level_5_directive_arr[@]}
 }

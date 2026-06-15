@@ -21,7 +21,7 @@ OpenListAccAdd()
     do
         openlist_prompt="OpenList - ${openlists_name[openlists_index]:-${openlists_url[openlists_index]}}"
 
-        if [ -n "${openlists_acc_username[openlists_index]}" ] 
+        if [ -n "${openlists_acc_username[openlists_index]:-}" ] 
         then
             IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
 
@@ -90,7 +90,7 @@ OpenListAccLogin()
     do
         openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
-        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
             openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n"
 
@@ -157,7 +157,7 @@ OpenListAccView()
     do
         openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
-        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
             openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
         else

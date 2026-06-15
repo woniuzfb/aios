@@ -148,32 +148,42 @@ OpenList.fs.list()
         --data "$openlist_payload"
     )
 
-    IFS=$'\003\t' read -r fs_list_code fs_list_message total readme write provider \
-    content_name content_size content_is_dir content_modified content_sign content_thumb \
-    content_type < <(JQs flat "$response" '' '
-    if type == "object" then . else {} end |
-    . as $response |
-    ($response.data | if type == "object" then . else {} end) as $data |
-    ($data.content | if type == "object" then . else {} end) as $content |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ) + reduce ({total,readme,write,provider}|keys_unsorted[]) as $key ([];
-        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ) + reduce ({name,size,is_dir,modified,sign,thumb,type}|keys_unsorted[]) as $key ([];
-        $content[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    )|@tsv' "${delimiters[@]}")
+    jq_payload=$(JQs flat "$response")
+
+    jq_path='[
+        ["code"],
+        ["message"],
+        ["data","total"],
+        ["data","readme"],
+        ["data","write"],
+        ["data","provider"],
+        ["data","content","name"],
+        ["data","content","size"],
+        ["data","content","is_dir"],
+        ["data","content","modified"],
+        ["data","content","sign"],
+        ["data","content","thumb"],
+        ["data","content","type"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    fs_list_code="$jq_code"
+    fs_list_message="$jq_message"
+    total="$jq_data_total"
+    readme="$jq_data_readme"
+    write="$jq_data_write"
+    provider="$jq_data_provider"
+    content_name="$jq_data_content_name"
+    content_size="$jq_data_content_size"
+    content_is_dir="$jq_data_content_is_dir"
+    content_modified="$jq_data_content_modified"
+    content_sign="$jq_data_content_sign"
+    content_thumb="$jq_data_content_thumb"
+    content_type="$jq_data_content_type"
 
     if [ "$fs_list_code" -ne 200 ] 
     then
@@ -201,16 +211,20 @@ OpenList.fs.rename()
         --data "$openlist_payload"
     )
 
-    IFS=$'\002\t' read -r fs_rename_code fs_rename_message < <(JQs flat "$response" '' '
-    if type == "object" then . else {} end |
-    . as $response |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + "\u0002"]
-        else
-            . + ["\u0002"]
-        end
-    )|@tsv' "${delimiters[@]}")
+    jq_payload=$(JQs flat "$response")
+
+    jq_path='[
+        ["code"],
+        ["message"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    fs_rename_code="$jq_code"
+    fs_rename_message="$jq_message"
 
     if [ "$fs_rename_code" -eq 200 ] 
     then
@@ -240,16 +254,20 @@ OpenList.fs.remove()
         --data "$openlist_payload"
     )
 
-    IFS=$'\002\t' read -r fs_remove_code fs_remove_message < <(JQs flat "$response" '' '
-    if type == "object" then . else {} end |
-    . as $response |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + "\u0002"]
-        else
-            . + ["\u0002"]
-        end
-    )|@tsv' "${delimiters[@]}")
+    jq_payload=$(JQs flat "$response")
+
+    jq_path='[
+        ["code"],
+        ["message"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    fs_remove_code="$jq_code"
+    fs_remove_message="$jq_message"
 
     if [ "$fs_remove_code" -ne 200 ] 
     then

@@ -377,7 +377,7 @@ ParseStream()
             m_programs_streams_index m_streams_index m_streams_codec_name m_streams_codec_type m_streams_width m_streams_height \
             m_streams_closed_captions m_streams_pix_fmt m_streams_field_order m_streams_r_frame_rate m_streams_channels \
             m_streams_channel_layout m_streams_bit_rate m_streams_tags streams_count programs_count format_name \
-            m_format_tags < <(JQs flat_c "$probe" '' '. as $probe |
+            m_format_tags < <(JQs flat "$probe" '' '. as $probe |
             ($probe.programs // {} | if (.|type) == "string" then {} else . end) as $programs |
             ($programs.streams // {} | if (.|type) == "string" then {} else . end) as $programs_streams |
             ($probe.streams // {} | if (.|type) == "string" then {} else . end) as $streams |

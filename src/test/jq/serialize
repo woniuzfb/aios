@@ -1,0 +1,103 @@
+
+test_json=$(
+    $JQ_FILE -n \
+    '{
+        "user": "alice",
+        "meta": {
+            "id": 1001,
+            "active": true,
+            "roles": [{"name": "admin", "age": 20}, "dev"],
+            "empty": "",
+            "null": null,
+            "hardware": {
+                "type": "laptop",
+                "specs": {
+                    "ram": "16GB",
+                    "storage": [512, 1024]
+                }
+            }
+        }
+    }'
+)
+
+$JQ_FILE -r -c '
+def serialize_nested:
+
+    ["\u0002", "\u0003", "\u0004", "\u0005", "\u0006"] as $delims
+
+    |   def _walk($layer):
+        type as $type | 
+        if $type == "object" then
+            to_entries | map("\(.key)=\(.value | _walk($layer + 1))") | join($delims[$layer])
+        elif $type == "array" then
+            map(_walk($layer + 1)) | join($delims[$layer])
+        elif $type == "null" then
+            ""
+        else
+            tostring
+        end;
+    _walk(0)
+;
+
+serialize_nested
+' <<< "$test_json" | cat -v
+
+test_json=$(
+    $JQ_FILE -n \
+    '{
+        "user": "alice",
+        "arr": [1,2,3],
+        "meta": {
+            "profiles": [
+            { "name": "a" },
+            { "name": "b", "age": 1 }
+            ]
+        }
+    }'
+)
+
+$JQ_FILE -r -c '
+def delims: ["\u0002", "\u0003", "\u0004", "\u0005", "\u0006"];
+
+def serialize_val($layer):
+    type as $type
+    | if $type == "object" then
+        to_entries | map("\(.key)=\(.value | serialize_val($layer + 1))") | join(delims[$layer])
+    elif $type == "array" then
+        map(serialize_val($layer + 1)) | join(delims[$layer])
+    elif $type == "null" then
+        ""
+    else
+        tostring
+    end;
+
+def transform_structure($layer):
+    def merge_array_objects($layer):
+        delims[$layer] as $d
+        | ( [ .[] | keys[] ] | unique ) as $all_keys
+        | map(. as $obj | $all_keys | map({key: ., value: $obj[.]}))
+        | flatten
+        | group_by(.key) 
+        | map({
+            key: .[0].key,
+            value: (map(.value | transform_structure($layer + 1)) | join($d))
+            }) 
+        | from_entries;
+
+    type as $type
+    | if $type == "object" then
+        with_entries(.value |= transform_structure($layer + 1))
+    elif $type == "array" then
+        if (.[0] | type) == "object" then
+            merge_array_objects($layer)
+        else
+            serialize_val($layer)
+        end
+    elif $type == "null" then
+      ""
+    else
+        tostring
+    end;
+
+transform_structure(0)
+' <<< "$test_json"

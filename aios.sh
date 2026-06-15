@@ -194,7 +194,7 @@ ToJsonArray()
         return 0
     fi
     local arr=("${!var}")
-    local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s .)
+    local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s -c .)
     echo $json_array
 }
 
@@ -328,12 +328,14 @@ SetDelimiters()
 {
     [ -n "${delimiters:-}" ] && return 0
 
-    if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
-    then
-        delimiters=( $'μ' $'\002' $'\003' $'\004' $'\005' $'\006' )
-    else
-        delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
-    fi
+    delimiters=(
+        $'\x02' $'\x03' $'\x04' $'\x05' $'\x06'
+        $'\x11' $'\x12' $'\x13' $'\x14' $'\x15'
+        $'\x16' $'\x17' $'\x18' $'\x19' $'\x1A'
+        $'\x1B' $'\x1C' $'\x1D' $'\x1E' $'\x1F'
+    )
+
+    json_delimiters="$(ToJsonArray delimiters)"
 }
 
 RandStr()
@@ -4494,6 +4496,11 @@ JQs()
             read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
             jq_path=""
         ;;
+        "gets") 
+            $JQ_FILE -r --argjson paths "$jq_path" '
+                $paths[] as $p | "jq_\($p | join("_")): \(getpath($p)? // "")"' <<< "${!2}"
+            jq_path=""
+        ;;
         "add") 
             if [ "${4:-}" == "pre" ] 
             then
@@ -4553,215 +4560,64 @@ JQs()
                 jq_input="$2"
             fi
 
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;b;c;d;e;f;g):
-                (a // [{}]) as $a | (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
-                        if ($type == "object") then
-                            if ($type2 == "object") then
-                                flat([$val2,$val];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val == {}) then
-                                    $val2 + c
-                                else
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val];b;c;d;e;f;g)
-                                end
-                            elif ($val == {}) then
-                                ""
-                            else
-                                flat([$val];b;c;d;e;f;g)
-                            end
-                        elif ($type == "array") then
-                            flat($val;b;c;d;e;f;g) as $val3 | 
-                            if ($type2 == "object") then
-                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val3 == {}) then
-                                    $val2 + c
-                                elif ($val3 | type == "object") then
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val3];c;d;e;f;g;b)
-                                else
-                                    $val2 + c + $val3
-                                end
-                            elif ($val3 == {}) then
-                                ""
-                            else
-                                $val3
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                flat([$val2,{}];c;d;e;f;g;b)
-                            elif ($val2) then
-                                $val2 + c
-                            else
-                                ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
-                            else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
-                elif ($a == [""]) then
-                    "\"\""
-                elif ($a == [{}]) then
-                    {}
+            $JQ_FILE --argjson delims "$json_delimiters" -r -c '
+
+            def structural_merge:
+                type as $type
+                | if $type == "object" then
+                    with_entries(.value |= structural_merge)
+                elif $type == "array" then
+                    if length == 0 then []
+                    elif (map(type == "object") | any) then
+                    ( [ .[] | select(. != null) | keys[] ] | unique ) as $all_keys
+                    | map(. as $obj 
+                    | if $obj == null or type != "object" then 
+                        $all_keys | map({key: ., value: null}) | from_entries 
+                    else  
+                        $all_keys | map({key: ., value: $obj[.]}) | from_entries 
+                    end)
+                    | [ .[] | to_entries[] ] 
+                    | group_by(.key)
+                    | map({
+                        key: .[0].key,
+                        value: (map(.value) | structural_merge)
+                    })
+                    | from_entries
+                    else
+                        map(structural_merge)
+                        | if (map(type == "object") | any) then structural_merge else . end
+                    end
                 else
-                    a|join(b)
+                    .
                 end;
-            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
-        ;;
-        "flat_c")
-            if [[ $2 =~ ^/ ]] 
-            then
-                jq_input=$(< $2)
-            else
-                jq_input="$2"
-            fi
 
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;x;b;c;d;e;f;g):
-                a as $a | (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | 
-
-                    (reduce a[] as $item ({};
-                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
-                            if ($val and $val != [] and $val != {}) then
-                                if ($val2 and ($val2|.[-1:]) == [""]) then
-                                    $val2
-                                else
-                                    ($val2 // []) + [""]
-                                end
-                            else
-                                if ($val2) then
-                                    if ($val2|.[-1:] == [""]) then
-                                        $val2
-                                    else
-                                        $val2 + [{}]
-                                    end
-                                else
-                                    [{}]
-                                end
-                            end
-                        )
-                    )) as $blank | (reduce($keys[]) as $key ({};
-                        .[$key] = ($blank[$key] | .[:-1])
-                    )) as $blank |
-
-                    reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
-                    .[$key] = 
-                        if ($type == "object") then
-                            if ($val2) then
-                                if ($type2 == "object") then
-                                    if (x == [""]) then
-                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
-                                    else
-                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
-                                    end
-                                elif ($val == {}) then
-                                    $val2 + c
-                                else
-                                    if (x|.[-1:] == [1]) then
-                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
-                                    else
-                                        flat(($x + [$val]);[];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val == {}) then
-                                    ""
-                                elif (x == [""]) then
-                                    $val
-                                else
-                                    flat([$val];[];b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "array") then
-                            if ($val[0] | type == "object") then
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        ($a|index($item)) as $index | 
-                                        if ($a|length - $index == 1) then
-                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
-                                        else
-                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
-                                                if ($obj[$key] and $obj[$key] != []) then
-                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                                else
-                                                    . + [{}]
-                                                end
-                                            );[""];c;d;e;f;g;b)
-                                        end
-                                    end
-                                else
-                                    ($a|index($item)) as $index | 
-                                    if ($a|length - $index == 1) then
-                                        flat($val;$x;b;c;d;e;f;g)
-                                    else
-                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
-                                            if ($obj[$key] and $obj[$key] != []) then
-                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                            else
-                                                . + [{}]
-                                            end
-                                        );[""];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
-                                    end
-                                else
-                                    flat($val;$x;b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                if (x != [""] and (x|.[-1:] != [1])) then
-                                    $val2
-                                else
-                                    flat([$val2,{}];x;c;d;e;f;g;b)
-                                end
-                            elif ($val2) then
-                                $val2 + c
-                            else
+            def finalize_strings($layer):
+                type as $type
+                | if $type == "object" then
+                    with_entries(.value |= finalize_strings($layer + 1))
+                elif $type == "array" then
+                    if length == 0 then ""
+                    elif length == 1 and (.[0] | type) == "array" then
+                        .[0] | finalize_strings($layer)
+                    else
+                        map(
+                            (if type == "array" then
+                                finalize_strings($layer + 1)
+                            elif type == "null" or . == "" then
                                 ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
                             else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
-                elif ($a == [""]) then
-                    "\"\""
+                                tostring
+                            end) + ($delims[$layer] // "|")
+                        ) 
+                        | join("")
+                    end
+                elif $type == "null" or . == "" then
+                    ""
                 else
-                    a|join(b)
+                    tostring
                 end;
-            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+
+            '"${3:-.}"' | structural_merge | finalize_strings(0)' <<< "$jq_input"
         ;;
     esac
 }
@@ -11701,7 +11557,7 @@ EOF
                 m_programs_streams_index m_streams_index m_streams_codec_name m_streams_codec_type m_streams_width m_streams_height \
                 m_streams_closed_captions m_streams_pix_fmt m_streams_field_order m_streams_r_frame_rate m_streams_channels \
                 m_streams_channel_layout m_streams_bit_rate m_streams_tags streams_count programs_count format_name \
-                m_format_tags < <(JQs flat_c "$probe" '' '. as $probe |
+                m_format_tags < <(JQs flat "$probe" '' '. as $probe |
                 ($probe.programs // {} | if (.|type) == "string" then {} else . end) as $programs |
                 ($programs.streams // {} | if (.|type) == "string" then {} else . end) as $programs_streams |
                 ($probe.streams // {} | if (.|type) == "string" then {} else . end) as $streams |
@@ -21992,18 +21848,26 @@ EOF
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -22012,172 +21876,174 @@ EOF
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
@@ -43434,11 +43300,11 @@ then
                     if [ "$level_3_directive" == "listen" ] 
                     then
                         [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
-                        v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                        v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
                     elif [ "$level_3_directive" == "server_name" ] 
                     then
                         [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
-                        v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                        v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
                     elif [ "$level_3_directive" == "location" ] 
                     then
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
@@ -43448,7 +43314,7 @@ then
                             IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
                             IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
 
-                            if [[ ${level_3_args} =~ ^=${delimiters[0]}(.+) ]] 
+                            if [[ ${level_3_args} =~ ^=${delimiters[8]}(.+) ]] 
                             then
                                 v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
                                 for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
@@ -49507,11 +49373,11 @@ then
                     if [ "$level_3_directive" == "listen" ] 
                     then
                         [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
-                        v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                        v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
                     elif [ "$level_3_directive" == "server_name" ] 
                     then
                         [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
-                        v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                        v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
                     elif [ "$level_3_directive" == "location" ] 
                     then
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
@@ -49521,7 +49387,7 @@ then
                             IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
                             IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
 
-                            if [[ ${level_3_args} =~ ^=${delimiters[0]}(.+) ]] 
+                            if [[ ${level_3_args} =~ ^=${delimiters[8]}(.+) ]] 
                             then
                                 v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
                                 for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
@@ -50981,18 +50847,26 @@ EOF
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -51001,172 +50875,174 @@ EOF
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
@@ -51961,32 +51837,45 @@ EOF
     NginxGetConfig()
     {
         SetDelimiters
-        IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
-        level_2_directive level_2_args level_3_directive level_3_args \
-        level_4_directive level_4_args level_5_directive level_5_args < <(
-        JQs flat_c "$parse_out" '' \
-        '(.config.parsed|if type == "object" then . else {} end) as $level_1 |
-        ($level_1.block|if type == "object" then . else {} end) as $level_2 |
-        ($level_2.block|if type == "object" then . else {} end) as $level_3 |
-        ($level_3.block|if type == "object" then . else {} end) as $level_4 |
-        ($level_4.block|if type == "object" then . else {} end) as $level_5 |
-        [.status + "\u0007",
-        (.errors|if . == "" then {} else . end).error + "\u0007",
-        ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",
-        ($level_1.args|if . != null then (. + $d2) else . end) + "\u0007",
-        ($level_2.directive|if . != null then (. + $d3) else . end) + "\u0007",
-        ($level_2.args|if . != null then (. + $d3) else . end) + "\u0007",
-        ($level_3.directive|if . != null then (. + $d4) else . end) + "\u0007",
-        ($level_3.args|if . != null then (. + $d4) else . end) + "\u0007",
-        ($level_4.directive|if . != null then (. + $d5) else . end) + "\u0007",
-        ($level_4.args|if . != null then (. + $d5) else . end) + "\u0007",
-        ($level_5.directive|if . != null then (. + $d6) else . end) + "\u0007",
-        ($level_5.args|if . != null then (. + $d6) else . end) + "\u0007"
-        ]|@tsv' "${delimiters[@]}")
+
+        jq_payload=$(JQs flat "$parse_out")
+
+        jq_path='[
+            ["status"],
+            ["errors","error"],
+            ["config","parsed","directive"],
+            ["config","parsed","args"],
+            ["config","parsed","block","directive"],
+            ["config","parsed","block","args"],
+            ["config","parsed","block","block","directive"],
+            ["config","parsed","block","block","args"],
+            ["config","parsed","block","block","block","directive"],
+            ["config","parsed","block","block","block","args"],
+            ["config","parsed","block","block","block","block","directive"],
+            ["config","parsed","block","block","block","block","args"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        status="$jq_status"
+        error_message="$jq_errors_error"
+        level_1_directive="$jq_config_parsed_directive"
+        level_1_args="$jq_config_parsed_args"
+        level_2_directive="$jq_config_parsed_block_directive"
+        level_2_args="$jq_config_parsed_block_args"
+        level_3_directive="$jq_config_parsed_block_block_directive"
+        level_3_args="$jq_config_parsed_block_block_args"
+        level_4_directive="$jq_config_parsed_block_block_block_directive"
+        level_4_args="$jq_config_parsed_block_block_block_args"
+        level_5_directive="$jq_config_parsed_block_block_block_block_directive"
+        level_5_args="$jq_config_parsed_block_block_block_block_args"
 
         if [ "$status" == "failed" ] 
         then
-            Println "$error ${error_message//$'\002'/$'\n'}\n"
+            Println "$error ${error_message//$'\x02'/$'\n'}\n"
             exit 1
         fi
 
@@ -52007,8 +51896,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[1]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
-        IFS="${delimiters[1]}" read -r -a level_1_args_arr <<< "$level_1_args"
+        IFS="${delimiters[3]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
+        IFS="${delimiters[3]}" read -r -a level_1_args_arr <<< "$level_1_args"
 
         level_1_count=${#level_1_directive_arr[@]}
 
@@ -52017,8 +51906,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[2]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
-        IFS="${delimiters[2]}" read -r -a level_2_args_arr <<< "$level_2_args"
+        IFS="${delimiters[4]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
+        IFS="${delimiters[4]}" read -r -a level_2_args_arr <<< "$level_2_args"
 
         level_2_d1_count=${#level_2_directive_arr[@]}
 
@@ -52027,8 +51916,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[3]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
-        IFS="${delimiters[3]}" read -r -a level_3_args_arr <<< "$level_3_args"
+        IFS="${delimiters[5]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
+        IFS="${delimiters[5]}" read -r -a level_3_args_arr <<< "$level_3_args"
 
         level_3_d1_count=${#level_3_directive_arr[@]}
 
@@ -52037,8 +51926,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[4]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
-        IFS="${delimiters[4]}" read -r -a level_4_args_arr <<< "$level_4_args"
+        IFS="${delimiters[6]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
+        IFS="${delimiters[6]}" read -r -a level_4_args_arr <<< "$level_4_args"
 
         level_4_d1_count=${#level_4_directive_arr[@]}
 
@@ -52047,8 +51936,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[5]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
-        IFS="${delimiters[5]}" read -r -a level_5_args_arr <<< "$level_5_args"
+        IFS="${delimiters[7]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
+        IFS="${delimiters[7]}" read -r -a level_5_args_arr <<< "$level_5_args"
 
         level_5_d1_count=${#level_5_directive_arr[@]}
     }
@@ -52167,16 +52056,16 @@ EOF
         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
         level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
         if [ "$level_4_d1_count" -gt 0 ] 
         then
             level_4_directive_d1=${level_4_directive_arr[level_1_index]}
             level_4_args_d1=${level_4_args_arr[level_1_index]}
-            IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
-            IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+            IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
+            IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
         fi
 
         for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -52186,15 +52075,15 @@ EOF
                 level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                 level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                 if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                 then
                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                     level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-                    IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
+                    IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
                 fi
 
                 nginx_domain_servers_count=$((nginx_domain_servers_count+1))
@@ -52214,11 +52103,11 @@ EOF
                     if [ "$level_3_directive" == "listen" ] 
                     then
                         [ -n "$nginx_domain_server_listen_list" ] && nginx_domain_server_listen_list="$nginx_domain_server_listen_list, "
-                        nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                        nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
                     elif [ "$level_3_directive" == "server_name" ] 
                     then
                         [ -n "$nginx_domain_server_name_list" ] && nginx_domain_server_name_list="$nginx_domain_server_name_list, "
-                        nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                        nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
                     elif [ "$level_3_directive" == "location" ] 
                     then
                         if [ "${level_3_args}" == "/flv" ] 
@@ -52228,10 +52117,10 @@ EOF
                         then
                             level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                             level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
-                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+                            IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
+                            IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                            if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                            if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
                             then
                                 for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                                 do
@@ -52391,10 +52280,10 @@ EOF
                 level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                 level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
-                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
                 for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
                 do
@@ -52403,8 +52292,8 @@ EOF
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                         if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] 
                         then
@@ -52488,16 +52377,16 @@ EOF
                 level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                 level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
                 if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                 then
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                     level_4_args_d1=${level_4_args_arr[level_1_index]}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
-                    IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
+                    IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
                 fi
 
                 for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -52507,15 +52396,15 @@ EOF
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                         then
                             level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                             level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-                            IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                            IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
+                            IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
                         fi
 
                         nginx_localhost_server_count=$((nginx_localhost_server_count+1))
@@ -52534,7 +52423,7 @@ EOF
                             if [ "$level_3_directive" == "listen" ] 
                             then
                                 [ -n "$nginx_localhost_listen" ] && nginx_localhost_listen="$nginx_localhost_listen, "
-                                nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[0]}/ }"
+                                nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[8]}/ }"
                             elif [ "$level_3_directive" == "location" ] 
                             then
                                 if [ "${level_3_args}" == "/flv" ] 
@@ -52544,10 +52433,10 @@ EOF
                                 then
                                     level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                                     level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
-                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                                    IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+                                    IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
+                                    IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                                    if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                                    if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
                                     then
                                         for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                                         do
@@ -52741,7 +52630,7 @@ EOF
 
                     if [ -n "$level_2_directive_d1" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
                         level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
                     fi
 
@@ -52793,7 +52682,7 @@ EOF
                     level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
 
                     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
 
                     level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
 
@@ -52801,7 +52690,7 @@ EOF
 
                     if [ -n "$level_3_directive_d2" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
                         level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
                     fi
 
@@ -52854,10 +52743,10 @@ EOF
                     level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
 
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
 
                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
 
                     level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
 
@@ -52865,7 +52754,7 @@ EOF
 
                     if [ -n "$level_4_directive_d3" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                        IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
                         level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
                     fi
 
@@ -52919,13 +52808,13 @@ EOF
                     level_4_index=${level_4_add_indices[directive_i]:-${level_4_add_indices[0]}}
 
                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1"
 
                     level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+                    IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2"
 
                     level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+                    IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3"
 
                     level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
 
@@ -52933,7 +52822,7 @@ EOF
 
                     if [ -n "$level_5_directive_d4" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                        IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4"
                         level_5_directive_d4_arr_count=${#level_5_directive_d4_arr[@]}
                     fi
 
@@ -53503,15 +53392,16 @@ EOF
 
                     level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                     level_2_args_d1=${level_2_args_arr[level_1_index]}
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                    IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+
+                    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                    IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
 
                     if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                     then
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                         level_3_args_d1=${level_3_args_arr[level_1_index]}
-                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
                     fi
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -53520,8 +53410,8 @@ EOF
                         then
                             level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                             level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                            IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                            IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                             for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
                             do
@@ -53532,7 +53422,7 @@ EOF
                                         continue 2
                                     fi
                                     updated=1
-                                    IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                    IFS="${delimiters[8]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}"
                                     new_conf='{"status":"ok","errors":[],"config":[]}'
                                     localhost_found=0
                                     for((l=0;l<${#domains[@]};l++));
@@ -53620,7 +53510,7 @@ EOF
 
                         if [ -n "${level_1_args_arr[level_1_index]}" ] 
                         then
-                            IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
+                            IFS="${delimiters[4]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
                             for arg in "${args[@]}"
                             do
                                 level_1_option="$level_1_option ${arg:-''}"
@@ -53702,13 +53592,13 @@ EOF
                         level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                         level_2_args_d1=${level_2_args_arr[level_1_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}${delimiters[1]}"
+                        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}"
+                        IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}"
 
                         if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                         then
                             level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
+                            IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
                         fi
 
                         for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -53717,7 +53607,7 @@ EOF
 
                             if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
                             then
-                                IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
+                                IFS="${delimiters[6]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}"
                                 for arg in "${args[@]}"
                                 do
                                     level_2_option="$level_2_option ${arg:-''}"
@@ -53811,25 +53701,25 @@ EOF
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                         level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
-                        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}${delimiters[2]}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
+                        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}"
 
                         if [ -n "${level_3_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                             level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}${delimiters[1]}"
+                            IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}"
+                            IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}"
 
                             if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                             then
                                 level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
+                                IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
                                 if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                                 then
                                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
                                 fi
                             fi
 
@@ -53839,7 +53729,7 @@ EOF
 
                                 if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
                                 then
-                                    IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                    IFS="${delimiters[8]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}"
                                     for arg in "${args[@]}"
                                     do
                                         level_3_option="$level_3_option ${arg:-''}"
@@ -53934,37 +53824,37 @@ EOF
                         level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                         level_4_args_d1=${level_4_args_arr[level_1_index]}
 
-                        IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
-                        IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
+                        IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
+                        IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}"
 
                         if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                             level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
-                            IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
+                            IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
+                            IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}"
 
                             if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                             then
                                 level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                                 level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
 
-                                IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
-                                IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+                                IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}"
+                                IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}"
 
                                 if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                                 then
                                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
                                     if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                                     then
                                         level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                                        IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                                        IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
                                         if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                                         then
                                             level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                                            IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                            IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
                                         fi
                                     fi
                                 fi
@@ -53975,7 +53865,7 @@ EOF
 
                                     if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
                                     then
-                                        IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
+                                        IFS="${delimiters[10]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}"
                                         for arg in "${args[@]}"
                                         do
                                             level_4_option="$level_4_option ${arg:-''}"
@@ -54071,32 +53961,32 @@ EOF
                         level_5_directive_d1=${level_5_directive_arr[level_1_index]}
                         level_5_args_d1=${level_5_args_arr[level_1_index]}
 
-                        IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
-                        IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
+                        IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
+                        IFS="${delimiters[8]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}"
 
                         if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
                             level_5_args_d2=${level_5_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
-                            IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
+                            IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
+                            IFS="${delimiters[9]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}"
 
                             if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                             then
                                 level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
                                 level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
-                                IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
-                                IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
+                                IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
+                                IFS="${delimiters[10]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}"
 
                                 if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                                 then
                                     level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
                                     level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
 
-                                    IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
-                                    IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+                                    IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}"
+                                    IFS="${delimiters[11]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}"
 
                                     for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                     do
@@ -54104,7 +53994,7 @@ EOF
 
                                         if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
                                         then
-                                            IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
+                                            IFS="${delimiters[12]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}"
                                             for arg in "${args[@]}"
                                             do
                                                 level_5_option="$level_5_option ${arg:-''}"
@@ -57832,18 +57722,26 @@ EOF
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -57852,172 +57750,174 @@ EOF
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
@@ -58700,32 +58600,45 @@ EOF
     NginxGetConfig()
     {
         SetDelimiters
-        IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
-        level_2_directive level_2_args level_3_directive level_3_args \
-        level_4_directive level_4_args level_5_directive level_5_args < <(
-        JQs flat_c "$parse_out" '' \
-        '(.config.parsed|if type == "object" then . else {} end) as $level_1 |
-        ($level_1.block|if type == "object" then . else {} end) as $level_2 |
-        ($level_2.block|if type == "object" then . else {} end) as $level_3 |
-        ($level_3.block|if type == "object" then . else {} end) as $level_4 |
-        ($level_4.block|if type == "object" then . else {} end) as $level_5 |
-        [.status + "\u0007",
-        (.errors|if . == "" then {} else . end).error + "\u0007",
-        ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",
-        ($level_1.args|if . != null then (. + $d2) else . end) + "\u0007",
-        ($level_2.directive|if . != null then (. + $d3) else . end) + "\u0007",
-        ($level_2.args|if . != null then (. + $d3) else . end) + "\u0007",
-        ($level_3.directive|if . != null then (. + $d4) else . end) + "\u0007",
-        ($level_3.args|if . != null then (. + $d4) else . end) + "\u0007",
-        ($level_4.directive|if . != null then (. + $d5) else . end) + "\u0007",
-        ($level_4.args|if . != null then (. + $d5) else . end) + "\u0007",
-        ($level_5.directive|if . != null then (. + $d6) else . end) + "\u0007",
-        ($level_5.args|if . != null then (. + $d6) else . end) + "\u0007"
-        ]|@tsv' "${delimiters[@]}")
+
+        jq_payload=$(JQs flat "$parse_out")
+
+        jq_path='[
+            ["status"],
+            ["errors","error"],
+            ["config","parsed","directive"],
+            ["config","parsed","args"],
+            ["config","parsed","block","directive"],
+            ["config","parsed","block","args"],
+            ["config","parsed","block","block","directive"],
+            ["config","parsed","block","block","args"],
+            ["config","parsed","block","block","block","directive"],
+            ["config","parsed","block","block","block","args"],
+            ["config","parsed","block","block","block","block","directive"],
+            ["config","parsed","block","block","block","block","args"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        status="$jq_status"
+        error_message="$jq_errors_error"
+        level_1_directive="$jq_config_parsed_directive"
+        level_1_args="$jq_config_parsed_args"
+        level_2_directive="$jq_config_parsed_block_directive"
+        level_2_args="$jq_config_parsed_block_args"
+        level_3_directive="$jq_config_parsed_block_block_directive"
+        level_3_args="$jq_config_parsed_block_block_args"
+        level_4_directive="$jq_config_parsed_block_block_block_directive"
+        level_4_args="$jq_config_parsed_block_block_block_args"
+        level_5_directive="$jq_config_parsed_block_block_block_block_directive"
+        level_5_args="$jq_config_parsed_block_block_block_block_args"
 
         if [ "$status" == "failed" ] 
         then
-            Println "$error ${error_message//$'\002'/$'\n'}\n"
+            Println "$error ${error_message//$'\x02'/$'\n'}\n"
             exit 1
         fi
 
@@ -58746,8 +58659,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[1]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
-        IFS="${delimiters[1]}" read -r -a level_1_args_arr <<< "$level_1_args"
+        IFS="${delimiters[3]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
+        IFS="${delimiters[3]}" read -r -a level_1_args_arr <<< "$level_1_args"
 
         level_1_count=${#level_1_directive_arr[@]}
 
@@ -58756,8 +58669,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[2]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
-        IFS="${delimiters[2]}" read -r -a level_2_args_arr <<< "$level_2_args"
+        IFS="${delimiters[4]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
+        IFS="${delimiters[4]}" read -r -a level_2_args_arr <<< "$level_2_args"
 
         level_2_d1_count=${#level_2_directive_arr[@]}
 
@@ -58766,8 +58679,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[3]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
-        IFS="${delimiters[3]}" read -r -a level_3_args_arr <<< "$level_3_args"
+        IFS="${delimiters[5]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
+        IFS="${delimiters[5]}" read -r -a level_3_args_arr <<< "$level_3_args"
 
         level_3_d1_count=${#level_3_directive_arr[@]}
 
@@ -58776,8 +58689,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[4]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
-        IFS="${delimiters[4]}" read -r -a level_4_args_arr <<< "$level_4_args"
+        IFS="${delimiters[6]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
+        IFS="${delimiters[6]}" read -r -a level_4_args_arr <<< "$level_4_args"
 
         level_4_d1_count=${#level_4_directive_arr[@]}
 
@@ -58786,8 +58699,8 @@ EOF
             return 0
         fi
 
-        IFS="${delimiters[5]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
-        IFS="${delimiters[5]}" read -r -a level_5_args_arr <<< "$level_5_args"
+        IFS="${delimiters[7]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
+        IFS="${delimiters[7]}" read -r -a level_5_args_arr <<< "$level_5_args"
 
         level_5_d1_count=${#level_5_directive_arr[@]}
     }
@@ -58906,16 +58819,16 @@ EOF
         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
         level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
         if [ "$level_4_d1_count" -gt 0 ] 
         then
             level_4_directive_d1=${level_4_directive_arr[level_1_index]}
             level_4_args_d1=${level_4_args_arr[level_1_index]}
-            IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
-            IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+            IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
+            IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
         fi
 
         for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -58925,15 +58838,15 @@ EOF
                 level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                 level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                 if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                 then
                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                     level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-                    IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
+                    IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
                 fi
 
                 nginx_domain_servers_count=$((nginx_domain_servers_count+1))
@@ -58953,11 +58866,11 @@ EOF
                     if [ "$level_3_directive" == "listen" ] 
                     then
                         [ -n "$nginx_domain_server_listen_list" ] && nginx_domain_server_listen_list="$nginx_domain_server_listen_list, "
-                        nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                        nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
                     elif [ "$level_3_directive" == "server_name" ] 
                     then
                         [ -n "$nginx_domain_server_name_list" ] && nginx_domain_server_name_list="$nginx_domain_server_name_list, "
-                        nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                        nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
                     elif [ "$level_3_directive" == "location" ] 
                     then
                         if [ "${level_3_args}" == "/flv" ] 
@@ -58967,10 +58880,10 @@ EOF
                         then
                             level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                             level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
-                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+                            IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
+                            IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                            if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                            if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
                             then
                                 for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                                 do
@@ -59130,10 +59043,10 @@ EOF
                 level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                 level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
-                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
                 for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
                 do
@@ -59142,8 +59055,8 @@ EOF
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                         if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] 
                         then
@@ -59227,16 +59140,16 @@ EOF
                 level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                 level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
                 if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                 then
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                     level_4_args_d1=${level_4_args_arr[level_1_index]}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
-                    IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
+                    IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
                 fi
 
                 for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -59246,15 +59159,15 @@ EOF
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                         then
                             level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                             level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-                            IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                            IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
+                            IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
                         fi
 
                         nginx_localhost_server_count=$((nginx_localhost_server_count+1))
@@ -59273,7 +59186,7 @@ EOF
                             if [ "$level_3_directive" == "listen" ] 
                             then
                                 [ -n "$nginx_localhost_listen" ] && nginx_localhost_listen="$nginx_localhost_listen, "
-                                nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[0]}/ }"
+                                nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[8]}/ }"
                             elif [ "$level_3_directive" == "location" ] 
                             then
                                 if [ "${level_3_args}" == "/flv" ] 
@@ -59283,10 +59196,10 @@ EOF
                                 then
                                     level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                                     level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
-                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                                    IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+                                    IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
+                                    IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                                    if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                                    if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
                                     then
                                         for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                                         do
@@ -59480,7 +59393,7 @@ EOF
 
                     if [ -n "$level_2_directive_d1" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
                         level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
                     fi
 
@@ -59532,7 +59445,7 @@ EOF
                     level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
 
                     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
 
                     level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
 
@@ -59540,7 +59453,7 @@ EOF
 
                     if [ -n "$level_3_directive_d2" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
                         level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
                     fi
 
@@ -59593,10 +59506,10 @@ EOF
                     level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
 
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
 
                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
 
                     level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
 
@@ -59604,7 +59517,7 @@ EOF
 
                     if [ -n "$level_4_directive_d3" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                        IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
                         level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
                     fi
 
@@ -59658,13 +59571,13 @@ EOF
                     level_4_index=${level_4_add_indices[directive_i]:-${level_4_add_indices[0]}}
 
                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1"
 
                     level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+                    IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2"
 
                     level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+                    IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3"
 
                     level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
 
@@ -59672,7 +59585,7 @@ EOF
 
                     if [ -n "$level_5_directive_d4" ] 
                     then
-                        IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                        IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4"
                         level_5_directive_d4_arr_count=${#level_5_directive_d4_arr[@]}
                     fi
 
@@ -60242,15 +60155,16 @@ EOF
 
                     level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                     level_2_args_d1=${level_2_args_arr[level_1_index]}
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                    IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+
+                    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+                    IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
 
                     if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                     then
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                         level_3_args_d1=${level_3_args_arr[level_1_index]}
-                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+                        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
                     fi
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -60259,8 +60173,8 @@ EOF
                         then
                             level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                             level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                            IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                            IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
                             for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
                             do
@@ -60271,7 +60185,7 @@ EOF
                                         continue 2
                                     fi
                                     updated=1
-                                    IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                    IFS="${delimiters[8]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}"
                                     new_conf='{"status":"ok","errors":[],"config":[]}'
                                     localhost_found=0
                                     for((l=0;l<${#domains[@]};l++));
@@ -60359,7 +60273,7 @@ EOF
 
                         if [ -n "${level_1_args_arr[level_1_index]}" ] 
                         then
-                            IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
+                            IFS="${delimiters[4]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
                             for arg in "${args[@]}"
                             do
                                 level_1_option="$level_1_option ${arg:-''}"
@@ -60441,13 +60355,13 @@ EOF
                         level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                         level_2_args_d1=${level_2_args_arr[level_1_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}${delimiters[1]}"
+                        IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}"
+                        IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}"
 
                         if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                         then
                             level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
+                            IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
                         fi
 
                         for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
@@ -60456,7 +60370,7 @@ EOF
 
                             if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
                             then
-                                IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
+                                IFS="${delimiters[6]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}"
                                 for arg in "${args[@]}"
                                 do
                                     level_2_option="$level_2_option ${arg:-''}"
@@ -60550,25 +60464,25 @@ EOF
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                         level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
-                        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}${delimiters[2]}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
+                        IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}"
 
                         if [ -n "${level_3_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                             level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}${delimiters[1]}"
+                            IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}"
+                            IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}"
 
                             if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                             then
                                 level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
+                                IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
                                 if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                                 then
                                     level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                                    IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
                                 fi
                             fi
 
@@ -60578,7 +60492,7 @@ EOF
 
                                 if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
                                 then
-                                    IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                    IFS="${delimiters[8]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}"
                                     for arg in "${args[@]}"
                                     do
                                         level_3_option="$level_3_option ${arg:-''}"
@@ -60673,37 +60587,37 @@ EOF
                         level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                         level_4_args_d1=${level_4_args_arr[level_1_index]}
 
-                        IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
-                        IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
+                        IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
+                        IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}"
 
                         if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                             level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
-                            IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
+                            IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
+                            IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}"
 
                             if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                             then
                                 level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                                 level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
 
-                                IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
-                                IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+                                IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}"
+                                IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}"
 
                                 if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                                 then
                                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
                                     if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                                     then
                                         level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                                        IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                                        IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
                                         if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                                         then
                                             level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                                            IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                            IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
                                         fi
                                     fi
                                 fi
@@ -60714,7 +60628,7 @@ EOF
 
                                     if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
                                     then
-                                        IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
+                                        IFS="${delimiters[10]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}"
                                         for arg in "${args[@]}"
                                         do
                                             level_4_option="$level_4_option ${arg:-''}"
@@ -60810,32 +60724,32 @@ EOF
                         level_5_directive_d1=${level_5_directive_arr[level_1_index]}
                         level_5_args_d1=${level_5_args_arr[level_1_index]}
 
-                        IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
-                        IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
+                        IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
+                        IFS="${delimiters[8]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}"
 
                         if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                         then
                             level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
                             level_5_args_d2=${level_5_args_d1_arr[level_2_index]}
 
-                            IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
-                            IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
+                            IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
+                            IFS="${delimiters[9]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}"
 
                             if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
                             then
                                 level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
                                 level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
-                                IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
-                                IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
+                                IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
+                                IFS="${delimiters[10]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}"
 
                                 if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                                 then
                                     level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
                                     level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
 
-                                    IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
-                                    IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+                                    IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}"
+                                    IFS="${delimiters[11]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}"
 
                                     for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                     do
@@ -60843,7 +60757,7 @@ EOF
 
                                         if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
                                         then
-                                            IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
+                                            IFS="${delimiters[12]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}"
                                             for arg in "${args[@]}"
                                             do
                                                 level_5_option="$level_5_option ${arg:-''}"
@@ -73619,18 +73533,26 @@ then
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -73639,172 +73561,174 @@ then
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
@@ -74332,7 +74256,7 @@ EOF
         do
             openlist_prompt="OpenList - ${openlists_name[openlists_index]:-${openlists_url[openlists_index]}}"
 
-            if [ -n "${openlists_acc_username[openlists_index]}" ] 
+            if [ -n "${openlists_acc_username[openlists_index]:-}" ] 
             then
                 IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
 
@@ -74401,7 +74325,7 @@ EOF
         do
             openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
-            if [ -z "${openlists_acc_username[openlists_index]}" ] 
+            if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
             then
                 openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n"
 
@@ -74468,7 +74392,7 @@ EOF
         do
             openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
-            if [ -z "${openlists_acc_username[openlists_index]}" ] 
+            if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
             then
                 openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
             else
@@ -74646,32 +74570,42 @@ EOF
             --data "$openlist_payload"
         )
 
-        IFS=$'\003\t' read -r fs_list_code fs_list_message total readme write provider \
-        content_name content_size content_is_dir content_modified content_sign content_thumb \
-        content_type < <(JQs flat "$response" '' '
-        if type == "object" then . else {} end |
-        . as $response |
-        ($response.data | if type == "object" then . else {} end) as $data |
-        ($data.content | if type == "object" then . else {} end) as $content |
-        reduce ({code,message}|keys_unsorted[]) as $key ([];
-            $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-                . + [($val|tostring) + "\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        ) + reduce ({total,readme,write,provider}|keys_unsorted[]) as $key ([];
-            $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-                . + [($val|tostring) + "\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        ) + reduce ({name,size,is_dir,modified,sign,thumb,type}|keys_unsorted[]) as $key ([];
-            $content[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-                . + [($val|tostring) + "\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        )|@tsv' "${delimiters[@]}")
+        jq_payload=$(JQs flat "$response")
+
+        jq_path='[
+            ["code"],
+            ["message"],
+            ["data","total"],
+            ["data","readme"],
+            ["data","write"],
+            ["data","provider"],
+            ["data","content","name"],
+            ["data","content","size"],
+            ["data","content","is_dir"],
+            ["data","content","modified"],
+            ["data","content","sign"],
+            ["data","content","thumb"],
+            ["data","content","type"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        fs_list_code="$jq_code"
+        fs_list_message="$jq_message"
+        total="$jq_data_total"
+        readme="$jq_data_readme"
+        write="$jq_data_write"
+        provider="$jq_data_provider"
+        content_name="$jq_data_content_name"
+        content_size="$jq_data_content_size"
+        content_is_dir="$jq_data_content_is_dir"
+        content_modified="$jq_data_content_modified"
+        content_sign="$jq_data_content_sign"
+        content_thumb="$jq_data_content_thumb"
+        content_type="$jq_data_content_type"
 
         if [ "$fs_list_code" -ne 200 ] 
         then
@@ -74699,16 +74633,20 @@ EOF
             --data "$openlist_payload"
         )
 
-        IFS=$'\002\t' read -r fs_rename_code fs_rename_message < <(JQs flat "$response" '' '
-        if type == "object" then . else {} end |
-        . as $response |
-        reduce ({code,message}|keys_unsorted[]) as $key ([];
-            $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-                . + [($val|tostring) + "\u0002"]
-            else
-                . + ["\u0002"]
-            end
-        )|@tsv' "${delimiters[@]}")
+        jq_payload=$(JQs flat "$response")
+
+        jq_path='[
+            ["code"],
+            ["message"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        fs_rename_code="$jq_code"
+        fs_rename_message="$jq_message"
 
         if [ "$fs_rename_code" -eq 200 ] 
         then
@@ -74738,16 +74676,20 @@ EOF
             --data "$openlist_payload"
         )
 
-        IFS=$'\002\t' read -r fs_remove_code fs_remove_message < <(JQs flat "$response" '' '
-        if type == "object" then . else {} end |
-        . as $response |
-        reduce ({code,message}|keys_unsorted[]) as $key ([];
-            $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-                . + [($val|tostring) + "\u0002"]
-            else
-                . + ["\u0002"]
-            end
-        )|@tsv' "${delimiters[@]}")
+        jq_payload=$(JQs flat "$response")
+
+        jq_path='[
+            ["code"],
+            ["message"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        fs_remove_code="$jq_code"
+        fs_remove_message="$jq_message"
 
         if [ "$fs_remove_code" -ne 200 ] 
         then
@@ -74771,7 +74713,7 @@ EOF
         for((openlists_index=0;openlists_index<openlists_count;openlists_index++));
         do
             openlists_options+=("OpenList $((openlists_index+1))")
-            if [ -z "${openlists_acc_username[openlists_index]}" ] 
+            if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
             then
                 openlist_accs_count=0
             else
@@ -74786,7 +74728,7 @@ EOF
         echo
         inquirer list_input_index "选择 OpenList" openlists_options openlists_index
 
-        if [ -z "${openlists_acc_username[openlists_index]}" ] 
+        if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
             Println "$error 请先添加账号\n"
             exit 1
@@ -77492,18 +77434,26 @@ then
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -77512,172 +77462,174 @@ then
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
@@ -80766,18 +80718,26 @@ EOF
 
         SetDelimiters
 
+        jq_payload=$(JQs flat "$SERVICES_CONFIG")
+
         case $service_id in
             4gtv) 
-                IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                ))|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["4gtv","proxy"],
+                    ["4gtv","accounts","email"],
+                    ["4gtv","accounts","password"],
+                    ["4gtv","accounts","token"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                d_4gtv_proxy="$jq_4gtv_proxy"
+                _4gtv_acc_email="$jq_4gtv_accounts_email"
+                _4gtv_acc_pass="$jq_4gtv_accounts_password"
+                _4gtv_acc_token="$jq_4gtv_accounts_token"
 
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
                 IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -80786,172 +80746,174 @@ EOF
                 _4gtv_accs_count=${#_4gtv_accs_email[@]}
             ;;
             openlist) 
-                IFS=$'\004\t' read -r openlist_name openlist_url openlist_acc_username \
-                openlist_acc_password openlist_acc_token < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'" | if type == "object" then . else {} end) as $openlist |
-                ($openlist.accs // {} | if type == "object" then . else {} end) as $accs |
-                reduce ({name,url}|keys_unsorted[]) as $key ([];
-                $openlist[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
-                    $accs[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["openlist","name"],
+                    ["openlist","url"],
+                    ["openlist","accs","username"],
+                    ["openlist","accs","password"],
+                    ["openlist","accs","token"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$openlist_name"
-                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$openlist_url"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$openlist_acc_username"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$openlist_acc_password"
-                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$openlist_acc_token"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
+                IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+                IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
                 openlists_count=${#openlists_name[@]}
             ;;
             rclone) 
             case ${2:-} in
                 serve) 
-                    IFS=$'\004\t' read -r m_serves_remote m_serves_protocol m_serves_addr m_serves_htpasswd \
-                    m_serves_args m_serves_user m_serves_pass < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.serve' '
-                    if type == "object" then . else {} end | . as $serve |
-                    ($serve.accs | if type == "object" then . else {} end) as $accs |
-                    reduce ({remote,protocol,addr,htpasswd,args}|keys_unsorted[]) as $key ([];
-                    $serve[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    ) + reduce ({user,pass}|keys_unsorted[]) as $key ([];
-                        $accs[$key] as $val | if $val then
-                            . + [$val + "\u0003\u0004"]
-                        else
-                            . + ["\u0004"]
-                        end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","serve","remote"],
+                        ["rclone","serve","protocol"],
+                        ["rclone","serve","addr"],
+                        ["rclone","serve","htpasswd"],
+                        ["rclone","serve","args"],
+                        ["rclone","serve","accs","user"],
+                        ["rclone","serve","accs","pass"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$m_serves_remote"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$m_serves_protocol"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$m_serves_addr"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$m_serves_htpasswd"
-                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$m_serves_args"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$m_serves_user"
-                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$m_serves_pass"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                    IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
+                    IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
 
                     rclone_serves_count=${#rclone_serves_remote[@]}
                 ;;
                 sync) 
-                    IFS=$'\004\t' read -r m_sync_rsync m_sync_source m_sync_target m_sync_args \
-                    m_sync_exclude_before m_sync_include m_sync_exclude_after < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.sync' '
-                    if type == "object" then . else {} end | . as $sync |
-                    reduce ({rsync,source,target,args,exclude_before,include,exclude_after}|keys_unsorted[]) as $key ([];
-                    $sync[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                    )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","sync","rsync"],
+                        ["rclone","sync","source"],
+                        ["rclone","sync","target"],
+                        ["rclone","sync","args"],
+                        ["rclone","sync","exclude_before"],
+                        ["rclone","sync","include"],
+                        ["rclone","sync","exclude_after"]
+                    ]'
 
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$m_sync_rsync"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$m_sync_source"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$m_sync_target"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$m_sync_args"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$m_sync_exclude_before"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$m_sync_include"
-                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$m_sync_exclude_after"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
+
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                    IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                     rclone_syncs_count=${#rclone_syncs_rsync[@]}
                 ;;
                 *) 
-                IFS=$'\004\t' read -r m_remotes_name m_remotes_type m_remotes_url \
-                m_remotes_vendor m_remotes_user m_remotes_pass m_remotes_path m_remotes_mount_path \
-                m_remotes_mount_flag < <(JQs flat "$SERVICES_CONFIG" '.[0].rclone.remote' '
-                if type == "object" then . else {} end | . as $remote |
-                ($remote.mount | if type == "object" then . else {} end) as $mount |
-                reduce ({name,type,url,vendor,user,pass}|keys_unsorted[]) as $key ([];
-                    $remote[$key] as $val | if $val then
-                        . + [$val + "\u0002\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                ) + reduce ({path,mount_path,flags}|keys_unsorted[]) as $key ([];
-                    $mount[$key] as $val | if $val then
-                        . + [$val + "\u0003\u0004"]
-                    else
-                        . + ["\u0004"]
-                    end
-                )|@tsv' "${delimiters[@]}")
+                    jq_path='[
+                        ["rclone","remote","name"],
+                        ["rclone","remote","type"],
+                        ["rclone","remote","url"],
+                        ["rclone","remote","vendor"],
+                        ["rclone","remote","user"],
+                        ["rclone","remote","pass"],
+                        ["rclone","remote","mount","path"],
+                        ["rclone","remote","mount","mount_path"],
+                        ["rclone","remote","mount","flags"]
+                    ]'
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$m_remotes_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$m_remotes_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$m_remotes_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$m_remotes_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$m_remotes_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$m_remotes_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$m_remotes_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$m_remotes_mount_path"
+                    while IFS=": " read -r path_name value; do
+                        var_name=${path_name}
+                        read -r ${var_name?} <<< "$value"
+                    done < <(JQs gets jq_payload)
 
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${m_remotes_mount_flag:-$flags_if_null}${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                    IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
 
-                rclone_remotes_count=${#rclone_remotes_name[@]}
+                    new_flags=("${rclone_remotes_mount_path[@]//*/}")
+                    flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
+                    IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+
+                    rclone_remotes_count=${#rclone_remotes_name[@]}
                 ;;
             esac
             ;;
             kcc)
-                IFS="${delimiters[2]}"$'\t' read -r kcc_format kcc_process kcc_args kcc_output \
-                m_source < <($JQ_FILE -r --arg delimiter "${delimiters[1]}" --arg delimiter2 "${delimiters[2]}" '
-                if type == "object" then . else {} end |
-                (.kcc | if type == "object" then . else {} end) as $kcc |
-                reduce ({format,process,args,output,source}|keys_unsorted[]) as $key ([];
-                $kcc[$key] as $val | ($val | type) as $type | if $val then
-                    if ($type == "array") then
-                        . + [($val|join($delimiter)) + $delimiter2]
-                    else
-                        . + [($val|tostring) + $delimiter2]
-                    end
-                else
-                    . + [$delimiter2]
-                end
-                )|@tsv' "$SERVICES_CONFIG")
+                jq_path='[
+                    ["kcc","format"],
+                    ["kcc","process"],
+                    ["kcc","args"],
+                    ["kcc","output"],
+                    ["kcc","source"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$m_source"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                kcc_format="$jq_kcc_format"
+                kcc_process="$jq_kcc_process"
+                kcc_args="$jq_kcc_args"
+                kcc_output="$jq_kcc_output"
+
+                IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
             ;;
             iperf)
-                IFS=$'\004\t' read -r m_iperf_name m_iperf_type m_iperf_target \
-                m_iperf_args < <(JQs flat "$SERVICES_CONFIG" '.[0].iperf' '
-                if type == "object" then . else {} end | . as $iperf |
-                reduce ({name,type,target,args}|keys_unsorted[]) as $key ([];
-                $iperf[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["iperf","name"],
+                    ["iperf","type"],
+                    ["iperf","target"],
+                    ["iperf","args"]
+                ]'
 
-                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$m_iperf_name"
-                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$m_iperf_type"
-                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$m_iperf_target"
-                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$m_iperf_args"
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
+                IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
+                IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+                IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
                 iperf_count=${#iperf_types[@]}
             ;;
             *)
-                IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_CONFIG" '' '
-                if type == "object" then . else {} end |
-                (."'"$service_id"'".accounts | if type == "object" then . else {} end) as $accounts |
-                reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
-                $accounts[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0003"]
-                else
-                    . + ["\u0003"]
-                end
-                )|@tsv' "${delimiters[@]}")
+                jq_path='[
+                    ["'"$service_id"'","accounts","user_name"],
+                    ["'"$service_id"'","accounts","phone_number"],
+                    ["'"$service_id"'","accounts","password"],
+                    ["'"$service_id"'","accounts","access_token"],
+                    ["'"$service_id"'","accounts","device_no"],
+                    ["'"$service_id"'","accounts","device_id"],
+                    ["'"$service_id"'","accounts","refresh"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    var_name=${##*_accounts_}
+                    var_name=m_"$var_name"
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
 
                 if [ -z "$m_user_name" ] 
                 then
