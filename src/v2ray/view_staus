@@ -1,4 +1,0 @@
-V2rayStatus()
-{
-    systemctl --no-pager -l status $v2ray_name
-}

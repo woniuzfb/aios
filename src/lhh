@@ -157,44 +157,47 @@ ZhLhh()
 
     SetDelimiters
 
-    jq_input=$($JQ_FILE -c 'del(.books.hdlz)' "$LIANHUANHUA_CONFIG")
+    jq_payload=$(JQs flat "$LIANHUANHUA_CONFIG" 'del(.books.hdlz)')
 
-    IFS=$'\003\t' read -r default_save_dir m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
-    m_muludir m_original m_p m_publish m_yd m_downloaded m_fav < <(JQs flat "$jq_input" '' \
-    'if type == "object" then . else {} end |
-    (.default | if type == "object" then . else {} end) as $default |
-    (.books.zhlhh | if type == "object" then . else {} end) as $zhlhh |
-    reduce ({save_dir}|keys_unsorted[]) as $key ([];
-        $default[$key] as $val | if $val then
-            . + [$val + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ) + 
-    reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
-        yd,downloaded,fav}|keys_unsorted[]) as $key ([];
-            $zhlhh[$key] as $val | if $val then
-                . + [$val + "\u0002\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        )
-    |@tsv' "${delimiters[@]}")
+    jq_path='[
+        ["default","save_dir"],
+        ["books","zhlhh","adapter"],
+        ["books","zhlhh","addtime"],
+        ["books","zhlhh","bookname"],
+        ["books","zhlhh","category_id"],
+        ["books","zhlhh","cover"],
+        ["books","zhlhh","drawing"],
+        ["books","zhlhh","m"],
+        ["books","zhlhh","muludir"],
+        ["books","zhlhh","original"],
+        ["books","zhlhh","p"],
+        ["books","zhlhh","publish"],
+        ["books","zhlhh","yd"],
+        ["books","zhlhh","downloaded"],
+        ["books","zhlhh","fav"]
+    ]'
 
-    IFS="${delimiters[1]}" read -r -a books_adapter <<< "$m_adapter"
-    IFS="${delimiters[1]}" read -r -a books_addtime <<< "$m_addtime"
-    IFS="${delimiters[1]}" read -r -a books_bookname <<< "$m_bookname"
-    IFS="${delimiters[1]}" read -r -a books_category_id <<< "$m_category_id"
-    IFS="${delimiters[1]}" read -r -a books_cover <<< "$m_cover"
-    IFS="${delimiters[1]}" read -r -a books_drawing <<< "$m_drawing"
-    IFS="${delimiters[1]}" read -r -a books_m <<< "$m_m"
-    IFS="${delimiters[1]}" read -r -a books_muludir <<< "$m_muludir"
-    IFS="${delimiters[1]}" read -r -a books_original <<< "$m_original"
-    IFS="${delimiters[1]}" read -r -a books_p <<< "$m_p"
-    IFS="${delimiters[1]}" read -r -a books_publish <<< "$m_publish"
-    IFS="${delimiters[1]}" read -r -a books_yd <<< "$m_yd"
-    IFS="${delimiters[1]}" read -r -a books_downloaded <<< "$m_downloaded"
-    IFS="${delimiters[1]}" read -r -a books_fav <<< "$m_fav"
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    default_save_dir="$jq_default_save_dir"
+
+    IFS="${delimiters[3]}" read -r -a books_adapter <<< "$jq_books_zhlhh_adapter"
+    IFS="${delimiters[3]}" read -r -a books_addtime <<< "$jq_books_zhlhh_addtime"
+    IFS="${delimiters[3]}" read -r -a books_bookname <<< "$jq_books_zhlhh_bookname"
+    IFS="${delimiters[3]}" read -r -a books_category_id <<< "$jq_books_zhlhh_category_id"
+    IFS="${delimiters[3]}" read -r -a books_cover <<< "$jq_books_zhlhh_cover"
+    IFS="${delimiters[3]}" read -r -a books_drawing <<< "$jq_books_zhlhh_drawing"
+    IFS="${delimiters[3]}" read -r -a books_m <<< "$jq_books_zhlhh_m"
+    IFS="${delimiters[3]}" read -r -a books_muludir <<< "$jq_books_zhlhh_muludir"
+    IFS="${delimiters[3]}" read -r -a books_original <<< "$jq_books_zhlhh_original"
+    IFS="${delimiters[3]}" read -r -a books_p <<< "$jq_books_zhlhh_p"
+    IFS="${delimiters[3]}" read -r -a books_publish <<< "$jq_books_zhlhh_publish"
+    IFS="${delimiters[3]}" read -r -a books_yd <<< "$jq_books_zhlhh_yd"
+    IFS="${delimiters[3]}" read -r -a books_downloaded <<< "$jq_books_zhlhh_downloaded"
+    IFS="${delimiters[3]}" read -r -a books_fav <<< "$jq_books_zhlhh_fav"
 
     local books_total=${#books_adapter[@]}
 
@@ -274,21 +277,36 @@ ZhLhh()
             post_url="http://www.zhlhh.com/web/handler/main.ashx/G_F_B"
         fi
 
-IFS=$'\003\t' read -r result_count result_total m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
-    m_muludir m_original m_p m_publish m_yd < <(
-JQs flat "$(CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: http://www.zhlhh.com/" --data ''"$post_data"'' $post_url)" '' \
-'[.AllCount|tostring + "\u0003"] +
-[.pageInfor.AllCount|tostring + "\u0003"] +
-((.result | if . == "" then {} else . end) as $result |
-reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
-    yd}|keys_unsorted[]) as $key ([];
-        $result[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ))
-|@tsv' "${delimiters[@]}")
+        response=$(
+            CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: http://www.zhlhh.com/" --data ''"$post_data"'' $post_url
+        )
+
+        jq_payload=$(JQs flat "$response")
+
+        jq_path='[
+            ["AllCount"],
+            ["pageInfor","AllCount"],
+            ["result","adapter"],
+            ["result","addtime"],
+            ["result","bookname"],
+            ["result","category_id"],
+            ["result","cover"],
+            ["result","drawing"],
+            ["result","m"],
+            ["result","muludir"],
+            ["result","original"],
+            ["result","p"],
+            ["result","publish"],
+            ["result","yd"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        result_count="$jq_result_count"
+        result_total="$jq_pageInfor_AllCount"
 
         if [ "$result_count" -eq 0 ] 
         then
@@ -298,18 +316,18 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
 
         iframe_paths=($(CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: http://www.zhlhh.com/" "http://www.zhlhh.com/web/js/main.js" | grep -oP 'url = "\K[^"]+'))
 
-        IFS="${delimiters[1]}" read -r -a result_adapter <<< "$m_adapter"
-        IFS="${delimiters[1]}" read -r -a result_addtime <<< "$m_addtime"
-        IFS="${delimiters[1]}" read -r -a result_bookname <<< "$m_bookname"
-        IFS="${delimiters[1]}" read -r -a result_category_id <<< "$m_category_id"
-        IFS="${delimiters[1]}" read -r -a result_cover <<< "$m_cover"
-        IFS="${delimiters[1]}" read -r -a result_drawing <<< "$m_drawing"
-        IFS="${delimiters[1]}" read -r -a result_m <<< "$m_m"
-        IFS="${delimiters[1]}" read -r -a result_muludir <<< "$m_muludir"
-        IFS="${delimiters[1]}" read -r -a result_original <<< "$m_original"
-        IFS="${delimiters[1]}" read -r -a result_p <<< "$m_p"
-        IFS="${delimiters[1]}" read -r -a result_publish <<< "$m_publish"
-        IFS="${delimiters[1]}" read -r -a result_yd <<< "$m_yd"
+        IFS="${delimiters[2]}" read -r -a result_adapter <<< "$jq_result_adapter"
+        IFS="${delimiters[2]}" read -r -a result_addtime <<< "$jq_result_addtime"
+        IFS="${delimiters[2]}" read -r -a result_bookname <<< "$jq_result_bookname"
+        IFS="${delimiters[2]}" read -r -a result_category_id <<< "$jq_result_category_id"
+        IFS="${delimiters[2]}" read -r -a result_cover <<< "$jq_result_cover"
+        IFS="${delimiters[2]}" read -r -a result_drawing <<< "$jq_result_drawing"
+        IFS="${delimiters[2]}" read -r -a result_m <<< "$jq_result_m"
+        IFS="${delimiters[2]}" read -r -a result_muludir <<< "$jq_result_muludir"
+        IFS="${delimiters[2]}" read -r -a result_original <<< "$jq_result_original"
+        IFS="${delimiters[2]}" read -r -a result_p <<< "$jq_result_p"
+        IFS="${delimiters[2]}" read -r -a result_publish <<< "$jq_result_publish"
+        IFS="${delimiters[2]}" read -r -a result_yd <<< "$jq_result_yd"
 
         local i j books new_book books_indices=()
 
@@ -607,20 +625,29 @@ HdlzGetTouTiaoCookies()
     fi
 
     SetDelimiters
-    IFS=$'\003\t' read -r getinfo_url signed_url feed_cookie feed_referer getinfo_referer getinfo_useragent < <(
-    JQs flat "$toutiao_init" '' '
-    .data as $response | 
-    [$response.getinfo.url + "\u0003", 
-    $response.feed.url + "\u0003",
-    $response.feed.headers.cookie + "\u0003" +
-    $response.feed.headers.referer + "\u0003"] +
-    reduce ({referer,"user-agent"}|keys_unsorted[]) as $key ([];
-        $response["getinfo"]["headers"][$key] as $val | if $val then
-            . + [$val + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    )|@tsv' "${delimiters[@]}")
+
+    jq_payload=$(JQs flat "$toutiao_init")
+
+    jq_path='[
+        ["data","getinfo","url"],
+        ["data","feed","url"],
+        ["data","feed","headers","cookie"],
+        ["data","feed","headers","referer"],
+        ["data","getinfo","headers","referer"],
+        ["data","getinfo","headers","user-agent"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    getinfo_url="$jq_data_getinfo_url"
+    signed_url="$jq_data_feed_url"
+    feed_cookie="$jq_data_feed_headers_cookie"
+    feed_referer="$jq_data_feed_headers_referer"
+    getinfo_referer="$jq_data_getinfo_headers_referer"
+    getinfo_useragent="$jq_data_getinfo_headers_user-agent"
 
     if [[ "${feed_cookie}" =~ (.*)tt_scid=([^\;]+)\;\ (.*) ]] || [[ "${feed_cookie}" =~ (.*)tt_scid=([^ ]+)(.*) ]] 
     then
@@ -652,34 +679,35 @@ HdlzLhh()
 
     SetDelimiters
 
-    IFS=$'\003\t' read -r default_save_dir m_source m_id m_title m_cover m_excerpt m_behot_time m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
-    'if type == "object" then . else {} end |
-    (.default | if type == "object" then . else {} end) as $default |
-    (.books.hdlz | if type == "object" then . else {} end) as $hdlz |
-    reduce ({save_dir}|keys_unsorted[]) as $key ([];
-        $default[$key] as $val | if $val then
-            . + [$val + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ) + 
-    reduce ({source,id,title,cover,excerpt,behot_time,downloaded,fav}|keys_unsorted[]) as $key ([];
-            $hdlz[$key] as $val | if $val then
-                . + [$val + "\u0002\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        )
-    |@tsv' "${delimiters[@]}")
+    jq_payload=$(JQs flat "$LIANHUANHUA_CONFIG")
 
-    IFS="${delimiters[1]}" read -r -a books_source <<< "$m_source"
-    IFS="${delimiters[1]}" read -r -a books_id <<< "$m_id"
-    IFS="${delimiters[1]}" read -r -a books_title <<< "$m_title"
-    IFS="${delimiters[1]}" read -r -a books_cover <<< "$m_cover"
-    IFS="${delimiters[1]}" read -r -a books_excerpt <<< "$m_excerpt"
-    IFS="${delimiters[1]}" read -r -a books_behot_time <<< "$m_behot_time"
-    IFS="${delimiters[1]}" read -r -a books_downloaded <<< "$m_downloaded"
-    IFS="${delimiters[1]}" read -r -a books_fav <<< "$m_fav"
+    jq_path='[
+        ["default","save_dir"],
+        ["books","hdlz","source"],
+        ["books","hdlz","id"],
+        ["books","hdlz","title"],
+        ["books","hdlz","cover"],
+        ["books","hdlz","excerpt"],
+        ["books","hdlz","behot_time"],
+        ["books","hdlz","downloaded"],
+        ["books","hdlz","fav"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    default_save_dir="$jq_default_save_dir"
+
+    IFS="${delimiters[3]}" read -r -a books_source <<< "$jq_books_hdlz_source"
+    IFS="${delimiters[3]}" read -r -a books_id <<< "$jq_books_hdlz_id"
+    IFS="${delimiters[3]}" read -r -a books_title <<< "$jq_books_hdlz_title"
+    IFS="${delimiters[3]}" read -r -a books_cover <<< "$jq_books_hdlz_cover"
+    IFS="${delimiters[3]}" read -r -a books_excerpt <<< "$jq_books_hdlz_excerpt"
+    IFS="${delimiters[3]}" read -r -a books_behot_time <<< "$jq_books_hdlz_behot_time"
+    IFS="${delimiters[3]}" read -r -a books_downloaded <<< "$jq_books_hdlz_downloaded"
+    IFS="${delimiters[3]}" read -r -a books_fav <<< "$jq_books_hdlz_fav"
 
     local books_total=${#books_source[@]} i j lookup_options_index=0
 
@@ -709,22 +737,32 @@ HdlzLhh()
 
             echo -n "搜索知乎 $((1+loop*20))~$((20+loop*20)), 共 2568 条"
 
-IFS=$'\003\t' read -r paging_is_end paging_next paging_previous m_excerpt m_id m_cover m_title < <(
-JQs flat "$(CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: https://www.zhihu.com/column/c_1396234006309003264" ${paging_next:-'http://www.zhihu.com/api/v4/columns/c_1396234006309003264/items?limit=20&offset=0'})" '' \
-'[.paging.is_end|tostring + "\u0003"] +
-[.paging.next|tostring + "\u0003"] +
-[.paging.previous|tostring + "\u0003"] +
-((.data | if . == "" then {} else . end) as $result |
-reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
-        $result[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ))
-|@tsv' "${delimiters[@]}" 2> /dev/null) || true
+            response=$(
+                CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: https://www.zhihu.com/column/c_1396234006309003264" ${paging_next:-'http://www.zhihu.com/api/v4/columns/c_1396234006309003264/items?limit=20&offset=0'}
+            )
 
-            IFS="${delimiters[1]}" read -r -a result_excerpt <<< "${m_excerpt:-}"
+            jq_payload=$(JQs flat "$response")
+
+            jq_path='[
+                ["paging","is_end"],
+                ["paging","next"],
+                ["paging","previous"],
+                ["data","excerpt"],
+                ["data","id"],
+                ["data","image_url"],
+                ["data","title"]
+            ]'
+
+            while IFS=": " read -r path_name value; do
+                var_name=${path_name}
+                read -r ${var_name?} <<< "$value"
+            done < <(JQs gets jq_payload)
+
+            paging_is_end="$jq_paging_is_end"
+            paging_next="$jq_paging_next"
+            paging_previous="$jq_paging_previous"
+
+            IFS="${delimiters[2]}" read -r -a result_excerpt <<< "$jq_data_excerpt"
 
             if [ -z "${result_excerpt:-}" ] 
             then
@@ -732,9 +770,9 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
                 continue
             fi
 
-            IFS="${delimiters[1]}" read -r -a result_id <<< "$m_id"
-            IFS="${delimiters[1]}" read -r -a result_cover <<< "$m_cover"
-            IFS="${delimiters[1]}" read -r -a result_title <<< "$m_title"
+            IFS="${delimiters[2]}" read -r -a result_id <<< "$jq_data_id"
+            IFS="${delimiters[2]}" read -r -a result_cover <<< "$jq_data_image_url"
+            IFS="${delimiters[2]}" read -r -a result_title <<< "$jq_data_title"
 
             result_total=${#result_id[@]}
             books_total=$((books_total+result_total))
@@ -877,22 +915,27 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
             then
                 result_total=0
             else
-IFS=$'\003\t' read -r has_more m_max_behot_time m_id m_behot_time m_title < <(JQs flat "$jq_input" '' \
-'[.has_more|tostring + "\u0003"] +
-[.next.max_behot_time|tostring + "\u0003"] +
-((.data | if . == "" then {} else . end) as $result |
-reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
-        $result[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ))
-|@tsv' "${delimiters[@]}")
+                jq_payload=$(JQs flat "$jq_input")
 
-                IFS="${delimiters[1]}" read -r -a result_id <<< "${m_id:-}"
-                IFS="${delimiters[1]}" read -r -a result_behot_time <<< "$m_behot_time"
-                IFS="${delimiters[1]}" read -r -a result_title <<< "$m_title"
+                jq_path='[
+                    ["has_more"],
+                    ["next","max_behot_time"],
+                    ["data","id"],
+                    ["data","behot_time"],
+                    ["data","title"]
+                ]'
+
+                while IFS=": " read -r path_name value; do
+                    var_name=${path_name}
+                    read -r ${var_name?} <<< "$value"
+                done < <(JQs gets jq_payload)
+
+                has_more="$jq_has_more"
+                max_behot_time="$jq_next_max_behot_time"
+
+                IFS="${delimiters[2]}" read -r -a result_id <<< "$jq_data_id"
+                IFS="${delimiters[2]}" read -r -a result_behot_time <<< "$jq_data_behot_time"
+                IFS="${delimiters[2]}" read -r -a result_title <<< "$jq_data_title"
 
                 result_total=${#result_id[@]}
             fi
@@ -1221,33 +1264,33 @@ DangCloud()
 
     SetDelimiters
 
-    IFS=$'\003\t' read -r default_save_dir m_id m_title m_cover m_start m_end m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
-    'if type == "object" then . else {} end |
-    (.default | if type == "object" then . else {} end) as $default |
-    (.books.dang | if type == "object" then . else {} end) as $dang |
-    reduce ({save_dir}|keys_unsorted[]) as $key ([];
-        $default[$key] as $val | if $val then
-            . + [$val + "\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    ) + 
-    reduce ({id,title,cover,start,end,downloaded,fav}|keys_unsorted[]) as $key ([];
-            $dang[$key] as $val | if $val then
-                . + [$val + "\u0002\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        )
-    |@tsv' "${delimiters[@]}")
+    jq_payload=$(JQs flat "$LIANHUANHUA_CONFIG")
 
-    IFS="${delimiters[1]}" read -r -a books_id <<< "$m_id"
-    IFS="${delimiters[1]}" read -r -a books_title <<< "$m_title"
-    IFS="${delimiters[1]}" read -r -a books_cover <<< "$m_cover"
-    IFS="${delimiters[1]}" read -r -a books_start <<< "$m_start"
-    IFS="${delimiters[1]}" read -r -a books_end <<< "$m_end"
-    IFS="${delimiters[1]}" read -r -a books_downloaded <<< "$m_downloaded"
-    IFS="${delimiters[1]}" read -r -a books_fav <<< "$m_fav"
+    jq_path='[
+        ["default","save_dir"],
+        ["books","dang","id"],
+        ["books","dang","title"],
+        ["books","dang","cover"],
+        ["books","dang","start"],
+        ["books","dang","end"],
+        ["books","dang","downloaded"],
+        ["books","dang","fav"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    default_save_dir="$jq_default_save_dir"
+
+    IFS="${delimiters[3]}" read -r -a books_id <<< "$jq_books_dang_id"
+    IFS="${delimiters[3]}" read -r -a books_title <<< "$jq_books_dang_title"
+    IFS="${delimiters[3]}" read -r -a books_cover <<< "$jq_books_dang_cover"
+    IFS="${delimiters[3]}" read -r -a books_start <<< "$jq_books_dang_start"
+    IFS="${delimiters[3]}" read -r -a books_end <<< "$jq_books_dang_end"
+    IFS="${delimiters[3]}" read -r -a books_downloaded <<< "$jq_books_dang_downloaded"
+    IFS="${delimiters[3]}" read -r -a books_fav <<< "$jq_books_dang_fav"
 
     local books_total=${#books_id[@]}
 

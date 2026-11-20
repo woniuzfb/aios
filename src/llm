@@ -1,0 +1,20 @@
+HF_HOME=~/.cache/huggingface
+MODEL_NAME=${1:-mlx-community/Qwen3.5-4B-OptiQ-4bit}
+HF_MODEL_NAME=${MODEL_NAME//\//--}
+HF_DIR="${HF_HOME}/hub/models--${HF_MODEL_NAME}"
+
+if [ -d "$HF_DIR" ]
+then
+    exit 0
+fi
+
+HF_HASH=`git ls-remote "https://huggingface.co/${MODEL_NAME}" HEAD| cut -f1`
+
+modelscope download --model $MODEL_NAME --local_dir $HF_DIR
+
+mkdir -p "${HF_DIR}/snapshots/${HF_HASH}"
+
+# move all files into snapshots/${HF_HASH}
+find ${HF_DIR} -mindepth 1 -maxdepth 1 -not -path "${HF_DIR}/snapshots" -exec gmv -t "${HF_DIR}/snapshots/${HF_HASH}" {} +
+
+mkdir "${HF_DIR}/refs/" && echo "${HF_HASH}" > "${HF_DIR}/refs/main"

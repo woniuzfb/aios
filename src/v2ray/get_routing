@@ -1,52 +1,73 @@
 V2rayGetRouting()
 {
-    IFS=$'`\t' read -r routing_domain_strategy m_rules_type m_rules_domain m_rules_ip m_rules_port \
-    m_rules_source_port m_rules_network m_rules_source m_rules_user m_rules_inbound_tag \
-    m_rules_protocol m_rules_attrs m_rules_outbound_tag m_rules_balancer_tag m_balancers_tag \
-    m_balancers_selector < <($JQ_FILE -r '[
-    (.routing.domainStrategy|if . == "" // . == null then "AsIs" else . end + "`"),
-    ([(.routing.rules // [])[]|.type|if . == "" // . == null then "field" else . end|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.domain // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.ip // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.port|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.sourcePort|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.network|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.source // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.user // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.inboundTag // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.protocol // [] |join("|")|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.attrs|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.outboundTag|. + "^"]|join("") + "`"),
-    ([(.routing.rules // [])[]|.balancerTag|. + "^"]|join("") + "`"),
-    ([(.routing.balancers // [])[]|.tag|. + "^"]|join("") + "`"),
-    ([(.routing.balancers // [])[]|.selector // [] |join("|")|. + "^"]|join("") + "`")]|@tsv' "$V2_CONFIG")
+    SetDelimiters
 
-    if [ -z "$m_rules_type" ] 
-    then
-        routing_rules_count=0
-    else
-        IFS="^" read -r -a routing_rules_type <<< "$m_rules_type"
-        IFS="^" read -r -a routing_rules_domain <<< "$m_rules_domain"
-        IFS="^" read -r -a routing_rules_ip <<< "$m_rules_ip"
-        IFS="^" read -r -a routing_rules_port <<< "$m_rules_port"
-        IFS="^" read -r -a routing_rules_source_port <<< "$m_rules_source_port"
-        IFS="^" read -r -a routing_rules_network <<< "$m_rules_network"
-        IFS="^" read -r -a routing_rules_source <<< "$m_rules_source"
-        IFS="^" read -r -a routing_rules_user <<< "$m_rules_user"
-        IFS="^" read -r -a routing_rules_inbound_tag <<< "$m_rules_inbound_tag"
-        IFS="^" read -r -a routing_rules_protocol <<< "$m_rules_protocol"
-        IFS="^" read -r -a routing_rules_attrs <<< "$m_rules_attrs"
-        IFS="^" read -r -a routing_rules_outbound_tag <<< "$m_rules_outbound_tag"
-        IFS="^" read -r -a routing_rules_balancer_tag <<< "$m_rules_balancer_tag"
-        routing_rules_count=${#routing_rules_type[@]}
-    fi
+    jq_payload=$(JQs flat "$V2_CONFIG" '.routing')
 
-    if [ -z "$m_balancers_tag" ] 
+    jq_path='[
+        ["domainStrategy"],
+        ["domainMatcher"],
+        ["rules","domainMatcher"],
+        ["rules","type"],
+        ["rules","domains"],
+        ["rules","ip"],
+        ["rules","port"],
+        ["rules","sourcePort"],
+        ["rules","network"],
+        ["rules","source"],
+        ["rules","user"],
+        ["rules","inboundTag"],
+        ["rules","protocol"],
+        ["rules","attrs"],
+        ["rules","outboundTag"],
+        ["rules","balancerTag"],
+        ["balancers","tag"],
+        ["balancers","selector"],
+        ["balancers","strategy","type"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_routing_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    routing_domainStrategy="${jq_routing_domainStrategy:-AsIs}"
+    routing_domainMatcher="${jq_routing_domainMatcher:-mph}"
+
+    if [ -z "${jq_routing_balancers_tag:-}" ]
     then
         routing_balancers_count=0
     else
-        IFS="^" read -r -a routing_balancers_tag <<< "$m_balancers_tag"
-        IFS="^" read -r -a routing_balancers_selector <<< "$m_balancers_selector"
+        IFS="${delimiters[2]}" read -r -a routing_balancers_tag <<< "$jq_routing_balancers_tag"
+        IFS="${delimiters[2]}" read -r -a routing_balancers_selector <<< "$jq_routing_balancers_selector"
+        IFS="${delimiters[3]}" read -r -a routing_balancers_strategy_type <<< "$jq_routing_balancers_strategy_type"
+
         routing_balancers_count=${#routing_balancers_tag[@]}
     fi
+
+    if [ -z "${jq_routing_rules_type:-}" ]
+    then
+        routing_rules_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[1]}" read -r -a routing_domainStrategy <<< "$jq_routing_domainStrategy"
+    IFS="${delimiters[1]}" read -r -a routing_domainMatcher <<< "$jq_routing_domainMatcher"
+    IFS="${delimiters[2]}" read -r -a routing_rules_domainMatcher <<< "$jq_routing_rules_domainMatcher"
+    IFS="${delimiters[2]}" read -r -a routing_rules_type <<< "$jq_routing_rules_type"
+    IFS="${delimiters[2]}" read -r -a routing_rules_domains <<< "$jq_routing_rules_domains"
+    IFS="${delimiters[2]}" read -r -a routing_rules_ip <<< "$jq_routing_rules_ip"
+    IFS="${delimiters[2]}" read -r -a routing_rules_port <<< "$jq_routing_rules_port"
+    IFS="${delimiters[2]}" read -r -a routing_rules_sourcePort <<< "$jq_routing_rules_sourcePort"
+    IFS="${delimiters[2]}" read -r -a routing_rules_network <<< "$jq_routing_rules_network"
+    IFS="${delimiters[2]}" read -r -a routing_rules_source <<< "$jq_routing_rules_source"
+    IFS="${delimiters[2]}" read -r -a routing_rules_user <<< "$jq_routing_rules_user"
+    IFS="${delimiters[2]}" read -r -a routing_rules_inboundTag <<< "$jq_routing_rules_inboundTag"
+    IFS="${delimiters[2]}" read -r -a routing_rules_protocol <<< "$jq_routing_rules_protocol"
+    IFS="${delimiters[2]}" read -r -a routing_rules_attrs <<< "$jq_routing_rules_attrs"
+    IFS="${delimiters[2]}" read -r -a routing_rules_outboundTag <<< "$jq_routing_rules_outboundTag"
+    IFS="${delimiters[2]}" read -r -a routing_rules_balancerTag <<< "$jq_routing_rules_balancerTag"
+
+    routing_rules_count=${#routing_rules_type[@]}
+
 }

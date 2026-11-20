@@ -16,7 +16,7 @@ OpenListAppAdd()
     echo
     inquirer text_input "输入 OpenList 名称" openlist_name "$i18n_blank"
 
-    echo
+    Println "$tip 比如 http://127.0.0.1:5244"
     ExitOnText "输入 OpenList 地址" openlist_url
 
     if [ "$openlists_count" -gt 0 ] 

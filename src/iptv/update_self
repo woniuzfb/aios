@@ -289,7 +289,7 @@ then
         then
             IFS=" " read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
         else
-            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
+            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
         fi
 
         stream_link="[]"
@@ -306,14 +306,11 @@ then
 
         if [ -n "${chnls_subtitle_name[i]}" ] 
         then
-            IFS="${delimiters[1]}" read -ra chnl_subtitles_name <<< "${chnls_subtitle_name[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_subtitles_map <<< "${chnls_subtitle_map[i]}"
-
-            chnl_subtitles_if_null=("${chnls_subtitle_name[@]//*/}")
-
-            IFS="${delimiters[1]}" read -ra chnl_subtitles_language <<< "${chnls_subtitle_language[i]:-$chnl_subtitles_if_null}"
-            IFS="${delimiters[1]}" read -ra chnl_subtitles_default <<< "${chnls_subtitle_default[i]:-$chnl_subtitles_if_null}"
-            IFS="${delimiters[1]}" read -ra chnl_subtitles_auto_select <<< "${chnls_subtitle_auto_select[i]:-$chnl_subtitles_if_null}"
+            IFS="${delimiters[4]}" read -ra chnl_subtitles_name <<< "${chnls_subtitle_name[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_subtitles_map <<< "${chnls_subtitle_map[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_subtitles_language <<< "${chnls_subtitle_language[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_subtitles_default <<< "${chnls_subtitle_default[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_subtitles_auto_select <<< "${chnls_subtitle_auto_select[i]}"
 
             chnl_subtitles_indices=("${!chnls_subtitle_name[@]}")
 
@@ -342,18 +339,14 @@ then
 
         if [ -n "${chnls_schedule_status[i]}" ] 
         then
-            IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
-            IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
-
-            chnl_schedules_if_null="${chnls_schedule_hls_change[i]//false/}"
-            chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
-
-            IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[i]:-$chnl_schedules_if_null}${delimiters[1]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[i]}"
 
             chnl_schedules_indices=("${!chnl_schedules_status[@]}")
 

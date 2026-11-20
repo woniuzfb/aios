@@ -13,7 +13,7 @@ RcloneServeView()
 
     for((i=0;i<rclone_serves_count;i++));
     do
-        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
+        IFS="${delimiters[4]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
 
         rclone_serves_options+=( "${rclone_serves_remote[i]} -> ${rclone_serve_addrs[*]}")
         rclone_serves_list="${rclone_serves_list}${green}$((i+1)).${normal} 服务: ${rclone_serves_remote[i]}\n协议: ${rclone_serves_protocol[i]}\n监听: ${rclone_serve_addrs[*]}\n参数: ${rclone_serves_args[i]:-无}\n\n"
@@ -170,7 +170,7 @@ RcloneServeEdit()
                 ;;
                 2) 
                     rclone_serve_addr="${rclone_serves_addr[i]}"
-                    IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+                    IFS="${delimiters[4]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
                     echo
                     inquirer checkbox_input_indices "选择监听地址" rclone_serve_addrs rclone_serve_addrs_indices
                     local rclone_serve_addrs_index_offset=0
@@ -280,7 +280,7 @@ RcloneServeDel()
 
         for i in "${active_indices[@]}"
         do
-            IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
+            IFS="${delimiters[4]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
             Println "$info 恢复服务 ${rclone_serves_remote[i]} -> ${rclone_serve_addrs[*]}"
             ServiceControl start "rclone.serve-$((i+1))"
         done
@@ -301,7 +301,7 @@ RcloneServeExc()
     do
         service_name="rclone.serve-$((rclone_serves_index+1))"
         rclone_serve_addr="${rclone_serves_addr[rclone_serves_index]}"
-        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+        IFS="${delimiters[4]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
         rclone_serve_list="${rclone_serves_remote[rclone_serves_index]} -> ${rclone_serve_addrs[*]}"
 
         if ServiceControl is-active "$service_name"
@@ -314,8 +314,8 @@ RcloneServeExc()
 
         if [ -n "${rclone_serves_user[rclone_serves_index]:-}" ] 
         then
-            IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
-            IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+            IFS="${delimiters[5]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+            IFS="${delimiters[5]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
 
             rclone_serve_accs_count=${#rclone_serve_users[@]}
         fi
@@ -374,7 +374,7 @@ RcloneServeDeExc()
     do
         service_name="rclone.serve-$((rclone_serves_index+1))"
         rclone_serve_addr="${rclone_serves_addr[rclone_serves_index]}"
-        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+        IFS="${delimiters[4]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
         rclone_serve_list="${rclone_serves_remote[rclone_serves_index]} -> ${rclone_serve_addrs[*]}"
 
         if ! ServiceControl is-active "$service_name"
@@ -407,8 +407,8 @@ RcloneServeAccView()
         return 1
     fi
 
-    IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
-    IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+    IFS="${delimiters[5]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+    IFS="${delimiters[5]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
 
     rclone_serve_accs_count=${#rclone_serve_users[@]}
 
@@ -443,8 +443,8 @@ RcloneServeAccAdd()
 
     if [ -n "${rclone_serves_user[rclone_serves_index]:-}" ] 
     then
-        IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
-        IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+        IFS="${delimiters[5]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+        IFS="${delimiters[5]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
 
         rclone_serve_accs_count=${#rclone_serve_users[@]}
     fi

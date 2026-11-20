@@ -1,0 +1,33 @@
+XrayGetGeodata()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.geodata')
+
+    jq_path='[
+        ["cron"],
+        ["outbound"],
+        ["assets","url"],
+        ["assets","file"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="$path_name"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    geodata_cron=${jq_cron:-}
+    geodata_outbound=${jq_outbound:-}
+
+    if [ -z "${jq_assets_url:-}" ]
+    then
+        geodata_assets_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[2]}" read -r -a geodata_assets_url <<< "$jq_assets_url"
+    IFS="${delimiters[2]}" read -r -a geodata_assets_file <<< "$jq_assets_file"
+
+    geodata_assets_count="${#geodata_assets_url[@]}"
+
+}

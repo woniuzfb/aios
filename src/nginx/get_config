@@ -37,7 +37,7 @@ NginxGetConfig()
     level_5_directive="$jq_config_parsed_block_block_block_block_directive"
     level_5_args="$jq_config_parsed_block_block_block_block_args"
 
-    if [ "$status" == "failed" ] 
+    if [ "$status" == "failed" ]
     then
         Println "$error ${error_message//$'\x02'/$'\n'}\n"
         exit 1

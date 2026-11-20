@@ -1,4 +1,4 @@
-
+set -x
 test_json=$(
     $JQ_FILE -n \
     '{
@@ -26,7 +26,7 @@ def serialize_nested:
     ["\u0002", "\u0003", "\u0004", "\u0005", "\u0006"] as $delims
 
     |   def _walk($layer):
-        type as $type | 
+        type as $type |
         if $type == "object" then
             to_entries | map("\(.key)=\(.value | _walk($layer + 1))") | join($delims[$layer])
         elif $type == "array" then
@@ -77,11 +77,11 @@ def transform_structure($layer):
         | ( [ .[] | keys[] ] | unique ) as $all_keys
         | map(. as $obj | $all_keys | map({key: ., value: $obj[.]}))
         | flatten
-        | group_by(.key) 
+        | group_by(.key)
         | map({
             key: .[0].key,
             value: (map(.value | transform_structure($layer + 1)) | join($d))
-            }) 
+            })
         | from_entries;
 
     type as $type
@@ -101,3 +101,102 @@ def transform_structure($layer):
 
 transform_structure(0)
 ' <<< "$test_json"
+
+
+test_json=$(
+    $JQ_FILE -n \
+'{
+    "hosts": {
+        "baidu.com": "127.0.0.1",
+        "example.com": [
+            "127.0.0.1",
+            "::1",
+            "proxy.example.com",
+            "127.0.0.2"
+        ],
+        "dns.google": "8.8.8.8",
+        "proxy.example.com": "127.0.0.1",
+        "geosite:test": [
+            "another-proxy.example.com",
+            "127.0.0.1"
+        ],
+        "geosite:category-ads-all": [
+            "127.0.0.1",
+            "127.0.0.2",
+            "::1"
+        ]
+    },
+    "servers": [
+        "https://dns.google/dns-query",
+        {
+            "address": "223.5.5.5",
+            "port": 5353,
+            "clientIp": "5.6.7.8",
+            "skipFallback": true,
+            "domains": [
+                "domain:baidu.com",
+                "geosite:cn"
+            ],
+            "expectIPs": [
+                "geoip:cn",
+                "ext:customizedGeoIPFile.dat:cn",
+                "ext-ip:customizedGeoIPFile.dat:cn"
+            ]
+        },
+        {
+            "address": "fakedns",
+            "domains": [
+                "domain:v2fly.org",
+                "geosite:geolocation-!cn"
+            ]
+        },
+        {
+            "address": "https://1.1.1.1/dns-query",
+            "domains": [
+                "domain:v2fly.org",
+                "geosite:geolocation-!cn"
+            ],
+            "expectIPs": [
+                "geoip:!cn",
+                "ext:customizedGeoIPFile.dat:!cn",
+                "ext-ip:customizedGeoIPFile.dat:!cn"
+            ]
+        },
+        "1.0.0.1",
+        "localhost"
+    ],
+    "clientIp": "1.2.3.4",
+    "queryStrategy": "UseIPv4",
+    "disableCache": true,
+    "disableFallback": true,
+    "tag": "dns_inbound"
+}'
+)
+
+SetDelimiters
+
+dns=$(JQs flat "$test_json")
+
+jq_path='["hosts"]'
+JQs get dns '. // {} | to_entries[] | "\(.key)^\(.value)"'
+
+
+test_json=$(
+    $JQ_FILE -n \
+'{
+  "fakedns": [
+    {
+      "ipPool": "198.18.0.0/15",
+      "poolSize": 65535
+    },
+    {
+      "ipPool": "fc00::/18",
+      "poolSize": 65535
+    }
+  ]
+}'
+)
+
+SetDelimiters
+
+JQs flat "$test_json"

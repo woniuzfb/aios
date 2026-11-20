@@ -1,0 +1,29 @@
+XrayGetBurstObservatory()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.burstObservatory')
+
+    jq_path='[
+        ["subjectSelector"],
+        ["pingConfig","destination"],
+        ["pingConfig","connectivity"],
+        ["pingConfig","interval"],
+        ["pingConfig","sampling"],
+        ["pingConfig","timeout"],
+        ["pingConfig","httpMethod"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="burstObservatory_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    burstObservatory_pingConfig_destination=${jq_pingConfig_destination:-https://connectivitycheck.gstatic.com/generate_204}
+    burstObservatory_pingConfig_interval=${jq_pingConfig_interval:-1m}
+    burstObservatory_pingConfig_sampling=${jq_pingConfig_sampling:-10}
+    burstObservatory_pingConfig_timeout=${jq_pingConfig_timeout:-5s}
+    burstObservatory_pingConfig_httpMethod=${jq_pingConfig_httpMethod:-HEAD}
+
+    return 0
+}

@@ -1,21 +1,31 @@
 Println "$info 检测 astro ..."
 
 SetDelimiters
-IFS=$'\002\t' read -r m_id m_title m_description m_is_hd m_language < <(
-JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '.[0].response' '
-. as $response | reduce ({id,title,description,isHd,language}|keys_unsorted[]) as $key ([];
-    $response[$key] as $val | if $val then
-        . + [$val + "'"${delimiters[0]}"'\u0002"]
-    else
-        . + ["\u0002"]
-    end
-)|@tsv' "${delimiters[@]}")
 
-IFS="${delimiters[0]}" read -ra chnls_id <<< "$m_id"
-IFS="${delimiters[0]}" read -ra chnls_title <<< "$m_title"
-IFS="${delimiters[0]}" read -ra chnls_description <<< "$m_description"
-IFS="${delimiters[0]}" read -ra chnls_is_hd <<< "$m_is_hd"
-IFS="${delimiters[0]}" read -ra chnls_language <<< "$m_language"
+response=$(
+    curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json
+)
+
+jq_payload=$(JQs flat "$response")
+
+jq_path='[
+    ["response","id"],
+    ["response","title"],
+    ["response","description"],
+    ["response","isHd"],
+    ["response","language"]
+]'
+
+while IFS=": " read -r path_name value; do
+    var_name=${path_name}
+    read -r ${var_name?} <<< "$value"
+done < <(JQs gets jq_payload)
+
+IFS="${delimiters[2]}" read -ra chnls_id <<< "$jq_response_id"
+IFS="${delimiters[2]}" read -ra chnls_title <<< "$jq_response_title"
+IFS="${delimiters[2]}" read -ra chnls_description <<< "$jq_response_description"
+IFS="${delimiters[2]}" read -ra chnls_is_hd <<< "$jq_response_isHd"
+IFS="${delimiters[2]}" read -ra chnls_language <<< "$jq_response_language"
 
 chnls_list=""
 for((i=0;i<${#chnls_id[@]};i++));

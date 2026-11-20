@@ -4,12 +4,12 @@ NginxDomainUpdateCrt()
 
     [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
 
-    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]] 
+    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
     then
-        if [ -z "${tls_port:-}" ] 
+        if [ -z "${tls_port:-}" ]
         then
             tls_port=$(grep ^ExecStart= < /etc/systemd/system/mmproxy-acme.service)
-            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]] 
+            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]]
             then
                 tls_port=${BASH_REMATCH[1]}
             else
@@ -26,7 +26,7 @@ NginxDomainUpdateCrt()
 
         if [[ $(systemctl is-active $nginx_name) == "active" ]]
         then
-            if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+            if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]]
             then
                 Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
                 exit 1
@@ -43,13 +43,13 @@ NginxDomainUpdateCrt()
         [ "$stopped" -eq 1 ] && systemctl start $nginx_name
     fi
 
-    if [ -e "$AIOS_PREFIX/share/v2ray/$domain.crt" ] 
+    if [ -e "$AIOS_PREFIX/share/v2ray/$domain.crt" ]
     then
         cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/share/v2ray/$domain.crt"
         cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "$AIOS_PREFIX/share/v2ray/$domain.key"
     fi
 
-    if [ -e "$AIOS_PREFIX/share/xray/$domain.crt" ] 
+    if [ -e "$AIOS_PREFIX/share/xray/$domain.crt" ]
     then
         cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/share/xray/$domain.crt"
         cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "$AIOS_PREFIX/share/xray/$domain.key"
@@ -64,7 +64,7 @@ NginxDomainServerUpdateCrt()
 {
     nginx_domain_server_name=${nginx_domain_servers_name[nginx_domain_servers_index]}
 
-    if [[ $nginx_domain_server_name =~ , ]] 
+    if [[ $nginx_domain_server_name =~ , ]]
     then
         IFS="," read -r -a domains <<< "$nginx_domain_server_name"
 

@@ -22,7 +22,7 @@ DockerServiceStart()
 
     for traefik_local_plugin in "${traefik_local_plugins[@]}"
     do
-        if [ ! -d "$DOCKER_ROOT/data/traefik/plugins-local/src/$traefik_local_plugin" ] 
+        if [ ! -d "$DOCKER_ROOT/data/traefik/plugins-local/src/$traefik_local_plugin" ]
         then
             Println "$error traefik 本地插件 $traefik_local_plugin 不存在, 请先设置\n"
             return 1
@@ -37,7 +37,7 @@ DockerServiceStart()
 
     for var in JWT_SECRET SESSION_REDIS_PASSWORD SESSION_SECRET STORAGE_ENCRYPTION_KEY STORAGE_POSTGRES_PASSWORD
     do
-        if [[ -z "${!var:-}" ]] 
+        if [[ -z "${!var:-}" ]]
         then
             Println "$error $var 为空, 请先设置服务 secrets\n"
             return 1
@@ -56,7 +56,14 @@ DockerServiceStart()
     mkdir -p "$DOCKER_ROOT/data/traefik/logs"
     mkdir -p "$DOCKER_ROOT/data/authelia/logs"
 
-    docker compose up -d
+    docker compose up
+}
+
+DockerServiceStartClean()
+{
+    cd "$DOCKER_ROOT"
+
+    docker compose up
 }
 
 DockerServiceStop()
@@ -84,12 +91,12 @@ DockerServiceConfig()
 
                 for traefik_options_index in "${traefik_options_indices[@]}"
                 do
-                    if [ $traefik_options_index -eq 0 ] 
+                    if [ $traefik_options_index -eq 0 ]
                     then
                         . "$DOCKER_ROOT"/.env
                         echo
                         inquirer text_input "请输入 traefik 使用的域名" traefik_domain "$TRAEFIK_DOMAIN"
-                        if [ "$traefik_domain" != "$TRAEFIK_DOMAIN" ] 
+                        if [ "$traefik_domain" != "$TRAEFIK_DOMAIN" ]
                         then
                             sed -i "/TRAEFIK_DOMAIN=/c\TRAEFIK_DOMAIN=$traefik_domain" "$DOCKER_ROOT"/.env
                             Println "$info traefik 域名已设置为 $traefik_domain\n"
@@ -101,7 +108,7 @@ DockerServiceConfig()
                         inquirer checkbox_input_indices "选择 traefik 本地插件" traefik_local_plugins traefik_local_plugins_indices
                         for traefik_local_plugins_index in "${traefik_local_plugins_indices[@]}"
                         do
-                            if [ -d "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}" ] 
+                            if [ -d "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}" ]
                             then
                                 cd "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}"
                                 git pull
@@ -124,12 +131,12 @@ DockerServiceConfig()
                             . "$DOCKER_ROOT"/.env
                             echo
                             inquirer text_input "请输入 authelia 使用的域名" authelia_domain "$AUTHELIA_DOMAIN"
-                            if [ "$authelia_domain" != "$AUTHELIA_DOMAIN" ] 
+                            if [ "$authelia_domain" != "$AUTHELIA_DOMAIN" ]
                             then
                                 sed -i "/AUTHELIA_DOMAIN=/c\AUTHELIA_DOMAIN=$traefik_domain" "$DOCKER_ROOT"/.env
                                 echo
                                 inquirer list_input_index "是否添加到 /etc/hosts" ny_options ny_index
-                                if [ $ny_index -eq 1 ] 
+                                if [ $ny_index -eq 1 ]
                                 then
                                     Println "$tip 可能需要输入密码"
                                     echo "\
@@ -147,13 +154,13 @@ DockerServiceConfig()
                             authelia_default_username="${authelia_usernames[0]}"
                             echo
                             inquirer text_input "请输入 authelia 用户名" authelia_username "$authelia_default_username"
-                            if [ "$authelia_username" != "$authelia_default_username" ] 
+                            if [ "$authelia_username" != "$authelia_default_username" ]
                             then
                                 yq_path_new=".users.$authelia_username"
                                 yq_path_old=".users.$authelia_default_username"
                                 YQ update_key "$DOCKER_ROOT"/data/authelia/config/users_database.yml
                                 authelia_user_email=$(yq ".users.$authelia_username.email" "$DOCKER_ROOT"/data/authelia/config/users_database.yml)
-                                if [[ "$authelia_user_email" =~ '<USERNAME>' ]] 
+                                if [[ "$authelia_user_email" =~ '<USERNAME>' ]]
                                 then
                                     yq_path='["users","'$authelia_username'","email"]'
                                     yq_replace="${authelia_username}@${authelia_user_email#*@}"
@@ -168,7 +175,7 @@ DockerServiceConfig()
                             authelia_default_displayname=$(yq ".users.$authelia_default_username.displayname" "$DOCKER_ROOT"/data/authelia/config/users_database.yml)
                             echo
                             inquirer text_input "请输入 authelia 用户 $authelia_default_username 的显示名" authelia_displayname "$authelia_default_displayname"
-                            if [ "$authelia_displayname" != "$authelia_default_displayname" ] 
+                            if [ "$authelia_displayname" != "$authelia_default_displayname" ]
                             then
                                 yq_path='["users","'$authelia_default_username'","displayname"]'
                                 yq_replace="$authelia_displayname"
@@ -185,11 +192,11 @@ DockerServiceConfig()
                             then
                                 Println "$info 下载 authelia 镜像..."
                                 docker pull authelia/authelia
-                            fi 
+                            fi
                             echo
                             inquirer text_input "请输入 authelia 用户 $authelia_default_username 的密码" authelia_password "$authelia_default_password"
                             authelia_password=$(docker run authelia/authelia authelia crypto hash generate argon2 --password $authelia_password | sed 's/Digest: //g')
-                            if [ "$authelia_password" != "$authelia_default_password" ] 
+                            if [ "$authelia_password" != "$authelia_default_password" ]
                             then
                                 yq_path='["users","'$authelia_default_username'","password"]'
                                 yq_replace="$authelia_password"
@@ -242,7 +249,7 @@ DockerServiceConfig()
                 do
                     case $postgresql_options_index in
                         0)
-                            if psql -c "\du" | grep -q authelia 
+                            if psql -c "\du" | grep -q authelia
                             then
                                 Println "$error role authelia 已存在\n"
                                 continue
@@ -254,7 +261,7 @@ DockerServiceConfig()
                             Println "$info role authelia 已添加\n"
                         ;;
                         1)
-                            if ! psql -c "\du" | grep -q authelia 
+                            if ! psql -c "\du" | grep -q authelia
                             then
                                 Println "$error 请先添加 role authelia\n"
                                 continue
@@ -268,7 +275,7 @@ DockerServiceConfig()
                             Println "$info database authelia 已添加\n"
                         ;;
                         2)
-                            if ! psql -c "\du" | grep -q authelia 
+                            if ! psql -c "\du" | grep -q authelia
                             then
                                 Println "$error 请先添加 role authelia\n"
                                 continue
@@ -290,20 +297,45 @@ DockerServiceConfig()
 
 DockerService()
 {
-    docker_service_options=( '启动' '关闭' '重启' '设置' )
+    if [ ! -d "$DOCKER_ROOT" ]
+    then
+        if [ ! -d "$DEPENDS_ROOT"/aios ]
+        then
+            mkdir -p "$DEPENDS_ROOT"
+            GitInstall
+            git clone "$AIOS_LINK" "$DEPENDS_ROOT"/aios
+        else
+            cd "$DEPENDS_ROOT"/aios
+            git fetch --all && git reset --hard origin/main
+        fi
+        cp -r "$DEPENDS_ROOT"/aios/scripts/docker "$DOCKER_ROOT"
+    fi
+
+    if [ "$dist" == "mac" ] && [[ ! -x $(command -v psql) ]] && [[ -x /Applications/Postgres.app/Contents/Versions/latest/bin/psql ]]
+    then
+        export PATH="${PATH}:/Applications/Postgres.app/Contents/Versions/latest/bin"
+    fi
+
+    docker_service_options=( '启动' '启动(原版)' '关闭' '重启' '重启(原版)' '设置' )
     echo
     inquirer list_input_index "请选择" docker_service_options docker_service_options_index
 
     case $docker_service_options_index in
         0) DockerServiceStart
         ;;
-        1) DockerServiceStop
+        1) DockerServiceStartClean
         ;;
-        2)
+        2) DockerServiceStop
+        ;;
+        3)
             DockerServiceStop
             DockerServiceStart
         ;;
-        3)
+        4)
+            DockerServiceStop
+            DockerServiceStartClean
+        ;;
+        5)
             YqInstall
             DockerServiceConfig
         ;;

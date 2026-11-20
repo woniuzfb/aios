@@ -3,19 +3,25 @@ ParseSchedule()
     schedule=$($JQ_FILE 'unique_by(.start_time)' <<< "$schedule")
 
     SetDelimiters
-    IFS=$'\003\t' read -r m_title m_time m_start_time m_end_time < <(JQs flat "$schedule" '' '
-    . as $schedles | reduce ({title,time,start_time,end_time}|keys_unsorted[]) as $key ([];
-        $schedles[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
-        else
-            . + ["\u0003"]
-        end
-    )|@tsv' "${delimiters[@]}")
 
-    IFS="${delimiters[1]}" read -ra ${chnl_id}_title <<< "$m_title"
-    IFS="${delimiters[1]}" read -ra ${chnl_id}_time <<< "$m_time"
-    IFS="${delimiters[1]}" read -ra ${chnl_id}_start_time <<< "$m_start_time"
-    IFS="${delimiters[1]}" read -ra ${chnl_id}_end_time <<< "$m_end_time"
+    jq_payload=$(JQs flat "$schedule")
+
+    jq_path='[
+        ["title"],
+        ["time"],
+        ["start_time"],
+        ["end_time"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done
+
+    IFS="${delimiters[0]}" read -ra ${chnl_id}_title <<< "$jq_title"
+    IFS="${delimiters[0]}" read -ra ${chnl_id}_time <<< "$jq_time"
+    IFS="${delimiters[0]}" read -ra ${chnl_id}_start_time <<< "$jq_start_time"
+    IFS="${delimiters[0]}" read -ra ${chnl_id}_end_time <<< "$jq_end_time"
 
     schedule_title=("${chnl_id}_title"[@])
     schedule_title=("${!schedule_title}")

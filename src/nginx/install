@@ -6,15 +6,15 @@ NginxPackageInstall()
     . /etc/os-release
 
     case $dist in
-        ubu) 
-            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy|mantic ]] 
+        ubu)
+            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy|mantic ]]
             then
                 Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
             fi
             DepInstall lsb-release
             DepInstall ubuntu-keyring
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ]
             then
                 curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
@@ -30,15 +30,15 @@ NginxPackageInstall()
             fi
             sudo apt-get -y install nginx
         ;;
-        deb) 
-            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+        deb)
+            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]]
             then
                 Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
             fi
             DepInstall lsb-release
             DepInstall debian-archive-keyring
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ]
             then
                 curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
@@ -54,19 +54,19 @@ NginxPackageInstall()
             fi
             sudo apt-get -y install nginx
         ;;
-        rpm) 
-            if [ "${VERSION_ID%%.*}" -eq 7 ] 
+        rpm)
+            if [ "${VERSION_ID%%.*}" -eq 7 ]
             then
                 Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
             fi
 
             DepInstall yum-utils
 
-            if [ ! -f /etc/yum.repos.d/nginx.repo ] 
+            if [ ! -f /etc/yum.repos.d/nginx.repo ]
             then
                 if grep -q Amazon < /etc/os-release
                 then
-                    if [ "$VERSION" == "2" ] 
+                    if [ "$VERSION" == "2" ]
                     then
 cat > /etc/yum.repos.d/nginx.repo <<EOF
 [nginx-stable]
@@ -87,7 +87,7 @@ gpgkey=https://nginx.org/keys/nginx_signing.key
 module_hotfixes=true
 priority=9
 EOF
-                    elif [ "$VERSION" == "2023" ] 
+                    elif [ "$VERSION" == "2023" ]
                     then
 cat > /etc/yum.repos.d/nginx.repo <<EOF
 [nginx-stable]
@@ -149,7 +149,7 @@ EOF
             sudo apk add nginx@nginx
         ;;
         sles)
-            if [ "${VERSION_ID%%.*}" -eq 12 ] 
+            if [ "${VERSION_ID%%.*}" -eq 12 ]
             then
                 Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
             fi
@@ -165,7 +165,7 @@ EOF
         ;;
     esac
 
-    if [ ! -d "$nginx_prefix" ] 
+    if [ ! -d "$nginx_prefix" ]
     then
         mkdir -p "$nginx_prefix"/sbin
         mv /usr/sbin/nginx* "$nginx_prefix"/sbin/
@@ -175,7 +175,7 @@ EOF
         ln -sf /var/run/nginx.pid "$nginx_prefix"/logs/nginx.pid
         for file in "$nginx_prefix"/sbin/*
         do
-            if [[ -x "$AIOS_PREFIX"/bin/${file##*/} ]] 
+            if [[ -x "$AIOS_PREFIX"/bin/${file##*/} ]]
             then
                 continue
             fi
@@ -219,14 +219,14 @@ NginxSourceInstall()
 {
     local install="更新"
 
-    if [ -z "${1:-}" ] 
+    if [ -z "${1:-}" ]
     then
-        if [[ -x $(command -v $nginx_name) ]] 
+        if [[ -x $(command -v $nginx_name) ]]
         then
             return 0
         fi
         install="安装"
-    elif [[ ! -x $(command -v $nginx_name) ]] 
+    elif [[ ! -x $(command -v $nginx_name) ]]
     then
         install="安装"
     fi
@@ -263,7 +263,7 @@ NginxSourceInstall()
 
     while IFS= read -r line
     do
-        if [[ $line == *"/download/"* ]] 
+        if [[ $line == *"/download/"* ]]
         then
             nginx_package_name=${line#*/download/}
             nginx_package_name=${nginx_package_name%%.tar.gz*}
@@ -271,21 +271,21 @@ NginxSourceInstall()
         fi
     done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://nginx.org/en/download.html 2> /dev/null)
 
-    if [ ! -d "./$nginx_package_name" ] 
+    if [ ! -d "./$nginx_package_name" ]
     then
         curl -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
         Println "$info 解压 $nginx_package_name ..."
         tar xzf "$nginx_package_name.tar.gz"
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         SourceInstallReady "${pcre_options[pcre_options_index]}" zlib
 
         cc_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include -I$HOMEBREW_PREFIX/opt/zlib/include"
         ld_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib -L$HOMEBREW_PREFIX/opt/zlib/lib"
 
-        if [ "$openssl_options_index" -eq 2 ] 
+        if [ "$openssl_options_index" -eq 2 ]
         then
             QuictlsInstall
             cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
@@ -330,7 +330,7 @@ NginxSourceInstall()
         --with-stream_ssl_preread_module \
         --with-threads
     else
-        if [ "$dist" == "rpm" ] 
+        if [ "$dist" == "rpm" ]
         then
             SourceInstallReady openssl-devel gcc
         else
@@ -339,24 +339,24 @@ NginxSourceInstall()
 
         while IFS= read -r line
         do
-            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]]
             then
                 zlib_name=${BASH_REMATCH[1]}
                 break
             fi
         done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
 
-        if [ ! -d $zlib_name ] 
+        if [ ! -d $zlib_name ]
         then
             curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
             Println "$info 解压 $zlib_name ..."
             tar xzf $zlib_name.tar.gz
         fi
 
-        if [ "$pcre_options_index" -eq 0 ] 
+        if [ "$pcre_options_index" -eq 0 ]
         then
             pcre_name=pcre-8.45
-            if [ ! -d $pcre_name ] 
+            if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
@@ -364,7 +364,7 @@ NginxSourceInstall()
             fi
         else
             pcre_name=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
-            if [ ! -d $pcre_name ] 
+            if [ ! -d $pcre_name ]
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
@@ -372,7 +372,7 @@ NginxSourceInstall()
             fi
         fi
 
-        if [ "$openssl_options_index" -eq 2 ] 
+        if [ "$openssl_options_index" -eq 2 ]
         then
             openssl_name=openssl-OpenSSL_1_1_1w-quic1
             Println "$info 下载 ${openssl_name#*-} ..."
@@ -383,14 +383,14 @@ NginxSourceInstall()
             Println "$info 解压 ${openssl_name#*-} ..."
             tar xzf "$openssl_name".tar.gz
         else
-            if [ "$openssl_options_index" -eq 0 ] 
+            if [ "$openssl_options_index" -eq 0 ]
             then
                 openssl_url="https://www.openssl.org/source/old"
                 openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
 
                 for openssl_ver in "${openssl_vers[@]}"
                 do
-                    if [ "${openssl_ver%%.*}" -eq 1 ] 
+                    if [ "${openssl_ver%%.*}" -eq 1 ]
                     then
                         break
                     fi
@@ -404,7 +404,7 @@ NginxSourceInstall()
             openssl_pack="${openssl_packs[0]}"
             openssl_name=${openssl_pack%.tar*}
 
-            if [ ! -d "./$openssl_name" ] 
+            if [ ! -d "./$openssl_name" ]
             then
                 curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
                 Println "$info 解压 $openssl_name ..."
@@ -454,7 +454,7 @@ NginxSourceInstall()
 
     ln -sf "$nginx_prefix"/sbin/nginx "$AIOS_PREFIX"/bin/
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         if ! grep -q "$nginx_name:" < "/etc/passwd"
         then
@@ -485,23 +485,23 @@ NginxSourceInstall()
 
 NginxInstall()
 {
-    if [ -d "$nginx_prefix" ] 
+    if [ -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
         return 1
-    elif [[ -x $(command -v $nginx_name) ]] 
+    elif [[ -x $(command -v $nginx_name) ]]
     then
         Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
         return 1
     fi
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         Println "$tip 选择快速安装将缺少 nginx-http-flv-module 以及 quictls 选择"
         nginx_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
         inquirer list_input_index "选择安装方式" nginx_install_options nginx_install_options_index
 
-        if [ "$nginx_install_options_index" -eq 0 ] 
+        if [ "$nginx_install_options_index" -eq 0 ]
         then
             NginxPackageInstall
             return
@@ -513,7 +513,7 @@ NginxInstall()
 
 NginxUninstall()
 {
-    if [ ! -d "$nginx_prefix" ] 
+    if [ ! -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 未安装 !\n"
         return 1
@@ -522,20 +522,20 @@ NginxUninstall()
     echo
     ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
 
-    ServiceControlDisable $nginx_name
+    ServiceControl disable $nginx_name
 
     DepInstall file
 
     if file -h "$nginx_prefix/conf" | grep -q 'symbolic link'
     then
-        if [ "$dist" == "yum" ] 
+        if [ "$dist" == "yum" ]
         then
             yum -y remove "$nginx_name" || true
         else
             apt-get -y --purge remove "$nginx_name"* || true
         fi
         rm -f "$AIOS_PREFIX"/bin/"$nginx_name"*
-    elif [ "$dist" == "mac" ] 
+    elif [ "$dist" == "mac" ]
     then
         brew uninstall "$nginx_name"
         Println "$info 可能需要输入密码删除目录 "$nginx_prefix"\n"
@@ -550,7 +550,7 @@ NginxUpdate()
 {
     ShFileUpdate "$nginx_name"
 
-    if [ ! -d "$nginx_prefix" ] 
+    if [ ! -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 未安装 !\n"
         return 1
@@ -564,7 +564,7 @@ NginxUpdate()
         return
     fi
 
-    if [ "$dist" == "rpm" ] 
+    if [ "$dist" == "rpm" ]
     then
         yum update -y "$nginx_name"
     else

@@ -1,9 +1,9 @@
 JQInstall()
 {
-    if [[ -x "$JQ_FILE" ]] 
+    if [[ -x "$JQ_FILE" ]]
     then
         return
-    elif [[ -x "$IPTV_ROOT"/jq ]] 
+    elif [[ -x "$IPTV_ROOT"/jq ]]
     then
         JQ_FILE="$IPTV_ROOT"/jq
         return
@@ -12,13 +12,13 @@ JQInstall()
     DepsCheck
     ArchCheck
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         DepInstall jq check
         return 0
-    elif grep -q "arm" <<< "$arch" 
+    elif grep -q "arm" <<< "$arch"
     then
-        if ! /usr/local/bin/jq -V > /dev/null 2>&1 
+        if ! /usr/local/bin/jq -V > /dev/null 2>&1
         then
             Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
             cd ~
@@ -32,7 +32,7 @@ JQInstall()
             make $nproc > /dev/null
             make install > /dev/null
         fi
-        if [ "$JQ_FILE" != "/usr/local/bin/jq" ] 
+        if [ "$JQ_FILE" != "/usr/local/bin/jq" ]
         then
             rm -f "$JQ_FILE"
             ln -sf /usr/local/bin/jq "$JQ_FILE"
@@ -46,7 +46,7 @@ JQInstall()
             Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`"
             exit 1
         fi
-        if grep -q 64 <<< "$arch" 
+        if grep -q 64 <<< "$arch"
         then
             jq_package="jq-linux64"
         else
@@ -83,7 +83,7 @@ JQ()
 
     FILE=$2
 
-    if TMP_FILE=$(mktemp -q) 
+    if TMP_FILE=$(mktemp -q)
     then
         chmod +r "$TMP_FILE"
     else
@@ -95,76 +95,76 @@ JQ()
         rm -f "${TMP_FILE}_slurp"
     ' EXIT
 
-    if [ -n "$jq_path" ] 
+    if [ -n "$jq_path" ]
     then
         jq_args+=( --argjson path "$jq_path" )
     fi
 
-    if [ -n "$jq_path2" ] 
+    if [ -n "$jq_path2" ]
     then
         jq_args+=( --argjson path2 "$jq_path2" )
     fi
 
     case $1 in
         add)
-            if [ -n "$jq_path" ] 
+            if [ -n "$jq_path" ]
             then
                 jq_commands=( 'getpath($path)' )
             fi
 
-            if [ -n "${4:-}" ] 
+            if [ -n "${4:-}" ]
             then
-                if [ -n "$jq_path" ] 
+                if [ -n "$jq_path" ]
                 then
                     jq_commands+=( '|=' )
                 fi
 
-                if [ -n "$jq_path2" ] 
+                if [ -n "$jq_path2" ]
                 then
                     jq_commands+=( 'map((select(.[$key]==' )
                 else
                     jq_commands+=( 'map(select(.[$key]==' )
                 fi
 
-                if [ "$map_bool" = true ] 
+                if [ "$map_bool" = true ]
                 then
                     jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ] 
+                elif [ "$map_string" = true ]
                 then
                     jq_commands+=( '$value)' )
                 else
                     jq_commands+=( '($value|tonumber))' )
                 fi
 
-                if [ -n "$jq_path2" ] 
+                if [ -n "$jq_path2" ]
                 then
                     jq_commands+=( '|getpath($path2))' )
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ "$file" = true ] 
+                if [ "$file" = true ]
                 then
                     slurp_arg=("$5"[@])
                 else
                     jq_args+=( --argjson add "$5" )
                 fi
 
-                if [ "$pre" = true ] 
+                if [ "$pre" = true ]
                 then
                     jq_commands+=( '|=$add+.)' )
                 else
                     jq_commands+=( '+=$add)' )
                 fi
             else
-                if [ "$file" = true ] 
+                if [ "$file" = true ]
                 then
                     slurp_arg=("$3"[@])
                 else
                     jq_args+=( --argjson add "$3" )
                 fi
 
-                if [ "$pre" = true ] 
+                if [ "$pre" = true ]
                 then
                     jq_commands+=( '|=$add+.' )
                 else
@@ -172,14 +172,14 @@ JQ()
                 fi
             fi
 
-            if [ "$file" = true ] 
+            if [ "$file" = true ]
             then
                 jq_args+=( --slurpfile add "${TMP_FILE}_slurp" )
 
-                if [[ -z ${!slurp_arg:-} ]] 
+                if [[ -z ${!slurp_arg:-} ]]
                 then
                     printf '%s' "" > "${TMP_FILE}_slurp"
-                elif [ "$file_json" = true ] 
+                elif [ "$file_json" = true ]
                 then
                     printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
                 else
@@ -188,43 +188,43 @@ JQ()
             fi
         ;;
         update)
-            if [ -n "$jq_path" ] 
+            if [ -n "$jq_path" ]
             then
                 jq_commands=( 'getpath($path)' )
             fi
 
-            if [ -n "${4:-}" ] 
+            if [ -n "${4:-}" ]
             then
-                if [ -n "$jq_path" ] 
+                if [ -n "$jq_path" ]
                 then
                     jq_commands+=( '|=' )
                 fi
 
-                if [ -n "$jq_path2" ] 
+                if [ -n "$jq_path2" ]
                 then
                     jq_commands+=( 'map((select(.[$key]==' )
                 else
                     jq_commands+=( 'map(select(.[$key]==' )
                 fi
 
-                if [ "$map_bool" = true ] 
+                if [ "$map_bool" = true ]
                 then
                     jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ] 
+                elif [ "$map_string" = true ]
                 then
                     jq_commands+=( '$value)' )
                 else
                     jq_commands+=( '($value|tonumber))' )
                 fi
 
-                if [ -n "$jq_path2" ] 
+                if [ -n "$jq_path2" ]
                 then
                     jq_commands+=( '|getpath($path2))' )
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ "$file" = true ] 
+                if [ "$file" = true ]
                 then
                     slurp_arg=("$5"[@])
                 elif [ "$json" = true ] || [ "$merge" = true ]
@@ -234,20 +234,20 @@ JQ()
                     jq_args+=( --arg update "$5" )
                 fi
 
-                if [ "$merge" = true ] 
+                if [ "$merge" = true ]
                 then
                     jq_commands+=( '|=.*$update//.)' )
-                elif [ "$number" = true ] 
+                elif [ "$number" = true ]
                 then
                     jq_commands+=( '=($update|tonumber))' )
-                elif [ "$bool" = true ] 
+                elif [ "$bool" = true ]
                 then
                     jq_commands+=( '=($update|test("true")))' )
                 else
                     jq_commands+=( '=$update)' )
                 fi
             else
-                if [ "$file" = true ] 
+                if [ "$file" = true ]
                 then
                     slurp_arg=("$3"[@])
                 elif [ "$json" = true ] || [ "$merge" = true ]
@@ -257,13 +257,13 @@ JQ()
                     jq_args+=( --arg update "$3" )
                 fi
 
-                if [ "$merge" = true ] 
+                if [ "$merge" = true ]
                 then
                     jq_commands+=( '|=.*$update//.' )
-                elif [ "$number" = true ] 
+                elif [ "$number" = true ]
                 then
                     jq_commands+=( '=($update|tonumber)' )
-                elif [ "$bool" = true ] 
+                elif [ "$bool" = true ]
                 then
                     jq_commands+=( '=($update|test("true"))' )
                 else
@@ -271,14 +271,14 @@ JQ()
                 fi
             fi
 
-            if [ "$file" = true ] 
+            if [ "$file" = true ]
             then
                 jq_args+=( --slurpfile update "${TMP_FILE}_slurp" )
 
-                if [[ -z ${!slurp_arg:-} ]] 
+                if [[ -z ${!slurp_arg:-} ]]
                 then
                     printf '%s' "" > "${TMP_FILE}_slurp"
-                elif [ "$file_json" = true ] 
+                elif [ "$file_json" = true ]
                 then
                     printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
                 else
@@ -287,32 +287,32 @@ JQ()
             fi
         ;;
         delete)
-            if [ -n "${3:-}" ] 
+            if [ -n "${3:-}" ]
             then
-                if [ -z "${5:-}" ] 
+                if [ -z "${5:-}" ]
                 then
                     jq_commands=( 'del(' )
 
-                    if [ -n "$jq_path" ] 
+                    if [ -n "$jq_path" ]
                     then
                         jq_commands+=( 'getpath($path)[]|' )
                     else
                         jq_commands+=( '.[]|' )
                     fi
 
-                    if [ -n "$jq_path2" ] 
+                    if [ -n "$jq_path2" ]
                     then
                         jq_commands+=( '(select(.[$key]==' )
                     else
                         jq_commands+=( 'select(.[$key]==' )
                     fi
                 else
-                    if [ -n "$jq_path" ] 
+                    if [ -n "$jq_path" ]
                     then
                         jq_commands=( 'getpath($path)|=' )
                     fi
 
-                    if [ -n "$jq_path2" ] 
+                    if [ -n "$jq_path2" ]
                     then
                         jq_commands+=( 'map((select(.[$key]==' )
                     else
@@ -320,24 +320,24 @@ JQ()
                     fi
                 fi
 
-                if [ "$map_bool" = true ] 
+                if [ "$map_bool" = true ]
                 then
                     jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ] 
+                elif [ "$map_string" = true ]
                 then
                     jq_commands+=( '$value)' )
                 else
                     jq_commands+=( '($value|tonumber))' )
                 fi
 
-                if [ -n "$jq_path2" ] 
+                if [ -n "$jq_path2" ]
                 then
                     jq_commands+=( '|getpath($path2))' )
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ -n "${5:-}" ] 
+                if [ -n "${5:-}" ]
                 then
                     jq_args+=( --argjson delete "$5" )
                     jq_commands+=( '-=$delete' )
@@ -383,17 +383,16 @@ JQ()
 JQs()
 {
     case $1 in
-        "get") 
-            read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
+        "get")
+            $JQ_FILE -c -r --argjson path "$jq_path" 'getpath($path)|'"${3:-.}"'' <<< "${!2}"
             jq_path=""
         ;;
-        "gets") 
-            $JQ_FILE -r --argjson paths "$jq_path" '
-                $paths[] as $p | "jq_\($p | join("_")): \(getpath($p)? // "")"' <<< "${!2}"
+        "gets")
+            $JQ_FILE -c -r --argjson paths "$jq_path" '$paths[] as $p | "jq_\($p | join("_")): \(getpath($p)? // "")"' <<< "${!2}"
             jq_path=""
         ;;
-        "add") 
-            if [ "${4:-}" == "pre" ] 
+        "add")
+            if [ "${4:-}" == "pre" ]
             then
                 read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= $value + .' <<< "${!2}")
             else
@@ -401,8 +400,8 @@ JQs()
             fi
             jq_path=""
         ;;
-        "update") 
-            if [ "${4:-}" == "number" ] 
+        "update")
+            if [ "${4:-}" == "number" ]
             then
                 read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' <<< "${!2}")
             else
@@ -410,12 +409,12 @@ JQs()
             fi
             jq_path=""
         ;;
-        "replace") 
+        "replace")
             read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' <<< "${!2}")
             jq_path=""
         ;;
-        "delete") 
-            if [ -z "${3:-}" ] 
+        "delete")
+            if [ -z "${3:-}" ]
             then
                 read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" 'del(getpath($path))' <<< "${!2}")
             else
@@ -444,14 +443,23 @@ JQs()
             read -r $var < <($JQ_FILE "@" <<< "${!var}")
         ;;
         "flat")
-            if [[ $2 =~ ^/ ]] 
+            if [[ $2 =~ ^/ ]]
             then
                 jq_input=$(< $2)
             else
                 jq_input="$2"
             fi
 
-            $JQ_FILE --argjson delims "$json_delimiters" -r -c '
+            local pre="${3:-.}| if type == \"null\" or . == \"\" then {} else . end"
+
+            if [ -n "${3:-}" ]
+            then
+                shift 3
+            else
+                shift 2
+            fi
+
+            $JQ_FILE --argjson delims "$json_delimiters" -r -c "$@" '
 
             def structural_merge:
                 type as $type
@@ -459,21 +467,23 @@ JQs()
                     with_entries(.value |= structural_merge)
                 elif $type == "array" then
                     if length == 0 then []
+                    elif (map(type == "object") | unique | length == 2) then
+                        .
                     elif (map(type == "object") | any) then
-                    ( [ .[] | select(. != null) | keys[] ] | unique ) as $all_keys
-                    | map(. as $obj 
-                    | if $obj == null or type != "object" then 
-                        $all_keys | map({key: ., value: null}) | from_entries 
-                    else  
-                        $all_keys | map({key: ., value: $obj[.]}) | from_entries 
-                    end)
-                    | [ .[] | to_entries[] ] 
-                    | group_by(.key)
-                    | map({
-                        key: .[0].key,
-                        value: (map(.value) | structural_merge)
-                    })
-                    | from_entries
+                        ( [ .[] | select(. != null) | keys[] ] | unique ) as $all_keys
+                        | map(. as $obj
+                        | if $obj == null or type != "object" then
+                            $all_keys | map({key: ., value: null}) | from_entries
+                        else
+                            $all_keys | map({key: ., value: $obj[.]}) | from_entries
+                        end)
+                        | [ .[] | to_entries[] ]
+                        | group_by(.key)
+                        | map({
+                            key: .[0].key,
+                            value: (map(.value) | structural_merge)
+                        })
+                        | from_entries
                     else
                         map(structural_merge)
                         | if (map(type == "object") | any) then structural_merge else . end
@@ -499,7 +509,7 @@ JQs()
                             else
                                 tostring
                             end) + ($delims[$layer] // "|")
-                        ) 
+                        )
                         | join("")
                     end
                 elif $type == "null" or . == "" then
@@ -508,7 +518,7 @@ JQs()
                     tostring
                 end;
 
-            '"${3:-.}"' | structural_merge | finalize_strings(0)' <<< "$jq_input"
+            '"$pre"' | structural_merge | finalize_strings(0)' <<< "$jq_input"
         ;;
     esac
 }

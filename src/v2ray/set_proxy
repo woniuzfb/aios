@@ -85,7 +85,7 @@ V2raySetUserId()
     Println "$tip 必须为合法的 UUID"
     inquirer text_input "输入用户 ID: " user_id "$i18n_random"
 
-    if [ "$user_id" == "$i18n_random" ] 
+    if [ "$user_id" == "$i18n_random" ]
     then
         user_id=$($V2CTL_FILE uuid)
         Println "  id: ${green} $user_id ${normal}"
@@ -113,7 +113,7 @@ V2raySetUserEmail()
     echo
     inquirer text_input "输入用户邮箱: " user_email "$i18n_random"
 
-    if [ "$user_email" == "$i18n_random" ] 
+    if [ "$user_email" == "$i18n_random" ]
     then
         user_email="$(RandStr)@localhost"
         Println "  邮箱: ${green} $user_email ${normal}"
@@ -184,7 +184,7 @@ V2raySetUsers()
 {
     Println "$tip 必须为合法的 UUID, 多个 UUID 用空格分隔"
     inquirer text_input "输入用户 ID: " users "$i18n_blank"
-    users=$(StringToList users)
+    users=$(StringToPath users)
 }
 
 V2raySetServerAddress()
@@ -228,7 +228,7 @@ V2raySetProxyFallbacks()
     Println "$tip 只能用于 TCP+TLS 传输组合"
     inquirer list_input_ny "是否配置协议回落" ft_options continue_yn
 
-    if [ "$continue_yn" = false ] 
+    if [ "$continue_yn" = false ]
     then
         proxy_fallbacks="[]"
         return
@@ -244,7 +244,7 @@ V2raySetProxyFallbacks()
         "xver": $xver | tonumber
     }]')
 
-    while true 
+    while true
     do
         Println "$tip 请输入单个, 比如 http/1.1 或 h2"
         inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "$i18n_blank"
@@ -255,13 +255,13 @@ V2raySetProxyFallbacks()
         fi
         Println "$tip 非空则必须以 / 开头, 不支持 h2c"
         inquirer text_input "输入尝试匹配首包 HTTP PATH: " v2ray_fallback_path "任意"
-        if [ "$v2ray_fallback_path" == "任意" ] 
+        if [ "$v2ray_fallback_path" == "任意" ]
         then
             v2ray_fallback_path=""
         fi
         Println "$tip 格式为 addr:port 或 /dev/shm/domain.socket, 若填写域名, 也将直接发起 TCP 连接(而不走内置的 DNS)"
         inquirer text_input "输入 $tls_name 解密后 TCP 流量的去向: " v2ray_fallback_dest
-        if [ -z "$v2ray_fallback_dest" ] 
+        if [ -z "$v2ray_fallback_dest" ]
         then
             Println "$error $i18n_canceled...\n"
             exit 1
@@ -269,16 +269,16 @@ V2raySetProxyFallbacks()
         Println "$tip 如果配置 nginx 的 PROXY protocol 记得设置 set_real_ip_from"
         v2ray_fallback_proxy_protocol_options=( '不发送' '版本1' '版本2' )
         inquirer list_input "选择 PROXY protocol" v2ray_fallback_proxy_protocol_options v2ray_fallback_proxy_protocol
-        if [ "$v2ray_fallback_proxy_protocol" == "不发送" ] 
+        if [ "$v2ray_fallback_proxy_protocol" == "不发送" ]
         then
             v2ray_fallback_proxy_protocol=0
-        elif [ "$v2ray_fallback_proxy_protocol" == "版本1" ] 
+        elif [ "$v2ray_fallback_proxy_protocol" == "版本1" ]
         then
             v2ray_fallback_proxy_protocol=1
         else
             v2ray_fallback_proxy_protocol=2
         fi
-        if [[ $v2ray_fallback_dest =~ ^[0-9]+$ ]] 
+        if [[ $v2ray_fallback_dest =~ ^[0-9]+$ ]]
         then
             v2ray_fallback=$(
             $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
@@ -306,7 +306,7 @@ V2raySetProxyFallbacks()
         '. + $fallback' <<< "$v2ray_fallbacks")
         echo
         inquirer list_input "回落添加成功, 是否继续添加新的回落" ny_options v2ray_fallbacks_yn
-        if [ "$v2ray_fallbacks_yn" == "$i18n_no" ] 
+        if [ "$v2ray_fallbacks_yn" == "$i18n_no" ]
         then
             break
         fi
@@ -432,7 +432,7 @@ V2raySetShadowsocksPasswordInbound()
     Println "$tip 建议使用 16 字符或更长的密码"
     inquirer text_input "shadowsocks 密码: " shadowsocks_password "$i18n_random"
 
-    if [ "$shadowsocks_password" == "$i18n_random" ] 
+    if [ "$shadowsocks_password" == "$i18n_random" ]
     then
         shadowsocks_password=$(RandStr 16)
         Println "  shadowsocks 密码: ${green}$shadowsocks_password${normal}"
@@ -511,7 +511,7 @@ V2raySetTrojanUsers()
 {
     Println "$tip 多个密码用空格分隔"
     inquirer text_input "trojan 输入用户密码: " trojan_users "$i18n_blank"
-    trojan_users=$(StringToList trojan_users)
+    trojan_users=$(StringToPath trojan_users)
 }
 
 V2raySetTrojanPacketEncoding()

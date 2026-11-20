@@ -113,65 +113,78 @@ SetDelimiters
 
 EXIT_STATUS=0
 
-IFS=$'\004\t' read -r m_id m_name m_user_agent m_verify_type m_verify_acc_type m_reg_type m_server_version m_unique_url \
-m_access_token_url m_refresh_access_token_url m_third_token_url m_img_url m_sms_url m_verify_url m_reg_url m_login_url \
-m_user_info_url m_auth_info_url m_auth_verify_url m_play_url m_playback_url m_list_url m_schedule_url m_event_info_url \
-m_operating_system m_system_version m_model m_app_version < <(JQs flat "$ts_source" '.[0].data |
-map(select(.reg_url != null)|with_entries(select(.key as $k |
-["id","name","user_agent","verify_type","verify_acc_type","reg_type","server_version",
-"extend_info","unique_url","access_token_url","refresh_access_token_url","third_token_url","img_url","sms_url","verify_url",
-"reg_url","login_url","user_info_url","auth_info_url","auth_verify_url","play_url","playback_url","list_url","schedule_url",
-"event_info_url"] | index($k))))' '. as $source | ($source.extend_info // {} | if (.|type) == "string" then {} else . end) 
-as $extend_info | reduce ({id,name,user_agent,verify_type,verify_acc_type,reg_type,server_version,unique_url,access_token_url,
-refresh_access_token_url,third_token_url,img_url,sms_url,verify_url,reg_url,login_url,user_info_url,auth_info_url,
-auth_verify_url,play_url,playback_url,list_url,schedule_url,event_info_url}|keys_unsorted[]) as $key ([];
-    $source[$key] as $val | if $val then
-        . + [$val + "\u0002\u0004"]
-    else
-        . + ["\u0004"]
-    end
-) + reduce ({operatingsystem,systemversion,model,appversion}|keys_unsorted[]) as $key ([];
-    $extend_info[$key] as $val | if $val then
-        . + [$val + "\u0003\u0004"]
-    else
-        . + ["\u0004"]
-    end
-)|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+jq_payload=$(JQs flat "$ts_source")
 
-if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+jq_path='[
+    ["data","id"],
+    ["data","name"],
+    ["data","user_agent"],
+    ["data","verify_type"],
+    ["data","verify_acc_type"],
+    ["data","reg_type"],
+    ["data","server_version"],
+    ["data","unique_url"],
+    ["data","access_token_url"],
+    ["data","refresh_access_token_url"],
+    ["data","third_token_url"],
+    ["data","img_url"],
+    ["data","sms_url"],
+    ["data","verify_url"],
+    ["data","reg_url"],
+    ["data","login_url"],
+    ["data","user_info_url"],
+    ["data","auth_info_url"],
+    ["data","auth_verify_url"],
+    ["data","play_url"],
+    ["data","playback_url"],
+    ["data","list_url"],
+    ["data","schedule_url"],
+    ["data","event_info_url"],
+    ["data","extend_info","operatingsystem"],
+    ["data","extend_info","systemversion"],
+    ["data","extend_info","model"],
+    ["data","extend_info","appversion"]
+]'
+
+while IFS=": " read -r path_name value; do
+    var_name=${path_name}
+    read -r ${var_name?} <<< "$value"
+done < <(JQs gets jq_payload)
+
+if [ -z "$m_name" ]
 then
     Println "$error 没有找到频道\n"
     exit 1
 fi
 
-IFS="${delimiters[1]}" read -ra ts_id <<< "$m_id"
-IFS="${delimiters[1]}" read -ra ts_name <<< "$m_name"
-IFS="${delimiters[1]}" read -ra ts_user_agent <<< "$m_user_agent"
-IFS="${delimiters[1]}" read -ra ts_verify_type <<< "$m_verify_type"
-IFS="${delimiters[1]}" read -ra ts_verify_acc_type <<< "$m_verify_acc_type"
-IFS="${delimiters[1]}" read -ra ts_reg_type <<< "$m_reg_type"
-IFS="${delimiters[1]}" read -ra ts_server_version <<< "$m_server_version"
-IFS="${delimiters[1]}" read -ra ts_unique_url <<< "$m_unique_url"
-IFS="${delimiters[1]}" read -ra ts_access_token_url <<< "$m_access_token_url"
-IFS="${delimiters[1]}" read -ra ts_refresh_access_token_url <<< "$m_refresh_access_token_url"
-IFS="${delimiters[1]}" read -ra ts_third_token_url <<< "$m_third_token_url"
-IFS="${delimiters[1]}" read -ra ts_img_url <<< "$m_img_url"
-IFS="${delimiters[1]}" read -ra ts_sms_url <<< "$m_sms_url"
-IFS="${delimiters[1]}" read -ra ts_verify_url <<< "$m_verify_url"
-IFS="${delimiters[1]}" read -ra ts_reg_url <<< "$m_reg_url"
-IFS="${delimiters[1]}" read -ra ts_login_url <<< "$m_login_url"
-IFS="${delimiters[1]}" read -ra ts_user_info_url <<< "$m_user_info_url"
-IFS="${delimiters[1]}" read -ra ts_auth_info_url <<< "$m_auth_info_url"
-IFS="${delimiters[1]}" read -ra ts_auth_verify_url <<< "$m_auth_verify_url"
-IFS="${delimiters[1]}" read -ra ts_play_url <<< "$m_play_url"
-IFS="${delimiters[1]}" read -ra ts_playback_url <<< "$m_playback_url"
-IFS="${delimiters[1]}" read -ra ts_list_url <<< "$m_list_url"
-IFS="${delimiters[1]}" read -ra ts_schedule_url <<< "$m_schedule_url"
-IFS="${delimiters[1]}" read -ra ts_event_info_url <<< "$m_event_info_url"
-IFS="${delimiters[2]}" read -ra ts_operating_system <<< "$m_operating_system"
-IFS="${delimiters[2]}" read -ra ts_system_version <<< "$m_system_version"
-IFS="${delimiters[2]}" read -ra ts_model <<< "$m_model"
-IFS="${delimiters[2]}" read -ra ts_app_version <<< "$m_app_version"
+IFS="${delimiters[2]}" read -ra ts_id <<< "$jq_data_id"
+IFS="${delimiters[2]}" read -ra ts_name <<< "$jq_data_name"
+IFS="${delimiters[2]}" read -ra ts_user_agent <<< "$jq_data_user_agent"
+IFS="${delimiters[2]}" read -ra ts_verify_type <<< "$jq_data_verify_type"
+IFS="${delimiters[2]}" read -ra ts_verify_acc_type <<< "$jq_data_verify_acc_type"
+IFS="${delimiters[2]}" read -ra ts_reg_type <<< "$jq_data_reg_type"
+IFS="${delimiters[2]}" read -ra ts_server_version <<< "$jq_data_server_version"
+IFS="${delimiters[2]}" read -ra ts_unique_url <<< "$jq_data_unique_url"
+IFS="${delimiters[2]}" read -ra ts_access_token_url <<< "$jq_data_access_token_url"
+IFS="${delimiters[2]}" read -ra ts_refresh_access_token_url <<< "$jq_data_refresh_access_token_url"
+IFS="${delimiters[2]}" read -ra ts_third_token_url <<< "$jq_data_third_token_url"
+IFS="${delimiters[2]}" read -ra ts_img_url <<< "$jq_data_img_url"
+IFS="${delimiters[2]}" read -ra ts_sms_url <<< "$jq_data_sms_url"
+IFS="${delimiters[2]}" read -ra ts_verify_url <<< "$jq_data_verify_url"
+IFS="${delimiters[2]}" read -ra ts_reg_url <<< "$jq_data_reg_url"
+IFS="${delimiters[2]}" read -ra ts_login_url <<< "$jq_data_login_url"
+IFS="${delimiters[2]}" read -ra ts_user_info_url <<< "$jq_data_user_info_url"
+IFS="${delimiters[2]}" read -ra ts_auth_info_url <<< "$jq_data_auth_info_url"
+IFS="${delimiters[2]}" read -ra ts_auth_verify_url <<< "$jq_data_auth_verify_url"
+IFS="${delimiters[2]}" read -ra ts_play_url <<< "$jq_data_play_url"
+IFS="${delimiters[2]}" read -ra ts_playback_url <<< "$jq_data_playback_url"
+IFS="${delimiters[2]}" read -ra ts_list_url <<< "$jq_data_list_url"
+IFS="${delimiters[2]}" read -ra ts_schedule_url <<< "$jq_data_schedule_url"
+IFS="${delimiters[2]}" read -ra ts_event_info_url <<< "$jq_data_event_info_url"
+IFS="${delimiters[3]}" read -ra ts_operating_system <<< "$jq_data_extend_info_operatingsystem"
+IFS="${delimiters[3]}" read -ra ts_system_version <<< "$jq_data_extend_info_systemversion"
+IFS="${delimiters[3]}" read -ra ts_model <<< "$jq_data_extend_info_model"
+IFS="${delimiters[3]}" read -ra ts_app_version <<< "$jq_data_extend_info_appversion"
 
 rm -rf /tmp/cookie_jar
 mkdir -p /tmp/cookie_jar
@@ -736,39 +749,64 @@ fi
 
 EXIT_STATUS=0
 
-IFS=$'\003\t' read -r m_chnl_id m_str_chnl_id m_chnl_name m_chnl_type m_chnl_num m_logic_num m_definition m_is_favorite \
-m_is_free m_is_hide m_is_livetv m_is_tstv m_is_lock m_is_purchased m_is_public m_is_boot m_is_fast_channel_change \
-m_stream_type m_times m_comment_num m_score m_praise_num m_degrade_num m_score_num m_iframe_url m_device_type m_providerid \
-m_provider_icon_font m_ts_id m_content_type m_sub_type m_subtype_name m_label_name m_support_playback m_rate_list \
-m_tstv_url m_livetv_url m_video_code m_trial_short m_trial_longest m_trial_times m_play_type m_codec_info \
-m_logo_info < <(JQs flat "$res" '.[0].chnl_list | map(select(.chnl_id != null)|with_entries(select(.key as $k |
-["chnl_id","str_chnl_id","chnl_name","chnl_type","chnl_num","logic_num","definition","is_favorite","is_free","is_hide","is_livetv","is_tstv",
-"is_lock","is_purchased","is_public","is_boot","is_fast_channel_change","stream_type","times","comment_num","score","praise_num","degrade_num",
-"score_num","iframe_url","device_type","providerid","provider_icon_font","ts_id","content_type","sub_type","subtype_name","label_name",
-"support_playback","rate_list","tstv_url","livetv_url","video_code","trial_short","trial_longest","trial_times","play_type",
-"codec_info","logo_info"] | index($k))))' '. as $channel | reduce ({chnl_id,str_chnl_id,chnl_name,chnl_type,chnl_num,logic_num,definition,
-is_favorite,is_free,is_hide,is_livetv,is_tstv,is_lock,is_purchased,is_public,is_boot,is_fast_channel_change,stream_type,times,comment_num,
-score,praise_num,degrade_num,score_num,iframe_url,device_type,providerid,provider_icon_font,ts_id,content_type,sub_type,subtype_name,
-label_name,support_playback,rate_list,tstv_url,livetv_url,video_code,trial_short,trial_longest,trial_times,play_type,
-codec_info,logo_info}|keys_unsorted[]) as $key ([];
-    $channel[$key] as $val | if $val then
-        . + [$val + "\u0002\u0003"]
-    else
-        . + ["\u0003"]
-    end
-)|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+jq_payload=$(JQs flat "$res")
 
-if [ "$EXIT_STATUS" -ne 0 ] 
-then
-    echo "$res"
-    Println "$error 无法解析频道\n"
-    exit 1
-fi
+jq_path='[
+    ["chnl_list","chnl_id"],
+    ["chnl_list","str_chnl_id"],
+    ["chnl_list","chnl_name"],
+    ["chnl_list","chnl_type"],
+    ["chnl_list","chnl_num"],
+    ["chnl_list","logic_num"],
+    ["chnl_list","definition"],
+    ["chnl_list","is_favorite"],
+    ["chnl_list","is_free"],
+    ["chnl_list","is_hide"],
+    ["chnl_list","is_livetv"],
+    ["chnl_list","is_tstv"],
+    ["chnl_list","is_lock"],
+    ["chnl_list","is_purchased"],
+    ["chnl_list","is_public"],
+    ["chnl_list","is_boot"],
+    ["chnl_list","is_fast_channel_change"],
+    ["chnl_list","stream_type"],
+    ["chnl_list","times"],
+    ["chnl_list","comment_num"],
+    ["chnl_list","score"],
+    ["chnl_list","praise_num"],
+    ["chnl_list","degrade_num"],
+    ["chnl_list","score_num"],
+    ["chnl_list","iframe_url"],
+    ["chnl_list","device_type"],
+    ["chnl_list","providerid"],
+    ["chnl_list","provider_icon_font"],
+    ["chnl_list","ts_id"],
+    ["chnl_list","content_type"],
+    ["chnl_list","sub_type"],
+    ["chnl_list","subtype_name"],
+    ["chnl_list","label_name"],
+    ["chnl_list","support_playback"],
+    ["chnl_list","rate_list"],
+    ["chnl_list","tstv_url"],
+    ["chnl_list","livetv_url"],
+    ["chnl_list","video_code"],
+    ["chnl_list","trial_short"],
+    ["chnl_list","trial_longest"],
+    ["chnl_list","trial_times"],
+    ["chnl_list","play_type"],
+    ["chnl_list","codec_info"],
+    ["chnl_list","logo_info"]
+]'
 
-IFS="${delimiters[1]}" read -ra chnl_id <<< "$m_chnl_id"
-IFS="${delimiters[1]}" read -ra chnl_name <<< "$m_chnl_name"
-IFS="${delimiters[1]}" read -ra rate_list <<< "$m_rate_list"
-IFS="${delimiters[1]}" read -ra livetv_url <<< "$m_livetv_url"
+while IFS=": " read -r path_name value; do
+    var_name=${path_name}
+    read -r ${var_name?} <<< "$value"
+done < <(JQs gets jq_payload)
+
+IFS="${delimiters[2]}" read -ra chnl_id <<< "$jq_chnl_list_chnl_id"
+IFS="${delimiters[2]}" read -ra chnl_name <<< "$jq_chnl_list_chnl_name"
+IFS="${delimiters[2]}" read -ra rate_list <<< "$jq_chnl_list_rate_list"
+IFS="${delimiters[2]}" read -ra livetv_url <<< "$jq_chnl_list_livetv_url"
 
 echo
 inquirer checkbox_input_indices "选择添加的频道" chnl_name chnl_indices
@@ -780,14 +818,14 @@ cookies=""
 
 for chnl_index in "${chnl_indices[@]}"
 do
-    IFS="${delimiters[0]}" read -ra rates <<< "${rate_list[chnl_index]}"
+    IFS="${delimiters[3]}" read -ra rates <<< "${rate_list[chnl_index]}"
 
     echo
     inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
 
     if [ -z "$play_url" ] 
     then
-        IFS="${delimiters[0]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
+        IFS="${delimiters[3]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
 
         echo
         inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls play_url

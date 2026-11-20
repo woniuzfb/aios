@@ -23,13 +23,9 @@ OpenListAccAdd()
 
         if [ -n "${openlists_acc_username[openlists_index]:-}" ] 
         then
-            IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
-
-            new_arr=("${openlist_accs_username[@]//*/}")
-            openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
-
-            IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
-            IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]}"
 
             openlist_accs_count=${#openlist_accs_username[@]}
 
@@ -99,13 +95,9 @@ OpenListAccLogin()
             continue
         fi
 
-        IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
-
-        new_arr=("${openlist_accs_username[@]//*/}")
-        openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
-
-        IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
-        IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+        IFS="${delimiters[3]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+        IFS="${delimiters[3]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]}"
+        IFS="${delimiters[3]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]}"
 
         openlist_accs_count=${#openlist_accs_username[@]}
 
@@ -161,13 +153,9 @@ OpenListAccView()
         then
             openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
         else
-            IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
-
-            new_arr=("${openlist_accs_username[@]//*/}")
-            openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
-
-            IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
-            IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]}"
 
             openlist_accs_count=${#openlist_accs_username[@]}
 

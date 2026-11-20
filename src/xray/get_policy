@@ -1,0 +1,49 @@
+XrayGetPolicy()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.policy')
+
+    jq_path='["levels"]'
+
+    policy_levels_id=()
+    policy_levels_handshake=()
+    policy_levels_connIdle=()
+    policy_levels_uplinkOnly=()
+    policy_levels_downlinkOnly=()
+    policy_levels_statsUserUplink=()
+    policy_levels_statsUserDownlink=()
+    policy_levels_bufferSize=()
+
+    while IFS="^" read -r policy_levels_id policy_levels_handshake policy_levels_connIdle policy_levels_uplinkOnly \
+    policy_levels_downlinkOnly policy_levels_statsUserUplink policy_levels_statsUserDownlink policy_levels_bufferSize; do
+        policy_levels_id+=("$policy_levels_id^")
+        policy_levels_handshake+=("$policy_levels_handshake^")
+        policy_levels_connIdle+=("$policy_levels_connIdle^")
+        policy_levels_uplinkOnly+=("$policy_levels_uplinkOnly^")
+        policy_levels_downlinkOnly+=("$policy_levels_downlinkOnly^")
+        policy_levels_statsUserUplink+=("$policy_levels_statsUserUplink^")
+        policy_levels_statsUserDownlink+=("$policy_levels_statsUserDownlink^")
+        policy_levels_bufferSize+=("$policy_levels_bufferSize^")
+    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value.handshake // 4)^\(.value.connIdle // 300)^\(.value.uplinkOnly // 2)^\(.value.downlinkOnly // 5)^\(.value.statsUserUplink // false)^\(.value.statsUserDownlink // false)^\(.value.bufferSize // 4)"')
+
+    jq_path='[
+        ["system","statsInboundUplink"],
+        ["system","statsInboundDownlink"],
+        ["system","statsOutboundUplink"],
+        ["system","statsOutboundDownlink"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_policy_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    policy_system_stats_inbound_uplink=${jq_policy_system_stats_inbound_uplink:-false}
+    policy_system_stats_inbound_downlink=${jq_policy_system_stats_inbound_downlink:-false}
+    policy_system_stats_outbound_uplink=${jq_policy_system_stats_outbound_uplink:-false}
+    policy_system_stats_outbound_downlink=${jq_policy_system_stats_outbound_downlink:-false}
+
+    policy_levels_count="${#policy_levels_id[@]}"
+
+}

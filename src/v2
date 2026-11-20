@@ -1,7 +1,6 @@
 Include utils/imagemagick "$@"
 Include utils/imgcat "$@"
 Include src/v2ray/get_free_tag "$@"
-Include src/v2ray/view_staus "$@"
 Include src/v2ray/inbound "$@"
 Include src/v2ray/stream "$@"
 Include src/v2ray/get_inbounds "$@"
@@ -53,13 +52,9 @@ Include src/service/control "$@"
 
 ShFileCheck
 
-v2ray_sh="v2"
-v2ray_name="v2ray"
-tls_name="TLS"
-
-if [ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
+if [ "$dist" != "mac" ][ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
 then
-    ServiceControlDisable disable v2ray
+    ServiceControl disable v2ray
     rm -rf /usr/bin/v2ray/
     mv /etc/v2ray/ /usr/local/etc/
     if ! grep -q "v2ray:" < "/etc/passwd"

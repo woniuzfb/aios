@@ -16,9 +16,9 @@ NginxGetStream()
 
     for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
     do
-        if [ "${level_1_directive_arr[level_1_index]}" == "stream" ] 
+        if [ "${level_1_directive_arr[level_1_index]}" == "stream" ]
         then
-            if [ -z "${level_3_directive_arr[level_1_index]}" ] 
+            if [ -z "${level_3_directive_arr[level_1_index]}" ]
             then
                 break
             fi
@@ -30,10 +30,10 @@ NginxGetStream()
             level_3_directive_d1=${level_3_directive_arr[level_1_index]}
             level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-            IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
-            IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
-            IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
-            IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
+            IFS="${delimiters[4]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+            IFS="${delimiters[4]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1"
+            IFS="${delimiters[5]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+            IFS="${delimiters[5]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
             for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
             do
@@ -42,26 +42,26 @@ NginxGetStream()
                     level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                     level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                    IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
-                    IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
+                    IFS="${delimiters[6]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+                    IFS="${delimiters[6]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
-                    if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] 
+                    if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ]
                     then
-                        if [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_server_name${delimiters[0]}\$upstream" ] 
+                        if [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_server_name${delimiters[0]}\$upstream" ]
                         then
                             for((server_name_i=0;server_name_i<${#level_3_directive_d2_arr[@]};server_name_i++));
                             do
                                 nginx_stream_server_name_list="$nginx_stream_server_name_list $((server_name_i+1)).${indent_6}${green}${level_3_directive_d2_arr[server_name_i]}${normal} => ${green}${level_3_args_d2_arr[server_name_i]}${normal}\n"
                                 nginx_stream_server_name+=("${level_3_directive_d2_arr[server_name_i]} => ${level_3_args_d2_arr[server_name_i]}")
                             done
-                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_protocol${delimiters[0]}\$ssl_proxy" ] 
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_protocol${delimiters[0]}\$ssl_proxy" ]
                         then
                             for((protocol_i=0;protocol_i<${#level_3_directive_d2_arr[@]};protocol_i++));
                             do
                                 nginx_stream_protocol_list="$nginx_stream_protocol_list $((protocol_i+1)).${indent_6}${green}${level_3_directive_d2_arr[protocol_i]:-''}${normal} => ${green}${level_3_args_d2_arr[protocol_i]}${normal}\n"
                                 nginx_stream_protocol+=("${level_3_directive_d2_arr[protocol_i]:-''} => ${level_3_args_d2_arr[protocol_i]}")
                             done
-                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_alpn_protocols${delimiters[0]}\$proxy_pass" ] 
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_alpn_protocols${delimiters[0]}\$proxy_pass" ]
                         then
                             for((alpn_protocols_i=0;alpn_protocols_i<${#level_3_directive_d2_arr[@]};alpn_protocols_i++));
                             do
@@ -69,7 +69,7 @@ NginxGetStream()
                                 nginx_stream_alpn_protocols+=("${level_3_directive_d2_arr[alpn_protocols_i]} => ${level_3_args_d2_arr[alpn_protocols_i]}")
                             done
                         fi
-                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "upstream" ] 
+                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "upstream" ]
                     then
                         nginx_stream_upstream_indices+=("$level_2_index")
                         nginx_stream_upstream_count=$((nginx_stream_upstream_count+1))
@@ -82,17 +82,17 @@ NginxGetStream()
         fi
     done
 
-    if [ -n "${nginx_stream_server_name:-}" ] 
+    if [ -n "${nginx_stream_server_name:-}" ]
     then
         nginx_stream_server_name_count=${#nginx_stream_server_name[@]}
     fi
 
-    if [ -n "${nginx_stream_protocol:-}" ] 
+    if [ -n "${nginx_stream_protocol:-}" ]
     then
         nginx_stream_protocol_count=${#nginx_stream_protocol[@]}
     fi
 
-    if [ -n "${nginx_stream_alpn_protocols:-}" ] 
+    if [ -n "${nginx_stream_alpn_protocols:-}" ]
     then
         nginx_stream_alpn_protocols_count=${#nginx_stream_alpn_protocols[@]}
     fi

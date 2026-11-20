@@ -18,5 +18,13 @@ then
     fi
 fi
 
+if [ -n "${3:-}" ] 
+then
+    locale_fix=1
+fi
+
 i18nInstall "$new_locale"
+
+i18nCheck
+
 exit 0

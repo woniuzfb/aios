@@ -11,11 +11,11 @@ NginxBuildConf()
         rm -f "$TMP_FILE"
     ' EXIT
 
-    if [ "$parse_domain" -eq 1 ] 
+    if [ "$parse_domain" -eq 1 ]
     then
         parse_out_domain=${!1}
         jq_path='["config",0,"parsed",0,"block"]'
-        JQs get parse_out_domain domain_conf
+        domain_conf=$(JQs get parse_out_domain)
         jq_path='["config",0,"parsed"]'
         JQs replace parse_out_domain "$domain_conf"
         echo "$parse_out_domain" > "$TMP_FILE"

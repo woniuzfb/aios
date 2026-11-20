@@ -1,0 +1,26 @@
+V2rayGetFakedns()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$V2_CONFIG" '.fakedns')
+
+    jq_path='[
+        ["ipPool"],
+        ["poolSize"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_fakedns_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    if [ -z "${jq_fakedns_ipPool:-}" ]
+    then
+        fakedns_count=0
+    else
+        IFS="${delimiters[1]}" read -r -a fakedns_ipPool <<< "$jq_fakedns_ipPool"
+        IFS="${delimiters[1]}" read -r -a fakedns_poolSize <<< "$jq_fakedns_poolSize"
+        fakedns_count=${#fakedns_ipPool[@]}
+    fi
+
+}

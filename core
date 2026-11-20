@@ -15,7 +15,7 @@ JoinByChar()
 {
     local IFS="$1"
     shift
-    echo "$*"
+    printf "%s" "$*"
 }
 
 JoinByString()
@@ -27,10 +27,26 @@ JoinByString()
     printf "%s" "$first" "${@/#/$separator}"
 }
 
+JoinByStringUnquote()
+{
+    local separator="$1"
+    shift
+
+    local cleaned=( "${@#\"}" )
+    cleaned=( "${cleaned[@]%\"}" )
+    cleaned=( "${cleaned[@]//\\\"/\"}" )
+    cleaned=( "${cleaned[@]//\\\\/\\}" )
+
+    local result
+    printf -v result "%s%s" "${cleaned[@]/#/$separator}"
+
+    printf "%s" "${result#"$separator"}"
+}
+
 ToJsonArray()
 {
     local var=("$1"[@])
-    if [[ -z "${!var:-}" ]] 
+    if [[ -z "${!var:-}" ]]
     then
         echo "[]"
         return 0
@@ -42,34 +58,97 @@ ToJsonArray()
 
 ToQuoteArray()
 {
-    local var=("$1"[@])
+    if [[ -z "${1:-}" ]]
+    then
+        return 1
+    fi
 
-    if [[ -z "${!var:-}" ]] 
+    local keys
+    eval "keys=(\"\${!$1[@]}\")"
+
+    if [[ ${#keys[@]} -eq 0 ]]
     then
         return 0
     fi
 
-    local arr=("${!var}")
-    local quoted_ele ele i
-    eval "$1=()"
+    local i quoted_ele val
 
-    for((i=0;i<"${#arr[@]}";i++));
+    for i in "${keys[@]}"
     do
-        quoted_ele=$(printf '%s' "${arr[i]}" | sed 's/"/\\"/g')
+        eval "val=\"\${$1[$i]}\""
+
+        quoted_ele="${val//\\/\\\\}"
+        quoted_ele="${quoted_ele//\"/\\\"}"
         quoted_ele="\"$quoted_ele\""
+
         eval "$1[$i]=\"\$quoted_ele\""
     done
 
-    return
+    return 0
 }
 
-ArrayToList()
+ToUnquoteArray()
+{
+    if [[ -z "${1:-}" ]]
+    then
+        return 1
+    fi
+
+    local keys
+    eval "keys=(\"\${!$1[@]}\")"
+
+    local i val unquoted
+
+    for i in "${keys[@]}"
+    do
+        eval "val=\"\${$1[$i]}\""
+
+        unquoted="${val#\"}"
+        unquoted="${unquoted%\"}"
+        unquoted="${unquoted//\\\"/\"}"
+        unquoted="${unquoted//\\\\/\\}"
+
+        eval "$1[$i]=\"\$unquoted\""
+    done
+
+    return 0
+}
+
+ArrayToQuotedList()
 {
     ToQuoteArray "$@"
 
     local var=("$1"[@])
 
-    if [[ -z "${!var:-}" ]] 
+    if [[ -z "${!var:-}" ]]
+    then
+        return 0
+    fi
+
+    local arr=("${!var}")
+
+    JoinByString ', ' "${arr[@]}"
+}
+
+ArrayToList()
+{
+    local var=("$1"[@])
+
+    if [[ -z "${!var:-}" ]]
+    then
+        return 0
+    fi
+
+    local arr=("${!var}")
+
+    JoinByString ', ' "${arr[@]}"
+}
+
+ArrayToPath()
+{
+    local var=("$1"[@])
+
+    if [[ -z "${!var:-}" ]]
     then
         return 0
     fi
@@ -83,7 +162,7 @@ StringToList()
 {
     local text="${!1}"
 
-    if [ -z "${text:-}" ] 
+    if [ -z "${text:-}" ]
     then
         return 0
     fi
@@ -93,6 +172,34 @@ StringToList()
     ArrayToList array_to_list
 }
 
+StringToQuotedList()
+{
+    local text="${!1}"
+
+    if [ -z "${text:-}" ]
+    then
+        return 0
+    fi
+
+    IFS=" " read -r -a array_to_list <<< "$text"
+
+    ArrayToQuotedList array_to_list
+}
+
+StringToPath()
+{
+    local text="${!1}"
+
+    if [ -z "${text:-}" ]
+    then
+        return 0
+    fi
+
+    IFS=" " read -r -a array_to_list <<< "$text"
+
+    ArrayToPath array_to_list
+}
+
 shopt -s extglob
 
 EleInArray()
@@ -100,7 +207,7 @@ EleInArray()
     local ele="$1"
     shift
     local var=("$1"[@])
-    if [[ -z "${!var:-}" ]] 
+    if [[ -z "${!var:-}" ]]
     then
         return 1
     fi
@@ -110,11 +217,11 @@ EleInArray()
 
 printf()
 {
-    if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
+    if [ "${BASH_VERSINFO[0]}" -lt 4 ]
     then
-        if [[ "${3:-}" =~ \%\((.+)\)T ]] 
+        if [[ "${3:-}" =~ \%\((.+)\)T ]]
         then
-            if [ "${4:--1}" == "-1" ] 
+            if [ "${4:--1}" == "-1" ]
             then
                 read -r $2 < <(date +"${BASH_REMATCH[1]}")
             elif [ "$dist" == "mac" ] && ! type -p gdate &>/dev/null
@@ -125,9 +232,9 @@ printf()
             fi
 
             return 0
-        elif [[ "$1" =~ \%\((.+)\)T ]] 
+        elif [[ "$1" =~ \%\((.+)\)T ]]
         then
-            if [ "${2:--1}" == "-1" ] 
+            if [ "${2:--1}" == "-1" ]
             then
                 echo $(date +"${BASH_REMATCH[1]}")
             elif [ "$dist" == "mac" ] && ! type -p gdate &>/dev/null
@@ -148,12 +255,12 @@ CurlFake()
 {
     CurlImpersonateInstall
     local service_name="$1"
-    if [[ -x "${CURL_IMPERSONATE_FILE}-$service_name" ]] 
+    if [[ -x "${CURL_IMPERSONATE_FILE}-$service_name" ]]
     then
         shift
         "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
         return 0
-    elif [ "$service_name" == "xtream_codes" ] 
+    elif [ "$service_name" == "xtream_codes" ]
     then
         rm -f "${CURL_IMPERSONATE_FILE}-$service_name"
         awk '!x{x=sub(/dir=.*/,"dir='"$DEPENDS_ROOT/curl-impersonate"'")}1' "$DEPENDS_ROOT/curl-impersonate/curl_chrome99_android" > "${CURL_IMPERSONATE_FILE}-$service_name"
@@ -251,7 +358,7 @@ GetFreePort()
     then
         lport=$1
         uport=$2
-    elif [ "$dist" == "mac" ] 
+    elif [ "$dist" == "mac" ]
     then
         lport=1024
         uport=49151
@@ -259,7 +366,7 @@ GetFreePort()
         read lport uport < /proc/sys/net/ipv4/ip_local_port_range
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         DepInstall lsof
         while true
@@ -311,10 +418,10 @@ HandleTerm()
 {
     if [ -n "${term_child_pid:-}" ]
     then
-        if [ "${pkill:-0}" -eq 1 ] 
+        if [ "${pkill:-0}" -eq 1 ]
         then
             pkill -TERM -P "$term_child_pid" 2> /dev/null || true
-        elif [ "${force_exit:-0}" -eq 1 ] 
+        elif [ "${force_exit:-0}" -eq 1 ]
         then
             kill -9 "$term_child_pid" 2> /dev/null || true
         else
@@ -330,10 +437,10 @@ WaitTerm()
     term_child_pid=$!
     if [ "${term_kill_needed:-0}" -eq 1 ]
     then
-        if [ "${pkill:-0}" -eq 1 ] 
+        if [ "${pkill:-0}" -eq 1 ]
         then
             pkill -TERM -P "$term_child_pid" 2> /dev/null || true
-        elif [ "${force_exit:-0}" -eq 1 ] 
+        elif [ "${force_exit:-0}" -eq 1 ]
         then
             kill -9 "$term_child_pid" 2> /dev/null || true
         else
@@ -343,7 +450,7 @@ WaitTerm()
     wait $term_child_pid 2> /dev/null || term_signal=1
     trap - TERM
     wait $term_child_pid 2> /dev/null || true
-    if [ "${term_signal:-0}" -eq 1 ] 
+    if [ "${term_signal:-0}" -eq 1 ]
     then
         rm -rf "${delete_on_term:-notfound}"
         exit 1

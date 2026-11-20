@@ -2,7 +2,7 @@ ServiceControlIsActive()
 {
     exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
     service_label="$1"
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         if ! EleInArray "$service_label" exceptions
         then
@@ -19,7 +19,7 @@ ServiceControlIsActive()
             service_label="aios.$service_label"
         fi
         service_file="/etc/systemd/system/${service_label}.service"
-        if [ ! -f "$service_file" ] || ! systemctl is-active --quiet "$service_label" 
+        if [ ! -f "$service_file" ] || ! systemctl is-active --quiet "$service_label"
         then
             return 1
         fi
@@ -31,14 +31,14 @@ ServiceControlIsEnabled()
 {
     exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
     service_label="$1"
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         if ! EleInArray "$service_label" exceptions
         then
             service_label="com.aios.$service_label"
         fi
         service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
-        if [ ! -f "$service_file" ] 
+        if [ ! -f "$service_file" ]
         then
             return 1
         fi
@@ -48,7 +48,7 @@ ServiceControlIsEnabled()
             service_label="aios.$service_label"
         fi
         service_file="/etc/systemd/system/${service_label}.service"
-        if [ ! -f "$service_file" ] 
+        if [ ! -f "$service_file" ]
         then
             return 1
         fi
@@ -56,9 +56,29 @@ ServiceControlIsEnabled()
     return 0
 }
 
+ServiceControlStatus()
+{
+    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
+    service_label="$1"
+    if [ "$dist" == "mac" ]
+    then
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="com.aios.$service_label"
+        fi
+        launchctl print "gui/$UID/$service_label"
+    else
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="aios.$service_label"
+        fi
+        systemctl --no-pager -l status $service_label
+    fi
+}
+
 ServiceControlStart()
 {
-    if ServiceControlIsActive "$1" 
+    if ServiceControlIsActive "$1"
     then
         echo "服务已启动"
         return 0
@@ -67,21 +87,21 @@ ServiceControlStart()
     local var=("$2"[@])
     local args=() arg arr
 
-    if [[ -n "${!var:-}" ]] 
+    if [[ -n "${!var:-}" ]]
     then
         args=("${!var}")
-        if [[ ! -x "${args[0]}" ]] 
+        if [[ ! -x "${args[0]}" ]]
         then
             echo "${args[0]} 不存在"
             return 1
         fi
-    elif [ ! -f "$service_file" ] 
+    elif [ ! -f "$service_file" ]
     then
         echo "$service_file 不存在"
         return 1
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         if [ ! -f "$service_file" ] || [ -n "${3:-}" ]
         then
@@ -139,13 +159,13 @@ EOF
 
 ServiceControlStop()
 {
-    if ! ServiceControlIsActive "$1" 
+    if ! ServiceControlIsActive "$1"
     then
         echo "服务未启动"
         return 0
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         launchctl unload "$service_file"
     else
@@ -155,7 +175,7 @@ ServiceControlStop()
 
 ServiceControlRestart()
 {
-    if ServiceControlIsActive "$1" 
+    if ServiceControlIsActive "$1"
     then
         ServiceControlStop
     fi
@@ -165,12 +185,12 @@ ServiceControlRestart()
 
 ServiceControlDisable()
 {
-    if ServiceControlIsActive "$1" 
+    if ServiceControlIsActive "$1"
     then
         ServiceControlStop
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         rm -f "$service_file"
     else
@@ -185,7 +205,7 @@ ServiceControlRename()
 {
     local old_service_label="$1"
     local new_service_label="$2"
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         mv "$HOME/Library/LaunchAgents/com.aios.$old_service_label.plist" "$HOME/Library/LaunchAgents/com.aios.$new_service_label.plist"
     else
@@ -198,22 +218,25 @@ ServiceControl()
     local cmd=$1
     shift
     case $cmd in
-        is-active) 
+        is-active)
             ServiceControlIsActive "$@"
         ;;
-        is-enabled) 
+        is-enabled)
             ServiceControlIsEnabled "$@"
         ;;
-        start) 
+        status)
+            ServiceControlStatus "$@"
+        ;;
+        start)
             ServiceControlStart "$@"
         ;;
-        stop) 
+        stop)
             ServiceControlStop "$@"
         ;;
-        restart) 
+        restart)
             ServiceControlRestart "$@"
         ;;
-        disable) 
+        disable)
             ServiceControlDisable "$@"
         ;;
         rename)

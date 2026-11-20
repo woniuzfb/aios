@@ -11,20 +11,20 @@ ServiceBrowse()
     local root="$1" files=() lists=() lists_options=() lists_indices=() extra_options=() extra_commands=() lists_options_count lists_index file files_count depth=0 i
     shift
 
-    while [ -n "${1:-}" ] 
+    while [ -n "${1:-}" ]
     do
         extra_options+=("$1")
         extra_commands+=("$2")
         shift 2
     done
 
-    if [ ! -d "$root" ] 
+    if [ ! -d "$root" ]
     then
         Println "$error 无效的目录: $root\n"
         return 1
     fi
 
-    while true 
+    while true
     do
         lists_indices=()
         shopt -s nullglob
@@ -34,9 +34,9 @@ ServiceBrowse()
         # IFS=$'\n'
         # files=($(ls -1 "$@" "$root"))
 
-        if [[ -z "${files:-}" ]] 
+        if [[ -z "${files:-}" ]]
         then
-            if [ "$depth" -gt 0 ] 
+            if [ "$depth" -gt 0 ]
             then
                 root=${root%/*}
                 depth=$((depth-1))
@@ -51,14 +51,14 @@ ServiceBrowse()
         files_count=${#files[@]}
         lists=()
 
-        if [ "$depth" -gt 0 ] 
+        if [ "$depth" -gt 0 ]
         then
             lists+=("返回上级目录")
         fi
 
         for file in "${files[@]}"
         do
-            if [ -d "$root/$file" ] 
+            if [ -d "$root/$file" ]
             then
                 lists+=("$file/")
             else
@@ -69,16 +69,16 @@ ServiceBrowse()
         echo
         inquirer checkbox_input_indices "请选择" lists lists_indices 20
 
-        if [ "$depth" -gt 0 ] && [ "${#lists_indices[@]}" -eq 1 ] && [ "${lists_indices[0]}" -eq 0 ] 
+        if [ "$depth" -gt 0 ] && [ "${#lists_indices[@]}" -eq 1 ] && [ "${lists_indices[0]}" -eq 0 ]
         then
             root=${root%/*}
             depth=$((depth-1))
             continue
         fi
 
-        if [ "$depth" -gt 0 ] 
+        if [ "$depth" -gt 0 ]
         then
-            if [ "${lists_indices[0]}" -eq 0 ] 
+            if [ "${lists_indices[0]}" -eq 0 ]
             then
                 unset lists_indices[0]
                 lists_indices=("${lists_indices[@]}")
@@ -91,14 +91,14 @@ ServiceBrowse()
             done
         fi
 
-        if [ -n "${extra_options:-}" ] 
+        if [ -n "${extra_options:-}" ]
         then
             lists_options=( "${extra_options[@]}" )
         else
             lists_options=()
         fi
 
-        if [ "${#lists_indices[@]}" -eq 1 ] && [ -d "$root/${files[${lists_indices[0]}]}" ] 
+        if [ "${#lists_indices[@]}" -eq 1 ] && [ -d "$root/${files[${lists_indices[0]}]}" ]
         then
             lists_options+=( '重命名' '删除' '取消' )
             lists_options=( '进入' "${lists_options[@]}" )
@@ -108,11 +108,11 @@ ServiceBrowse()
 
         echo
         inquirer list_input_index "请选择" lists_options list_options_index
-        if [ "${lists_options[list_options_index]}" == "进入" ] 
+        if [ "${lists_options[list_options_index]}" == "进入" ]
         then
             root="$root/${files[${lists_indices[0]}]}"
             depth=$((depth+1))
-        elif [ "${lists_options[list_options_index]}" == "重命名" ] 
+        elif [ "${lists_options[list_options_index]}" == "重命名" ]
         then
             for lists_index in "${lists_indices[@]}"
             do
@@ -121,21 +121,25 @@ ServiceBrowse()
                 browse_list_rename_root="$root"
                 inquirer text_input "重命名 ${lists[lists_index]}" new_name "$browse_list_rename" ServiceBrowseRenameValidator "文件名已存在"
             done
-        elif [ "${lists_options[list_options_index]}" == "删除" ] 
+        elif [ "${lists_options[list_options_index]}" == "删除" ]
         then
             echo
             inquirer list_input_index "确认删除" ny_options ny_index
-            if [ "$ny_index" -eq 1 ] 
+            if [ "$ny_index" -eq 1 ]
             then
                 for lists_index in "${lists_indices[@]}"
                 do
                     rm -rf "$root/${files[${lists_indices[lists_index]}]:-notfound}"
                 done
             fi
-        elif [ "${lists_options[list_options_index]}" == "取消" ] 
+        elif [ "${lists_options[list_options_index]}" == "取消" ]
         then
+            if [ "$files_count" -eq 1 ] && [ "$depth" -eq 0 ]
+            then
+                return 0
+            fi
             continue
-        elif [ "${lists_options[0]}" == "进入" ] 
+        elif [ "${lists_options[0]}" == "进入" ]
         then
             "${extra_commands[list_options_index-1]}" "$root" "${lists_indices[@]}" || continue
         else

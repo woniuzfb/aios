@@ -373,54 +373,41 @@ ParseStream()
         then
             SetDelimiters
 
-            IFS=$'\004\t' read -r m_programs_program_id m_programs_program_num m_programs_streams_count m_programs_tags \
-            m_programs_streams_index m_streams_index m_streams_codec_name m_streams_codec_type m_streams_width m_streams_height \
-            m_streams_closed_captions m_streams_pix_fmt m_streams_field_order m_streams_r_frame_rate m_streams_channels \
-            m_streams_channel_layout m_streams_bit_rate m_streams_tags streams_count programs_count format_name \
-            m_format_tags < <(JQs flat "$probe" '' '. as $probe |
-            ($probe.programs // {} | if (.|type) == "string" then {} else . end) as $programs |
-            ($programs.streams // {} | if (.|type) == "string" then {} else . end) as $programs_streams |
-            ($probe.streams // {} | if (.|type) == "string" then {} else . end) as $streams |
-            ($probe.format // {} | if (.|type) == "string" then {} else . end) as $format |
-            reduce ({program_id,program_num,nb_streams}|keys_unsorted[]) as $key ([];
-                $programs[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-            ) + ($programs.tags | if . then
-                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
-                else
-                    ["\u0004"]
-                end
-            ) + ($programs_streams.index | if . then
-                    [(. + "\u0003\u0004")]
-                else
-                    ["\u0004"]
-                end
-            ) + reduce ({index,codec_name,codec_type,width,height,closed_captions,pix_fmt,field_order,r_frame_rate,channels,channel_layout,bit_rate}|keys_unsorted[]) as $key ([];
-                $streams[$key] as $val | if $val then
-                    . + [$val + "\u0002\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-            ) + ($streams.tags | if . then
-                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
-                else
-                    ["\u0004"]
-                end
-            ) + reduce ({nb_streams,nb_programs,format_name}|keys_unsorted[]) as $key ([];
-                $format[$key] as $val | if $val then
-                    . + [$val + "\u0004"]
-                else
-                    . + ["\u0004"]
-                end
-            ) + ($format.tags | if . then
-                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0002")|join("")+"\u0004")]
-                else
-                    ["\u0004"]
-                end
-            )|@tsv' "${delimiters[@]}")
+            jq_payload=$(JQs flat "$probe")
+
+            jq_path='[
+                ["programs","program_id"],
+                ["programs","program_num"],
+                ["programs","streams_count"],
+                ["programs","tags"],
+                ["programs","streams","index"],
+                ["streams","index"],
+                ["streams","codec_name"],
+                ["streams","codec_type"],
+                ["streams","width"],
+                ["streams","height"],
+                ["streams","closed_captions"],
+                ["streams","pix_fmt"],
+                ["streams","field_order"],
+                ["streams","r_frame_rate"],
+                ["streams","channels"],
+                ["streams","channel_layout"],
+                ["streams","bit_rate"],
+                ["streams","tags"],
+                ["format","nb_streams"],
+                ["format","nb_programs"],
+                ["format","format_name"],
+                ["format","tags"]
+            ]'
+
+            while IFS=": " read -r path_name value; do
+                var_name=${path_name}
+                read -r ${var_name?} <<< "$value"
+            done < <(JQs gets jq_payload)
+
+            streams_count="$jq_format_nb_streams"
+            programs_count="$jq_format_nb_programs"
+            format_name="$jq_format_format_name"
 
             if [ "$streams_count" -gt 0 ] 
             then
@@ -442,27 +429,20 @@ ParseStream()
                     is_hls=false
                 fi
 
-                IFS="${delimiters[1]}" read -r -a streams_index <<< "$m_streams_index"
-
-                streams_if_null=""
-                for stream_index in "${streams_index[@]}"
-                do
-                    streams_if_null="$streams_if_null${delimiters[1]}"
-                done
-
-                IFS="${delimiters[1]}" read -r -a streams_codec_name <<< "$m_streams_codec_name"
-                IFS="${delimiters[1]}" read -r -a streams_codec_type <<< "$m_streams_codec_type"
-                IFS="${delimiters[1]}" read -r -a streams_width <<< "${m_streams_width:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_height <<< "${m_streams_height:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_closed_captions <<< "${m_streams_closed_captions:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_pix_fmt <<< "${m_streams_pix_fmt:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_field_order <<< "${m_streams_field_order:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_r_frame_rate <<< "$m_streams_r_frame_rate"
-                IFS="${delimiters[1]}" read -r -a streams_channels <<< "${m_streams_channels:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_channel_layout <<< "${m_streams_channel_layout:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_bit_rate <<< "${m_streams_bit_rate:-$streams_if_null}"
-                IFS="${delimiters[1]}" read -r -a streams_tags <<< "$m_streams_tags"
-                IFS="${delimiters[1]}" read -r -a format_tags <<< "$m_format_tags"
+                IFS="${delimiters[2]}" read -r -a streams_index <<< "$jq_streams_index"
+                IFS="${delimiters[2]}" read -r -a streams_codec_name <<< "$jq_streams_codec_name"
+                IFS="${delimiters[2]}" read -r -a streams_codec_type <<< "$jq_streams_codec_type"
+                IFS="${delimiters[2]}" read -r -a streams_width <<< "$jq_streams_width"
+                IFS="${delimiters[2]}" read -r -a streams_height <<< "$jq_streams_height"
+                IFS="${delimiters[2]}" read -r -a streams_closed_captions <<< "$jq_streams_closed_captions"
+                IFS="${delimiters[2]}" read -r -a streams_pix_fmt <<< "$jq_streams_pix_fmt"
+                IFS="${delimiters[2]}" read -r -a streams_field_order <<< "$jq_streams_field_order"
+                IFS="${delimiters[2]}" read -r -a streams_r_frame_rate <<< "$jq_streams_r_frame_rate"
+                IFS="${delimiters[2]}" read -r -a streams_channels <<< "$jq_streams_channels"
+                IFS="${delimiters[2]}" read -r -a streams_channel_layout <<< "$jq_streams_channel_layout"
+                IFS="${delimiters[2]}" read -r -a streams_bit_rate <<< "$jq_streams_bit_rate"
+                IFS="${delimiters[2]}" read -r -a streams_tags <<< "$jq_streams_tags"
+                IFS="${delimiters[2]}" read -r -a format_tags <<< "$jq_format_tags"
 
                 if [ -n "${format_tags:-}" ] 
                 then
@@ -470,7 +450,7 @@ ParseStream()
 
                     for format_tag in "${format_tags[@]}"
                     do
-                        format_tags_list="$format_tags_list${format_tag//${delimiters[0]}/: }\n"
+                        format_tags_list="$format_tags_list${format_tag//${delimiters[3]}/: }\n"
                     done
 
                     Println "格式标签:\n$format_tags_list"
@@ -480,10 +460,10 @@ ParseStream()
  
                 if [ "$programs_count" -gt 0 ] 
                 then
-                    IFS="${delimiters[1]}" read -r -a programs_program_id <<< "$m_programs_program_id"
-                    IFS="${delimiters[1]}" read -r -a programs_program_num <<< "$m_programs_program_num"
-                    IFS="${delimiters[1]}" read -r -a programs_streams_count <<< "$m_programs_streams_count"
-                    IFS="${delimiters[1]}" read -r -a programs_tags <<< "$m_programs_tags"
+                    IFS="${delimiters[2]}" read -r -a programs_program_id <<< "$jq_programs_program_id"
+                    IFS="${delimiters[2]}" read -r -a programs_program_num <<< "$jq_programs_program_num"
+                    IFS="${delimiters[2]}" read -r -a programs_streams_count <<< "$jq_programs_streams_count"
+                    IFS="${delimiters[2]}" read -r -a programs_tags <<< "$jq_programs_tags"
 
                     programs_tags_list=()
 
@@ -491,10 +471,10 @@ ParseStream()
                     then
                         for programs_tag in "${programs_tags[@]}"
                         do
-                            programs_tag_key="${programs_tag%${delimiters[0]}*}"
-                            programs_tag_value="${programs_tag#*${delimiters[0]}}"
+                            programs_tag_key="${programs_tag%${delimiters[3]}*}"
+                            programs_tag_value="${programs_tag#*${delimiters[3]}}"
 
-                            IFS="${delimiters[2]}" read -r -a programs_tag_arr <<< "$programs_tag_value"
+                            IFS="${delimiters[3]}" read -r -a programs_tag_arr <<< "$programs_tag_value"
 
                             for((programs_i=0;programs_i<${#programs_tag_arr[@]};programs_i++));
                             do
@@ -508,7 +488,7 @@ ParseStream()
                         done
                     fi
 
-                    IFS="${delimiters[2]}" read -r -a programs_streams_index <<< "${m_programs_streams_index:-$programs_tags_if_null}"
+                    IFS="${delimiters[3]}" read -r -a programs_streams_index <<< "${jq_programs_streams_index}"
 
                     programs_list=""
 
@@ -524,7 +504,7 @@ ParseStream()
 
                         program_streams_index="${programs_streams_index[programs_i]}"
 
-                        IFS="${delimiters[1]}" read -r -a program_streams_indices <<< "$program_streams_index"
+                        IFS="${delimiters[4]}" read -r -a program_streams_indices <<< "$program_streams_index"
 
                         for((program_streams_i=0;program_streams_i<program_streams_count;program_streams_i++));
                         do
@@ -545,10 +525,10 @@ ParseStream()
                 then
                     for streams_tag in "${streams_tags[@]}"
                     do
-                        streams_tag_key="${streams_tag%${delimiters[0]}*}"
-                        streams_tag_value="${streams_tag#*${delimiters[0]}}"
+                        streams_tag_key="${streams_tag%${delimiters[3]}*}"
+                        streams_tag_value="${streams_tag#*${delimiters[3]}}"
 
-                        IFS="${delimiters[2]}" read -r -a streams_tag_arr <<< "$streams_tag_value"
+                        IFS="${delimiters[3]}" read -r -a streams_tag_arr <<< "$streams_tag_value"
 
                         for((streams_i=0;streams_i<${#streams_tag_arr[@]};streams_i++));
                         do

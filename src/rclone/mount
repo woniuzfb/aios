@@ -11,12 +11,9 @@ RcloneMountView()
         return 1
     fi
 
-    IFS="${delimiters[1]}" read -r -a rclone_remote_paths <<< "${rclone_remotes_path[rclone_remotes_index]}"
-    IFS="${delimiters[1]}" read -r -a rclone_remote_mount_paths <<< "${rclone_remotes_mount_path[rclone_remotes_index]}"
-
-    new_flag=("${rclone_remote_paths[@]//*/}")
-    flag_if_null=$(JoinByChar "${delimiters[1]}" "${new_flag[@]}")
-    IFS="${delimiters[1]}" read -r -a rclone_remote_mount_flags <<< "${rclone_remotes_mount_flag[rclone_remotes_index]:-$flag_if_null}${delimiters[1]}"
+    IFS="${delimiters[5]}" read -r -a rclone_remote_paths <<< "${rclone_remotes_path[rclone_remotes_index]}"
+    IFS="${delimiters[5]}" read -r -a rclone_remote_mount_paths <<< "${rclone_remotes_mount_path[rclone_remotes_index]}"
+    IFS="${delimiters[5]}" read -r -a rclone_remote_mount_flags <<< "${rclone_remotes_mount_flag[rclone_remotes_index]}"
 
     rclone_remote_mount_count=${#rclone_remote_paths[@]}
 

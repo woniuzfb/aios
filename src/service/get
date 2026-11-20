@@ -33,9 +33,9 @@ ServiceGet()
             _4gtv_acc_pass="$jq_4gtv_accounts_password"
             _4gtv_acc_token="$jq_4gtv_accounts_token"
 
-            IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
-            IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
-            IFS="${delimiters[1]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
+            IFS="${delimiters[2]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+            IFS="${delimiters[2]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+            IFS="${delimiters[2]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
 
             _4gtv_accs_count=${#_4gtv_accs_email[@]}
         ;;
@@ -53,8 +53,8 @@ ServiceGet()
                 read -r ${var_name?} <<< "$value"
             done < <(JQs gets jq_payload)
 
-            IFS="${delimiters[1]}" read -r -a openlists_name <<< "$jq_openlist_name"
-            IFS="${delimiters[1]}" read -r -a openlists_url <<< "$jq_openlist_url"
+            IFS="${delimiters[2]}" read -r -a openlists_name <<< "$jq_openlist_name"
+            IFS="${delimiters[2]}" read -r -a openlists_url <<< "$jq_openlist_url"
             IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
             IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
             IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
@@ -79,13 +79,13 @@ ServiceGet()
                     read -r ${var_name?} <<< "$value"
                 done < <(JQs gets jq_payload)
 
-                IFS="${delimiters[1]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
-                IFS="${delimiters[1]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
-                IFS="${delimiters[1]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
-                IFS="${delimiters[1]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
-                IFS="${delimiters[1]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
-                IFS="${delimiters[2]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_user"
-                IFS="${delimiters[2]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_pass"
+                IFS="${delimiters[3]}" read -r -a rclone_serves_remote <<< "$jq_rclone_serve_remote"
+                IFS="${delimiters[3]}" read -r -a rclone_serves_protocol <<< "$jq_rclone_serve_protocol"
+                IFS="${delimiters[3]}" read -r -a rclone_serves_addr <<< "$jq_rclone_serve_addr"
+                IFS="${delimiters[3]}" read -r -a rclone_serves_htpasswd <<< "$jq_rclone_serve_htpasswd"
+                IFS="${delimiters[3]}" read -r -a rclone_serves_args <<< "$jq_rclone_serve_args"
+                IFS="${delimiters[4]}" read -r -a rclone_serves_user <<< "$jq_rclone_serve_accs_user"
+                IFS="${delimiters[4]}" read -r -a rclone_serves_pass <<< "$jq_rclone_serve_accs_pass"
 
                 rclone_serves_count=${#rclone_serves_remote[@]}
             ;;
@@ -105,13 +105,13 @@ ServiceGet()
                     read -r ${var_name?} <<< "$value"
                 done < <(JQs gets jq_payload)
 
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
-                IFS="${delimiters[1]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_rsync <<< "$jq_rclone_sync_rsync"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_source <<< "$jq_rclone_sync_source"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_target <<< "$jq_rclone_sync_target"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_args <<< "$jq_rclone_sync_args"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_exclude_before <<< "$jq_rclone_sync_exclude_before"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_include <<< "$jq_rclone_sync_include"
+                IFS="${delimiters[3]}" read -r -a rclone_syncs_exclude_after <<< "$jq_rclone_sync_exclude_after"
 
                 rclone_syncs_count=${#rclone_syncs_rsync[@]}
             ;;
@@ -133,18 +133,15 @@ ServiceGet()
                     read -r ${var_name?} <<< "$value"
                 done < <(JQs gets jq_payload)
 
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
-                IFS="${delimiters[1]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
-
-                new_flags=("${rclone_remotes_mount_path[@]//*/}")
-                flags_if_null=$(JoinByChar "${delimiters[2]}" "${new_flags[@]}")
-                IFS="${delimiters[2]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags:-$flags_if_null}${delimiters[2]}"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_name <<< "$jq_rclone_remote_name"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_type <<< "$jq_rclone_remote_type"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_url <<< "$jq_rclone_remote_url"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_vendor <<< "$jq_rclone_remote_vendor"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_user <<< "$jq_rclone_remote_user"
+                IFS="${delimiters[3]}" read -r -a rclone_remotes_pass <<< "$jq_rclone_remote_pass"
+                IFS="${delimiters[4]}" read -r -a rclone_remotes_path <<< "$jq_rclone_remote_mount_path"
+                IFS="${delimiters[4]}" read -r -a rclone_remotes_mount_path <<< "$jq_rclone_remote_mount_mount_path"
+                IFS="${delimiters[4]}" read -r -a rclone_remotes_mount_flag <<< "${jq_rclone_remote_mount_flags}"
 
                 rclone_remotes_count=${#rclone_remotes_name[@]}
             ;;
@@ -169,7 +166,7 @@ ServiceGet()
             kcc_args="$jq_kcc_args"
             kcc_output="$jq_kcc_output"
 
-            IFS="${delimiters[1]}" read -r -a kcc_sources <<< "$jq_kcc_source"
+            IFS="${delimiters[2]}" read -r -a kcc_sources <<< "$jq_kcc_source"
         ;;
         iperf)
             jq_path='[
@@ -184,10 +181,10 @@ ServiceGet()
                 read -r ${var_name?} <<< "$value"
             done < <(JQs gets jq_payload)
 
-            IFS="${delimiters[1]}" read -r -a iperf_names <<< "$jq_iperf_name"
-            IFS="${delimiters[1]}" read -r -a iperf_types <<< "$jq_iperf_type"
-            IFS="${delimiters[1]}" read -r -a iperf_targets <<< "$jq_iperf_target"
-            IFS="${delimiters[1]}" read -r -a iperf_args <<< "$jq_iperf_args"
+            IFS="${delimiters[2]}" read -r -a iperf_names <<< "$jq_iperf_name"
+            IFS="${delimiters[2]}" read -r -a iperf_types <<< "$jq_iperf_type"
+            IFS="${delimiters[2]}" read -r -a iperf_targets <<< "$jq_iperf_target"
+            IFS="${delimiters[2]}" read -r -a iperf_args <<< "$jq_iperf_args"
 
             iperf_count=${#iperf_types[@]}
         ;;
@@ -215,20 +212,20 @@ ServiceGet()
                 return 0
             fi
 
-            IFS="${delimiters[1]}" read -r -a ts_accs_user_name <<< "$m_user_name"
+            IFS="${delimiters[3]}" read -r -a ts_accs_user_name <<< "$m_user_name"
 
             if [ -z "$m_phone_number" ] 
             then
                 ts_accs_phone_number=("${ts_accs_user_name[@]//*/}")
             else
-                IFS="${delimiters[1]}" read -r -a ts_accs_phone_number <<< "$m_phone_number"
+                IFS="${delimiters[3]}" read -r -a ts_accs_phone_number <<< "$m_phone_number"
             fi
 
-            IFS="${delimiters[1]}" read -r -a ts_accs_password <<< "$m_password"
-            IFS="${delimiters[1]}" read -r -a ts_accs_access_token <<< "$m_access_token"
-            IFS="${delimiters[1]}" read -r -a ts_accs_device_no <<< "$m_device_no"
-            IFS="${delimiters[1]}" read -r -a ts_accs_device_id <<< "$m_device_id"
-            IFS="${delimiters[1]}" read -r -a ts_accs_refresh <<< "$m_refresh"
+            IFS="${delimiters[3]}" read -r -a ts_accs_password <<< "$m_password"
+            IFS="${delimiters[3]}" read -r -a ts_accs_access_token <<< "$m_access_token"
+            IFS="${delimiters[3]}" read -r -a ts_accs_device_no <<< "$m_device_no"
+            IFS="${delimiters[3]}" read -r -a ts_accs_device_id <<< "$m_device_id"
+            IFS="${delimiters[3]}" read -r -a ts_accs_refresh <<< "$m_refresh"
 
             ts_accs_count=${#ts_accs_user_name[@]}
         ;;

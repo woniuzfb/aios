@@ -1,0 +1,82 @@
+V2rayGetTransport()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$V2_CONFIG" '.transport')
+
+    jq_path='[
+        ["tcpSettings","acceptProxyProtocol"],
+        ["tcpSettings","header","type"],
+        ["kcpSettings","mtu"],
+        ["kcpSettings","tti"],
+        ["kcpSettings","uplinkCapacity"],
+        ["kcpSettings","downlinkCapacity"],
+        ["kcpSettings","congestion"],
+        ["kcpSettings","readBufferSize"],
+        ["kcpSettings","writeBufferSize"],
+        ["kcpSettings","header","type"],
+        ["kcpSettings","seed"],
+        ["wsSettings","acceptProxyProtocol"],
+        ["wsSettings","path"],
+        ["wsSettings","headers"],
+        ["wsSettings","maxEarlyData"],
+        ["wsSettings","useBrowserForwarding"],
+        ["wsSettings","earlyDataHeaderName"],
+        ["httpSettings","host"],
+        ["httpSettings","path"],
+        ["httpSettings","method"],
+        ["httpSettings","headers"],
+        ["quicSettings","security"],
+        ["quicSettings","key"],
+        ["quicSettings","header","type"],
+        ["dsSettings","path"],
+        ["dsSettings","abstract"],
+        ["dsSettings","padding"],
+        ["hy2steriaSettings","password"],
+        ["hy2steriaSettings","use_udp_extension"],
+        ["hy2steriaSettings","congestion","type"],
+        ["hy2steriaSettings","congestion","up_mbps"],
+        ["hy2steriaSettings","congestion","down_mbps"],
+        ["grpcSettings","serviceName"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_transport_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    transport_tcpSettings_acceptProxyProtocol=${jq_transport_tcpSettings_acceptProxyProtocol:-false}
+    transport_tcpSettings_header_type=${jq_transport_tcpSettings_header_type:-none}
+    transport_kcpSettings_mtu=${jq_transport_kcpSettings_mtu:-1350}
+    transport_kcpSettings_tti=${jq_transport_kcpSettings_tti:-50}
+    transport_kcpSettings_uplinkCapacity=${jq_transport_kcpSettings_uplinkCapacity:-5}
+    transport_kcpSettings_downlinkCapacity=${jq_transport_kcpSettings_downlinkCapacity:-20}
+    transport_kcpSettings_congestion=${jq_transport_kcpSettings_congestion:-false}
+    transport_kcpSettings_readBufferSize=${jq_transport_kcpSettings_readBufferSize:-2}
+    transport_kcpSettings_writeBufferSize=${jq_transport_kcpSettings_writeBufferSize:-2}
+    transport_kcpSettings_header_type=${jq_transport_kcpSettings_header_type:-none}
+    transport_kcpSettings_seed=${jq_transport_kcpSettings_seed:-}
+    transport_wsSettings_acceptProxyProtocol=${jq_transport_wsSettings_acceptProxyProtocol:-false}
+    transport_wsSettings_path=${jq_transport_wsSettings_path:-/}
+    transport_wsSettings_headers=${jq_transport_wsSettings_headers:-}
+    transport_wsSettings_maxEarlyData=${jq_transport_wsSettings_maxEarlyData:-0}
+    transport_wsSettings_useBrowserForwarding=${jq_transport_wsSettings_useBrowserForwarding:-false}
+    transport_wsSettings_earlyDataHeaderName=${jq_transport_wsSettings_earlyDataHeaderName:-}
+    transport_httpSettings_host=${jq_transport_wsSettings_host:-}
+    transport_httpSettings_path=${jq_transport_wsSettings_path:-/}
+    transport_httpSettings_method=${jq_transport_wsSettings_method:-PUT}
+    transport_httpSettings_headers=${jq_transport_wsSettings_headers:-}
+    transport_quicSettings_security=${jq_transport_quicSettings_security:-none}
+    transport_quicSettings_key=${jq_transport_quicSettings_key:-}
+    transport_quicSettings_header_type=${jq_transport_quicSettings_header_type:-none}
+    transport_dsSettings_path=${jq_transport_dsSettings_path:-}
+    transport_dsSettings_abstract=${jq_transport_dsSettings_abstract:-false}
+    transport_dsSettings_padding=${jq_transport_dsSettings_padding:-false}
+    transport_hy2steriaSettings_password=${jq_transport_hy2steriaSettings_password:-}
+    transport_hy2steriaSettings_use_udp_extension=${jq_transport_hy2steriaSettings_use_udp_extension:-false}
+    transport_hy2steriaSettings_congestion_type=${jq_transport_hy2steriaSettings_congestion_type:-bbr}
+    transport_hy2steriaSettings_congestion_up_mbps=${jq_transport_hy2steriaSettings_congestion_up_mbps:-0}
+    transport_hy2steriaSettings_congestion_down_mbps=${jq_transport_hy2steriaSettings_congestion_down_mbps:-0}
+    transport_grpcSettings_serviceName=${jq_transport_grpcSettings_serviceName:-}
+
+}

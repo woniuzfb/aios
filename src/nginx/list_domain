@@ -4,7 +4,7 @@ NginxListDomain()
 
     NginxListDomains
 
-    if [ "$nginx_domains_count" -eq 0 ] 
+    if [ "$nginx_domains_count" -eq 0 ]
     then
         Println "$error 没有域名\n"
         exit 1
@@ -14,7 +14,7 @@ NginxListDomain()
     NginxParseConfig ${nginx_domains[nginx_domains_index]}
     NginxGetConfig
 
-    if [ "$level_3_d1_count" -eq 0 ] 
+    if [ "$level_3_d1_count" -eq 0 ]
     then
         Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
         exit 1
@@ -32,34 +32,34 @@ NginxListDomain()
     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
     level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
-    IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
-    IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
+    IFS="${delimiters[4]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1"
+    IFS="${delimiters[5]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1"
+    IFS="${delimiters[5]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1"
 
-    if [ "$level_4_d1_count" -gt 0 ] 
+    if [ "$level_4_d1_count" -gt 0 ]
     then
         level_4_directive_d1=${level_4_directive_arr[level_1_index]}
         level_4_args_d1=${level_4_args_arr[level_1_index]}
-        IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
-        IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
+        IFS="${delimiters[6]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1"
+        IFS="${delimiters[6]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1"
     fi
 
     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
     do
-        if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+        if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ]
         then
             level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
             level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-            IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
-            IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
+            IFS="${delimiters[6]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2"
+            IFS="${delimiters[6]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2"
 
             if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
             then
                 level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                 level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-                IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
-                IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
+                IFS="${delimiters[7]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2"
+                IFS="${delimiters[7]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2"
             fi
 
             nginx_domain_servers_count=$((nginx_domain_servers_count+1))
@@ -76,33 +76,33 @@ NginxListDomain()
                 level_3_directive=${level_3_directive_d2_arr[level_3_index]}
                 level_3_args=${level_3_args_d2_arr[level_3_index]}
 
-                if [ "$level_3_directive" == "listen" ] 
+                if [ "$level_3_directive" == "listen" ]
                 then
                     [ -n "$nginx_domain_server_listen_list" ] && nginx_domain_server_listen_list="$nginx_domain_server_listen_list, "
-                    nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
-                elif [ "$level_3_directive" == "server_name" ] 
+                    nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[7]}/ }"
+                elif [ "$level_3_directive" == "server_name" ]
                 then
                     [ -n "$nginx_domain_server_name_list" ] && nginx_domain_server_name_list="$nginx_domain_server_name_list, "
-                    nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
-                elif [ "$level_3_directive" == "location" ] 
+                    nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[7]}/, }"
+                elif [ "$level_3_directive" == "location" ]
                 then
-                    if [ "${level_3_args}" == "/flv" ] 
+                    if [ "${level_3_args}" == "/flv" ]
                     then
                         nginx_domain_server_flv_status="${green}已配置${normal}"
                     elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                     then
                         level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                         level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
-                        IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
-                        IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
+                        IFS="${delimiters[8]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
+                        IFS="${delimiters[8]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                        if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                        if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ]
                         then
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do
-                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ]
                                 then
-                                    if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]] 
+                                    if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
                                     then
                                         nginx_domain_server_nodejs_status="${green}已配置${normal}"
                                         skip_find_nodejs=1
@@ -110,13 +110,13 @@ NginxListDomain()
                                     break
                                 fi
                             done
-                        elif [ "${level_3_args}" == "/" ] 
+                        elif [ "${level_3_args}" == "/" ]
                         then
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do
-                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "root" ] 
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "root" ]
                                 then
-                                    if [ "${level_4_args_d3_arr[level_4_index]:0:1}" == "/" ] 
+                                    if [ "${level_4_args_d3_arr[level_4_index]:0:1}" == "/" ]
                                     then
                                         server_root=${level_4_args_d3_arr[level_4_index]}
                                     else
@@ -127,9 +127,9 @@ NginxListDomain()
                             done
                         fi
                     fi
-                elif [ "$level_3_directive" == "root" ] 
+                elif [ "$level_3_directive" == "root" ]
                 then
-                    if [ "${level_3_args_d2_arr[level_3_index]:0:1}" == "/" ] 
+                    if [ "${level_3_args_d2_arr[level_3_index]:0:1}" == "/" ]
                     then
                         server_root=${level_3_args_d2_arr[level_3_index]}
                     else
@@ -144,7 +144,7 @@ NginxListDomain()
         fi
     done
 
-    if [ "$nginx_domain_servers_count" -eq 0 ] 
+    if [ "$nginx_domain_servers_count" -eq 0 ]
     then
         Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
         exit 1

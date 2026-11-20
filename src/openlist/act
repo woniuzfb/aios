@@ -17,7 +17,7 @@ OpenListAct()
         then
             openlist_accs_count=0
         else
-            IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+            IFS="${delimiters[3]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
             openlist_accs_count=${#openlist_accs_username[@]}
         fi
         openlists_txt="$openlists_txt\n${green}$((openlists_index+1)).${normal}${indent_6}名称: ${openlists_name[openlists_index]:-无}\n${indent_6}地址: ${openlists_url[openlists_index]}\n${indent_6}账号: ${openlist_accs_count}个\n"
@@ -34,13 +34,9 @@ OpenListAct()
         exit 1
     fi
 
-    IFS="${delimiters[1]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
-
-    new_arr=("${openlist_accs_username[@]//*/}")
-    openlist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
-
-    IFS="${delimiters[1]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]:-$openlist_if_null}${delimiters[1]}"
-    IFS="${delimiters[1]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]:-$openlist_if_null}${delimiters[1]}"
+    IFS="${delimiters[3]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
+    IFS="${delimiters[3]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]}"
+    IFS="${delimiters[3]}" read -ra openlist_accs_token <<< "${openlists_acc_token[openlists_index]}"
 
     openlist_accs_count=${#openlist_accs_username[@]}
 
@@ -89,8 +85,8 @@ OpenListAct()
             fi
         elif [ -n "$content_name" ] 
         then
-            IFS="${delimiters[1]}" read -ra openlist_files_name <<< "$content_name"
-            IFS="${delimiters[1]}" read -ra openlist_files_is_dir <<< "$content_is_dir"
+            IFS="${delimiters[3]}" read -ra openlist_files_name <<< "$content_name"
+            IFS="${delimiters[3]}" read -ra openlist_files_is_dir <<< "$content_is_dir"
 
             openlist_files_count=${#openlist_files_name[@]}
         else

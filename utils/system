@@ -7,29 +7,29 @@ DistCheck()
 
     for dist_file in "${dist_files[@]}"
     do
-        if [ ! -s "$dist_file" ] 
+        if [ ! -s "$dist_file" ]
         then
             continue
         fi
 
-        if grep -qi "Ubuntu" < "$dist_file" 
+        if grep -qi "Ubuntu" < "$dist_file"
         then
             dist="ubu"
             break
-        elif grep -qi "Debian" < "$dist_file" 
+        elif grep -qi "Debian" < "$dist_file"
         then
             dist="deb"
             break
-        elif grep -Eqi "Red Hat|redhat|rhel|CentOS|Fedora|Amazon" < "$dist_file" 
+        elif grep -Eqi "Red Hat|redhat|rhel|CentOS|Fedora|Amazon" < "$dist_file"
         then
             dist="rpm"
             break
         fi
     done
 
-    if [ -z "$dist" ] 
+    if [ -z "$dist" ]
     then
-        if [[ $OSTYPE =~ darwin ]] || [[ $(uname | tr '[:upper:]' '[:lower:]') =~ darwin ]] 
+        if [[ $OSTYPE =~ darwin ]] || [[ $(uname | tr '[:upper:]' '[:lower:]') =~ darwin ]]
         then
             dist="mac"
         else
@@ -45,25 +45,25 @@ ArchCheck()
 
     arch=$(uname -m)
 
-    if grep -Eqi "x86_64|amd64" <<< "$arch" 
+    if grep -Eqi "x86_64|amd64" <<< "$arch"
     then
         arch="x86_64"
-    elif grep -Eqi "i386|i686|x86" <<< "$arch" 
+    elif grep -Eqi "i386|i686|x86" <<< "$arch"
     then
         arch="i386"
-    elif grep -Eqi "aarch64|armv8|arm64" <<< "$arch" 
+    elif grep -Eqi "aarch64|armv8|arm64" <<< "$arch"
     then
         arch="arm64"
-    elif grep -qi "armv7" <<< "$arch" 
+    elif grep -qi "armv7" <<< "$arch"
     then
         arch="armhf"
-    elif grep -qi "armv6" <<< "$arch" 
+    elif grep -qi "armv6" <<< "$arch"
     then
         arch="armv6l"
-    elif grep -qi "arm" <<< "$arch" 
+    elif grep -qi "arm" <<< "$arch"
     then
         arch="armel"
-    elif grep -qi "s390" <<< "$arch" 
+    elif grep -qi "s390" <<< "$arch"
     then
         arch="s390x"
     fi
@@ -71,12 +71,12 @@ ArchCheck()
 
 DebFixSources()
 {
-    if [ "${deb_fix:-1}" -eq 1 ] 
+    if [ "${deb_fix:-1}" -eq 1 ]
     then
         sed -i 's/^mozilla\/DST_Root_CA_X3.crt/!mozilla\/DST_Root_CA_X3.crt/g' /etc/ca-certificates.conf
         update-ca-certificates -f >/dev/null 2>&1 || true
 
-        if [ -f /etc/apt/sources.list.d/sources-aliyun-0.list ] 
+        if [ -f /etc/apt/sources.list.d/sources-aliyun-0.list ]
         then
             deb_list=$(< /etc/apt/sources.list.d/sources-aliyun-0.list)
             rm -f /etc/apt/sources.list.d/sources-aliyun-0.list
@@ -95,7 +95,7 @@ deb http://security.debian.org jessie/updates main
 deb-src http://security.debian.org jessie/updates main
 EOF
             apt-get clean >/dev/null 2>&1
-        elif grep -q "wheezy" <<< "$deb_list" 
+        elif grep -q "wheezy" <<< "$deb_list"
         then
 cat > /etc/apt/sources.list <<EOF
 deb http://archive.debian.org/debian/ wheezy main
@@ -115,7 +115,7 @@ EOF
 
 AptUpdate()
 {
-    if [ "${apt_updated:-false}" = false ] 
+    if [ "${apt_updated:-false}" = false ]
     then
         Println "$info 更新软件包列表..."
         apt-get update --allow-releaseinfo-change >/dev/null
@@ -138,7 +138,7 @@ BrewInstall()
             export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles"
             export HOMEBREW_API_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles/api"
 
-            if ! curl -s -S -Lm 20 https://mirrors.ustc.edu.cn/misc/brew-install.sh | bash 
+            if ! curl -s -S -Lm 20 https://mirrors.ustc.edu.cn/misc/brew-install.sh | bash
             then
                 Println "${green}[ERROR]${normal} 无法安装 Homebrew\n"
                 return 1
@@ -162,15 +162,15 @@ DepInstall()
     then
         Println "${green}[INFO]${normal} Installing $dependency, it takes awhile..."
 
-        if [ "$dist" == "mac" ] 
+        if [ "$dist" == "mac" ]
         then
-            if [ "$dependency" == "gsed" ] 
+            if [ "$dependency" == "gsed" ]
             then
                 dependency=gnu-sed
-            elif [ "$dependency" == "gdate" ] 
+            elif [ "$dependency" == "gdate" ]
             then
                 dependency=coreutils
-            elif [ "$dependency" == "ggrep" ] 
+            elif [ "$dependency" == "ggrep" ]
             then
                 dependency=grep
             fi
@@ -185,7 +185,7 @@ DepInstall()
                     return 1
                 fi
             fi
-        elif [ "$dist" == "rpm" ] 
+        elif [ "$dist" == "rpm" ]
         then
             if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
             then
@@ -203,7 +203,7 @@ DepInstall()
                 fi
             fi
         else
-            if [ "$dist" == "deb" ] 
+            if [ "$dist" == "deb" ]
             then
                 DebFixSources
             fi
@@ -224,9 +224,9 @@ DepInstall()
         return 0
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
-        if [ "$dependency" == "tput" ] 
+        if [ "$dependency" == "tput" ]
         then
             dependency="ncurses"
         fi
@@ -242,23 +242,23 @@ DepInstall()
                 return 1
             fi
         fi
-    elif [ "$dist" == "rpm" ] 
+    elif [ "$dist" == "rpm" ]
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
             setenforce 0
         fi
 
-        if [ "$dependency" == "dig" ] 
+        if [ "$dependency" == "dig" ]
         then
             dependency="bind-utils"
-        elif [ "$dependency" == "hexdump" ] 
+        elif [ "$dependency" == "hexdump" ]
         then
             dependency="util-linux"
-        elif [ "$dependency" == "ss" ] 
+        elif [ "$dependency" == "ss" ]
         then
             dependency="iproute"
-        elif [ "$dependency" == "tput" ] 
+        elif [ "$dependency" == "tput" ]
         then
             dependency="ncurses"
         fi
@@ -275,21 +275,21 @@ DepInstall()
             fi
         fi
     else
-        if [ "$dist" == "deb" ] 
+        if [ "$dist" == "deb" ]
         then
             DebFixSources
         fi
 
-        if [ "$dependency" == "dig" ] 
+        if [ "$dependency" == "dig" ]
         then
             dependency="dnsutils"
-        elif [ "$dependency" == "hexdump" ] 
+        elif [ "$dependency" == "hexdump" ]
         then
             dependency="bsdmainutils"
-        elif [ "$dependency" == "ss" ] 
+        elif [ "$dependency" == "ss" ]
         then
             dependency="iproute2"
-        elif [ "$dependency" == "tput" ] 
+        elif [ "$dependency" == "tput" ]
         then
             dependency="ncurses-bin"
         fi
@@ -311,7 +311,7 @@ DepInstall()
 
 DepsCheck()
 {
-    if [ "${deps_checked:-false}" = true ] 
+    if [ "${deps_checked:-false}" = true ]
     then
         return 0
     fi
@@ -325,7 +325,7 @@ DepsCheck()
 
 DepsInstall()
 {
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         depends=(wget unzip vim curl patchutils)
 
@@ -343,7 +343,7 @@ DepsInstall()
                 fi
             fi
         done
-    elif [ "$dist" == "rpm" ] 
+    elif [ "$dist" == "rpm" ]
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
@@ -352,7 +352,7 @@ DepsInstall()
 
         depends=(sudo wget unzip vim curl crond logrotate patch nscd bind-utils util-linux iproute ncurses)
 
-        if [ "${rpm_fix:-1}" -eq 1 ] 
+        if [ "${rpm_fix:-1}" -eq 1 ]
         then
             yum -y update ca-certificates &> /dev/null || yum -y reinstall ca-certificates &> /dev/null
             rpm_fix=0
@@ -365,7 +365,7 @@ DepsInstall()
             [[ -x $(command -v $depend) ]] && continue
             if ! rpm -q "$depend" &> /dev/null
             then
-                if yum -y install "$depend" &> /dev/null 
+                if yum -y install "$depend" &> /dev/null
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
@@ -375,7 +375,7 @@ DepsInstall()
             fi
         done
     else
-        if [ "$dist" == "deb" ] 
+        if [ "$dist" == "deb" ]
         then
             DebFixSources
         fi
@@ -403,12 +403,12 @@ DepsInstall()
 
 ResourceLimit()
 {
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         return 0
     fi
 
-    if [ ! -e /proc/sys/fs/file-max ] 
+    if [ ! -e /proc/sys/fs/file-max ]
     then
         echo 65536 > /proc/sys/fs/file-max
         echo "fs.file-max=65536" >> /etc/sysctl.conf
@@ -416,7 +416,7 @@ ResourceLimit()
 
     file_max=$(< /proc/sys/fs/file-max)
 
-    if [ "$file_max" -lt 65000 ] 
+    if [ "$file_max" -lt 65000 ]
     then
         file_max=$((file_max*95/100))
     else
@@ -443,13 +443,13 @@ ResourceLimit()
     limits_append=""
     for limit in "${limits[@]}"
     do
-        if ! grep -q "${limit% *}" < "/etc/security/limits.conf" 
+        if ! grep -q "${limit% *}" < "/etc/security/limits.conf"
         then
             limits_append="$limits_append$limit\n"
         fi
     done
 
-    if [ -n "$limits_append" ] 
+    if [ -n "$limits_append" ]
     then
         # systemd ignores limits set in the /etc/security/limits.conf
         echo -e "$limits_append" >> "/etc/security/limits.conf"
@@ -463,7 +463,7 @@ ResourceLimit()
     ulimit -m unlimited
     ulimit -u 64000
 
-    if [ "$dist" == "rpm" ] 
+    if [ "$dist" == "rpm" ]
     then
         if [ ! -e ~/.bash_profile ] || ! grep -q ulimit < ~/.bash_profile
         then
@@ -493,7 +493,7 @@ EOF
     fi
 
     # The limits defined in these files are set by PAM when starting a login session, but daemons started by systemd do not use PAM login sessions
-    #if [ ! -e /etc/security/limits.d/99-mongodb-nproc.conf ] && ls -A /etc/security/limits.d/*-nproc.conf > /dev/null 2>&1 
+    #if [ ! -e /etc/security/limits.d/99-mongodb-nproc.conf ] && ls -A /etc/security/limits.d/*-nproc.conf > /dev/null 2>&1
     #then
     #    echo -e "mongodb soft nproc 64000\nmongodb hard nproc 64000" > /etc/security/limits.d/99-mongodb-nproc.conf
     #fi
@@ -501,7 +501,7 @@ EOF
 
 DistCheck
 
-if [ "$dist" == "mac" ] 
+if [ "$dist" == "mac" ]
 then
     export HOMEBREW_NO_ASK=1
 
@@ -509,10 +509,10 @@ then
 
     ArchCheck
 
-    if [ "$arch" == "arm64" ] 
+    if [ "$arch" == "arm64" ]
     then
         HOMEBREW_PREFIX="/opt/homebrew"
-        if [ "${add_homebrew_path:-false}" = true ] 
+        if [ "${add_homebrew_path:-false}" = true ]
         then
             echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
         fi
@@ -524,18 +524,17 @@ then
         HOMEBREW_PREFIX="/usr/local"
     fi
 
-    DepInstall gsed
-    DepInstall gdate
-    DepInstall ggrep
-
-    if [ ! -d "$AIOS_PREFIX"/bin ]
+    if [ ! -s "$SH_FILE" ]
     then
-
         AIOS_PREFIX="$HOMEBREW_PREFIX"
         Include env
     fi
 
     TEXTDOMAINDIR="$HOMEBREW_PREFIX"/share/locale
+
+    DepInstall gsed
+    DepInstall gdate
+    DepInstall ggrep
 
 sed()
 {

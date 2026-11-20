@@ -13,7 +13,7 @@ OpenrestyPackageInstall()
 
     ArchCheck
 
-    if [ "$arch" == "arm64" ] 
+    if [ "$arch" == "arm64" ]
     then
         arch_path="/arm64"
     else
@@ -23,11 +23,11 @@ OpenrestyPackageInstall()
     . /etc/os-release
 
     case $dist in
-        ubu) 
+        ubu)
             DepInstall lsb-release
             DepInstall ubuntu-keyring
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -43,11 +43,11 @@ OpenrestyPackageInstall()
             fi
             sudo apt-get -y install openresty --no-install-recommends
         ;;
-        deb) 
+        deb)
             DepInstall lsb-release
             DepInstall debian-archive-keyring
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -63,10 +63,10 @@ OpenrestyPackageInstall()
             fi
             sudo apt-get -y install openresty --no-install-recommends
         ;;
-        rpm) 
+        rpm)
             DepInstall yum-utils
 
-            if [ ! -f /etc/yum.repos.d/openresty.repo ] 
+            if [ ! -f /etc/yum.repos.d/openresty.repo ]
             then
                 dist_names=( amazon alinux tlinux oracle rocky fedora centos rhel )
 
@@ -79,7 +79,7 @@ OpenrestyPackageInstall()
                                 curl -s -L https://openresty.org/package/$dist_name/openresty.repo -o /etc/yum.repos.d/openresty.repo
                             ;;
                             rocky|centos|rhel)
-                                if [ "${VERSION_ID%%.*}" -gt 8 ] 
+                                if [ "${VERSION_ID%%.*}" -gt 8 ]
                                 then
                                     curl -s -L https://openresty.org/package/$dist_name/openresty2.repo -o /etc/yum.repos.d/openresty.repo
                                 else
@@ -128,14 +128,14 @@ OpenrestySourceInstall()
 {
     local install="更新"
 
-    if [ -z "${1:-}" ] 
+    if [ -z "${1:-}" ]
     then
-        if [[ -x $(command -v $nginx_name) ]] 
+        if [[ -x $(command -v $nginx_name) ]]
         then
             return 0
         fi
         install="安装"
-    elif [[ ! -x $(command -v $nginx_name) ]] 
+    elif [[ ! -x $(command -v $nginx_name) ]]
     then
         install="安装"
     fi
@@ -153,22 +153,22 @@ OpenrestySourceInstall()
     echo
     inquirer list_input_index "额外添加编译选项" ny_options ny_index
     install_options_selected=()
-    if [ "$ny_index" -eq 1 ] 
+    if [ "$ny_index" -eq 1 ]
     then
         echo
         install_options=( --with-http_iconv_module --with-http_postgres_module --with-http_slice_module )
         inquirer checkbox_input "选择编译选项" install_options install_options_selected
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         Println "$tip 如果选择官方编译, $nginx_name 将缺少 nginx-http-flv-module 和 quictls 选择"
         inquirer list_input_index "使用官方编译" yn_options yn_index
-        if [ "$yn_index" -eq 0 ] 
+        if [ "$yn_index" -eq 0 ]
         then
             brew tap openresty/brew
             brew install openresty ${install_options_selected[@]+"${install_options_selected[@]}"}
-            if [ ! -d "$nginx_prefix" ] 
+            if [ ! -d "$nginx_prefix" ]
             then
                 Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
                 sudo mkdir -p "$nginx_prefix"/html/localhost/
@@ -184,7 +184,7 @@ OpenrestySourceInstall()
             sudo mkdir "$nginx_prefix"
             sudo chown $USER "$nginx_prefix"
             sudo chown $USER "${nginx_prefix%/*}"
-            if [ ! -f /etc/paths.d/openresty ] 
+            if [ ! -f /etc/paths.d/openresty ]
             then
                 sudo mkdir -p /etc/paths.d
                 echo "$HOMEBREW_PREFIX"/openresty/bin | sudo tee /etc/paths.d/openresty
@@ -208,7 +208,7 @@ OpenrestySourceInstall()
     latest_release=0
     while IFS= read -r line
     do
-        if [[ $line == *"Lastest release"* ]] 
+        if [[ $line == *"Lastest release"* ]]
         then
             latest_release=1
         elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
@@ -223,7 +223,7 @@ OpenrestySourceInstall()
     Println "$info 解压 $openresty_package_name ..."
     tar xzf "$openresty_package_name.tar.gz"
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         SourceInstallReady "${pcre_options[pcre_options_index]}" zlib geoip
 
@@ -232,7 +232,7 @@ OpenrestySourceInstall()
 
         for install_option in "${install_options_selected[@]}"
         do
-            if [ "$install_option" == "--with-http_postgres_module" ] 
+            if [ "$install_option" == "--with-http_postgres_module" ]
             then
                 DepInstall postgresql@14
                 cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/postgresql@14/include"
@@ -241,7 +241,7 @@ OpenrestySourceInstall()
             fi
         done
 
-        if [ "$openssl_options_index" -eq 1 ] 
+        if [ "$openssl_options_index" -eq 1 ]
         then
             QuictlsInstall
             cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
@@ -296,7 +296,7 @@ OpenrestySourceInstall()
         --with-threads \
         --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check ${install_options_selected[@]+"${install_options_selected[@]}"}
     else
-        if [ "$dist" == "rpm" ] 
+        if [ "$dist" == "rpm" ]
         then
             SourceInstallReady openssl-devel gcc libpq-devel
         else
@@ -305,24 +305,24 @@ OpenrestySourceInstall()
 
         while IFS= read -r line
         do
-            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]]
             then
                 zlib_name=${BASH_REMATCH[1]}
                 break
             fi
         done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
 
-        if [ ! -d $zlib_name ] 
+        if [ ! -d $zlib_name ]
         then
             curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
             Println "$info 解压 $zlib_name ..."
             tar xzf $zlib_name.tar.gz
         fi
 
-        if [ "$pcre_options_index" -eq 0 ] 
+        if [ "$pcre_options_index" -eq 0 ]
         then
             pcre_name=pcre-8.45
-            if [ ! -d $pcre_name ] 
+            if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
@@ -330,7 +330,7 @@ OpenrestySourceInstall()
             fi
         else
             pcre_name=$(curl -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
-            if [ ! -d $pcre_name ] 
+            if [ ! -d $pcre_name ]
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
@@ -343,7 +343,7 @@ OpenrestySourceInstall()
 
         for openssl_ver in "${openssl_vers[@]}"
         do
-            if [ "${openssl_ver%%.*}" -eq 1 ] 
+            if [ "${openssl_ver%%.*}" -eq 1 ]
             then
                 break
             fi
@@ -355,7 +355,7 @@ OpenrestySourceInstall()
         openssl_pack="${openssl_packs[0]}"
         openssl_name=${openssl_pack%.tar*}
 
-        if [ "$openssl_options_index" -eq 1 ] 
+        if [ "$openssl_options_index" -eq 1 ]
         then
             openssl_ver=${openssl_name#*-}
             openssl_name=openssl-OpenSSL_${openssl_ver//./_}-quic1
@@ -365,7 +365,7 @@ OpenrestySourceInstall()
         then
             rm -rf ${openssl_name}-patched
 
-            if [ "$openssl_options_index" -eq 1 ] 
+            if [ "$openssl_options_index" -eq 1 ]
             then
                 Println "$info 下载 ${openssl_name#*-} ..."
                 if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
@@ -441,7 +441,7 @@ OpenrestySourceInstall()
 
     ln -sf "$nginx_prefix"/sbin/nginx "$AIOS_PREFIX"/bin/
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         if ! grep -q "$nginx_name:" < "/etc/passwd"
         then
@@ -472,23 +472,23 @@ OpenrestySourceInstall()
 
 OpenrestyInstall()
 {
-    if [ -d "$nginx_prefix" ] 
+    if [ -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
         return 1
-    elif [[ -x $(command -v $nginx_name) ]] 
+    elif [[ -x $(command -v $nginx_name) ]]
     then
         Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
         return 1
     fi
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         Println "$tip 选择快速安装将缺少 nginx-http-flv-module 和 quictls 选择"
         openresty_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
         inquirer list_input_index "选择安装方式" openresty_install_options openresty_install_options_index
 
-        if [ "$openresty_install_options_index" -eq 0 ] 
+        if [ "$openresty_install_options_index" -eq 0 ]
         then
             OpenrestyPackageInstall
             return
@@ -500,7 +500,7 @@ OpenrestyInstall()
 
 OpenrestyUninstall()
 {
-    if [ ! -d "$nginx_prefix" ] 
+    if [ ! -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 未安装 !\n"
         return 1
@@ -509,23 +509,23 @@ OpenrestyUninstall()
     echo
     ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
 
-    ServiceControlDisable "$nginx_name"
+    ServiceControl disable "$nginx_name"
 
     case $dist in
-        mac) 
+        mac)
             if brew list "$nginx_name" &>/dev/null
             then
                 brew uninstall "$nginx_name"
             fi
         ;;
-        rpm) 
+        rpm)
             if rpm -q "$nginx_name" &> /dev/null
             then
                 yum remove -y "$nginx_name"* || true
             fi
         ;;
-        *) 
-            if dpkg -s "$nginx_name" &> /dev/null 
+        *)
+            if dpkg -s "$nginx_name" &> /dev/null
             then
                 apt-get -y --purge remove "$nginx_name"* || true
             fi
@@ -541,7 +541,7 @@ OpenrestyUpdate()
 {
     ShFileUpdate "$nginx_name"
 
-    if [ ! -d "$nginx_prefix" ] 
+    if [ ! -d "$nginx_prefix" ]
     then
         Println "$error $nginx_name 未安装 !\n"
         return 1

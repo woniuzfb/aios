@@ -124,7 +124,7 @@ ListChannels()
             chnls_proxy_text=""
         fi
 
-        IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[chnls_index]}"
+        IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[chnls_index]}"
 
         chnl_stream_links_text=""
 

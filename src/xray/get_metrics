@@ -1,0 +1,18 @@
+XrayGetMetrics()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.metrics')
+
+    jq_path='[
+        ["tag"],
+        ["listen"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="metrics_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    return 0
+}

@@ -12,8 +12,7 @@ KccInstall()
     git clone https://github.com/ciromattia/kcc.git "$KCC_ROOT"
     cd "$KCC_ROOT"
     python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
+    ./venv/bin/python3 -m pip install -r requirements.txt
     Println "$info KCC 安装成功\n"
 }
 

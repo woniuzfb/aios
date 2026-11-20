@@ -1,43 +1,50 @@
 V2rayGetDns()
 {
-    IFS=$'`\t' read -r m_dns_hosts_domain m_dns_hosts_address m_dns_servers \
-    dns_client_ip dns_tag dns_query_strategy dns_disable_cache dns_disable_fallback \
-    dns_disable_fallback_if_match < <($JQ_FILE -r '[
-    ([.dns.hosts // {}|to_entries[]|.key|. + "^"]|join("") + "`"),
-    ([.dns.hosts // {}|to_entries[]|.value|if (.|type) == "array" then
-        (.|join(","))
-    else
-        . end|. + "^"]|join("") + "`"),
-    ([.dns.servers // []|.[]|if (.|type) == "object" then 
-        ([
-            .address,
-            (.port // ""|tostring),
-            (.domains // []|join(",")),
-            (.expectIPs // []|join(","))
-        ]|join("|"))
-    else 
-        . end|. + "^"]|join("") + "`"),
-    (.dns.clientIp|. + "`"),
-    (.dns.tag|. + "`"),
-    (.dns.queryStrategy // "UseIP"|. + "`"),
-    (.dns.disableCache // false|tostring|. + "`"),
-    (.dns.disableFallback // false|tostring|. + "`"),
-    (.dns.disableFallbackIfMatch // false|tostring|. + "`")]|@tsv' "$V2_CONFIG")
+    SetDelimiters
 
-    if [ -z "$m_dns_hosts_domain" ] 
-    then
-        dns_hosts_count=0
-    else
-        IFS="^" read -r -a dns_hosts_domain <<< "$m_dns_hosts_domain"
-        IFS="^" read -r -a dns_hosts_address <<< "$m_dns_hosts_address"
-        dns_hosts_count=${#dns_hosts_domain[@]}
-    fi
+    jq_payload=$(JQs flat "$V2_CONFIG" '.dns')
 
-    if [ -z "$m_dns_servers" ] 
+    jq_path='["hosts"]'
+
+    dns_hosts_domain=()
+    dns_hosts_address=()
+
+    while IFS="^" read -r dns_host_domain dns_host_address; do
+        dns_hosts_domain+=("$dns_host_domain")
+        dns_hosts_address+=("$dns_host_address")
+    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+    dns_hosts_count="${#dns_hosts_domain[@]}"
+
+    jq_path='[
+        ["servers"],
+        ["clientIp"],
+        ["queryStrategy"],
+        ["disableCache"],
+        ["disableFallback"],
+        ["disableFallbackIfMatch"],
+        ["tag"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_dns_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    dns_clientIp="${jq_dns_clientIp:-}"
+    dns_queryStrategy="${jq_dns_queryStrategy:-UseIP}"
+    dns_disableCache="${jq_dns_disableCache:-false}"
+    dns_disableFallback="${jq_dns_disableFallback:-false}"
+    dns_disableFallbackIfMatch="${jq_dns_disableFallbackIfMatch:-false}"
+    dns_tag="${jq_dns_tag:-dns_inbound}"
+
+    if [ -z "${jq_dns_servers:-}" ]
     then
         dns_servers_count=0
-    else
-        IFS="^" read -r -a dns_servers <<< "$m_dns_servers"
-        dns_servers_count=${#dns_servers[@]}
+        return 0
     fi
+
+    IFS="${delimiters[1]}" read -r -a dns_servers <<< "$jq_dns_servers"
+
+    dns_servers_count=${#dns_servers[@]}
 }

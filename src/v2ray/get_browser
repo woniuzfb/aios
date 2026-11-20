@@ -1,0 +1,18 @@
+V2rayGetBrowser()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$V2_CONFIG" '.browserForwarder')
+
+    jq_path='[
+        ["listenAddr"],
+        ["listenPort"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="browser_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    return 0
+}

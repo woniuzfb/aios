@@ -24,21 +24,21 @@ RcloneSyncView()
         then
             rclone_sync_exclude_before_list="前排除: 未设置\n"
         else
-            IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[i]}"
+            IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[i]}"
             rclone_sync_exclude_before_list="前排除:\n$(printf '%s\n' "${rclone_sync_excludes_before[@]}")\n"
         fi
         if [[ -z "${rclone_syncs_include[i]:-}" ]] 
         then
             rclone_sync_include_list="包含: 未设置\n"
         else
-            IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[i]}"
+            IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[i]}"
             rclone_sync_include_list="包含:\n$(printf '%s\n' "${rclone_sync_includes[@]}")"
         fi
         if [[ -z "${rclone_syncs_exclude_after[i]:-}" ]] 
         then
             rclone_sync_exclude_after_list="后排除: 未设置\n"
         else
-            IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[i]}"
+            IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[i]}"
             rclone_sync_exclude_after_list="后排除:\n$(printf '%s\n' "${rclone_sync_excludes_after[@]}")\n"
         fi
         rclone_syncs_list="${rclone_syncs_list}同步源: ${rclone_syncs_source[i]}\n同步目标: ${rclone_syncs_target[i]}\n同步参数: ${rclone_syncs_args[i]:-无}\n${rclone_sync_exclude_before_list}${rclone_sync_include_list}${rclone_sync_exclude_after_list}\n"
@@ -360,7 +360,7 @@ RcloneSyncEdit()
             then
                 RcloneSyncSetExcludeBefore
             else
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
                 rclone_sync_exclude_options=( '新增' '修改' '删除' )
                 echo
                 inquirer list_input_index "选择操作" rclone_sync_exclude_options rclone_sync_exclude_options_index
@@ -408,7 +408,7 @@ RcloneSyncEdit()
             then
                 RcloneSyncSetInclude
             else
-                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
                 rclone_sync_include_options=( '新增' '修改' '删除' )
                 echo
                 inquirer list_input_index "选择操作" rclone_sync_include_options rclone_sync_include_options_index
@@ -456,7 +456,7 @@ RcloneSyncEdit()
             then
                 RcloneSyncSetExcludeAfter
             else
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
                 rclone_sync_exclude_options=( '新增' '修改' '删除' )
                 echo
                 inquirer list_input_index "选择操作" rclone_sync_exclude_options rclone_sync_exclude_options_index
@@ -536,7 +536,7 @@ RcloneSyncExc()
             rsync_commands=()
             if [ -n "${rclone_syncs_exclude_before[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
                 for rclone_sync_exclude_before in "${rclone_sync_excludes_before[@]}"
                 do
                     rsync_commands+=("--exclude=${rclone_sync_exclude_before#"$rclone_sync_source"}")
@@ -544,7 +544,7 @@ RcloneSyncExc()
             fi
             if [ -n "${rclone_syncs_include[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
                 for rclone_sync_include in "${rclone_sync_includes[@]}"
                 do
                     rsync_commands+=("--include=${rclone_sync_include#"$rclone_sync_source"}")
@@ -552,7 +552,7 @@ RcloneSyncExc()
             fi
             if [ -n "${rclone_syncs_exclude_after[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
                 for rclone_sync_exclude_after in "${rclone_sync_excludes_after[@]}"
                 do
                     rsync_commands+=("--exclude=${rclone_sync_exclude_after#"$rclone_sync_source"}")
@@ -563,7 +563,7 @@ RcloneSyncExc()
             sync_commands=()
             if [ -n "${rclone_syncs_exclude_before[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
                 for rclone_sync_exclude_before in "${rclone_sync_excludes_before[@]}"
                 do
                     sync_commands+=("--filter='- ${rclone_sync_exclude_before#"$rclone_sync_source"}'")
@@ -571,7 +571,7 @@ RcloneSyncExc()
             fi
             if [ -n "${rclone_syncs_include[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
                 for rclone_sync_include in "${rclone_sync_includes[@]}"
                 do
                     sync_commands+=("--filter='+ ${rclone_sync_include#"$rclone_sync_source"}'")
@@ -579,7 +579,7 @@ RcloneSyncExc()
             fi
             if [ -n "${rclone_syncs_exclude_after[rclone_syncs_index]:-}" ] 
             then
-                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
                 for rclone_sync_exclude_after in "${rclone_sync_excludes_after[@]}"
                 do
                     sync_commands+=("--filter='- ${rclone_sync_exclude_after#"$rclone_sync_source"}'")

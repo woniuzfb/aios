@@ -1,0 +1,174 @@
+case $* in
+    "e")
+        [ ! -e "$X_CONFIG" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        editor "$X_CONFIG" && exit 0
+    ;;
+    *)
+    ;;
+esac
+
+if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
+then
+    nginx_prefix="/usr/local/openresty/nginx"
+    nginx_name="openresty"
+    nginx_ctl="or"
+elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
+then
+    nginx_prefix="/usr/local/nginx"
+    nginx_name="nginx"
+    nginx_ctl="nx"
+else
+    nginx_prefix="/usr/local/nginx"
+    nginx_name="nginx"
+    nginx_ctl="nx"
+fi
+
+NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+Println "  xray 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 安装
+  ${green}2.${normal} 升级
+  ${green}3.${normal} 配置域名
+  ${green}4.${normal} 查看状态
+————————————
+  ${green}5.${normal} 查看入站
+  ${green}6.${normal} 添加入站
+  ${green}7.${normal} 添加入站账号
+————————————
+  ${green}8.${normal} 查看出站
+  ${green}9.${normal} 添加出站
+ ${green}10.${normal} 添加出站账号
+————————————
+ ${green}11.${normal} 查看DNS
+ ${green}12.${normal} 设置DNS
+————————————
+ ${green}13.${normal} 查看路由
+ ${green}14.${normal} 设置路由
+————————————
+ ${green}15.${normal} 查看策略
+ ${green}16.${normal} 设置策略
+————————————
+ ${green}17.${normal} 查看流量
+ ${green}18.${normal} 重置流量
+————————————
+ ${green}19.${normal} 查看反向代理
+ ${green}20.${normal} 设置反向代理
+————————————
+ ${green}21.${normal} 删除入站
+ ${green}22.${normal} 删除入站账号
+ ${green}23.${normal} 删除出站
+ ${green}24.${normal} 删除出站账号
+————————————
+ ${green}25.${normal} 开关
+ ${green}26.${normal} 重启
+
+ ${tip} 输入: x 打开面板
+"
+read -p "`gettext \"输入序号\"` [1-26]: " xray_num
+case $xray_num in
+    1)
+        XrayInstall
+    ;;
+    2)
+        XrayUpdate
+    ;;
+    3)
+        XrayConfigDomain
+    ;;
+    4)
+        XrayStatus
+    ;;
+    5)
+        XrayListInboundAccounts
+        XrayListInboundShare
+    ;;
+    6)
+        XrayAddInbound
+    ;;
+    7)
+        XrayAddInboundAccount
+    ;;
+    8)
+        XrayListOutboundAccounts
+    ;;
+    9)
+        XrayAddOutbound
+    ;;
+    10)
+        XrayAddOutboundAccount
+    ;;
+    11)
+        XrayListDns
+    ;;
+    12)
+        XraySetDns
+    ;;
+    13)
+        XrayListRouting
+    ;;
+    14)
+        XraySetRouting
+    ;;
+    15)
+        XrayListPolicy
+    ;;
+    16)
+        XraySetPolicy
+    ;;
+    17)
+        XrayListStats
+    ;;
+    18)
+        XrayResetStats
+    ;;
+    19)
+        XrayListReverse
+    ;;
+    20)
+        XraySetReverse
+    ;;
+    21)
+        XrayDeleteInbound
+    ;;
+    22)
+        XrayDeleteInboundAccount
+    ;;
+    23)
+        XrayDeleteOutbound
+    ;;
+    24)
+        XrayDeleteOutboundAccount
+    ;;
+    25)
+        if [ ! -e "$X_CONFIG" ]
+        then
+            Println "$error xray 未安装...\n" && exit 1
+        fi
+        echo
+        if ServiceControl is-active xray
+        then
+            ExitOnList y "`eval_gettext \"xray 正在运行, 是否关闭\"`"
+
+            ServiceControl stop xray > /dev/null 2>&1
+            Println "$info xray 已关闭\n"
+        else
+            ExitOnList y "`eval_gettext \"xray 未运行, 是否开启\"`"
+
+            ServiceControl start xray > /dev/null 2>&1
+            Println "$info xray 已开启\n"
+        fi
+    ;;
+    26)
+        if [ ! -e "$X_CONFIG" ]
+        then
+            Println "$error xray 未安装...\n" && exit 1
+        fi
+        ServiceControl restart xray > /dev/null 2>&1
+        Println "$info xray 已重启\n"
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-26]\n"
+    ;;
+esac
+
+exit 0

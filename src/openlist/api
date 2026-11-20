@@ -9,25 +9,29 @@ OpenList.auth.login()
         }'
     )
 
-    IFS="${delimiters[0]}"$'\t' read -r auth_login_code auth_login_message openlist_acc_token < <(curl -s -L 20 "${openlists_url[openlists_index]}"/api/auth/login \
-    -H "Content-Type: application/json" \
-    -H "User-Agent: $USER_AGENT_BROWSER" \
-    --data "$openlist_payload" \
-    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" 'if type == "object" then . else {} end | . as $response |
-    ($response.data | if type == "object" then . else {} end) as $data |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    ) + reduce ({token}|keys_unsorted[]) as $key ([];
-        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    )|@tsv')
+    response=$(
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/auth/login \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        --data "$openlist_payload"
+    )
+
+    jq_payload=$(JQs flat "$response")
+
+    jq_path='[
+        ["code"],
+        ["message"],
+        ["data","token"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    auth_login_code="$jq_code"
+    auth_login_message="$jq_message"
+    openlist_acc_token="$jq_data_token"
 
     if [ "$auth_login_code" -eq 200 ] 
     then
@@ -35,93 +39,171 @@ OpenList.auth.login()
         JQ update "$SERVICES_CONFIG" "$openlist_acc_token"
         Println "$info 账号 $openlist_acc_username 登陆成功\n"
     else
-        Println "$error 账号 $openlist_acc_username 登陆失败: $message\n"
+        Println "$error 账号 $openlist_acc_username 登陆失败: $auth_login_message\n"
         return 1
     fi
 }
 
 OpenList.me()
 {
-    IFS="${delimiters[0]}"$'\t' read -r me_code me_message id base_path role disabled \
-    permission github_id tp < <(curl -s -L 20 "${openlists_url[openlists_index]}"/api/me \
-    -H "Content-Type: application/json" \
-    -H "User-Agent: $USER_AGENT_BROWSER" \
-    -H "Authorization: $openlist_acc_token" \
-    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" 'if type == "object" then . else {} end | . as $response |
-    ($response.data | if type == "object" then . else {} end) as $data |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    ) + reduce ({id,base_path,role,disabled,permission,github_id,otp}|keys_unsorted[]) as $key ([];
-        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    )|@tsv')
+    response=$(
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/me \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $openlist_acc_token"
+    )
+
+    jq_payload=$(JQs flat "$response")
+
+    jq_path='[
+        ["code"],
+        ["message"],
+        ["data","id"],
+        ["data","base_path"],
+        ["data","role"],
+        ["data","disabled"],
+        ["data","permission"],
+        ["data","github_id"],
+        ["data","otp"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    me_code="$jq_code"
+    me_message="$jq_message"
+    id="$jq_data_id"
+    base_path="$jq_data_base_path"
+    role="$jq_data_role"
+    disabled="$jq_data_disabled"
+    permission="$jq_data_permission"
+    github_id="$jq_data_github_id"
+    otp="$jq_data_otp"
 
     return 0
 }
 
 OpenList.fs.get()
 {
-    IFS="${delimiters[0]}"$'\t' read -r fs_get_code fs_get_message name size is_dir \
-    modified sign thumb type raw_url readme provider related < <(curl -s -L 20 "${openlists_url[openlists_index]}"/api/fs/get \
-    -H "Content-Type: application/json" \
-    -H "User-Agent: $USER_AGENT_BROWSER" \
-    -H "Authorization: $openlist_acc_token" \
-    --data '{"path":"/","password":""}' \
-    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" 'if type == "object" then . else {} end | . as $response |
-    ($response.data | if type == "object" then . else {} end) as $data |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    ) + reduce ({name,size,is_dir,modified,sign,thumb,type,raw_url,readme,provider,related}|keys_unsorted[]) as $key ([];
-        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    )|@tsv')
+    response=$(
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/fs/get \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $openlist_acc_token" \
+        --data '{"path":"/","password":""}'
+    )
+
+    jq_path='[
+        ["code"],
+        ["message"],
+        ["data","name"],
+        ["data","size"],
+        ["data","is_dir"],
+        ["data","modified"],
+        ["data","sign"],
+        ["data","thumb"],
+        ["data","type"],
+        ["data","raw_url"],
+        ["data","readme"],
+        ["data","provider"],
+        ["data","related"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    fs_get_code="$jq_code"
+    fs_get_message="$jq_message"
+    name="$jq_data_name"
+    size="$jq_data_size"
+    is_dir="$jq_data_is_dir"
+    modified="$jq_data_modified"
+    sign="$jq_data_sign"
+    thumb="$jq_data_thumb"
+    type="$jq_data_type"
+    raw_url="$jq_data_raw_url"
+    readme="$jq_data_readme"
+    provider="$jq_data_provider"
+    related="$jq_data_related"
 
     return 0
 }
 
 OpenList.public.settings()
 {
-    IFS="${delimiters[0]}"$'\t' read -r pub_set_code pub_set_message allow_indexed announcement \
-    audio_autoplay audio_cover auto_update_index default_page_size external_previews \
-    favicon filename_char_mapping forward_direct_link_params github_login_enabled \
-    hide_files home_container home_icon iframe_previews logo main_color ocr_api \
-    package_download pagination_type search_index settings_layout site_title \
-    version video_autoplay < <(curl -s -L 20 "${openlists_url[openlists_index]}"/api/public/settings \
-    -H "Content-Type: application/json" \
-    -H "User-Agent: $USER_AGENT_BROWSER" \
-    -H "Authorization: $openlist_acc_token" \
-    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" 'if type == "object" then . else {} end | . as $response |
-    ($response.data | if type == "object" then . else {} end) as $data |
-    reduce ({code,message}|keys_unsorted[]) as $key ([];
-        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    ) + reduce ({allow_indexed,announcement,audio_autoplay,audio_cover,auto_update_index,default_page_size,
-        external_previews,favicon,filename_char_mapping,forward_direct_link_params,github_login_enabled,
-        hide_files,home_container,home_icon,iframe_previews,logo,main_color,ocr_api,package_download,
-        pagination_type,search_index,settings_layout,site_title,version,video_autoplay}|keys_unsorted[]) as $key ([];
-        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
-            . + [($val|tostring) + $delimiter]
-        else
-            . + [$delimiter]
-        end
-    )|@tsv')
+    response=$(
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/public/settings \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $openlist_acc_token"
+    )
+
+    jq_path='[
+        ["code"],
+        ["message"],
+        ["data","allow_indexed"],
+        ["data","announcement"],
+        ["data","audio_autoplay"],
+        ["data","audio_cover"],
+        ["data","auto_update_index"],
+        ["data","default_page_size"],
+        ["data","external_previews"],
+        ["data","favicon"],
+        ["data","filename_char_mapping"],
+        ["data","forward_direct_link_params"],
+        ["data","github_login_enabled"],
+        ["data","hide_files"],
+        ["data","home_container"],
+        ["data","home_icon"],
+        ["data","iframe_previews"],
+        ["data","logo"],
+        ["data","main_color"],
+        ["data","ocr_api"],
+        ["data","package_download"],
+        ["data","pagination_type"],
+        ["data","search_index"],
+        ["data","settings_layout"],
+        ["data","site_title"],
+        ["data","version"],
+        ["data","video_autoplay"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    pub_set_code="$jq_code"
+    pub_set_message="$jq_message"
+    allow_indexed="$jq_data_allow_indexed"
+    announcement="$jq_data_announcement"
+    audio_autoplay="$jq_data_audio_autoplay"
+    audio_cover="$jq_data_audio_cover"
+    auto_update_index="$jq_data_auto_update_index"
+    default_page_size="$jq_data_default_page_size"
+    external_previews="$jq_data_external_previews"
+    favicon="$jq_data_favicon"
+    filename_char_mapping="$jq_data_filename_char_mapping"
+    forward_direct_link_params="$jq_data_forward_direct_link_params"
+    github_login_enabled="$jq_data_github_login_enabled"
+    hide_files="$jq_data_hide_files"
+    home_container="$jq_data_home_container"
+    home_icon="$jq_data_home_icon"
+    iframe_previews="$jq_data_iframe_previews"
+    logo="$jq_data_logo"
+    main_color="$jq_data_main_color"
+    ocr_api="$jq_data_ocr_api"
+    package_download="$jq_data_package_download"
+    pagination_type="$jq_data_pagination_type"
+    search_index="$jq_data_search_index"
+    settings_layout="$jq_data_settings_layout"
+    site_title="$jq_data_site_title"
+    version="$jq_data_version"
+    video_autoplay="$jq_data_video_autoplay"
 
     return 0
 }
@@ -141,7 +223,7 @@ OpenList.fs.list()
     )
 
     response=$(
-        curl -s -L 20 "${openlists_url[openlists_index]}"/api/fs/list \
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/fs/list \
         -H "Content-Type: application/json" \
         -H "User-Agent: $USER_AGENT_BROWSER" \
         -H "Authorization: $openlist_acc_token" \
@@ -204,7 +286,7 @@ OpenList.fs.rename()
     )
 
     response=$(
-        curl -s -L 20 "${openlists_url[openlists_index]}"/api/fs/rename \
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/fs/rename \
         -H "Content-Type: application/json" \
         -H "User-Agent: $USER_AGENT_BROWSER" \
         -H "Authorization: $openlist_acc_token" \
@@ -247,7 +329,7 @@ OpenList.fs.remove()
     )
 
     response=$(
-        curl -s -L 20 "${openlists_url[openlists_index]}"/api/fs/remove \
+        curl -s -Lm 20 "${openlists_url[openlists_index]}"/api/fs/remove \
         -H "Content-Type: application/json" \
         -H "User-Agent: $USER_AGENT_BROWSER" \
         -H "Authorization: $openlist_acc_token" \

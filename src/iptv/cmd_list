@@ -25,7 +25,7 @@ then
     do
         if [ "${chnls_flv_status[i]:-}" == "on" ] 
         then
-            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
 
             chnl_stream_links_list=""
 
@@ -37,7 +37,7 @@ then
             flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
         elif [ "${chnls_status[i]:-}" == "on" ] 
         then
-            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
 
             chnl_stream_links_list=""
 

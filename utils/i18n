@@ -238,6 +238,42 @@ LocaleFix()
     fi
 }
 
+i18nCheck()
+{
+    if [ -z "${sh_locale:-}" ] 
+    then
+        sh_locale="zh_CN"
+
+        if [ "${locale_fix:-1}" -eq 1 ] && ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+        then
+            LocaleFix zh_CN
+        fi
+
+        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+    elif [ "$sh_locale" == "zh_CN" ] 
+    then
+        if [ "${locale_fix:-1}" -eq 1 ] 
+        then
+            if ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+            then
+                LocaleFix zh_CN
+            fi
+            echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+        fi
+    else
+        if [ "${locale_fix:-1}" -eq 1 ] && [ "$sh_locale" == "en" ] && ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
+        then
+            LocaleFix en_US
+            echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+        fi
+
+        if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo" ] 
+        then
+            i18nInstall "$sh_locale"
+        fi
+    fi
+}
+
 eval_gettext()
 {
     gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
@@ -249,37 +285,6 @@ then
     . "$i18n_FILE"
 fi
 
-if [ -z "${sh_locale:-}" ] 
-then
-    sh_locale="zh_CN"
-
-    if [ "${locale_fix:-1}" -eq 1 ] && ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
-    then
-        LocaleFix zh_CN
-    fi
-
-    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-elif [ "$sh_locale" == "zh_CN" ] 
-then
-    if [ "${locale_fix:-1}" -eq 1 ] 
-    then
-        if ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
-        then
-            LocaleFix zh_CN
-        fi
-        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-    fi
-else
-    if [ "${locale_fix:-1}" -eq 1 ] && [ "$sh_locale" == "en" ] && ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
-    then
-        LocaleFix en_US
-        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-    fi
-
-    if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo" ] 
-    then
-        i18nInstall "$sh_locale"
-    fi
-fi
+i18nCheck
 
 i18nGetMsg

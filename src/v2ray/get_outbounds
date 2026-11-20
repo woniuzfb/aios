@@ -1,170 +1,189 @@
 V2rayGetOutbounds()
 {
-    IFS=$'`\t' read -r map_send_through map_protocol map_settings_user_level map_settings_address \
-    map_settings_port map_settings_network map_settings_response_type map_settings_domain_strategy \
-    map_settings_redirect map_settings_version map_settings_email map_settings_method map_settings_password \
-    map_settings_iv_check map_stream_network map_stream_security map_stream_tls_server_name \
-    map_stream_tls_alpn map_stream_tls_allow_insecure map_stream_tls_disable_system_root \
-    map_stream_tls_pinned_peer_certificate_chain_sha256 map_stream_tls_enable_session_resumption \
-    map_stream_tls_fingerprint map_stream_tls_certificates_ocsp_stapling map_stream_tls_certificates_one_time_loading \
-    map_stream_tls_certificates_usage map_stream_tls_certificates_certificate_file \
-    map_stream_tls_certificates_key_file map_stream_tls_certificates_certificate \
-    map_stream_tls_certificates_key map_stream_header_type map_stream_header_request map_stream_header_response \
-    map_stream_kcp_mtu map_stream_kcp_tti map_stream_kcp_uplink_capacity map_stream_kcp_downlink_capacity \
-    map_stream_kcp_congestion map_stream_kcp_read_buffer_size map_stream_kcp_write_buffer_size \
-    map_stream_kcp_seed map_stream_path map_stream_ws_headers map_stream_ws_max_early_data \
-    map_stream_ws_use_browser_forwarding map_stream_ws_early_data_header_name map_stream_http_host \
-    map_stream_http_method map_stream_http_headers map_stream_quic_security map_stream_quic_key \
-    map_stream_grpc_service_name map_stream_grpc_multi_mode map_stream_sockopt_mark \
-    map_stream_sockopt_tcp_fast_open map_stream_sockopt_tcp_keep_alive_interval \
-    map_stream_sockopt_domain_strategy map_proxy_tag map_proxy_transport_layer map_mux_enabled \
-    map_mux_concurrency map_tag < <($JQ_FILE -c -r '[
-    ([.outbounds[]|.sendThrough|if . == "" // . == null then "0.0.0.0" else . end|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.protocol|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.userLevel // .settings.servers[0].level // ""|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.address // .settings.vnext[0].address // .settings.servers[0].address|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.port // .settings.vnext[0].port // .settings.servers[0].port // ""|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.network|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.response.type // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.domainStrategy // "AsIs"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.redirect|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.version // 5|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.servers[0].email|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.servers[0].method // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.servers[0].password|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.settings.servers[0].ivCheck // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.network|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.security // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.serverName // .streamSettings.xtlsSettings.serverName|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.alpn // .streamSettings.xtlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.allowInsecure // .streamSettings.xtlsSettings.allowInsecure // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.disableSystemRoot // .streamSettings.xtlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.pinnedPeerCertificateChainSha256|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.enableSessionResumption // .streamSettings.xtlsSettings.enableSessionResumption // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.fingerprint // .streamSettings.xtlsSettings.fingerprint|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].ocspStapling // 3600|tostring|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].oneTimeLoading // false|tostring|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tcpSettings.header.type // .streamSettings.kcpSettings.header.type // .streamSettings.quicSettings.header.type // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tcpSettings.header.request // {}|to_entries|
-    map("\(.key)=\(.value|(. | type) as $type|if ($type == "array") then (.|join("~")) 
-    elif ($type == "object") then (.|to_entries|map("\(.key)=\(
-        (.value|(. | type) as $type2|if ($type2 == "array") then (.|join("~")) else . end))")|join("!"))
-    else . end)")|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tcpSettings.header.response // {}|to_entries|
-    map("\(.key)=\(.value|(. | type) as $type|if ($type == "object") then (.|to_entries|map("\(.key)=\(
-        (.value|(. | type) as $type2|if ($type2 == "array") then (.|join("~")) else . end))")|join("!"))
-    else . end)")|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.mtu // 1350|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.tti // 20|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.uplinkCapacity // 5|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.downlinkCapacity // 20|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.congestion // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.readBufferSize // 2|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.writeBufferSize // 2|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.kcpSettings.seed|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.wsSettings.path // .streamSettings.httpSettings.path|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.wsSettings.headers // {}|to_entries|map("\(.key)=\(.value)")|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.wsSettings.maxEarlyData // 0|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.wsSettings.useBrowserForwarding // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.wsSettings.earlyDataHeaderName|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.httpSettings.host // []|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.httpSettings.method // "method"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.httpSettings.headers // {}|to_entries|
-    map("\(.key)=\(.value|if (.|type == "array") then (.|join("~")) else . end)")|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.quicSettings.security // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.quicSettings.key|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.grpcSettings.serviceName|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.grpcSettings.multiMode // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.sockopt.mark // 0|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.sockopt.tcpFastOpen // ""|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.sockopt.tcpKeepAliveInterval // 0|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.sockopt.domainStrategy // "AsIs"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.sockopt.dialerProxy // .proxySettings.tag|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.proxySettings.transportLayer // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.mux.enabled // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.mux.concurrency // 8|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.tag|. + "^"]|join("") + "`")
-    ]|@tsv' "$V2_CONFIG")
+    SetDelimiters
 
-    if [ -z "$map_protocol" ] 
+    jq_payload=$(JQs flat "$V2_CONFIG" '.outbounds')
+
+    jq_path='[
+        ["sendThrough"],
+        ["protocol"],
+        ["settings","response","type"],
+        ["settings","network"],
+        ["settings","address"],
+        ["settings","port"],
+        ["settings","domainStrategy"],
+        ["settings","redirect"],
+        ["settings","userLevel"],
+        ["settings","servers","address"],
+        ["settings","servers","port"],
+        ["settings","servers","users","user"],
+        ["settings","servers","users","pass"],
+        ["settings","servers","users","level"],
+        ["settings","servers","email"],
+        ["settings","servers","method"],
+        ["settings","servers","password"],
+        ["settings","servers","level"],
+        ["settings","servers","ivCheck"],
+        ["settings","vnext","address"],
+        ["settings","vnext","port"],
+        ["settings","vnext","users","id"],
+        ["settings","vnext","users","alterId"],
+        ["settings","vnext","users","security"],
+        ["settings","vnext","users","level"],
+        ["settings","vnext","users","encryption"],
+        ["settings","inboundTag"],
+        ["streamSettings","network"],
+        ["streamSettings","security"],
+        ["streamSettings","tlsSettings","serverName"],
+        ["streamSettings","tlsSettings","allowInsecure"],
+        ["streamSettings","tlsSettings","disableSystemRoot"],
+        ["streamSettings","tlsSettings","verifyClientCertificate"],
+        ["streamSettings","tlsSettings","pinnedPeerCertificateChainSha256"],
+        ["streamSettings","tlsSettings","alpn"],
+        ["streamSettings","tlsSettings","certificates","usage"],
+        ["streamSettings","tlsSettings","certificates","certificateFile"],
+        ["streamSettings","tlsSettings","certificates","keyFile"],
+        ["streamSettings","tlsSettings","certificates","certificate"],
+        ["streamSettings","tlsSettings","certificates","key"],
+        ["streamSettings","tcpSettings","header","type"],
+        ["streamSettings","tcpSettings","header","request","version"],
+        ["streamSettings","tcpSettings","header","request","method"],
+        ["streamSettings","tcpSettings","header","request","path"],
+        ["streamSettings","tcpSettings","header","request","headers"],
+        ["streamSettings","tcpSettings","header","response","version"],
+        ["streamSettings","tcpSettings","header","response","status"],
+        ["streamSettings","tcpSettings","header","response","reason"],
+        ["streamSettings","tcpSettings","header","response","headers"],
+        ["streamSettings","kcpSettings","mtu"],
+        ["streamSettings","kcpSettings","tti"],
+        ["streamSettings","kcpSettings","uplinkCapacity"],
+        ["streamSettings","kcpSettings","downlinkCapacity"],
+        ["streamSettings","kcpSettings","congestion"],
+        ["streamSettings","kcpSettings","readBufferSize"],
+        ["streamSettings","kcpSettings","writeBufferSize"],
+        ["streamSettings","kcpSettings","header","type"],
+        ["streamSettings","kcpSettings","seed"],
+        ["streamSettings","wsSettings","path"],
+        ["streamSettings","wsSettings","headers"],
+        ["streamSettings","wsSettings","maxEarlyData"],
+        ["streamSettings","wsSettings","useBrowserForwarding"],
+        ["streamSettings","wsSettings","earlyDataHeaderName"],
+        ["streamSettings","httpSettings","host"],
+        ["streamSettings","httpSettings","path"],
+        ["streamSettings","httpSettings","method"],
+        ["streamSettings","httpSettings","headers"],
+        ["streamSettings","quicSettings","security"],
+        ["streamSettings","quicSettings","key"],
+        ["streamSettings","quicSettings","header","type"],
+        ["streamSettings","dsSettings","path"],
+        ["streamSettings","dsSettings","abstract"],
+        ["streamSettings","dsSettings","padding"],
+        ["streamSettings","grpcSettings","serviceName"],
+        ["streamSettings","sockopt","mark"],
+        ["streamSettings","sockopt","tcpFastOpen"],
+        ["streamSettings","sockopt","tcpFastOpenQueueLength"],
+        ["streamSettings","sockopt","tproxy"],
+        ["streamSettings","sockopt","tcpKeepAliveInterval"],
+        ["streamSettings","sockopt","bindToDevice"],
+        ["streamSettings","sockopt","mptcp"],
+        ["tag"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    if [ -z "${jq_protocol:-}" ]
     then
         outbounds_count=0
         return 0
     fi
 
-    IFS="^" read -r -a outbounds_protocol <<< "$map_protocol"
+    IFS="${delimiters[1]}" read -r -a outbounds_sendThrough <<< "$jq_sendThrough"
+    IFS="${delimiters[1]}" read -r -a outbounds_protocol <<< "$jq_protocol"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_response_type <<< "$jq_settings_response_type"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_network <<< "$jq_settings_network"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_address <<< "$jq_settings_address"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_port <<< "$jq_settings_port"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_domainStrategy <<< "$jq_settings_domainStrategy"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_redirect <<< "$jq_settings_redirect"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_userLevel <<< "$jq_settings_userLevel"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_address <<< "$jq_settings_servers_address"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_port <<< "$jq_settings_servers_port"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_servers_users_user <<< "$jq_settings_servers_users_user"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_servers_users_pass <<< "$jq_settings_servers_users_pass"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_servers_users_level <<< "$jq_settings_servers_users_level"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_email <<< "$jq_settings_servers_email"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_method <<< "$jq_settings_servers_method"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_password <<< "$jq_settings_servers_password"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_level <<< "$jq_settings_servers_level"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_servers_ivCheck <<< "$jq_settings_servers_ivCheck"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_vnext_address <<< "$jq_settings_vnext_address"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_vnext_port <<< "$jq_settings_vnext_port"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_vnext_users_id <<< "$jq_settings_vnext_users_id"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_vnext_users_alterId <<< "$jq_settings_vnext_users_alterId"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_vnext_users_security <<< "$jq_settings_vnext_users_security"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_vnext_users_level <<< "$jq_settings_vnext_users_level"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_vnext_users_encryption <<< "$jq_settings_vnext_users_encryption"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_inboundTag <<< "$jq_settings_inboundTag"
+    IFS="${delimiters[2]}" read -r -a outbounds_streamSettings_network <<< "$jq_streamSettings_network"
+    IFS="${delimiters[2]}" read -r -a outbounds_streamSettings_security <<< "$jq_streamSettings_security"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_serverName <<< "$jq_streamSettings_tlsSettings_serverName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_allowInsecure <<< "$jq_streamSettings_tlsSettings_allowInsecure"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_disableSystemRoot <<< "$jq_streamSettings_tlsSettings_disableSystemRoot"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_verifyClientCertificate <<< "$jq_streamSettings_tlsSettings_verifyClientCertificate"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_pinnedPeerCertificateChainSha256 <<< "$jq_streamSettings_tlsSettings_pinnedPeerCertificateChainSha256"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_alpn <<< "$jq_streamSettings_tlsSettings_alpn"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_usage <<< "$jq_streamSettings_tlsSettings_certificates_usage"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_certificateFile <<< "$jq_streamSettings_tlsSettings_certificates_certificateFile"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_keyFile <<< "$jq_streamSettings_tlsSettings_certificates_keyFile"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_certificate <<< "$jq_streamSettings_tlsSettings_certificates_certificate"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_key <<< "$jq_streamSettings_tlsSettings_certificates_key"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tcpSettings_header_type <<< "$jq_streamSettings_tcpSettings_header_type"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_request_version <<< "$jq_streamSettings_tcpSettings_header_request_version"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_request_method <<< "$jq_streamSettings_tcpSettings_header_request_method"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_request_path <<< "$jq_streamSettings_tcpSettings_header_request_path"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_request_headers <<< "$jq_streamSettings_tcpSettings_header_request_headers"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_response_version <<< "$jq_streamSettings_tcpSettings_header_response_version"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_response_status <<< "$jq_streamSettings_tcpSettings_header_response_status"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_response_reason <<< "$jq_streamSettings_tcpSettings_header_response_reason"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tcpSettings_header_response_headers <<< "$jq_streamSettings_tcpSettings_header_response_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_mtu <<< "$jq_streamSettings_kcpSettings_mtu"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_tti <<< "$jq_streamSettings_kcpSettings_tti"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_uplinkCapacity <<< "$jq_streamSettings_kcpSettings_uplinkCapacity"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_downlinkCapacity <<< "$jq_streamSettings_kcpSettings_downlinkCapacity"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_congestion <<< "$jq_streamSettings_kcpSettings_congestion"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_readBufferSize <<< "$jq_streamSettings_kcpSettings_readBufferSize"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_writeBufferSize <<< "$jq_streamSettings_kcpSettings_writeBufferSize"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_kcpSettings_header_type <<< "$jq_streamSettings_kcpSettings_header_type"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_seed <<< "$jq_streamSettings_kcpSettings_seed"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_path <<< "$jq_streamSettings_wsSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_headers <<< "$jq_streamSettings_wsSettings_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_maxEarlyData <<< "$jq_streamSettings_wsSettings_maxEarlyData"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_useBrowserForwarding <<< "$jq_streamSettings_wsSettings_useBrowserForwarding"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_earlyDataHeaderName <<< "$jq_streamSettings_wsSettings_earlyDataHeaderName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpSettings_host <<< "$jq_streamSettings_httpSettings_host"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpSettings_path <<< "$jq_streamSettings_httpSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpSettings_method <<< "$jq_streamSettings_httpSettings_method"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpSettings_headers <<< "$jq_streamSettings_httpSettings_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_quicSettings_security <<< "$jq_streamSettings_quicSettings_security"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_quicSettings_key <<< "$jq_streamSettings_quicSettings_key"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_quicSettings_header_type <<< "$jq_streamSettings_quicSettings_header_type"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_dsSettings_path <<< "$jq_streamSettings_dsSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_dsSettings_abstract <<< "$jq_streamSettings_dsSettings_abstract"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_dsSettings_padding <<< "$jq_streamSettings_dsSettings_padding"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_serviceName <<< "$jq_streamSettings_grpcSettings_serviceName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_mark <<< "$jq_streamSettings_sockopt_mark"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpFastOpen <<< "$jq_streamSettings_sockopt_tcpFastOpen"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpFastOpenQueueLength <<< "$jq_streamSettings_sockopt_tcpFastOpenQueueLength"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tproxy <<< "$jq_streamSettings_sockopt_tproxy"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpKeepAliveInterval <<< "$jq_streamSettings_sockopt_tcpKeepAliveInterval"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_bindToDevice <<< "$jq_streamSettings_sockopt_bindToDevice"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_mptcp <<< "$jq_streamSettings_sockopt_mptcp"
+    IFS="${delimiters[1]}" read -r -a outbounds_tag <<< "$jq_tag"
+
     outbounds_count=${#outbounds_protocol[@]}
-    if_null=""
 
-    for((outbounds_i=0;outbounds_i<outbounds_count;outbounds_i++));
-    do
-        if_null="$if_null^"
-    done
-
-    IFS="^" read -r -a outbounds_send_through <<< "${map_send_through:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_user_level <<< "${map_settings_user_level:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_address <<< "${map_settings_address:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_port <<< "${map_settings_port:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_network <<< "${map_settings_network:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_response_type <<< "${map_settings_response_type:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_domain_strategy <<< "${map_settings_domain_strategy:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_redirect <<< "${map_settings_redirect:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_version <<< "${map_settings_version:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_email <<< "${map_settings_email:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_method <<< "${map_settings_method:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_password <<< "${map_settings_password:-$if_null}"
-    IFS="^" read -r -a outbounds_settings_iv_check <<< "${map_settings_iv_check:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_network <<< "${map_stream_network:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_security <<< "${map_stream_security:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_server_name <<< "${map_stream_tls_server_name:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_alpn <<< "${map_stream_tls_alpn:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_allow_insecure <<< "${map_stream_tls_allow_insecure:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_disable_system_root <<< "${map_stream_tls_disable_system_root:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_pinned_peer_certificate_chain_sha256 <<< "${map_stream_tls_pinned_peer_certificate_chain_sha256:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_enable_session_resumption <<< "${map_stream_tls_enable_session_resumption:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_fingerprint <<< "${map_stream_tls_fingerprint:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_ocsp_stapling <<< "${map_stream_tls_certificates_ocsp_stapling:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_one_time_loading <<< "${map_stream_tls_certificates_one_time_loading:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_usage <<< "${map_stream_tls_certificates_usage:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_certificate_file <<< "${map_stream_tls_certificates_certificate_file:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_key_file <<< "${map_stream_tls_certificates_key_file:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_certificate <<< "${map_stream_tls_certificates_certificate:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_tls_certificates_key <<< "${map_stream_tls_certificates_key:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_header_type <<< "${map_stream_header_type:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_header_request <<< "${map_stream_header_request:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_header_response <<< "${map_stream_header_response:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_mtu <<< "${map_stream_kcp_mtu:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_tti <<< "${map_stream_kcp_tti:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_uplink_capacity <<< "${map_stream_kcp_uplink_capacity:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_downlink_capacity <<< "${map_stream_kcp_downlink_capacity:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_congestion <<< "${map_stream_kcp_congestion:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_read_buffer_size <<< "${map_stream_kcp_read_buffer_size:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_write_buffer_size <<< "${map_stream_kcp_write_buffer_size:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_kcp_seed <<< "${map_stream_kcp_seed:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_path <<< "${map_stream_path:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_ws_headers <<< "${map_stream_ws_headers:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_ws_max_early_data <<< "${map_stream_ws_max_early_data:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_ws_use_browser_forwarding <<< "${map_stream_ws_use_browser_forwarding:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_ws_early_data_header_name <<< "${map_stream_ws_early_data_header_name:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_http_host <<< "${map_stream_http_host:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_http_method <<< "${map_stream_http_method:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_http_headers <<< "${map_stream_http_headers:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_quic_security <<< "${map_stream_quic_security:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_quic_key <<< "${map_stream_quic_key:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_grpc_service_name <<< "${map_stream_grpc_service_name:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_grpc_multi_mode <<< "${map_stream_grpc_multi_mode:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_sockopt_mark <<< "${map_stream_sockopt_mark:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_sockopt_tcp_fast_open <<< "${map_stream_sockopt_tcp_fast_open:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_sockopt_tcp_keep_alive_interval <<< "${map_stream_sockopt_tcp_keep_alive_interval:-$if_null}"
-    IFS="^" read -r -a outbounds_stream_sockopt_domain_strategy <<< "${map_stream_sockopt_domain_strategy:-$if_null}"
-    IFS="^" read -r -a outbounds_proxy_tag <<< "${map_proxy_tag:-$if_null}"
-    IFS="^" read -r -a outbounds_proxy_transport_layer <<< "${map_proxy_transport_layer:-$if_null}"
-    IFS="^" read -r -a outbounds_mux_enabled <<< "${map_mux_enabled:-$if_null}"
-    IFS="^" read -r -a outbounds_mux_concurrency <<< "${map_mux_concurrency:-$if_null}"
-    IFS="^" read -r -a outbounds_tag <<< "${map_tag:-$if_null}"
+    return 0
 }

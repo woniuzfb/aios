@@ -1,8 +1,8 @@
 NginxConfigDirective()
 {
     case $1 in
-        level_1) 
-            while true 
+        level_1)
+            while true
             do
                 level_1_options=()
 
@@ -10,9 +10,9 @@ NginxConfigDirective()
                 do
                     level_1_option="${level_1_directive_arr[level_1_index]:-''}"
 
-                    if [ -n "${level_1_args_arr[level_1_index]}" ] 
+                    if [ -n "${level_1_args_arr[level_1_index]}" ]
                     then
-                        IFS="${delimiters[4]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
+                        IFS="${delimiters[3]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
                         for arg in "${args[@]}"
                         do
                             level_1_option="$level_1_option ${arg:-''}"
@@ -32,16 +32,16 @@ NginxConfigDirective()
                 level_1_options+=("添加指令" "$i18n_cancel")
                 level_1_options_count=${#level_1_options[@]}
 
-                while true 
+                while true
                 do
                     echo
                     inquirer list_input_index "选择指令" level_1_options level_1_index
 
-                    if [ "$level_1_index" -eq "$((level_1_options_count-1))" ] 
+                    if [ "$level_1_index" -eq "$((level_1_options_count-1))" ]
                     then
                         Println "$i18n_canceled...\n"
                         break
-                    elif [ "$level_1_index" -eq "$((level_1_options_count-2))" ] 
+                    elif [ "$level_1_index" -eq "$((level_1_options_count-2))" ]
                     then
                         NginxAddDirective level_1
                         continue 2
@@ -51,7 +51,7 @@ NginxConfigDirective()
                         echo
                         inquirer list_input "选择操作" level_1_actions level_1_action
 
-                        if [ "$level_1_action" == "修改二级指令" ] 
+                        if [ "$level_1_action" == "修改二级指令" ]
                         then
                             from_level_1=1
                             NginxConfigDirective level_2
@@ -65,11 +65,11 @@ NginxConfigDirective()
                             Println "$info ${level_1_directive_arr[level_1_index]} 指令修改成功\n"
                             NginxGetConfig
                             continue 2
-                        elif [ "$level_1_action" == "删除指令" ] 
+                        elif [ "$level_1_action" == "删除指令" ]
                         then
                             echo
                             inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
-                            if [ "$yn_option" == "$i18n_yes" ] 
+                            if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed"]'
                                 JQs delete parse_out "$level_1_index"
@@ -84,8 +84,8 @@ NginxConfigDirective()
                 break
             done
         ;;
-        level_2) 
-            while true 
+        level_2)
+            while true
             do
                 level_2_options=()
 
@@ -94,22 +94,22 @@ NginxConfigDirective()
                     level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                     level_2_args_d1=${level_2_args_arr[level_1_index]}
 
-                    IFS="${delimiters[5]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}"
-                    IFS="${delimiters[5]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}"
+                    IFS="${delimiters[4]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}"
+                    IFS="${delimiters[4]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}"
 
                     if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                     then
                         level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-                        IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
+                        IFS="${delimiters[5]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
                     fi
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
                     do
                         level_2_option="${level_2_directive_d1_arr[level_2_index]:-''}"
 
-                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
+                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ]
                         then
-                            IFS="${delimiters[6]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}"
+                            IFS="${delimiters[5]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}"
                             for arg in "${args[@]}"
                             do
                                 level_2_option="$level_2_option ${arg:-''}"
@@ -129,7 +129,7 @@ NginxConfigDirective()
 
                 level_2_options+=("添加指令")
 
-                if [ "${from_level_1:-0}" -eq 1 ] 
+                if [ "${from_level_1:-0}" -eq 1 ]
                 then
                     level_2_options+=("返回一级指令")
                 else
@@ -138,19 +138,19 @@ NginxConfigDirective()
 
                 level_2_options_count=${#level_2_options[@]}
 
-                while true 
+                while true
                 do
                     echo
                     inquirer list_input_index "选择指令" level_2_options level_2_index
 
-                    if [ "$level_2_index" -eq "$((level_2_options_count-1))" ] 
+                    if [ "$level_2_index" -eq "$((level_2_options_count-1))" ]
                     then
-                        if [ "${from_level_1:-0}" -eq 0 ] 
+                        if [ "${from_level_1:-0}" -eq 0 ]
                         then
                             Println "$i18n_canceled...\n"
                         fi
                         break
-                    elif [ "$level_2_index" -eq "$((level_2_options_count-2))" ] 
+                    elif [ "$level_2_index" -eq "$((level_2_options_count-2))" ]
                     then
                         NginxAddDirective level_2
                         continue 2
@@ -160,7 +160,7 @@ NginxConfigDirective()
                         echo
                         inquirer list_input "选择操作" level_2_actions level_2_action
 
-                        if [ "$level_2_action" == "修改三级指令" ] 
+                        if [ "$level_2_action" == "修改三级指令" ]
                         then
                             from_level_2=1
                             NginxConfigDirective level_3
@@ -174,11 +174,11 @@ NginxConfigDirective()
                             NginxGetConfig
                             Println "$info ${level_2_directive_d1_arr[level_2_index]} 指令修改成功\n"
                             continue 2
-                        elif [ "$level_2_action" == "删除指令" ] 
+                        elif [ "$level_2_action" == "删除指令" ]
                         then
                             echo
                             inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
-                            if [ "$yn_option" == "$i18n_yes" ] 
+                            if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
                                 JQs delete parse_out "$level_2_index"
@@ -193,8 +193,8 @@ NginxConfigDirective()
                 break
             done
         ;;
-        level_3) 
-            while true 
+        level_3)
+            while true
             do
                 level_3_options=()
 
@@ -203,25 +203,25 @@ NginxConfigDirective()
                     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                     level_3_args_d1=${level_3_args_arr[level_1_index]}
 
-                    IFS="${delimiters[6]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
-                    IFS="${delimiters[6]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}"
+                    IFS="${delimiters[5]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}"
+                    IFS="${delimiters[5]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}"
 
-                    if [ -n "${level_3_directive_d1_arr[level_2_index]}" ] 
+                    if [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
                     then
                         level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
                         level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[7]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}"
-                        IFS="${delimiters[7]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}"
+                        IFS="${delimiters[6]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}"
+                        IFS="${delimiters[6]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}"
 
                         if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                         then
                             level_4_directive_d1=${level_4_directive_arr[level_1_index]}
-                            IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
+                            IFS="${delimiters[6]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
                             if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                             then
                                 level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                                IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
+                                IFS="${delimiters[7]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
                             fi
                         fi
 
@@ -229,9 +229,9 @@ NginxConfigDirective()
                         do
                             level_3_option="${level_3_directive_d2_arr[level_3_index]:-''}"
 
-                            if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
+                            if [ -n "${level_3_args_d2_arr[level_3_index]}" ]
                             then
-                                IFS="${delimiters[8]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}"
+                                IFS="${delimiters[7]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}"
                                 for arg in "${args[@]}"
                                 do
                                     level_3_option="$level_3_option ${arg:-''}"
@@ -252,7 +252,7 @@ NginxConfigDirective()
 
                 level_3_options+=("添加指令")
 
-                if [ "${from_level_2:-0}" -eq 1 ] 
+                if [ "${from_level_2:-0}" -eq 1 ]
                 then
                     level_3_options+=("返回二级指令")
                 else
@@ -261,19 +261,19 @@ NginxConfigDirective()
 
                 level_3_options_count=${#level_3_options[@]}
 
-                while true 
+                while true
                 do
                     echo
                     inquirer list_input_index "选择指令" level_3_options level_3_index
 
-                    if [ "$level_3_index" -eq "$((level_3_options_count-1))" ] 
+                    if [ "$level_3_index" -eq "$((level_3_options_count-1))" ]
                     then
-                        if [ "${from_level_2:-0}" -eq 0 ] 
+                        if [ "${from_level_2:-0}" -eq 0 ]
                         then
                             Println "$i18n_canceled...\n"
                         fi
                         break
-                    elif [ "$level_3_index" -eq "$((level_3_options_count-2))" ] 
+                    elif [ "$level_3_index" -eq "$((level_3_options_count-2))" ]
                     then
                         NginxAddDirective level_3
                         continue 2
@@ -283,7 +283,7 @@ NginxConfigDirective()
                         echo
                         inquirer list_input "选择操作" level_3_actions level_3_action
 
-                        if [ "$level_3_action" == "修改四级指令" ] 
+                        if [ "$level_3_action" == "修改四级指令" ]
                         then
                             from_level_3=1
                             NginxConfigDirective level_4
@@ -297,11 +297,11 @@ NginxConfigDirective()
                             NginxGetConfig
                             Println "$info ${level_3_directive_d2_arr[level_3_index]} 指令修改成功\n"
                             continue 2
-                        elif [ "$level_3_action" == "删除指令" ] 
+                        elif [ "$level_3_action" == "删除指令" ]
                         then
                             echo
                             inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
-                            if [ "$yn_option" == "$i18n_yes" ] 
+                            if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
                                 JQs delete parse_out "$level_3_index"
@@ -316,8 +316,8 @@ NginxConfigDirective()
                 break
             done
         ;;
-        level_4) 
-            while true 
+        level_4)
+            while true
             do
                 level_4_options=()
 
@@ -326,37 +326,37 @@ NginxConfigDirective()
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                     level_4_args_d1=${level_4_args_arr[level_1_index]}
 
-                    IFS="${delimiters[7]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
-                    IFS="${delimiters[7]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}"
+                    IFS="${delimiters[6]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}"
+                    IFS="${delimiters[6]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}"
 
-                    if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] 
+                    if [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
                     then
                         level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
                         level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[8]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
-                        IFS="${delimiters[8]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}"
+                        IFS="${delimiters[7]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}"
+                        IFS="${delimiters[7]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}"
 
                         if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                         then
                             level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
                             level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
 
-                            IFS="${delimiters[9]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}"
-                            IFS="${delimiters[9]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}"
+                            IFS="${delimiters[8]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}"
+                            IFS="${delimiters[8]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}"
 
                             if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                             then
                                 level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                                IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
-                                if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
+                                IFS="${delimiters[7]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
+                                if [ -n "${level_5_directive_d1_arr[level_2_index]}" ]
                                 then
                                     level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                                    IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
-                                    if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                                    IFS="${delimiters[8]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
+                                    if [ -n "${level_5_directive_d2_arr[level_3_index]}" ]
                                     then
                                         level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                                        IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
+                                        IFS="${delimiters[9]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
                                     fi
                                 fi
                             fi
@@ -365,9 +365,9 @@ NginxConfigDirective()
                             do
                                 level_4_option="${level_4_directive_d3_arr[level_4_index]:-''}"
 
-                                if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
+                                if [ -n "${level_4_args_d3_arr[level_4_index]}" ]
                                 then
-                                    IFS="${delimiters[10]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}"
+                                    IFS="${delimiters[9]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}"
                                     for arg in "${args[@]}"
                                     do
                                         level_4_option="$level_4_option ${arg:-''}"
@@ -389,7 +389,7 @@ NginxConfigDirective()
 
                 level_4_options+=("添加指令")
 
-                if [ "${from_level_3:-0}" -eq 1 ] 
+                if [ "${from_level_3:-0}" -eq 1 ]
                 then
                     level_4_options+=("返回三级指令")
                 else
@@ -398,19 +398,19 @@ NginxConfigDirective()
 
                 level_4_options_count=${#level_4_options[@]}
 
-                while true 
+                while true
                 do
                     echo
                     inquirer list_input_index "选择指令" level_4_options level_4_index
 
-                    if [ "$level_4_index" -eq "$((level_4_options_count-1))" ] 
+                    if [ "$level_4_index" -eq "$((level_4_options_count-1))" ]
                     then
-                        if [ "${from_level_3:-0}" -eq 0 ] 
+                        if [ "${from_level_3:-0}" -eq 0 ]
                         then
                             Println "$i18n_canceled...\n"
                         fi
                         break
-                    elif [ "$level_4_index" -eq "$((level_4_options_count-2))" ] 
+                    elif [ "$level_4_index" -eq "$((level_4_options_count-2))" ]
                     then
                         NginxAddDirective level_4
                         continue 2
@@ -420,7 +420,7 @@ NginxConfigDirective()
                         echo
                         inquirer list_input "选择操作" level_4_actions level_4_action
 
-                        if [ "$level_4_action" == "修改五级指令" ] 
+                        if [ "$level_4_action" == "修改五级指令" ]
                         then
                             from_level_4=1
                             NginxConfigDirective level_5
@@ -434,11 +434,11 @@ NginxConfigDirective()
                             NginxGetConfig
                             Println "$info ${level_4_directive_d3_arr[level_4_index]} 指令修改成功\n"
                             continue 2
-                        elif [ "$level_4_action" == "删除指令" ] 
+                        elif [ "$level_4_action" == "删除指令" ]
                         then
                             echo
                             inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
-                            if [ "$yn_option" == "$i18n_yes" ] 
+                            if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
                                 JQs delete parse_out "$level_4_index"
@@ -453,8 +453,8 @@ NginxConfigDirective()
                 break
             done
         ;;
-        level_5) 
-            while true 
+        level_5)
+            while true
             do
                 level_5_options=()
 
@@ -463,40 +463,40 @@ NginxConfigDirective()
                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
                     level_5_args_d1=${level_5_args_arr[level_1_index]}
 
-                    IFS="${delimiters[8]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
-                    IFS="${delimiters[8]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}"
+                    IFS="${delimiters[7]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}"
+                    IFS="${delimiters[7]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}"
 
-                    if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
+                    if [ -n "${level_5_directive_d1_arr[level_2_index]}" ]
                     then
                         level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
                         level_5_args_d2=${level_5_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[9]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
-                        IFS="${delimiters[9]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}"
+                        IFS="${delimiters[8]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}"
+                        IFS="${delimiters[8]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}"
 
-                        if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                        if [ -n "${level_5_directive_d2_arr[level_3_index]}" ]
                         then
                             level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
                             level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
-                            IFS="${delimiters[10]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
-                            IFS="${delimiters[10]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}"
+                            IFS="${delimiters[9]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}"
+                            IFS="${delimiters[9]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}"
 
                             if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                             then
                                 level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
                                 level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
 
-                                IFS="${delimiters[11]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}"
-                                IFS="${delimiters[11]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}"
+                                IFS="${delimiters[10]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}"
+                                IFS="${delimiters[10]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}"
 
                                 for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                 do
                                     level_5_option="${level_5_directive_d4_arr[level_5_index]:-''}"
 
-                                    if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
+                                    if [ -n "${level_5_args_d4_arr[level_5_index]}" ]
                                     then
-                                        IFS="${delimiters[12]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}"
+                                        IFS="${delimiters[11]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}"
                                         for arg in "${args[@]}"
                                         do
                                             level_5_option="$level_5_option ${arg:-''}"
@@ -512,7 +512,7 @@ NginxConfigDirective()
 
                 level_5_options+=("添加指令")
 
-                if [ "${from_level_4:-0}" -eq 1 ] 
+                if [ "${from_level_4:-0}" -eq 1 ]
                 then
                     level_5_options+=("返回四级指令")
                 else
@@ -521,19 +521,19 @@ NginxConfigDirective()
 
                 level_5_options_count=${#level_5_options[@]}
 
-                while true 
+                while true
                 do
                     echo
                     inquirer list_input_index "选择指令" level_5_options level_5_index
 
-                    if [ "$level_5_index" -eq "$((level_5_options_count-1))" ] 
+                    if [ "$level_5_index" -eq "$((level_5_options_count-1))" ]
                     then
-                        if [ "${from_level_4:-0}" -eq 0 ] 
+                        if [ "${from_level_4:-0}" -eq 0 ]
                         then
                             Println "$i18n_canceled...\n"
                         fi
                         break
-                    elif [ "$level_5_index" -eq "$((level_5_options_count-2))" ] 
+                    elif [ "$level_5_index" -eq "$((level_5_options_count-2))" ]
                     then
                         NginxAddDirective level_5
                         continue 2
@@ -552,11 +552,11 @@ NginxConfigDirective()
                             NginxGetConfig
                             Println "$info ${level_5_directive_d4_arr[level_5_index]} 指令修改成功\n"
                             continue 2
-                        elif [ "$level_5_action" == "删除指令" ] 
+                        elif [ "$level_5_action" == "删除指令" ]
                         then
                             echo
                             inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
-                            if [ "$yn_option" == "$i18n_yes" ] 
+                            if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
                                 JQs delete parse_out "$level_5_index"

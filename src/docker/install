@@ -2,22 +2,22 @@ DockerInstall()
 {
     local install="更新"
 
-    if [ -z "${1:-}" ] 
+    if [ -z "${1:-}" ]
     then
-        if [[ -x $(command -v docker) ]] 
+        if [[ -x $(command -v docker) ]]
         then
             return 0
         fi
         install="安装"
-    elif [[ ! -x $(command -v docker) ]] 
+    elif [[ ! -x $(command -v docker) ]]
     then
         install="安装"
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
         brew install --cask docker
-        Println "$info docker ${install}成功\n"
+        Println "$info docker ${install}成功, 打开 docker app 完成最后设置!\n"
         return 0
     fi
 
@@ -26,12 +26,12 @@ DockerInstall()
     DepInstall gpg
 
     case $dist in
-        ubu) 
+        ubu)
             if grep -q "docker-ce" < /etc/apt/sources.list
             then
                 sed -i '/docker-ce/d' /etc/apt/sources.list
             fi
-            if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
+            if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -51,12 +51,12 @@ DockerInstall()
             done
             sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         ;;
-        deb) 
+        deb)
             if grep -q "docker-ce" < /etc/apt/sources.list
             then
                 sed -i '/docker-ce/d' /etc/apt/sources.list
             fi
-            if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
+            if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -76,7 +76,7 @@ DockerInstall()
             done
             sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         ;;
-        rpm) 
+        rpm)
             echo
             sudo yum install -y yum-utils
             sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
@@ -96,7 +96,7 @@ DockerInstall()
         ;;
     esac
 
-    if [ ! -f /etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf ] 
+    if [ ! -f /etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf ]
     then
 cat > /etc/systemd/system/docker.service.d/clear_mount_propagation_flags.conf <<EOF
 [Service]

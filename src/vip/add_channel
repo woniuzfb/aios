@@ -26,23 +26,26 @@ VipAddChannel()
 
         EXIT_STATUS=0
 
-        IFS=$'\003\t' read -r m_name m_url < <(JQs flat "$VIP_CHANNELS_FILE" '.[0]|map(select(.url // ""|test("http://?.*";"i")))' '. as $channels |
-        reduce ({name,url}|keys_unsorted[]) as $key ([];
-            $channels[$key] as $val | if $val then
-                . + [$val + "\u0002\u0003"]
-            else
-                . + ["\u0003"]
-            end
-        )|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+        jq_payload=$(JQs flat "$VIP_CHANNELS_FILE") || EXIT_STATUS=$?
 
-        if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+        jq_path='[
+            ["name"],
+            ["url"]
+        ]'
+
+        while IFS=": " read -r path_name value; do
+            var_name=${path_name}
+            read -r ${var_name?} <<< "$value"
+        done < <(JQs gets jq_payload)
+
+        if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$jq_name" ]
         then
             Println "$error 没有找到频道\n"
             exit 1
         fi
 
-        IFS="${delimiters[1]}" read -r -a vip_channels_name <<< "$m_name"
-        IFS="${delimiters[1]}" read -r -a vip_channels_url <<< "$m_url"
+        IFS="${delimiters[0]}" read -r -a vip_channels_name <<< "$jq_name"
+        IFS="${delimiters[0]}" read -r -a vip_channels_url <<< "$jq_url"
 
         vip_channels_host_ip=()
         vip_channels_host_port=()

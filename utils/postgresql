@@ -2,23 +2,28 @@ PostgresqlInstall()
 {
     local install="更新"
 
-    if [ -z "${1:-}" ] 
+    if [ -z "${1:-}" ]
     then
-        if [[ -x $(command -v psql) ]] 
+        if [[ -x $(command -v psql) ]]
         then
             return 0
         fi
         install="安装"
-    elif [[ ! -x $(command -v psql) ]] 
+    elif [[ ! -x $(command -v psql) ]]
     then
         install="安装"
     fi
 
-    if [ "$dist" == "mac" ] 
+    if [ "$dist" == "mac" ]
     then
+        if [[ -x /Applications/Postgres.app/Contents/Versions/latest/bin/psql ]]
+        then
+            return 0
+        fi
+
         brew install --cask postgres-unofficial
         open /Applications/Postgres.app
-        if [ ! -f /etc/paths.d/postgresapp ] 
+        if [ ! -f /etc/paths.d/postgresapp ]
         then
             Println "$info 输入密码配置命令行: "
             sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin | sudo tee /etc/paths.d/postgresapp
@@ -33,14 +38,14 @@ PostgresqlInstall()
     . /etc/os-release
 
     case $dist in
-        ubu) 
-            if ! [[ "$VERSION_CODENAME" =~ mantic|lunar|jammy|focal ]] 
+        ubu)
+            if ! [[ "$VERSION_CODENAME" =~ mantic|lunar|jammy|focal ]]
             then
                 sudo apt-get -y install postgresql-12
                 return 0
             fi
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/pgdg.list ] 
+            if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -56,14 +61,14 @@ PostgresqlInstall()
             fi
             sudo apt-get -y install postgresql
         ;;
-        deb) 
-            if ! [[ "$VERSION_CODENAME" =~ bookworm|bullseye|buster|sid ]] 
+        deb)
+            if ! [[ "$VERSION_CODENAME" =~ bookworm|bullseye|buster|sid ]]
             then
                 sudo apt-get -y install postgresql-12
                 return 0
             fi
             DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/pgdg.list ] 
+            if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
             then
                 if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
                 then
@@ -79,23 +84,23 @@ PostgresqlInstall()
             fi
             sudo apt-get -y install postgresql
         ;;
-        rpm) 
+        rpm)
             ArchCheck
 
             local repo_name=""
-            if [ "$arch" == "arm64" ] 
+            if [ "$arch" == "arm64" ]
             then
                 repo_name="-aarch64"
             else
                 repo_name="-x86_64"
             fi
-            if [ "${ID:-}" == "fedora" ] 
+            if [ "${ID:-}" == "fedora" ]
             then
                 repo_name="F-${VERSION_ID%%.*}${repo_name}/pgdg-fedora-repo-latest.noarch.rpm"
             else
                 repo_name="EL-${VERSION_ID%%.*}${repo_name}/pgdg-redhat-repo-latest.noarch.rpm"
             fi
-            if [[ -x $(command -v dnf) ]] 
+            if [[ -x $(command -v dnf) ]]
             then
                 sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}
                 sudo dnf -qy module disable postgresql || true
@@ -106,7 +111,7 @@ PostgresqlInstall()
             else
                 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}/pgdg-redhat-repo-latest.noarch.rpm
                 sudo yum install -y postgresql16-server
-                if [ "${VERSION_ID%%.*}" -eq 7 ] 
+                if [ "${VERSION_ID%%.*}" -eq 7 ]
                 then
                     sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
                     sudo systemctl enable postgresql-16
@@ -124,7 +129,7 @@ PostgresqlInstall()
             systemctl start postgresql.service
         ;;
         sles)
-            if [ "${VERSION_ID%%.*}" -eq 12 ] 
+            if [ "${VERSION_ID%%.*}" -eq 12 ]
             then
                 SUSEConnect -p PackageHub/12/x86_64
                 SUSEConnect -p sle-sdk/12/x86_64
@@ -151,7 +156,7 @@ PostgresqlInstall()
         ;;
     esac
 
-    if ! su postgres -c 'psql -c "\du"' | grep -q "$USER" 
+    if ! su postgres -c 'psql -c "\du"' | grep -q "$USER"
     then
         su postgres -c "createuser --superuser $USER"
         createdb "$USER"

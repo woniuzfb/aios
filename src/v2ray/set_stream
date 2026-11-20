@@ -28,17 +28,17 @@ V2raySetWebSocketPath()
 V2raySetWebSocketHeaders()
 {
     ws_headers='{}'
-    while true 
+    while true
     do
         echo
         inquirer text_input "输入自定义 HTTP 头的名称: " ws_header_name "$i18n_blank"
-        if [ "$ws_header_name" == "$i18n_blank" ] 
+        if [ "$ws_header_name" == "$i18n_blank" ]
         then
             break
         fi
         echo
         inquirer text_input "输入自定义 HTTP 头 $ws_header_name 的值: " ws_header_value "$i18n_blank"
-        if [ "$ws_header_value" == "$i18n_blank" ] 
+        if [ "$ws_header_value" == "$i18n_blank" ]
         then
             ws_header_value=""
         fi
@@ -48,7 +48,7 @@ V2raySetWebSocketHeaders()
         }'
         echo
         inquirer list_input_index "是否继续添加" ny_options ny_index
-        if [ "$ny_index" -eq 0 ] 
+        if [ "$ny_index" -eq 0 ]
         then
             break
         fi
@@ -78,7 +78,7 @@ V2raySetWebsocketEarlyDataHeaderName()
     echo
     inquirer text_input "发送的前置数据的 HTTP 头的名字" ws_early_data_header_name "$i18n_blank"
 
-    if [ "$ws_early_data_header_name" == "$i18n_blank" ] 
+    if [ "$ws_early_data_header_name" == "$i18n_blank" ]
     then
         ws_early_data_header_name=""
     fi
@@ -227,7 +227,7 @@ V2raySetGrpcServiceName()
     echo
     inquirer text_input "输入 gRPC 服务的名称: " grpc_service_name "$i18n_random" V2raySetGrpcServiceNameValidator "名称格式错误"
 
-    if [ "$grpc_service_name" == "$i18n_random" ] 
+    if [ "$grpc_service_name" == "$i18n_random" ]
     then
         grpc_service_name=$(RandStr)
         Println "  gRPC 服务的名称: ${green} $grpc_service_name ${normal}"
@@ -322,7 +322,7 @@ V2raySetStreamTlsAlpn()
 {
     Println "$tip 多个 ALPN 值用空格分隔"
     inquirer text_input "stream tls 指定 ALPN 值: " stream_tls_next_protocol "h2 http/1.1"
-    stream_tls_next_protocol=$(StringToList stream_tls_next_protocol)
+    stream_tls_next_protocol=$(StringToPath stream_tls_next_protocol)
 }
 
 V2raySetStreamTlsDisableSystemRoot()
@@ -335,7 +335,7 @@ V2raySetStreamTlsChainSha256()
 {
     Println "$tip 多个数值用空格分隔"
     inquirer text_input "stream tls 使用 Base64 标准编码格式表示的远程服务器的证书链的SHA256散列值: " stream_tls_chain_sha256 "i18n_blank"
-    stream_tls_chain_sha256=$(StringToList stream_tls_chain_sha256)
+    stream_tls_chain_sha256=$(StringToPath stream_tls_chain_sha256)
 }
 
 V2raySetStreamTlsAllowInsecure()

@@ -1,0 +1,461 @@
+XrayGetOutbounds()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.outbounds')
+
+    jq_path='[
+        ["settings","sendThrough"],
+        ["settings","protocol"],
+        ["settings","response","type"],
+        ["settings","rewriteNetwork"],
+        ["settings","rewriteAddress"],
+        ["settings","rewritePort"],
+        ["settings","userLevel"],
+        ["settings","rules","action"],
+        ["settings","rules","qType"],
+        ["settings","rules","rCode"],
+        ["settings","rules","domain"],
+        ["settings","domainStrategy"],
+        ["settings","redirect"],
+        ["settings","fragment","packets"],
+        ["settings","fragment","length"],
+        ["settings","fragment","interval"],
+        ["settings","noises","type"],
+        ["settings","noises","packet"],
+        ["settings","noises","delay"],
+        ["settings","proxyProtocol"],
+        ["settings","finalRules","action"],
+        ["settings","finalRules","network"],
+        ["settings","finalRules","port"],
+        ["settings","finalRules","ip"],
+        ["settings","finalRules","blockDelay"],
+        ["settings","address"],
+        ["settings","port"],
+        ["settings","user"],
+        ["settings","pass"],
+        ["settings","level"],
+        ["settings","email"],
+        ["settings","headers"],
+        ["settings","inboundTag"],
+        ["settings","password"],
+        ["settings","method"],
+        ["settings","id"],
+        ["settings","encryption"],
+        ["settings","flow"],
+        ["settings","reverse","tag"],
+        ["settings","reverse","sniffing","enabled"],
+        ["settings","reverse","sniffing","destOverride"],
+        ["settings","reverse","sniffing","metadataOnly"],
+        ["settings","reverse","sniffing","domainsExcluded"],
+        ["settings","reverse","sniffing","ipsExcluded"],
+        ["settings","reverse","sniffing","routeOnly"],
+        ["settings","security"],
+        ["settings","experiments"],
+        ["settings","secretKey"],
+        ["settings","noKernelTun"],
+        ["settings","mtu"],
+        ["settings","reserved"],
+        ["settings","workers"],
+        ["settings","peers","endpoint"],
+        ["settings","peers","publicKey"],
+        ["settings","peers","preSharedKey"],
+        ["settings","peers","keepAlive"],
+        ["settings","peers","allowedIPs"],
+        ["settings","version"],
+        ["streamSettings","network"],
+        ["streamSettings","security"],
+        ["streamSettings","rawSettings","header","type"],
+        ["streamSettings","rawSettings","header","request","version"],
+        ["streamSettings","rawSettings","header","request","method"],
+        ["streamSettings","rawSettings","header","request","path"],
+        ["streamSettings","rawSettings","header","request","headers"],
+        ["streamSettings","rawSettings","header","response","version"],
+        ["streamSettings","rawSettings","header","response","status"],
+        ["streamSettings","rawSettings","header","response","reason"],
+        ["streamSettings","rawSettings","header","response","headers"],
+        ["streamSettings","xhttpSettings","host"],
+        ["streamSettings","xhttpSettings","path"],
+        ["streamSettings","xhttpSettings","mode"],
+        ["streamSettings","xhttpSettings","extra","headers"],
+        ["streamSettings","xhttpSettings","extra","xPaddingBytes"],
+        ["streamSettings","xhttpSettings","extra","noGRPCHeader"],
+        ["streamSettings","xhttpSettings","extra","scMaxEachPostBytes"],
+        ["streamSettings","xhttpSettings","extra","scMinPostsIntervalMs"],
+        ["streamSettings","xhttpSettings","extra","xmux","maxConcurrency"],
+        ["streamSettings","xhttpSettings","extra","xmux","maxConnections"],
+        ["streamSettings","xhttpSettings","extra","xmux","cMaxReuseTimes"],
+        ["streamSettings","xhttpSettings","extra","xmux","hMaxRequestTimes"],
+        ["streamSettings","xhttpSettings","extra","xmux","hMaxReusableSecs"],
+        ["streamSettings","xhttpSettings","extra","xmux","hKeepAlivePeriod"],
+        ["streamSettings","xhttpSettings","extra","downloadSettings","address"],
+        ["streamSettings","xhttpSettings","extra","downloadSettings","port"],
+        ["streamSettings","xhttpSettings","extra","downloadSettings","network"],
+        ["streamSettings","xhttpSettings","extra","downloadSettings","security"],
+        ["streamSettings","kcpSettings","mtu"],
+        ["streamSettings","kcpSettings","tti"],
+        ["streamSettings","kcpSettings","uplinkCapacity"],
+        ["streamSettings","kcpSettings","downlinkCapacity"],
+        ["streamSettings","kcpSettings","congestion"],
+        ["streamSettings","kcpSettings","readBufferSize"],
+        ["streamSettings","kcpSettings","writeBufferSize"],
+        ["streamSettings","grpcSettings","authority"],
+        ["streamSettings","grpcSettings","serviceName"],
+        ["streamSettings","grpcSettings","multiMode"],
+        ["streamSettings","grpcSettings","user_agent"],
+        ["streamSettings","grpcSettings","idle_timeout"],
+        ["streamSettings","grpcSettings","health_check_timeout"],
+        ["streamSettings","grpcSettings","permit_without_stream"],
+        ["streamSettings","grpcSettings","initial_windows_size"],
+        ["streamSettings","wsSettings","path"],
+        ["streamSettings","wsSettings","host"],
+        ["streamSettings","wsSettings","headers"],
+        ["streamSettings","wsSettings","heartbeatPeriod"],
+        ["streamSettings","httpupgradeSettings","path"],
+        ["streamSettings","httpupgradeSettings","host"],
+        ["streamSettings","httpupgradeSettings","headers"],
+        ["streamSettings","hysteriaSettings","version"],
+        ["streamSettings","hysteriaSettings","auth"],
+        ["streamSettings","hysteriaSettings","udpIdleTimeout"],
+        ["streamSettings","hysteriaSettings","masquerade","type"],
+        ["streamSettings","hysteriaSettings","masquerade","dir"],
+        ["streamSettings","hysteriaSettings","masquerade","url"],
+        ["streamSettings","hysteriaSettings","masquerade","rewriteHost"],
+        ["streamSettings","hysteriaSettings","masquerade","insecure"],
+        ["streamSettings","hysteriaSettings","masquerade","content"],
+        ["streamSettings","hysteriaSettings","masquerade","headers"],
+        ["streamSettings","hysteriaSettings","masquerade","statusCode"],
+        ["streamSettings","realitySettings","serverName"],
+        ["streamSettings","realitySettings","fingerprint"],
+        ["streamSettings","realitySettings","password"],
+        ["streamSettings","realitySettings","shortId"],
+        ["streamSettings","realitySettings","mldsa65Verify"],
+        ["streamSettings","realitySettings","spiderX"],
+        ["streamSettings","tlsSettings","serverName"],
+        ["streamSettings","tlsSettings","verifyPeerCertByName"],
+        ["streamSettings","tlsSettings","rejectUnknownSni"],
+        ["streamSettings","tlsSettings","allowInsecure"],
+        ["streamSettings","tlsSettings","alpn"],
+        ["streamSettings","tlsSettings","minVersion"],
+        ["streamSettings","tlsSettings","maxVersion"],
+        ["streamSettings","tlsSettings","cipherSuites"],
+        ["streamSettings","tlsSettings","certificates","ocspStapling"],
+        ["streamSettings","tlsSettings","certificates","oneTimeLoading"],
+        ["streamSettings","tlsSettings","certificates","usage"],
+        ["streamSettings","tlsSettings","certificates","buildChain"],
+        ["streamSettings","tlsSettings","certificates","certificateFile"],
+        ["streamSettings","tlsSettings","certificates","keyFile"],
+        ["streamSettings","tlsSettings","certificates","certificate"],
+        ["streamSettings","tlsSettings","certificates","key"],
+        ["streamSettings","tlsSettings","disableSystemRoot"],
+        ["streamSettings","tlsSettings","enableSessionResumption"],
+        ["streamSettings","tlsSettings","fingerprint"],
+        ["streamSettings","tlsSettings","pinnedPeerCertSha256"],
+        ["streamSettings","tlsSettings","curvePreferences"],
+        ["streamSettings","tlsSettings","masterKeyLog"],
+        ["streamSettings","tlsSettings","echConfigList"],
+        ["streamSettings","tlsSettings","echSockopt","mark"],
+        ["streamSettings","tlsSettings","echSockopt","tcpMaxSeg"],
+        ["streamSettings","tlsSettings","echSockopt","tcpFastOpen"],
+        ["streamSettings","tlsSettings","echSockopt","tproxy"],
+        ["streamSettings","tlsSettings","echSockopt","domainStrategy"],
+        ["streamSettings","tlsSettings","echSockopt","happyEyeballs","tryDelayMs"],
+        ["streamSettings","tlsSettings","echSockopt","happyEyeballs","prioritizeIPv6"],
+        ["streamSettings","tlsSettings","echSockopt","happyEyeballs","interleave"],
+        ["streamSettings","tlsSettings","echSockopt","happyEyeballs","maxConcurrentTry"],
+        ["streamSettings","tlsSettings","echSockopt","dialerProxy"],
+        ["streamSettings","tlsSettings","echSockopt","trustedXForwardedFor"],
+        ["streamSettings","tlsSettings","echSockopt","tcpKeepAliveInterval"],
+        ["streamSettings","tlsSettings","echSockopt","tcpKeepAliveIdle"],
+        ["streamSettings","tlsSettings","echSockopt","tcpUserTimeout"],
+        ["streamSettings","tlsSettings","echSockopt","tcpcongestion"],
+        ["streamSettings","tlsSettings","echSockopt","interface"],
+        ["streamSettings","tlsSettings","echSockopt","V6Only"],
+        ["streamSettings","tlsSettings","echSockopt","tcpWindowClamp"],
+        ["streamSettings","tlsSettings","echSockopt","tcpMptcp"],
+        ["streamSettings","tlsSettings","echSockopt","addressPortStrategy"],
+        ["streamSettings","tlsSettings","echSockopt","customSockopt"],
+        ["streamSettings","finalmask","tcp","type"],
+        ["streamSettings","finalmask","tcp","settings"],
+        ["streamSettings","finalmask","udp","type"],
+        ["streamSettings","finalmask","udp","settings"],
+        ["streamSettings","finalmask","quicParams","congestion"],
+        ["streamSettings","finalmask","quicParams","bbrProfile"],
+        ["streamSettings","finalmask","quicParams","debug"],
+        ["streamSettings","finalmask","quicParams","brutalUp"],
+        ["streamSettings","finalmask","quicParams","brutalDown"],
+        ["streamSettings","finalmask","quicParams","udpHop","ports"],
+        ["streamSettings","finalmask","quicParams","udpHop","interval"],
+        ["streamSettings","finalmask","quicParams","initStreamReceiveWindow"],
+        ["streamSettings","finalmask","quicParams","maxStreamReceiveWindow"],
+        ["streamSettings","finalmask","quicParams","initConnectionReceiveWindow"],
+        ["streamSettings","finalmask","quicParams","maxConnectionReceiveWindow"],
+        ["streamSettings","finalmask","quicParams","maxIdleTimeout"],
+        ["streamSettings","finalmask","quicParams","keepAlivePeriod"],
+        ["streamSettings","finalmask","quicParams","disablePathMTUDiscovery"],
+        ["streamSettings","finalmask","quicParams","maxIncomingStreams"],
+        ["streamSettings","sockopt","mark"],
+        ["streamSettings","sockopt","tcpMaxSeg"],
+        ["streamSettings","sockopt","tcpFastOpen"],
+        ["streamSettings","sockopt","tproxy"],
+        ["streamSettings","sockopt","domainStrategy"],
+        ["streamSettings","sockopt","happyEyeballs","tryDelayMs"],
+        ["streamSettings","sockopt","happyEyeballs","prioritizeIPv6"],
+        ["streamSettings","sockopt","happyEyeballs","interleave"],
+        ["streamSettings","sockopt","happyEyeballs","maxConcurrentTry"],
+        ["streamSettings","sockopt","dialerProxy"],
+        ["streamSettings","sockopt","trustedXForwardedFor"],
+        ["streamSettings","sockopt","tcpKeepAliveInterval"],
+        ["streamSettings","sockopt","tcpKeepAliveIdle"],
+        ["streamSettings","sockopt","tcpUserTimeout"],
+        ["streamSettings","sockopt","tcpcongestion"],
+        ["streamSettings","sockopt","interface"],
+        ["streamSettings","sockopt","V6Only"],
+        ["streamSettings","sockopt","tcpWindowClamp"],
+        ["streamSettings","sockopt","tcpMptcp"],
+        ["streamSettings","sockopt","addressPortStrategy"],
+        ["streamSettings","sockopt","customSockopt"],
+        ["proxySettings","tag"],
+        ["proxySettings","transportLayer"],
+        ["mux","enabled"],
+        ["mux","concurrency"],
+        ["mux","xudpConcurrency"],
+        ["mux","xudpProxyUDP443"],
+        ["targetStrategy"],
+        ["tag"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    if [ -z "${jq_protocol:-}" ]
+    then
+        outbounds_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[1]}" read -r -a outbounds_sendThrough <<< "$jq_sendThrough"
+    IFS="${delimiters[1]}" read -r -a outbounds_protocol <<< "$jq_protocol"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_response_type <<< "$jq_settings_response_type"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_rewriteNetwork <<< "$jq_settings_rewriteNetwork"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_rewriteAddress <<< "$jq_settings_rewriteAddress"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_rewritePort <<< "$jq_settings_rewritePort"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_userLevel <<< "$jq_settings_userLevel"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_rules_action<<< "$jq_settings_rules_action"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_rules_qType <<< "$jq_settings_rules_qType"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_rules_rCode <<< "$jq_settings_rules_rCode"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_rules_domain <<< "$jq_settings_rules_domain"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_domainStrategy <<< "$jq_settings_domainStrategy"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_redirect <<< "$jq_settings_redirect"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_fragment_packets <<< "$jq_settings_fragment_packets"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_fragment_length <<< "$jq_settings_fragment_length"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_fragment_interval <<< "$jq_settings_fragment_interval"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_noises_type <<< "$jq_settings_noises_type"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_noises_packet <<< "$jq_settings_noises_packet"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_noises_delay <<< "$jq_settings_noises_delay"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_proxyProtocol <<< "$jq_settings_proxyProtocol"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_finalRules_action <<< "$jq_settings_finalRules_action"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_finalRules_network <<< "$jq_settings_finalRules_network"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_finalRules_port <<< "$jq_settings_finalRules_port"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_finalRules_ip <<< "$jq_settings_finalRules_ip"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_finalRules_blockDelay <<< "$jq_settings_finalRules_blockDelay"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_address <<< "$jq_settings_address"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_port <<< "$jq_settings_port"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_user <<< "$jq_settings_user"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_pass <<< "$jq_settings_pass"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_level <<< "$jq_settings_level"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_email <<< "$jq_settings_email"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_headers <<< "$jq_settings_headers"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_inboundTag <<< "$jq_settings_inboundTag"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_password <<< "$jq_settings_password"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_method <<< "$jq_settings_method"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_id <<< "$jq_settings_id"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_encryption <<< "$jq_settings_encryption"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_flow <<< "$jq_settings_flow"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_reverse_tag <<< "$jq_settings_reverse_tag"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_enabled <<< "$jq_settings_reverse_sniffing_enabled"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_destOverride <<< "$jq_settings_reverse_sniffing_destOverride"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_metadataOnly <<< "$jq_settings_reverse_sniffing_metadataOnly"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_domainsExcluded <<< "$jq_settings_reverse_sniffing_domainsExcluded"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_ipsExcluded <<< "$jq_settings_reverse_sniffing_ipsExcluded"
+    IFS="${delimiters[4]}" read -r -a outbounds_settings_reverse_sniffing_routeOnly <<< "$jq_settings_reverse_sniffing_routeOnly"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_security <<< "$jq_settings_security"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_experiments <<< "$jq_settings_experiments"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_secretKey <<< "$jq_settings_secretKey"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_noKernelTun <<< "$jq_settings_noKernelTun"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_mtu <<< "$jq_settings_mtu"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_reserved <<< "$jq_settings_reserved"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_workers <<< "$jq_settings_workers"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_peers_endpoint <<< "$jq_settings_peers_endpoint"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_peers_publicKey <<< "$jq_settings_peers_publicKey"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_peers_preSharedKey <<< "$jq_settings_peers_preSharedKey"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_peers_keepAlive <<< "$jq_settings_peers_keepAlive"
+    IFS="${delimiters[3]}" read -r -a outbounds_settings_peers_allowedIPs <<< "$jq_settings_peers_allowedIPs"
+    IFS="${delimiters[2]}" read -r -a outbounds_settings_version <<< "$jq_settings_version"
+    IFS="${delimiters[2]}" read -r -a outbounds_streamSettings_network <<< "$jq_streamSettings_network"
+    IFS="${delimiters[2]}" read -r -a outbounds_streamSettings_security <<< "$jq_streamSettings_security"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_rawSettings_header_type <<< "$jq_streamSettings_rawSettings_header_type"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_request_version <<< "$jq_streamSettings_rawSettings_header_request_version"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_request_method <<< "$jq_streamSettings_rawSettings_header_request_method"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_request_path <<< "$jq_streamSettings_rawSettings_header_request_path"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_request_headers <<< "$jq_streamSettings_rawSettings_header_request_headers"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_response_version <<< "$jq_streamSettings_rawSettings_header_response_version"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_response_status <<< "$jq_streamSettings_rawSettings_header_response_status"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_response_reason <<< "$jq_streamSettings_rawSettings_header_response_reason"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_rawSettings_header_response_headers <<< "$jq_streamSettings_rawSettings_header_response_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_xhttpSettings_host <<< "$jq_streamSettings_xhttpSettings_host"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_xhttpSettings_path <<< "$jq_streamSettings_xhttpSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_xhttpSettings_mode <<< "$jq_streamSettings_xhttpSettings_mode"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_headers <<< "$jq_streamSettings_xhttpSettings_extra_headers"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xPaddingBytes <<< "$jq_streamSettings_xhttpSettings_extra_xPaddingBytes"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_noGRPCHeader <<< "$jq_streamSettings_xhttpSettings_extra_noGRPCHeader"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_scMaxEachPostBytes <<< "$jq_streamSettings_xhttpSettings_extra_scMaxEachPostBytes"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_scMinPostsIntervalMs <<< "$jq_streamSettings_xhttpSettings_extra_scMinPostsIntervalMs"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_maxConcurrency <<< "$jq_streamSettings_xhttpSettings_extra_xmux_maxConcurrency"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_maxConnections <<< "$jq_streamSettings_xhttpSettings_extra_xmux_maxConnections"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_cMaxReuseTimes <<< "$jq_streamSettings_xhttpSettings_extra_xmux_cMaxReuseTimes"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_hMaxRequestTimes <<< "$jq_streamSettings_xhttpSettings_extra_xmux_hMaxRequestTimes"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_hMaxReusableSecs <<< "$jq_streamSettings_xhttpSettings_extra_xmux_hMaxReusableSecs"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_xmux_hKeepAlivePeriod <<< "$jq_streamSettings_xhttpSettings_extra_xmux_hKeepAlivePeriod"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_downloadSettings_address <<< "$jq_streamSettings_xhttpSettings_extra_downloadSettings_address"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_downloadSettings_port <<< "$jq_streamSettings_xhttpSettings_extra_downloadSettings_port"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_downloadSettings_network <<< "$jq_streamSettings_xhttpSettings_extra_downloadSettings_network"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_xhttpSettings_extra_downloadSettings_security <<< "$jq_streamSettings_xhttpSettings_extra_downloadSettings_security"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_mtu <<< "$jq_streamSettings_kcpSettings_mtu"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_tti <<< "$jq_streamSettings_kcpSettings_tti"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_uplinkCapacity <<< "$jq_streamSettings_kcpSettings_uplinkCapacity"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_downlinkCapacity <<< "$jq_streamSettings_kcpSettings_downlinkCapacity"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_congestion <<< "$jq_streamSettings_kcpSettings_congestion"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_readBufferSize <<< "$jq_streamSettings_kcpSettings_readBufferSize"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_kcpSettings_writeBufferSize <<< "$jq_streamSettings_kcpSettings_writeBufferSize"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_authority <<< "$jq_streamSettings_grpcSettings_authority"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_serviceName <<< "$jq_streamSettings_grpcSettings_serviceName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_multiMode <<< "$jq_streamSettings_grpcSettings_multiMode"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_user_agent <<< "$jq_streamSettings_grpcSettings_user_agent"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_idle_timeout <<< "$jq_streamSettings_grpcSettings_idle_timeout"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_health_check_timeout <<< "$jq_streamSettings_grpcSettings_health_check_timeout"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_permit_without_stream <<< "$jq_streamSettings_grpcSettings_permit_without_stream"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_grpcSettings_initial_windows_size <<< "$jq_streamSettings_grpcSettings_initial_windows_size"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_path <<< "$jq_streamSettings_wsSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_host <<< "$jq_streamSettings_wsSettings_host"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_headers <<< "$jq_streamSettings_wsSettings_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_wsSettings_heartbeatPeriod <<< "$jq_streamSettings_wsSettings_heartbeatPeriod"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpupgradeSettings_path <<< "$jq_streamSettings_httpupgradeSettings_path"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpupgradeSettings_host <<< "$jq_streamSettings_httpupgradeSettings_host"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_httpupgradeSettings_headers <<< "$jq_streamSettings_httpupgradeSettings_headers"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_hysteriaSettings_version <<< "$jq_streamSettings_hysteriaSettings_version"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_hysteriaSettings_auth <<< "$jq_streamSettings_hysteriaSettings_auth"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_hysteriaSettings_udpIdleTimeout <<< "$jq_streamSettings_hysteriaSettings_udpIdleTimeout"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_type <<< "$jq_streamSettings_hysteriaSettings_masquerade_type"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_dir <<< "$jq_streamSettings_hysteriaSettings_masquerade_dir"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_url <<< "$jq_streamSettings_hysteriaSettings_masquerade_url"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_rewriteHost <<< "$jq_streamSettings_hysteriaSettings_masquerade_rewriteHost"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_insecure <<< "$jq_streamSettings_hysteriaSettings_masquerade_insecure"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_content <<< "$jq_streamSettings_hysteriaSettings_masquerade_content"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_headers <<< "$jq_streamSettings_hysteriaSettings_masquerade_headers"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_hysteriaSettings_masquerade_statusCode <<< "$jq_streamSettings_hysteriaSettings_masquerade_statusCode"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_serverName <<< "$jq_streamSettings_realitySettings_serverName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_fingerprint <<< "$jq_streamSettings_realitySettings_fingerprint"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_password <<< "$jq_streamSettings_realitySettings_password"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_shortId <<< "$jq_streamSettings_realitySettings_shortId"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_mldsa65Verify <<< "$jq_streamSettings_realitySettings_mldsa65Verify"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_realitySettings_spiderX <<< "$jq_streamSettings_realitySettings_spiderX"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_serverName <<< "$jq_streamSettings_tlsSettings_serverName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_verifyPeerCertByName <<< "$jq_streamSettings_tlsSettings_verifyPeerCertByName"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_rejectUnknownSni <<< "$jq_streamSettings_tlsSettings_rejectUnknownSni"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_allowInsecure <<< "$jq_streamSettings_tlsSettings_allowInsecure"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_alpn <<< "$jq_streamSettings_tlsSettings_alpn"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_minVersion <<< "$jq_streamSettings_tlsSettings_minVersion"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_maxVersion <<< "$jq_streamSettings_tlsSettings_maxVersion"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_cipherSuites <<< "$jq_streamSettings_tlsSettings_cipherSuites"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_ocspStapling <<< "$jq_streamSettings_tlsSettings_certificates_ocspStapling"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_oneTimeLoading <<< "$jq_streamSettings_tlsSettings_certificates_oneTimeLoading"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_usage <<< "$jq_streamSettings_tlsSettings_certificates_usage"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_buildChain <<< "$jq_streamSettings_tlsSettings_certificates_buildChain"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_certificateFile <<< "$jq_streamSettings_tlsSettings_certificates_certificateFile"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_keyFile <<< "$jq_streamSettings_tlsSettings_certificates_keyFile"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_certificate <<< "$jq_streamSettings_tlsSettings_certificates_certificate"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_certificates_key <<< "$jq_streamSettings_tlsSettings_certificates_key"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_disableSystemRoot <<< "$jq_streamSettings_tlsSettings_disableSystemRoot"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_enableSessionResumption <<< "$jq_streamSettings_tlsSettings_enableSessionResumption"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_fingerprint <<< "$jq_streamSettings_tlsSettings_fingerprint"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_pinnedPeerCertSha256 <<< "$jq_streamSettings_tlsSettings_pinnedPeerCertSha256"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_curvePreferences <<< "$jq_streamSettings_tlsSettings_curvePreferences"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_masterKeyLog <<< "$jq_streamSettings_tlsSettings_masterKeyLog"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_tlsSettings_echConfigList <<< "$jq_streamSettings_tlsSettings_echConfigList"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_mark <<< "$jq_streamSettings_tlsSettings_echSockopt_mark"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpMaxSeg <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpMaxSeg"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpFastOpen <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpFastOpen"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tproxy <<< "$jq_streamSettings_tlsSettings_echSockopt_tproxy"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_domainStrategy <<< "$jq_streamSettings_tlsSettings_echSockopt_domainStrategy"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_tryDelayMs <<< "$jq_streamSettings_tlsSettings_echSockopt_happyEyeballs_tryDelayMs"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_prioritizeIPv6 <<< "$jq_streamSettings_tlsSettings_echSockopt_happyEyeballs_prioritizeIPv6"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_interleave <<< "$jq_streamSettings_tlsSettings_echSockopt_happyEyeballs_interleave"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_maxConcurrentTry <<< "$jq_streamSettings_tlsSettings_echSockopt_happyEyeballs_maxConcurrentTry"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_dialerProxy <<< "$jq_streamSettings_tlsSettings_echSockopt_dialerProxy"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_trustedXForwardedFor <<< "$jq_streamSettings_tlsSettings_echSockopt_trustedXForwardedFor"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpKeepAliveInterval <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpKeepAliveInterval"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpKeepAliveIdle <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpKeepAliveIdle"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpUserTimeout <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpUserTimeout"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpcongestion <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpcongestion"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_interface <<< "$jq_streamSettings_tlsSettings_echSockopt_interface"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_V6Only <<< "$jq_streamSettings_tlsSettings_echSockopt_V6Only"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpWindowClamp <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpWindowClamp"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_tcpMptcp <<< "$jq_streamSettings_tlsSettings_echSockopt_tcpMptcp"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_addressPortStrategy <<< "$jq_streamSettings_tlsSettings_echSockopt_addressPortStrategy"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_tlsSettings_echSockopt_customSockopt <<< "$jq_streamSettings_tlsSettings_echSockopt_customSockopt"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_tcp_type <<< "$jq_streamSettings_finalmask_tcp_type"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_tcp_settings <<< "$jq_streamSettings_finalmask_tcp_settings"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_udp_type <<< "$jq_streamSettings_finalmask_udp_type"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_udp_settings <<< "$jq_streamSettings_finalmask_udp_settings"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_congestion <<< "$jq_streamSettings_finalmask_quicParams_congestion"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_bbrProfile <<< "$jq_streamSettings_finalmask_quicParams_bbrProfile"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_debug <<< "$jq_streamSettings_finalmask_quicParams_debug"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_brutalUp <<< "$jq_streamSettings_finalmask_quicParams_brutalUp"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_brutalDown <<< "$jq_streamSettings_finalmask_quicParams_brutalDown"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_finalmask_quicParams_udpHop_ports <<< "$jq_streamSettings_finalmask_quicParams_udpHop_ports"
+    IFS="${delimiters[5]}" read -r -a outbounds_streamSettings_finalmask_quicParams_udpHop_interval <<< "$jq_streamSettings_finalmask_quicParams_udpHop_interval"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_initStreamReceiveWindow <<< "$jq_streamSettings_finalmask_quicParams_initStreamReceiveWindow"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_maxStreamReceiveWindow <<< "$jq_streamSettings_finalmask_quicParams_maxStreamReceiveWindow"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_initConnectionReceiveWindow <<< "$jq_streamSettings_finalmask_quicParams_initConnectionReceiveWindow"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_maxConnectionReceiveWindow <<< "$jq_streamSettings_finalmask_quicParams_maxConnectionReceiveWindow"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_maxIdleTimeout <<< "$jq_streamSettings_finalmask_quicParams_maxIdleTimeout"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_keepAlivePeriod <<< "$jq_streamSettings_finalmask_quicParams_keepAlivePeriod"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_disablePathMTUDiscovery <<< "$jq_streamSettings_finalmask_quicParams_disablePathMTUDiscovery"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_finalmask_quicParams_maxIncomingStreams <<< "$jq_streamSettings_finalmask_quicParams_maxIncomingStreams"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_mark <<< "$jq_streamSettings_sockopt_mark"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpMaxSeg <<< "$jq_streamSettings_sockopt_tcpMaxSeg"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpFastOpen <<< "$jq_streamSettings_sockopt_tcpFastOpen"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tproxy <<< "$jq_streamSettings_sockopt_tproxy"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_domainStrategy <<< "$jq_streamSettings_sockopt_domainStrategy"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_sockopt_happyEyeballs_tryDelayMs <<< "$jq_streamSettings_sockopt_happyEyeballs_tryDelayMs"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_sockopt_happyEyeballs_prioritizeIPv6 <<< "$jq_streamSettings_sockopt_happyEyeballs_prioritizeIPv6"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_sockopt_happyEyeballs_interleave <<< "$jq_streamSettings_sockopt_happyEyeballs_interleave"
+    IFS="${delimiters[4]}" read -r -a outbounds_streamSettings_sockopt_happyEyeballs_maxConcurrentTry <<< "$jq_streamSettings_sockopt_happyEyeballs_maxConcurrentTry"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_dialerProxy <<< "$jq_streamSettings_sockopt_dialerProxy"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_trustedXForwardedFor <<< "$jq_streamSettings_sockopt_trustedXForwardedFor"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpKeepAliveInterval <<< "$jq_streamSettings_sockopt_tcpKeepAliveInterval"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpKeepAliveIdle <<< "$jq_streamSettings_sockopt_tcpKeepAliveIdle"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpUserTimeout <<< "$jq_streamSettings_sockopt_tcpUserTimeout"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpcongestion <<< "$jq_streamSettings_sockopt_tcpcongestion"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_interface <<< "$jq_streamSettings_sockopt_interface"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_V6Only <<< "$jq_streamSettings_sockopt_V6Only"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpWindowClamp <<< "$jq_streamSettings_sockopt_tcpWindowClamp"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_tcpMptcp <<< "$jq_streamSettings_sockopt_tcpMptcp"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_addressPortStrategy <<< "$jq_streamSettings_sockopt_addressPortStrategy"
+    IFS="${delimiters[3]}" read -r -a outbounds_streamSettings_sockopt_customSockopt <<< "$jq_streamSettings_sockopt_customSockopt"
+    IFS="${delimiters[2]}" read -r -a outbounds_proxySettings_tag <<< "$jq_proxySettings_tag"
+    IFS="${delimiters[2]}" read -r -a outbounds_proxySettings_transportLayer <<< "$jq_proxySettings_transportLayer"
+    IFS="${delimiters[2]}" read -r -a outbounds_mux_enabled <<< "$jq_mux_enabled"
+    IFS="${delimiters[2]}" read -r -a outbounds_mux_concurrency <<< "$jq_mux_concurrency"
+    IFS="${delimiters[2]}" read -r -a outbounds_mux_xudpConcurrency <<< "$jq_mux_xudpConcurrency"
+    IFS="${delimiters[2]}" read -r -a outbounds_mux_xudpProxyUDP443 <<< "$jq_mux_xudpProxyUDP443"
+    IFS="${delimiters[1]}" read -r -a outbounds_targetStrategy <<< "$jq_targetStrategy"
+    IFS="${delimiters[1]}" read -r -a outbounds_tag <<< "$jq_tag"
+
+    outbounds_count=${#outbounds_protocol[@]}
+
+    return 0
+}

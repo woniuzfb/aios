@@ -1925,7 +1925,7 @@ MonitorSet()
         then
             flv_count=$((flv_count+1))
 
-            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
+            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
 
             chnl_stream_links_text=""
             for((list_i=0;list_i<${#chnl_stream_links[@]};list_i++));
@@ -2219,18 +2219,14 @@ Monitor()
 
                         output_dir_name="${chnls_output_dir_name[chnls_index]}"
 
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
-
-                        chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
-                        chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
-
-                        IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+                        IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]}"
 
                         chnl_schedules_indices=("${!chnl_schedules_status[@]}")
 

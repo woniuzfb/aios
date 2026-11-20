@@ -6,25 +6,25 @@ TestCoreQuoteArray()
     printf '%s\n' "${test_array[@]}"
 }
 
-TestCoreJoinByChar()
+TestCoreJoinByString()
 {
     echo
     test_array=( a 'b "c' d)
     ToQuoteArray test_array
-    list=$(JoinByChar , "${test_array[@]}")
+    list=$(JoinByString ', ' "${test_array[@]}")
     echo "$list"
 }
 
 TestCore()
 {
-    test_core_options=( 
+    test_core_options=(
         '1. quote an array'
         '2. array -> list'
     )
 
     test_core_actions=(
         TestCoreQuoteArray
-        TestCoreJoinByChar
+        TestCoreJoinByString
     )
 
     echo

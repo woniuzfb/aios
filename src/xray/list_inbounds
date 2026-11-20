@@ -1,0 +1,461 @@
+XrayListInbounds()
+{
+    XrayGetInbounds
+
+    list_inbounds_options=( '全部入站' '本地 nginx 入站' "直连 xray 入站" )
+
+    local i j count
+
+    if [ "${1:-}" == "nginx" ]
+    then
+        list_inbounds_options_index=1
+        count=$inbounds_nginx_count
+    elif [ "${1:-}" == "direct" ]
+    then
+        list_inbounds_options_index=2
+        count=$inbounds_other_count
+    else
+        echo
+        inquirer list_input_index "选择显示的范围" list_inbounds_options list_inbounds_options_index
+
+        if [ "$list_inbounds_options_index" -eq 0 ]
+        then
+            count=$inbounds_count
+        elif [ "$list_inbounds_options_index" -eq 1 ]
+        then
+            count=$inbounds_nginx_count
+        else
+            count=$inbounds_other_count
+        fi
+    fi
+
+    if [ "$count" -eq 0 ]
+    then
+        if [ "$list_inbounds_options_index" -eq 0 ]
+        then
+            Println "$error 请先添加入站\n"
+        else
+            Println "$error 请先添加 ${list_inbounds_options[list_inbounds_options_index]}\n"
+        fi
+
+        exit 1
+    fi
+
+    Println "\n=== ${list_inbounds_options[list_inbounds_options_index]}数 ${green} $count ${normal}"
+
+    inbounds_list=""
+
+    for((j=0;j<count;j++));
+    do
+        if [ "$list_inbounds_options_index" -eq 0 ]
+        then
+            inbounds_index=$j
+        elif [ "$list_inbounds_options_index" -eq 1 ]
+        then
+            inbounds_index=${inbounds_nginx_index[j]}
+        else
+            inbounds_index=${inbounds_other_index[j]}
+        fi
+
+        inbound_list="${inbounds_list}监听地址: ${green}${inbounds_listen[inbounds_index]}${normal} 监听端口: ${green}${inbounds_port[inbounds_index]}${normal}\n${indent_6}传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal} 标识: ${green}${inbounds_tag[inbounds_index]}${normal}\n${indent_6}"
+
+        if [ "${inbounds_sniffing_enabled[inbounds_index]}" = true ]
+        then
+            inbound_sniffing_list="流量探测: ${green}开启${normal} "
+        else
+            inbound_sniffing_list="流量探测: ${red}关闭${normal} "
+        fi
+
+        if [ "${inbounds_sniffing_metadataOnly[inbounds_index]}" = false ]
+        then
+            inbound_sniffing_list="${inbound_sniffing_list}仅使用元数据推断: ${red}否${normal} "
+        else
+            inbound_sniffing_list="${inbound_sniffing_list}仅使用元数据推断: ${green}是${normal} "
+        fi
+
+        inbound_sniffing_list="${inbound_sniffing_list}指定流量类型: ${green}${inbounds_sniffing_destOverride[inbounds_index]//${delimiters[3]}/,}${normal}\n${indent_6}"
+
+        if [ -n "${inbounds_sniffing_destOverride[inbounds_index]}" ]
+        then
+            IFS="${delimiters[2]}" read -r -a sniffing_destOverride <<< "${inbounds_sniffing_destOverride[inbounds_index]}"
+            inbound_sniffing_list="${inbound_sniffing_list}重置连接的流量: $(ArrayToList sniffing_destOverride)\n${indent_6}"
+        fi
+
+        if [ "${inbounds_sniffing_routeOnly[inbounds_index]}" = false ]
+        then
+            inbound_sniffing_list="${inbound_sniffing_list}嗅探得到的域名仅用于路由: ${red}否${normal}\n${indent_6}"
+        else
+            inbound_sniffing_list="${inbound_sniffing_list}嗅探得到的域名仅用于路由: ${green}是${normal}\n${indent_6}"
+        fi
+
+        if [ -n "${inbounds_sniffing_domainsExcluded[inbounds_index]}" ]
+        then
+            IFS="${delimiters[2]}" read -r -a sniffing_domainsExcluded <<< "${inbounds_sniffing_domainsExcluded[inbounds_index]}"
+            inbound_sniffing_list="${inbound_sniffing_list}排除域名: $(ArrayToList sniffing_domainsExcluded)\n${indent_6}"
+        fi
+
+        if [ -n "${inbounds_sniffing_ipsExcluded[inbounds_index]}" ]
+        then
+            IFS="${delimiters[2]}" read -r -a sniffing_ipsExcluded <<< "${inbounds_sniffing_ipsExcluded[inbounds_index]}"
+            inbound_sniffing_list="${inbound_sniffing_list}排除重置: $(ArrayToList sniffing_ipsExcluded)\n${indent_6}"
+        fi
+
+        case ${inbounds_protocol[inbounds_index]} in
+            "tunnel"|"dokodemo-door")
+                inbound_settings_list="流量转发地址: ${green}${inbounds_settings_rewriteAddress[inbounds_index]}${normal} 流量转发端口: ${green}${inbounds_settings_rewritePort[inbounds_index]}${normal} 用户等级: ${green}${inbounds_settings_userLevel[inbounds_index]:-0}${normal}\n${indent_6}"
+                inbound_settings_list="${inbound_settings_list}可接收网络协议: ${green}${inbounds_settings_allowedNetwork[inbounds_index]:-tcp}${normal} "
+
+                if [ "${inbounds_settings_followRedirect[inbounds_index]:-false}" = false ]
+                then
+                    inbound_settings_list="${inbound_settings_list}识别转发iptables: ${red}否${normal}\n${indent_6}"
+                else
+                    inbound_settings_list="${inbound_settings_list}识别转发iptables: ${green}是${normal}\n${indent_6}"
+                fi
+
+                if [ -n "${inbounds_settings_portMap[inbounds_index]:-}" ]
+                then
+                    jq_payload="${inbounds_settings_portMap[inbounds_index]:-{}}"
+                    jq_path='[]'
+
+                    inbound_settings_portMap_local=()
+                    inbound_settings_portMap_remote=()
+                    inbound_settings_portMap_list=""
+                    local portMap_local portMap_remote
+
+                    while IFS="^" read -r portMap_local portMap_remote; do
+                        inbound_settings_portMap_local+=("$portMap_local")
+                        inbound_settings_portMap_remote+=("$portMap_remote")
+                        inbound_settings_portMap_list="${inbound_settings_portMap_list}, ${portMap_local} => ${portMap_remote}"
+                    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+                    inbound_settings_portMap_list="${inbound_settings_portMap_list#* }"
+                    inbound_settings_list="${inbound_settings_list}端口映射: ${inbound_settings_portMap_list}\n${indent_6}"
+                fi
+            ;;
+            "http")
+                if [ "${inbounds_settings_allowTransparent[inbounds_index]:-false}" = false ]
+                then
+                    inbound_settings_list="转发所有 HTTP 请求: ${red}否${normal} "
+                else
+                    inbound_settings_list="转发所有 HTTP 请求: ${green}是${normal} "
+                fi
+
+                inbound_settings_list="${inbound_settings_list}用户等级: ${green}${inbounds_settings_userLevel[inbounds_index]:-0}${normal}\n${indent_6}"
+            ;;
+            "shadowsocks")
+                inbound_settings_list="监听的网络类型: ${green}${inbounds_settings_network[inbounds_index]:-tcp}${normal} 加密方式: ${green}${inbounds_settings_method[inbounds_index]:-2022-blake3-aes-256-gcm}${normal}\n${indent_6}"
+                inbound_settings_list="${inbound_settings_list}密钥: ${green}${inbounds_settings_password[inbounds_index]:-}${normal}\n${indent_6}"
+                inbound_settings_list="${inbound_settings_list}用户等级: ${green}${inbounds_settings_level[inbounds_index]:-0}${normal} 邮箱: ${green}${inbounds_settings_email[inbounds_index]:-}${normal}\n${indent_6}"
+            ;;
+            "socks")
+                inbound_settings_list="认证方式: ${green}${inbounds_settings_auth[inbounds_index]:-noauth}${normal} "
+
+                if [ "${inbounds_settings_udp[inbounds_index]:-false}" = false ]
+                then
+                    inbound_settings_list="${inbound_settings_list}支持UDP协议: ${red}否${normal} "
+                else
+                    inbound_settings_list="${inbound_settings_list}支持UDP协议: ${green}是${normal} "
+                fi
+
+                inbound_settings_list="${inbound_settings_list}目标地址: ${green}${inbounds_settings_ip[inbounds_index]:-}${normal} 用户等级: ${green}${inbounds_settings_userLevel[inbounds_index]:-0}${normal}\n${indent_6}"
+            ;;
+            "trojan")
+                inbound_settings_list=""
+
+                if [ -n "${inbounds_settings_fallbacks_dest[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_name <<< "${inbounds_settings_fallbacks_name[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_alpn <<< "${inbounds_settings_fallbacks_alpn[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_path <<< "${inbounds_settings_fallbacks_path[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_dest <<< "${inbounds_settings_fallbacks_dest[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_xver <<< "${inbounds_settings_fallbacks_xver[inbounds_index]}"
+
+                    inbound_settings_fallbacks_count="${#inbound_settings_fallbacks_dest[@]}"
+
+                    for((i=0;i<inbound_settings_fallbacks_count;i++));
+                    do
+                        inbound_settings_list="${inbound_settings_list}回落$((i+1)) name:${green}${inbound_settings_fallbacks_name[i]}${normal} alpn:${green}${inbound_settings_fallbacks_alpn[i]}${normal} path:${green}${inbound_settings_fallbacks_path[i]}${normal} dest:${green}${inbound_settings_fallbacks_dest[i]}${normal} xver:${green}${inbound_settings_fallbacks_xver[i]}${normal}\n${indent_6}"
+                    done
+                fi
+            ;;
+            "vless")
+                inbound_settings_list="解密方式: ${green}${inbound_settings_decryption[inbounds_index]:-none}${normal}\n${indent_6}"
+                if [ -n "${inbounds_settings_fallbacks_dest[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_alpn <<< "${inbounds_settings_fallbacks_alpn[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_path <<< "${inbounds_settings_fallbacks_path[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_dest <<< "${inbounds_settings_fallbacks_dest[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_fallbacks_xver <<< "${inbounds_settings_fallbacks_xver[inbounds_index]}"
+
+                    inbound_settings_fallbacks_count="${#inbound_settings_fallbacks_dest[@]}"
+
+                    for((i=0;i<inbound_settings_fallbacks_count;i++));
+                    do
+                        inbound_settings_list="${inbound_settings_list}回落$((i+1)) alpn: ${green}${inbound_settings_fallbacks_alpn[i]}${normal} path:${green}${inbound_settings_fallbacks_path[i]}${normal} dest:${green}${inbound_settings_fallbacks_dest[i]}${normal} xver:${green}${inbound_settings_fallbacks_xver[i]}${normal}\n${indent_6}"
+                    done
+                fi
+            ;;
+            "vmess")
+                inbound_settings_list="用户等级: ${green}${inbounds_settings_default_level[inbounds_index]:-0}${normal}\n${indent_6}"
+            ;;
+            "wireguard")
+                inbound_settings_list="mtu: ${green}${inbounds_settings_mtu[inbounds_index]:-1420}${normal} 私钥: ${green}${inbounds_settings_secretKey[inbounds_index]}${normal}\n${indent_6}"
+
+                if [ -n "${inbounds_settings_peers_publicKey[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_peers_publicKey <<< "${inbounds_settings_peers_publicKey[inbounds_index]}"
+                    IFS="${delimiters[4]}" read -r -a inbound_settings_peers_allowedIPs <<< "${inbounds_settings_peers_allowedIPs[inbounds_index]}"
+
+                    inbound_settings_peers_count="${#inbound_settings_peers_publicKey[@]}"
+
+                    for((i=0;i<inbound_settings_peers_count;i++));
+                    do
+                        IFS="${delimiters[5]}" read -r -a inbound_settings_peer_allowedIPs <<< "${inbound_settings_peers_allowedIPs[i]:-0.0.0.0/0${delimiters[5]}::/0}"
+                        inbound_settings_list="${inbound_settings_list}peers服务器$((i+1)) 公钥: ${green}${inbound_settings_peers_publicKey[i]}${normal} 允许的源IP: ${green}$(ArrayToList inbound_settings_peer_allowedIPs)${normal}\n${indent_6}"
+                    done
+                fi
+            ;;
+            "hysteria")
+                inbound_settings_list="版本: ${green}${inbounds_settings_version[inbounds_index]:-2}${normal}\n${indent_6}"
+            ;;
+            "tun")
+                inbound_settings_list="接口名: ${green}${inbounds_settings_name[inbounds_index]:-xray0}${normal} mtu: ${green}${inbounds_settings_mtu[inbounds_index]:-1500}${normal} 用户等级: ${green}${inbounds_settings_userLevel[inbounds_index]:-0}${normal}\n${indent_6}"
+                inbound_settings_list="${inbound_settings_list}自动为 Xray 的出站绑定物理网络接口: ${green}${inbounds_settings_autoOutboundsInterface[inbounds_index]:-null}${normal}\n${indent_6}"
+
+                if [ -n "${inbounds_settings_gateway[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[3]}" read -r -a inbound_settings_gateway <<< "${inbounds_settings_gateway[inbounds_index]}"
+                    inbound_settings_list="${inbound_settings_list}TUN 接口地址前缀列表: $(ArrayToList inbound_settings_gateway)\n${indent_6}"
+                fi
+
+                if [ -n "${inbounds_settings_dns[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[3]}" read -r -a inbound_settings_dns <<< "${inbounds_settings_dns[inbounds_index]}"
+                    inbound_settings_list="${inbound_settings_list}TUN 接口 DNS 服务器列表: $(ArrayToList inbound_settings_dns)\n${indent_6}"
+                fi
+
+                if [ -n "${inbounds_settings_autoSystemRoutingTable[inbounds_index]:-}" ]
+                then
+                    IFS="${delimiters[3]}" read -r -a inbound_settings_autoSystemRoutingTable <<< "${inbounds_settings_autoSystemRoutingTable[inbounds_index]}"
+                    inbound_settings_list="${inbound_settings_list}autoSystemRoutingTable: $(ArrayToList inbound_settings_autoSystemRoutingTable)\n${indent_6}"
+                fi
+            ;;
+        esac
+
+        stream_settings_list="传输方式: ${green}${inbounds_streamSettings_network[inbounds_index]}${normal} 传输安全: ${green}${inbounds_streamSettings_security[inbounds_index]}${normal}\n${indent_6}"
+
+        case ${inbounds_streamSettings_network[inbounds_index]} in
+            "raw")
+                if [ "${inbounds_streamSettings_rawSettings_acceptProxyProtocol[inbounds_index]:-false}" = false ]
+                then
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${green}是${normal}\n${indent_6}"
+                fi
+
+                if [ "${inbounds_streamSettings_rawSettings_header_type[inbounds_index]:-none}" = "none" ]
+                then
+                    stream_settings_list="${stream_settings_list}头部伪装: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}头部伪装: ${green}http${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}请求协议: ${green}${inbounds_streamSettings_rawSettings_header_request_version[inbounds_index]:-1.1}${normal} method: ${green}${inbounds_streamSettings_rawSettings_header_request_method[inbounds_index]:-GET}${normal}\n${indent_6}"
+
+                    IFS="${delimiters[6]}" read -r -a inbound_streamSettings_rawSettings_header_request_path <<< "${inbounds_streamSettings_rawSettings_header_request_path[inbounds_index]:-/}"
+                    stream_settings_list="${stream_settings_list}请求路径: ${green}$(ArrayToList inbound_streamSettings_rawSettings_header_request_path)${normal}\n${indent_6}"
+
+                    jq_payload="${inbounds_streamSettings_rawSettings_header_request_headrs[inbounds_index]:-{}}"
+                    jq_path='[]'
+
+                    inbound_streamSettings_rawSettings_header_request_headrs_name=()
+                    inbound_streamSettings_rawSettings_header_request_headrs_value=()
+                    inbound_streamSettings_rawSettings_header_request_headrs_list=""
+                    local header_name header_value
+
+                    while IFS="^" read -r header_name header_value; do
+                        inbound_streamSettings_rawSettings_header_request_headrs_name+=("$header_name")
+                        inbound_streamSettings_rawSettings_header_request_headrs_value+=("$header_value")
+                        inbound_streamSettings_rawSettings_header_request_headrs_list="${inbound_streamSettings_rawSettings_header_request_headrs_list}, ${header_name}: ${header_value}"
+                    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+                    inbound_streamSettings_rawSettings_header_request_headrs_list="${inbound_streamSettings_rawSettings_header_request_headrs_list#* }"
+                    stream_settings_list="${stream_settings_list}请求头: ${green}${inbound_streamSettings_rawSettings_header_request_headrs_list}${normal}\n${indent_6}"
+
+                    stream_settings_list="${stream_settings_list}响应协议: ${green}${inbounds_streamSettings_rawSettings_header_response_version[inbounds_index]:-1.1}${normal} status: ${green}${inbounds_streamSettings_rawSettings_header_response_status[inbounds_index]:-200}${normal} reason: ${green}${inbounds_streamSettings_rawSettings_header_response_reason[inbounds_index]:-OK}${normal}\n${indent_6}"
+
+                    jq_payload="${inbounds_streamSettings_rawSettings_header_response_headrs[inbounds_index]:-{}}"
+                    jq_path='[]'
+
+                    inbound_streamSettings_rawSettings_header_response_headrs_name=()
+                    inbound_streamSettings_rawSettings_header_response_headrs_value=()
+                    inbound_streamSettings_rawSettings_header_response_headrs_list=""
+                    local header_name header_value
+
+                    while IFS="^" read -r header_name header_value; do
+                        inbound_streamSettings_rawSettings_header_response_headrs_name+=("$header_name")
+                        inbound_streamSettings_rawSettings_header_response_headrs_value+=("$header_value")
+                        inbound_streamSettings_rawSettings_header_response_headrs_list="${inbound_streamSettings_rawSettings_header_response_headrs_list}, ${header_name}: ${header_value}"
+                    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+                    inbound_streamSettings_rawSettings_header_response_headrs_list="${inbound_streamSettings_rawSettings_header_response_headrs_list#* }"
+                    stream_settings_list="${stream_settings_list}响应头: ${green}${inbound_streamSettings_rawSettings_header_response_headrs_list}${normal}\n${indent_6}"
+                fi
+            ;;
+            "xhttp")
+                stream_settings_list="${stream_settings_list}host: ${green}${inbounds_streamSettings_xhttpSettings_host[inbounds_index]:-}${normal} path: ${green}${inbounds_streamSettings_xhttpSettings_path[inbounds_index]:-}${normal} mode: ${green}${inbounds_streamSettings_xhttpSettings_mode[inbounds_index]:-auto}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}xPaddingBytes: ${green}${inbounds_streamSettings_xhttpSettings_extra_xPaddingBytes[inbounds_index]:-100-1000}${normal} noSSEHeader: ${green}${inbounds_streamSettings_xhttpSettings_extra_noSSEHeader[inbounds_index]:-false}${normal} scMaxEachPostBytes: ${green}${inbounds_streamSettings_xhttpSettings_extra_scMaxEachPostBytes[inbounds_index]:-1000000}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}scMaxBufferedPosts: ${green}${inbounds_streamSettings_xhttpSettings_extra_scMaxBufferedPosts[inbounds_index]:-30}${normal} scStreamUpServerSecs: ${green}${inbounds_streamSettings_xhttpSettings_extra_scStreamUpServerSecs[inbounds_index]:-20-80}${normal}\n${indent_6}"
+            ;;
+            "mkcp")
+                stream_settings_list="${stream_settings_list}mtu: ${green}${inbounds_streamSettings_kcpSettings_mtu[inbounds_index]:-1350}${normal} 传输时间间隔: ${green}${inbounds_streamSettings_kcpSettings_tti[inbounds_index]:-50}${normal}ms\n${indent_6}"
+                stream_settings_list="${stream_settings_list}上行链路容量: ${green}${inbounds_streamSettings_kcpSettings_uplinkCapacity[inbounds_index]:-5}${normal}MB/s 下行链路容量: ${green}${inbounds_streamSettings_kcpSettings_downlinkCapacity[inbounds_index]:-20}${normal}MB/s\n${indent_6}"
+
+                if [ "${inbounds_streamSettings_kcpSettings_congestion[inbounds_index]:-false}" = false ]
+                then
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${green}是${normal}\n${indent_6}"
+                fi
+
+                stream_settings_list="${stream_settings_list}读缓冲区: ${green}${inbounds_streamSettings_kcpSettings_readBufferSize[inbounds_index]:-2}${normal}MB 写缓冲区: ${green}${inbounds_streamSettings_kcpSettings_writeBufferSize[inbounds_index]:-2}${normal}MB\n${indent_6}"
+            ;;
+            "grpc")
+                stream_settings_list="${stream_settings_list}authority: ${green}${inbounds_streamSettings_grpcSettings_authority[inbounds_index]:-}${normal} serviceName: ${green}${inbounds_streamSettings_grpcSettings_serviceName[inbounds_index]:-}${normal}\n${indent_6}"
+            ;;
+            "websocket")
+                if [ "${inbounds_streamSettings_wsSettings_acceptProxyProtocol[inbounds_index]:-false}" = false ]
+                then
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${green}是${normal}\n${indent_6}"
+                fi
+
+                stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_streamSettings_wsSettings_path[inbounds_index]:-/}${normal} host: ${green}${inbounds_streamSettings_wsSettings_host[inbounds_index]:-}${normal} 心跳间隔: ${green}${inbounds_streamSettings_wsSettings_heartbeatPeriod[inbounds_index]:-0}${normal}\n${indent_6}"
+            ;;
+            "httpupgrade")
+                if [ "${inbounds_streamSettings_httpupgradeSettings_acceptProxyProtocol[inbounds_index]:-false}" = false ]
+                then
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}接收代理协议: ${green}是${normal}\n${indent_6}"
+                fi
+
+                stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_streamSettings_httpupgradeSettings_path[inbounds_index]:-/}${normal} host: ${green}${inbounds_streamSettings_httpupgradeSettings_host[inbounds_index]:-}${normal}\n${indent_6}"
+            ;;
+            "hysteria")
+                stream_settings_list="${stream_settings_list}版本: ${green}${inbounds_streamSettings_hysteriaSettings_version[inbounds_index]:-2}${normal} 认证密码: ${green}${inbounds_streamSettings_hysteriaSettings_auth[inbounds_index]:-}${normal} UDP超时断开: ${green}${inbounds_streamSettings_hysteriaSettings_udpIdleTimeout[inbounds_index]:-60}${normal}秒\n${indent_6}"
+                stream_settings_list="${stream_settings_list}http3 页面伪装 type: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_type[inbounds_index]:-}${normal} dir: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_dir[inbounds_index]:-}${normal} url: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_url[inbounds_index]:-}${normal} rewriteHost: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_rewriteHost[inbounds_index]:-false}${normal} insecure: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_insecure[inbounds_index]:-false}${normal} content: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_content[inbounds_index]:-}${normal} statusCode: ${green}${inbounds_streamSettings_hysteriaSettings_masquerade_statusCode[inbounds_index]:-0}${normal}\n${indent_6}"
+
+                jq_payload="${inbounds_streamSettings_hysteriaSettings_masquerade_headers[inbounds_index]:-{}}"
+                jq_path='[]'
+
+                inbound_streamSettings_hysteriaSettings_masquerade_headrs_name=()
+                inbound_streamSettings_hysteriaSettings_masquerade_headrs_value=()
+                inbound_streamSettings_hysteriaSettings_masquerade_headrs_list=""
+                local header_name header_value
+
+                while IFS="^" read -r header_name header_value; do
+                    inbound_streamSettings_hysteriaSettings_masquerade_headrs_name+=("$header_name")
+                    inbound_streamSettings_hysteriaSettings_masquerade_headrs_value+=("$header_value")
+                    inbound_streamSettings_hysteriaSettings_masquerade_headrs_list="${inbound_streamSettings_hysteriaSettings_masquerade_headrs_list}, ${header_name}: ${header_value}"
+                done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+                inbound_streamSettings_hysteriaSettings_masquerade_headrs_list="${inbound_streamSettings_hysteriaSettings_masquerade_headrs_list#* }"
+                stream_settings_list="${stream_settings_list}伪装 headers: ${green}${inbound_streamSettings_hysteriaSettings_masquerade_headrs_list}${normal}\n${indent_6}"
+            ;;
+        esac
+
+        if [ "${stream_settings_security}" == "reality" ]
+        then
+            if [ "${inbounds_streamSettings_realitySettings_show[inbounds_index]:-false}" = false ]
+            then
+                stream_settings_list="${stream_settings_list}输出调试信息: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}输出调试信息: ${green}是${normal}\n${indent_6}"
+            fi
+
+            stream_settings_list="${stream_settings_list}target: ${green}${inbounds_streamSettings_realitySettings_target[inbounds_index]:-}${normal} xver: ${green}${inbounds_streamSettings_realitySettings_xver[inbounds_index]:-0}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}serverNames: ${green}${inbounds_streamSettings_realitySettings_serverNames[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}privateKey: ${green}${inbounds_streamSettings_realitySettings_privateKey[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}minClientVer: ${green}${inbounds_streamSettings_realitySettings_minClientVer[inbounds_index]:-}${normal} maxClientVer: ${green}${inbounds_streamSettings_realitySettings_maxClientVer[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}maxTimeDiff: ${green}${inbounds_streamSettings_realitySettings_maxTimeDiff[inbounds_index]:-}${normal} shortIds: ${green}${inbounds_streamSettings_realitySettings_shortIds[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}mldsa65Seed: ${green}${inbounds_streamSettings_realitySettings_mldsa65Seed[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}limitFallbackUpload afterBytes: ${green}${inbounds_streamSettings_realitySettings_limitFallbackUpload_afterBytes[inbounds_index]:-0}${normal} bytesPerSec: ${green}${inbounds_streamSettings_realitySettings_limitFallbackUpload_bytesPerSec[inbounds_index]:-0}${normal} burstBytesPerSec: ${green}${inbounds_streamSettings_realitySettings_limitFallbackUpload_burstBytesPerSec[inbounds_index]:-0}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}limitFallbackDownload afterBytes: ${green}${inbounds_streamSettings_realitySettings_limitFallbackDownload_afterBytes[inbounds_index]:-0}${normal} bytesPerSec: ${green}${inbounds_streamSettings_realitySettings_limitFallbackDownload_bytesPerSec[inbounds_index]:-0}${normal} burstBytesPerSec: ${green}${inbounds_streamSettings_realitySettings_limitFallbackDownload_burstBytesPerSec[inbounds_index]:-0}${normal}\n${indent_6}"
+        elif [ "${stream_settings_security}" == "tls" ]
+        then
+            stream_settings_list="${stream_settings_list}serverName: ${green}${inbounds_streamSettings_tlsSettings_serverName[inbounds_index]:-}${normal} rejectUnknownSni: ${green}${inbounds_streamSettings_tlsSettings_rejectUnknownSni[inbounds_index]:-false}${normal}\n${indent_6}"
+            IFS="${delimiters[4]}" read -r -a inbound_streamSettings_tlsSettings_alpn <<< "${inbounds_streamSettings_tlsSettings_alpn[inbounds_index]:-h2${delimiters[4]}http/1.1}"
+            stream_settings_list="${stream_settings_list}alpn: ${green}$(ArrayToList inbound_streamSettings_tlsSettings_alpn)${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}minVersion: ${green}${inbounds_streamSettings_tlsSettings_minVersion[inbounds_index]:-}${normal} maxVersion: ${green}${inbounds_streamSettings_tlsSettings_maxVersion[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}cipherSuites: ${green}${inbounds_streamSettings_tlsSettings_cipherSuites[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}disableSystemRoot: ${green}${inbounds_streamSettings_tlsSettings_disableSystemRoot[inbounds_index]:-false}${normal} enableSessionResumption: ${green}${inbounds_streamSettings_tlsSettings_enableSessionResumption[inbounds_index]:-false}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}fingerprint: ${green}${inbounds_streamSettings_tlsSettings_fingerprint[inbounds_index]:-chrome}${normal} pinnedPeerCertSha256: ${green}${inbounds_streamSettings_tlsSettings_pinnedPeerCertSha256[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}curvePreferences: ${green}${inbounds_streamSettings_tlsSettings_curvePreferences[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}masterKeyLog: ${green}${inbounds_streamSettings_tlsSettings_masterKeyLog[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}echServerKeys: ${green}${inbounds_streamSettings_tlsSettings_echServerKeys[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}${red}echSockopt${normal} mark: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_mark[inbounds_index]:-0}${normal} tcpMaxSeg: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpMaxSeg[inbounds_index]:-1440}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}tcpFastOpen: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpFastOpen[inbounds_index]:-false}${normal} tproxy: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tproxy[inbounds_index]:-false}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}domainStrategy: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_domainStrategy[inbounds_index]:-AsIs} dialerProxy: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_dialerProxy[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}acceptProxyProtocol: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_acceptProxyProtocol[inbounds_index]:-false}${normal} trustedXForwardedFor: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_trustedXForwardedFor[inbounds_index]:-}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}tcpKeepAliveIdle: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpKeepAliveIdle[inbounds_index]:-0}${normal} tcpKeepAliveInterval: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpKeepAliveInterval[inbounds_index]:-0}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}tcpUserTimeout: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpUserTimeout[inbounds_index]:-10000}${normal} tcpcongestion: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpcongestion[inbounds_index]:-bbr}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}interface: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_interface[inbounds_index]:-}${normal} V6Only: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_V6Only[inbounds_index]:-false}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}tcpWindowClamp: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_tcpWindowClamp[inbounds_index]:-600} addressPortStrategy: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_addressPortStrategy[inbounds_index]:-none}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}${red}happyEyeballs${normal} tryDelayMs: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_tryDelayMs[inbounds_index]:-0}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}prioritizeIPv6: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_prioritizeIPv6[inbounds_index]:-false}${normal}\n${indent_6} interleave: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_interleave[inbounds_index]:-1}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}maxConcurrentTry: ${green}${inbounds_streamSettings_tlsSettings_echSockopt_happyEyeballs_maxConcurrentTry[inbounds_index]:-4}${normal}\n${indent_6}"
+
+            inbound_streamSettings_tlsSettings_certificates_count=0
+
+            if [ -n "${inbounds_streamSettings_tlsSettings_certificates_usage[inbounds_index]:-}" ]
+            then
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_ocspStapling <<< "${inbounds_streamSettings_tlsSettings_certificates_ocspStapling[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_oneTimeLoading <<< "${inbounds_streamSettings_tlsSettings_certificates_oneTimeLoading[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_usage <<< "${inbounds_streamSettings_tlsSettings_certificates_usage[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_buildChain <<< "${inbounds_streamSettings_tlsSettings_certificates_buildChain[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_certificateFile <<< "${inbounds_streamSettings_tlsSettings_certificates_certificateFile[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_keyFile <<< "${inbounds_streamSettings_tlsSettings_certificates_keyFile[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_certificate <<< "${inbounds_streamSettings_tlsSettings_certificates_certificate[inbounds_index]}"
+                IFS="${delimiters[5]}" read -r -a inbound_streamSettings_tlsSettings_certificates_key <<< "${inbounds_streamSettings_tlsSettings_certificates_key[inbounds_index]}"
+                inbound_streamSettings_tlsSettings_certificates_count=${#inbound_streamSettings_tlsSettings_certificates_usage[@]}
+            fi
+
+            for((i=0;i<inbound_streamSettings_tlsSettings_certificates_count;i++));
+            do
+                stream_settings_list="${stream_settings_list}证书$((i+1)) ocspStapling: ${green}${inbound_streamSettings_tlsSettings_certificates_ocspStapling[i]:-0}${normal} oneTimeLoading: ${green}${inbound_streamSettings_tlsSettings_certificates_oneTimeLoading[i]:-false}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}usage: ${green}${inbound_streamSettings_tlsSettings_certificates_usage[i]:-encipherment}${normal} buildChain: ${green}${inbound_streamSettings_tlsSettings_certificates_buildChain[i]:-false}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}certificateFile: ${green}${inbound_streamSettings_tlsSettings_certificates_certificateFile[i]:-}${normal} keyFile: ${green}${inbound_streamSettings_tlsSettings_certificates_keyFile[i]:-}${normal}\n${indent_6}"
+            done
+        fi
+
+        stream_settings_list="${stream_settings_list}${red}finalmask${normal} tcp: ${green}${inbounds_streamSettings_finalmask_tcp_type[inbounds_index]:-}${normal} udp: ${green}${inbounds_streamSettings_finalmask_udp_type[inbounds_index]:-}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}${red}quicParams${normal}\n${indent_6}"
+
+        if [ "${inbounds_streamSettings_network[inbounds_index]}" == "hysteria" ]
+        then
+            stream_settings_list="${stream_settings_list}congestion: ${green}${inbounds_streamSettings_quicParams_congestion[inbounds_index]:-brutal}${normal} "
+        else
+            stream_settings_list="${stream_settings_list}congestion: ${green}${inbounds_streamSettings_quicParams_congestion[inbounds_index]:-bbr}${normal} "
+        fi
+
+        stream_settings_list="${stream_settings_list}bbrProfile: ${green}${inbounds_streamSettings_quicParams_bbrProfile[inbounds_index]:-standard}${normal} debug: ${green}${inbounds_streamSettings_quicParams_debug[inbounds_index]:-false}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}brutalUp: ${green}${inbounds_streamSettings_quicParams_brutalUp[inbounds_index]:-0}${normal} brutalDown: ${green}${inbounds_streamSettings_quicParams_brutalDown[inbounds_index]:-0}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}udpHop ports: ${green}${inbounds_streamSettings_finalmask_quicParams_udpHop_ports[inbounds_index]:-}${normal} interval: ${green}${inbounds_streamSettings_quicParams_udpHop_interval[inbounds_index]:-30}${normal}秒\n${indent_6}"
+        stream_settings_list="${stream_settings_list}maxIdleTimeout: ${green}${inbounds_streamSettings_quicParams_maxIdleTimeout[inbounds_index]:-30}${normal} keepAlivePeriod: ${green}${inbounds_streamSettings_quicParams_keepAlivePeriod[inbounds_index]:-0}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}disablePathMTUDiscovery: ${green}${inbounds_streamSettings_quicParams_disablePathMTUDiscovery[inbounds_index]:-false}${normal} maxIncomingStreams: ${green}${inbounds_streamSettings_quicParams_maxIncomingStreams[inbounds_index]:-1024}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}maxOutgoingStreams: ${green}${inbounds_streamSettings_quicParams_maxOutgoingStreams[inbounds_index]:-0}${normal}\n${indent_6}"
+
+        stream_settings_list="${stream_settings_list}${red}sockopt${normal} mark: ${green}${inbounds_streamSettings_sockopt_mark[inbounds_index]:-0}${normal} tcpMaxSeg: ${green}${inbounds_streamSettings_sockopt_tcpMaxSeg[inbounds_index]:-1440}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}tcpFastOpen: ${green}${inbounds_streamSettings_sockopt_tcpFastOpen[inbounds_index]:-false}${normal} tproxy: ${green}${inbounds_streamSettings_sockopt_tproxy[inbounds_index]:-false}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}domainStrategy: ${green}${inbounds_streamSettings_sockopt_domainStrategy[inbounds_index]:-AsIs} dialerProxy: ${green}${inbounds_streamSettings_sockopt_dialerProxy[inbounds_index]:-}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}acceptProxyProtocol: ${green}${inbounds_streamSettings_sockopt_acceptProxyProtocol[inbounds_index]:-false}${normal} trustedXForwardedFor: ${green}${inbounds_streamSettings_sockopt_trustedXForwardedFor[inbounds_index]:-}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}tcpKeepAliveIdle: ${green}${inbounds_streamSettings_sockopt_tcpKeepAliveIdle[inbounds_index]:-0}${normal} tcpKeepAliveInterval: ${green}${inbounds_streamSettings_sockopt_tcpKeepAliveInterval[inbounds_index]:-0}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}tcpUserTimeout: ${green}${inbounds_streamSettings_sockopt_tcpUserTimeout[inbounds_index]:-10000}${normal} tcpcongestion: ${green}${inbounds_streamSettings_sockopt_tcpcongestion[inbounds_index]:-bbr}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}interface: ${green}${inbounds_streamSettings_sockopt_interface[inbounds_index]:-}${normal} V6Only: ${green}${inbounds_streamSettings_sockopt_V6Only[inbounds_index]:-false}${normal}\n${indent_6}"
+        stream_settings_list="${stream_settings_list}tcpWindowClamp: ${green}${inbounds_streamSettings_sockopt_tcpWindowClamp[inbounds_index]:-600} addressPortStrategy: ${green}${inbounds_streamSettings_sockopt_addressPortStrategy[inbounds_index]:-none}${normal}\n${indent_6}"
+
+        inbounds_list="$inbounds_list# ${green}$((j+1))${normal}${indent_6}$inbound_settings_list$stream_settings_list$inbound_sniffing_list\n\n"
+    done
+
+    Println "$inbounds_list\n"
+}

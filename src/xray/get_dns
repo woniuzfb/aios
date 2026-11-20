@@ -1,0 +1,58 @@
+XrayGetDns()
+{
+    SetDelimiters
+
+    jq_payload=$(JQs flat "$X_CONFIG" '.dns')
+
+    jq_path='["hosts"]'
+
+    dns_hosts_domain=()
+    dns_hosts_address=()
+
+    while IFS="^" read -r dns_host_domain dns_host_address; do
+        dns_hosts_domain+=("$dns_host_domain")
+        dns_hosts_address+=("$dns_host_address")
+    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value)"')
+
+    dns_hosts_count="${#dns_hosts_domain[@]}"
+
+    jq_path='[
+        ["servers"],
+        ["clientIp"],
+        ["queryStrategy"],
+        ["disableCache"],
+        ["serveStale"],
+        ["serveExpiredTTL"],
+        ["disableFallback"],
+        ["disableFallbackIfMatch"],
+        ["enableParallelQuery"],
+        ["useSystemHosts"],
+        ["tag"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name="jq_dns_${path_name#*_}"
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    dns_clientIp="${jq_dns_clientIp:-}"
+    dns_queryStrategy="${jq_dns_queryStrategy:-UseIP}"
+    dns_disableCache="${jq_dns_disableCache:-false}"
+    dns_serveStale="${jq_dns_serveStale:-false}"
+    dns_serveExpiredTTL="${jq_dns_serveExpiredTTL:-0}"
+    dns_disableFallback="${jq_dns_disableFallback:-false}"
+    dns_disableFallbackIfMatch="${jq_dns_disableFallbackIfMatch:-false}"
+    dns_enableParallelQuery="${jq_dns_enableParallelQuery:-false}"
+    dns_useSystemHosts="${jq_dns_useSystemHosts:-false}"
+    dns_tag="${jq_dns_tag:-dns_inbound}"
+
+    if [ -z "${jq_dns_servers:-}" ]
+    then
+        dns_servers_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[1]}" read -r -a dns_servers <<< "$jq_dns_servers"
+
+    dns_servers_count=${#dns_servers[@]}
+}

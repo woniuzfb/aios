@@ -84,6 +84,9 @@ V2_CONFIG="$AIOS_PREFIX"/etc/v2ray/config.json
 
 # xray
 X_FILE="$AIOS_PREFIX"/bin/x
+X_LINK=https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh
+X_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
+XCTL_FILE="$AIOS_PREFIX"/bin/xray
 X_CONFIG="$AIOS_PREFIX"/etc/xray/config.json
 
 # cloudflare

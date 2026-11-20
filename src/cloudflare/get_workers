@@ -1,15 +1,25 @@
 CloudflareGetWorkers()
 {
     SetDelimiters
-    IFS=$'\002\t' read -r name path project_name upstream < <(JQs flat "$CF_CONFIG" '.[0].workers' '
-    (. // {}| if . == "" then {} else . end) as $workers |
-    reduce ({name,path,project_name,upstream}|keys_unsorted[]) as $key ([];
-    $workers[$key] as $val | if $val then
-        . + [$val + "'"${delimiters[0]}"'\u0002"]
-    else
-        . + ["\u0002"]
-    end
-    )|@tsv' "${delimiters[@]}")
+
+    jq_payload=$(JQs flat "$CF_CONFIG")
+
+    jq_path='[
+        ["workers","name"],
+        ["workers","path"],
+        ["workers","project_name"],
+        ["workers","upstream"]
+    ]'
+
+    while IFS=": " read -r path_name value; do
+        var_name=${path_name}
+        read -r ${var_name?} <<< "$value"
+    done < <(JQs gets jq_payload)
+
+    name="$jq_workers_name"
+    path="$jq_workers_path"
+    project_name="$jq_workers_project_name"
+    upstream="$jq_workers_upstream"
 
     if [ -z "$name" ] 
     then
@@ -17,15 +27,15 @@ CloudflareGetWorkers()
         return 0
     fi
 
-    IFS="${delimiters[0]}" read -r -a cf_workers_name <<< "$name"
-    IFS="${delimiters[0]}" read -r -a cf_workers_path <<< "$path"
-    IFS="${delimiters[0]}" read -r -a cf_workers_project_name <<< "$project_name"
+    IFS="${delimiters[2]}" read -r -a cf_workers_name <<< "$name"
+    IFS="${delimiters[2]}" read -r -a cf_workers_path <<< "$path"
+    IFS="${delimiters[2]}" read -r -a cf_workers_project_name <<< "$project_name"
 
     if [ -z "$upstream" ] 
     then
         cf_workers_upstream=("${cf_workers_name[@]//*/}")
     else
-        IFS="${delimiters[0]}" read -r -a cf_workers_upstream <<< "$upstream"
+        IFS="${delimiters[2]}" read -r -a cf_workers_upstream <<< "$upstream"
     fi
 
     cf_workers_count=${#cf_workers_name[@]}
