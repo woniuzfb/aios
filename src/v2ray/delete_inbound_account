@@ -1,51 +1,41 @@
 V2rayDeleteInboundAccount()
 {
-    V2rayListInboundAccounts
-
-    if [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+    ProxySelectBound "$V2_CONFIG" inbounds "选择要删除账号的入站" || return 1
+    local idx="$selected_bound_index"
+    local protocol="${inbounds_protocol[idx]}"
+    local field="clients"
+    if [ "$protocol" == "socks" ] || [ "$protocol" == "http" ]
     then
-        Println "$error 请直接删除此入站\n"
-        exit 1
+        field="accounts"
     fi
 
-    echo -e "# ${green}$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
-    echo "`gettext \"输入序号\"`"
-    while read -p "$i18n_default_cancel" accounts_index
+    local opts=()
+    local line
+    while IFS= read -r line
     do
-        case "$accounts_index" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
-            ;;
-            *)
-                if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
-                then
-                    accounts_index=$((accounts_index-1))
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
-            ;;
-        esac
-    done
+        [ -n "$line" ] && opts+=("$line")
+    done < <(JQs query "$V2_CONFIG" '
+        (if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
+            and (.inbounds[$i].settings | type) == "object"
+            and (.inbounds[$i].settings[$f] | type) == "array"
+         then .inbounds[$i].settings[$f]
+         else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | "\(.key + 1). \(.value.email // .value.id // .value.user // .value.password // "account")"
+    ' --argjson i "$idx" --arg f "$field")
 
-    if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
+    if [ "${#opts[@]}" -eq 0 ]
     then
-        group_name="accounts"
-    else
-        group_name="clients"
+        Println "$error 该入站没有可删除的账号\n"
+        return 1
     fi
 
-    if [ "$accounts_index" == "$accounts_count" ] 
-    then
-        json=true
-        jq_path='["inbounds",'"$inbounds_index"',"settings","'"$group_name"'"]'
-        JQ update "$V2_CONFIG" []
-    else
-        jq_path='["inbounds",'"$inbounds_index"',"settings","'"$group_name"'",'"$accounts_index"']'
-        JQ delete "$V2_CONFIG"
-    fi
-    Println "$info 入站账号删除成功\n"
+    local acc_idx=0
+    echo
+    inquirer list_input_index "选择要删除的账号" opts acc_idx
+    jq_path='["inbounds",'"$idx"',"settings","'"$field"'",'"$acc_idx"']'
+    JQ delete "$V2_CONFIG"
+    ProxyRestartIfActive v2ray
+    Println "$info 已删除账号 ${green}${opts[acc_idx]}${normal}\n"
 }

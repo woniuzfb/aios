@@ -33,9 +33,9 @@ ServiceGet()
             _4gtv_acc_pass="$jq_4gtv_accounts_password"
             _4gtv_acc_token="$jq_4gtv_accounts_token"
 
-            IFS="${delimiters[2]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
-            IFS="${delimiters[2]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
-            IFS="${delimiters[2]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
+            IFS="${delimiters[3]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+            IFS="${delimiters[3]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+            IFS="${delimiters[3]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
 
             _4gtv_accs_count=${#_4gtv_accs_email[@]}
         ;;
@@ -55,9 +55,9 @@ ServiceGet()
 
             IFS="${delimiters[2]}" read -r -a openlists_name <<< "$jq_openlist_name"
             IFS="${delimiters[2]}" read -r -a openlists_url <<< "$jq_openlist_url"
-            IFS="${delimiters[2]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
-            IFS="${delimiters[2]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
-            IFS="${delimiters[2]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
+            IFS="${delimiters[3]}" read -r -a openlists_acc_username <<< "$jq_openlist_accs_username"
+            IFS="${delimiters[3]}" read -r -a openlists_acc_password <<< "$jq_openlist_accs_password"
+            IFS="${delimiters[3]}" read -r -a openlists_acc_token <<< "$jq_openlist_accs_token"
 
             openlists_count=${#openlists_name[@]}
         ;;
@@ -200,8 +200,7 @@ ServiceGet()
             ]'
 
             while IFS=": " read -r path_name value; do
-                var_name=${path_name}
-                var_name=${##*_accounts_}
+                var_name=${path_name##*_accounts_}
                 var_name=m_"$var_name"
                 read -r ${var_name?} <<< "$value"
             done < <(JQs gets jq_payload)

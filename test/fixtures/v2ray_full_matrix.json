@@ -1,0 +1,122 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "dns": {
+    "servers": [
+      {
+        "address": "1.1.1.1",
+        "port": 53,
+        "domains": ["geosite:geolocation-!cn"],
+        "expectIPs": ["geoip:!cn"]
+      }
+    ]
+  },
+  "inbounds": [
+    {
+      "tag": "vmess-direct",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "email": "v2-alice@example.test",
+            "level": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {
+          "path": "/v2ws"
+        },
+        "tlsSettings": {
+          "serverName": "v2.example.test"
+        }
+      },
+      "allocate": {
+        "strategy": "always"
+      }
+    },
+    {
+      "tag": "nginx-trojan",
+      "listen": "127.0.0.1",
+      "port": 10002,
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "v2-trojan-pass",
+            "email": "v2-trojan@example.test"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "none",
+        "grpcSettings": {
+          "serviceName": "v2grpc"
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {}
+    },
+    {
+      "tag": "proxy-vmess",
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "v2-edge.example.test",
+            "port": 443,
+            "users": [
+              {
+                "id": "66666666-6666-4666-8666-666666666666",
+                "security": "auto"
+              }
+            ]
+          }
+        ]
+      },
+      "proxySettings": {
+        "tag": "direct"
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "domainMatcher": "hybrid",
+    "rules": [
+      {
+        "type": "field",
+        "domains": ["geosite:cn"],
+        "outboundTag": "direct"
+      }
+    ]
+  },
+  "policy": {
+    "level": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "bufferSize": 512
+      }
+    }
+  },
+  "reverse": {
+    "bridges": [
+      {
+        "tag": "v2-br",
+        "domain": "v2rev.example.test"
+      }
+    ]
+  }
+}

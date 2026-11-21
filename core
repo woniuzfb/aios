@@ -284,6 +284,7 @@ SetDelimiters()
         $'\x1B' $'\x1C' $'\x1D' $'\x1E' $'\x1F'
     )
 
+    field_sep="${delimiters[19]}"
     json_delimiters="$(ToJsonArray delimiters)"
 }
 

@@ -19,11 +19,11 @@ XrayGetBurstObservatory()
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
 
-    burstObservatory_pingConfig_destination=${jq_pingConfig_destination:-https://connectivitycheck.gstatic.com/generate_204}
-    burstObservatory_pingConfig_interval=${jq_pingConfig_interval:-1m}
-    burstObservatory_pingConfig_sampling=${jq_pingConfig_sampling:-10}
-    burstObservatory_pingConfig_timeout=${jq_pingConfig_timeout:-5s}
-    burstObservatory_pingConfig_httpMethod=${jq_pingConfig_httpMethod:-HEAD}
+    burstObservatory_pingConfig_destination=${burstObservatory_pingConfig_destination:-https://connectivitycheck.gstatic.com/generate_204}
+    burstObservatory_pingConfig_interval=${burstObservatory_pingConfig_interval:-1m}
+    burstObservatory_pingConfig_sampling=${burstObservatory_pingConfig_sampling:-10}
+    burstObservatory_pingConfig_timeout=${burstObservatory_pingConfig_timeout:-5s}
+    burstObservatory_pingConfig_httpMethod=${burstObservatory_pingConfig_httpMethod:-HEAD}
 
     return 0
 }

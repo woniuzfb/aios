@@ -1,0 +1,252 @@
+XrayGenUuid()
+{
+    local xray_bin=""
+    if [ -n "${XRAY_FILE:-}" ] && [ -x "$XRAY_FILE" ]
+    then
+        xray_bin="$XRAY_FILE"
+    elif [ -n "${XCTL_FILE:-}" ] && [ -x "$XCTL_FILE" ]
+    then
+        xray_bin="$XCTL_FILE"
+    elif command -v xray > /dev/null 2>&1
+    then
+        xray_bin=$(command -v xray)
+    fi
+
+    local gen=""
+    if [ -n "$xray_bin" ]
+    then
+        gen=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+    fi
+    if [ -z "$gen" ] && command -v uuidgen > /dev/null 2>&1
+    then
+        gen=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+    fi
+    if [ -z "$gen" ] && [ -r /proc/sys/kernel/random/uuid ]
+    then
+        gen=$(cat /proc/sys/kernel/random/uuid | tr -d '\r\n')
+    fi
+    printf '%s' "$gen"
+}
+
+XrayGenSs2022Key()
+{
+    local method="$1"
+    local bytes=32
+    if [[ "$method" == *aes-128* ]]
+    then
+        bytes=16
+    fi
+    openssl rand -base64 "$bytes" 2>/dev/null | tr -d '\r\n'
+}
+
+XrayAddInboundAccount()
+{
+    ProxySelectBound "$X_CONFIG" inbounds "选择要添加账号的入站" || return 1
+    local idx="$selected_bound_index"
+    local protocol="${inbounds_protocol[idx]}"
+    local user_json=""
+    local acc_key="users"
+
+    if [ "$protocol" == "wireguard" ]
+    then
+        acc_key="peers"
+    else
+        acc_key=$(JQs query "$X_CONFIG" '
+            if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
+                and (.inbounds[$i].settings | type) == "object"
+            then
+                if (.inbounds[$i].settings.users | type) == "array" then "users"
+                elif (.inbounds[$i].settings.clients | type) == "array" then "clients"
+                elif (.inbounds[$i].settings.accounts | type) == "array" then "accounts"
+                else "users" end
+            else "users" end
+        ' --argjson i "$idx")
+        acc_key="${acc_key:-users}"
+    fi
+
+    case "$protocol" in
+        vless)
+            local uuid flow email
+            inquirer text_input "输入用户 UUID (留空自动生成)" uuid ""
+            if [ -z "$uuid" ]
+            then
+                uuid=$(XrayGenUuid)
+                if [ -z "$uuid" ]
+                then
+                    Println "$error 自动生成 UUID 失败, 请手动输入\n"
+                    return 1
+                fi
+                Println "$info 已自动生成 UUID: ${green}${uuid}${normal}\n"
+            fi
+            inquirer text_input "输入 flow (可留空)" flow ""
+            inquirer text_input "输入 email (可留空)" email ""
+            JQs build user_json '{"id": $id, "flow": $flow, "email": $email, "level": 0}' \
+                --arg id "$uuid" --arg flow "$flow" --arg email "$email"
+        ;;
+        vmess)
+            local uuid email
+            inquirer text_input "输入用户 UUID (留空自动生成)" uuid ""
+            if [ -z "$uuid" ]
+            then
+                uuid=$(XrayGenUuid)
+                if [ -z "$uuid" ]
+                then
+                    Println "$error 自动生成 UUID 失败, 请手动输入\n"
+                    return 1
+                fi
+                Println "$info 已自动生成 UUID: ${green}${uuid}${normal}\n"
+            fi
+            inquirer text_input "输入 email (可留空)" email ""
+            JQs build user_json '{"id": $id, "email": $email, "level": 0}' \
+                --arg id "$uuid" --arg email "$email"
+        ;;
+        trojan)
+            local password email
+            inquirer text_input "输入密码" password ""
+            inquirer text_input "输入 email (可留空)" email ""
+            JQs build user_json '{"password": $pw, "email": $email, "level": 0}' \
+                --arg pw "$password" --arg email "$email"
+        ;;
+        shadowsocks)
+            local inb_method
+            inb_method=$(JQs query "$X_CONFIG" '
+                if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
+                    and (.inbounds[$i].settings | type) == "object"
+                then (.inbounds[$i].settings.method // "")
+                else "" end
+            ' --argjson i "$idx")
+            local password email user_method=""
+            if [[ "$inb_method" == 2022-* ]]
+            then
+                inquirer text_input "输入密钥 (SS2022 留空自动生成)" password ""
+                if [ -z "$password" ]
+                then
+                    password=$(XrayGenSs2022Key "$inb_method")
+                    if [ -z "$password" ]
+                    then
+                        Println "$error 自动生成 SS2022 密钥失败, 请手动输入\n"
+                        return 1
+                    fi
+                    Println "$info 已自动生成 SS2022 密钥: ${green}${password}${normal}\n"
+                fi
+                inquirer text_input "输入 email (可留空)" email ""
+                JQs build user_json '{"password": $pw, "email": $email, "level": 0}' \
+                    --arg pw "$password" --arg email "$email"
+            else
+                inquirer text_input "输入用户加密方式 method" user_method "${inb_method:-aes-256-gcm}"
+                inquirer text_input "输入密码" password ""
+                inquirer text_input "输入 email (可留空)" email ""
+                JQs build user_json '{"method": $method, "password": $pw, "email": $email, "level": 0}' \
+                    --arg method "$user_method" --arg pw "$password" --arg email "$email"
+            fi
+        ;;
+        socks|http)
+            local user pass
+            inquirer text_input "输入用户名" user ""
+            inquirer text_input "输入密码" pass ""
+            JQs build user_json '{"user": $user, "pass": $pass}' \
+                --arg user "$user" --arg pass "$pass"
+        ;;
+        hysteria)
+            local auth email
+            inquirer text_input "输入认证密钥 auth" auth ""
+            inquirer text_input "输入 email (可留空)" email ""
+            JQs build user_json '{"auth": $auth, "email": $email, "level": 0}' \
+                --arg auth "$auth" --arg email "$email"
+        ;;
+        masque)
+            local pass email
+            inquirer text_input "输入用户 pass" pass ""
+            inquirer text_input "输入用户 email (必填, 不能包含 :)" email ""
+            if [ -z "$email" ] || [[ "$email" == *:* ]]
+            then
+                Println "$error MASQUE 用户 email 必填且不能包含 :\n"
+                return 1
+            fi
+            JQs build user_json '{"pass": $pass, "email": $email, "level": 0}' \
+                --arg pass "$pass" --arg email "$email"
+        ;;
+        wireguard)
+            local pk allowed_ips psk
+            inquirer text_input "输入对端 publicKey" pk ""
+            inquirer text_input "输入 allowedIPs (逗号分隔)" allowed_ips "10.0.0.2/32"
+            inquirer text_input "输入 preSharedKey (可留空)" psk ""
+            JQs build user_json '{
+                "publicKey": $pk,
+                "allowedIPs": ($ips | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+                "preSharedKey": $psk
+            }' --arg pk "$pk" --arg ips "$allowed_ips" --arg psk "$psk"
+        ;;
+        *)
+            Println "$error 协议 ${protocol} 不支持多账号管理\n"
+            return 1
+        ;;
+    esac
+
+    jq_path='["inbounds",'"$idx"',"settings","'"$acc_key"'"]'
+    if ! JQ add "$X_CONFIG" "[$user_json]"
+    then
+        Println "$error 向入站 ${inbounds_tag[idx]} 添加账号失败\n"
+        return 1
+    fi
+    ProxyRestartIfActive xray
+    Println "$info 已向入站 ${green}${inbounds_tag[idx]}${normal} 添加账号\n"
+}
+
+XrayDeleteInboundAccount()
+{
+    ProxySelectBound "$X_CONFIG" inbounds "选择要删除账号的入站" || return 1
+    local idx="$selected_bound_index"
+    local acc_key
+    acc_key=$(JQs query "$X_CONFIG" '
+        if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
+            and (.inbounds[$i].settings | type) == "object"
+        then
+            if (.inbounds[$i].settings.peers | type) == "array" and (.inbounds[$i].settings.peers | length) > 0 then "peers"
+            elif (.inbounds[$i].settings.users | type) == "array" and (.inbounds[$i].settings.users | length) > 0 then "users"
+            elif (.inbounds[$i].settings.clients | type) == "array" and (.inbounds[$i].settings.clients | length) > 0 then "clients"
+            elif (.inbounds[$i].settings.accounts | type) == "array" and (.inbounds[$i].settings.accounts | length) > 0 then "accounts"
+            else "" end
+        else "" end
+    ' --argjson i "$idx")
+
+    if [ -z "$acc_key" ]
+    then
+        Println "$error 该入站没有可删除的账号\n"
+        return 1
+    fi
+
+    local user_options=()
+    local line
+    while IFS= read -r line
+    do
+        [ -n "$line" ] && user_options+=("$line")
+    done < <(JQs query "$X_CONFIG" '
+        (if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
+            and (.inbounds[$i].settings | type) == "object"
+            and (.inbounds[$i].settings[$k] | type) == "array"
+         then .inbounds[$i].settings[$k]
+         else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | "\(.key + 1). \(.value.email // .value.id // .value.user // .value.publicKey // .value.password // .value.pass // .value.auth // "user")"
+    ' --argjson i "$idx" --arg k "$acc_key")
+
+    if [ "${#user_options[@]}" -eq 0 ]
+    then
+        Println "$error 该入站没有可删除的账号\n"
+        return 1
+    fi
+
+    local user_idx=0
+    echo
+    inquirer list_input_index "选择要删除的账号" user_options user_idx
+    jq_path='["inbounds",'"$idx"',"settings","'"$acc_key"'",'"$user_idx"']'
+    if ! JQ delete "$X_CONFIG"
+    then
+        Println "$error 删除账号失败\n"
+        return 1
+    fi
+    ProxyRestartIfActive xray
+    Println "$info 已删除账号 ${green}${user_options[user_idx]}${normal}\n"
+}

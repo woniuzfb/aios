@@ -1,0 +1,171 @@
+XraySetRouting()
+{
+    local actions=(
+        '添加路由规则'
+        '添加负载均衡器'
+        '设置 domainStrategy'
+        '删除路由规则'
+        '删除负载均衡器'
+    )
+    local action_idx=0
+    echo
+    inquirer list_input_index "选择 Xray 路由操作" actions action_idx
+
+    case "$action_idx" in
+        0)
+            local mode_opts=( '快捷路由 (选择入站 -> 出站)' '自定义路由规则' )
+            local mode_idx=0
+            inquirer list_input_index "选择添加路由方式" mode_opts mode_idx
+
+            if [ "$mode_idx" -eq 0 ]
+            then
+                ProxySelectBound "$X_CONFIG" inbounds "选择匹配的入站" || return 1
+                local in_tag="${inbounds_tag[selected_bound_index]}"
+                if [ -z "$in_tag" ]
+                then
+                    Println "$error 此入站没有标签\n"
+                    return 1
+                fi
+                ProxySelectBound "$X_CONFIG" outbounds "选择转发目标出站" || return 1
+                local out_tag="${outbounds_tag[selected_bound_index]}"
+                if [ -z "$out_tag" ]
+                then
+                    Println "$error 此出站没有标签\n"
+                    return 1
+                fi
+                local rule_json=""
+                JQs build rule_json '{"inboundTag": [$it], "outboundTag": $ot}' --arg it "$in_tag" --arg ot "$out_tag"
+                jq_path='["routing","rules"]'
+                JQ add "$X_CONFIG" "[$rule_json]"
+                Println "$info 快捷路由添加成功: ${green}${in_tag} => ${out_tag}${normal}\n"
+            else
+                local net_opts=( 'tcp,udp' 'tcp' 'udp' '不限' )
+                local net_choice=""
+                inquirer list_input "选择匹配的连接方式 network" net_opts net_choice
+                [ "$net_choice" == "不限" ] && net_choice=""
+
+                local rule_tag domains ips port src_port local_port src_ip local_ip users inb_tag procs vless_route webhook_url out_tag bal_tag
+                inquirer text_input "规则标识 ruleTag (可留空)" rule_tag ""
+                inquirer text_input "匹配 domain (逗号分隔, 可留空)" domains ""
+                inquirer text_input "匹配 ip (逗号分隔, 可留空)" ips ""
+                inquirer text_input "匹配目标 port (可留空)" port ""
+                inquirer text_input "匹配来源 sourcePort (可留空)" src_port ""
+                inquirer text_input "匹配本地 localPort (可留空)" local_port ""
+                inquirer text_input "匹配 sourceIP (逗号分隔, 可留空)" src_ip ""
+                inquirer text_input "匹配 localIP (逗号分隔, 可留空)" local_ip ""
+                inquirer text_input "匹配用户 user (逗号分隔, 可留空)" users ""
+
+                local proto_opts=( 'http' 'tls' 'quic' 'bittorrent' )
+                local proto_sel=()
+                inquirer checkbox_input "选择匹配的流量协议 protocol (可留空)" proto_opts proto_sel
+                local proto_csv=""
+                if [ "${#proto_sel[@]}" -gt 0 ] && [ -n "${proto_sel[0]:-}" ]
+                then
+                    proto_csv=$(JoinByChar , "${proto_sel[@]}")
+                fi
+
+                inquirer text_input "匹配 inboundTag (逗号分隔, 可留空)" inb_tag ""
+                inquirer text_input "匹配进程 process (逗号分隔, 可留空)" procs ""
+                inquirer text_input "匹配 vlessRoute (可留空)" vless_route ""
+                inquirer text_input "Webhook URL (可留空)" webhook_url ""
+                inquirer text_input "目标 outboundTag (与 balancerTag 二选一)" out_tag ""
+                inquirer text_input "目标 balancerTag (可留空)" bal_tag ""
+
+                local rule_json=""
+                JQs build rule_json '{
+                    "ruleTag": $rtag,
+                    "network": $net,
+                    "domain": (if $dom != "" then ($dom | split(",")) else null end),
+                    "ip": (if $ip != "" then ($ip | split(",")) else null end),
+                    "port": $port,
+                    "sourcePort": $sport,
+                    "localPort": $lport,
+                    "sourceIP": (if $sip != "" then ($sip | split(",")) else null end),
+                    "localIP": (if $lip != "" then ($lip | split(",")) else null end),
+                    "user": (if $usr != "" then ($usr | split(",")) else null end),
+                    "protocol": (if $proto != "" then ($proto | split(",")) else null end),
+                    "inboundTag": (if $itag != "" then ($itag | split(",")) else null end),
+                    "process": (if $proc != "" then ($proc | split(",")) else null end),
+                    "vlessRoute": $vr,
+                    "webhook": (if $wh != "" then {"url": $wh} else null end),
+                    "outboundTag": $otag,
+                    "balancerTag": $btag
+                }' --arg rtag "$rule_tag" --arg net "$net_choice" --arg dom "$domains" --arg ip "$ips" \
+                    --arg port "$port" --arg sport "$src_port" --arg lport "$local_port" \
+                    --arg sip "$src_ip" --arg lip "$local_ip" --arg usr "$users" --arg proto "$proto_csv" \
+                    --arg itag "$inb_tag" --arg proc "$procs" --arg vr "$vless_route" --arg wh "$webhook_url" \
+                    --arg otag "$out_tag" --arg btag "$bal_tag"
+
+                jq_path='["routing","rules"]'
+                JQ add "$X_CONFIG" "[$rule_json]"
+                Println "$info 已添加 Xray 路由规则\n"
+            fi
+        ;;
+        1)
+            local strat_opts=( 'random' 'roundRobin' 'leastPing' 'leastLoad' )
+            local b_tag b_sel b_strat b_fb
+            inquirer text_input "Balancer tag" b_tag ""
+            inquirer text_input "selector (逗号分隔)" b_sel ""
+            inquirer list_input "选择策略 strategy.type" strat_opts b_strat
+            inquirer text_input "fallbackTag (可留空)" b_fb ""
+
+            local bal_json=""
+            JQs build bal_json '{
+                "tag": $tag,
+                "selector": ($sel | split(",")),
+                "fallbackTag": $fb,
+                "strategy": {"type": $st}
+            }' --arg tag "$b_tag" --arg sel "$b_sel" --arg fb "$b_fb" --arg st "$b_strat"
+
+            jq_path='["routing","balancers"]'
+            JQ add "$X_CONFIG" "[$bal_json]"
+            Println "$info 已添加 Xray 负载均衡 ${green}${b_tag}${normal}\n"
+        ;;
+        2)
+            local ds_opts=( 'AsIs' 'IPIfNonMatch' 'IPOnDemand' )
+            local ds=""
+            inquirer list_input "选择域名解析策略 domainStrategy" ds_opts ds
+            jq_path='["routing","domainStrategy"]'
+            JQ update "$X_CONFIG" "$ds"
+            Println "$info 已设置 domainStrategy 为 ${green}${ds}${normal}\n"
+        ;;
+        3)
+            local rule_opts=()
+            local line
+            while IFS= read -r line
+            do
+                [ -n "$line" ] && rule_opts+=("$line")
+            done < <(JQs query "$X_CONFIG" 'if (.routing | type) == "object" and (.routing.rules | type) == "array" then (.routing.rules | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.ruleTag // "rule") => \(.value.outboundTag // .value.balancerTag // "")") else empty end')
+            if [ "${#rule_opts[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的路由规则\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的路由规则" rule_opts del_idx
+            jq_path='["routing","rules",'"$del_idx"']'
+            JQ delete "$X_CONFIG"
+            Println "$info 已删除路由规则: ${green}${rule_opts[$del_idx]}${normal}\n"
+        ;;
+        4)
+            local bal_opts=()
+            local line
+            while IFS= read -r line
+            do
+                [ -n "$line" ] && bal_opts+=("$line")
+            done < <(JQs query "$X_CONFIG" 'if (.routing | type) == "object" and (.routing.balancers | type) == "array" then (.routing.balancers | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.tag // "balancer")") else empty end')
+            if [ "${#bal_opts[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的负载均衡器\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的负载均衡器" bal_opts del_idx
+            jq_path='["routing","balancers",'"$del_idx"']'
+            JQ delete "$X_CONFIG"
+            Println "$info 已删除负载均衡器: ${green}${bal_opts[$del_idx]}${normal}\n"
+        ;;
+    esac
+
+    ProxyRestartIfActive xray
+}

@@ -66,34 +66,29 @@ JQInstall()
 
 JQ()
 {
-    local FILE TMP_FILE jq_args=() jq_commands=() slurp_arg
+    local jq_action=$1 FILE=$2 TMP_FILE jq_args=() jq_commands=() slurp_arg
+    local jq_a3=${3:-none} jq_a4=${4:-none} jq_a5=${5:-none}
 
     jq_path=${jq_path:-}
     jq_path2=${jq_path2:-}
 
-    map_bool=${map_bool:-false}
-    map_string=${map_string:-false}
-    merge=${merge:-false}
-    json=${json:-false}
-    number=${number:-false}
-    bool=${bool:-false}
-    pre=${pre:-false}
-    file=${file:-false}
-    file_json=${file_json:-false}
+    jq_map_bool=${jq_map_bool:-false}
+    jq_map_string=${jq_map_string:-false}
+    jq_merge=${jq_merge:-false}
+    jq_json=${jq_json:-false}
+    jq_number=${jq_number:-false}
+    jq_bool=${jq_bool:-false}
+    jq_pre=${jq_pre:-false}
+    jq_file=${jq_file:-false}
+    jq_file_json=${jq_file_json:-false}
 
-    FILE=$2
-
+    local jq_rc=0
     if TMP_FILE=$(mktemp -q)
     then
         chmod +r "$TMP_FILE"
     else
-        printf -v TMP_FILE "${FILE}_%s" "$BASHPID"
+        printf -v TMP_FILE "${FILE}_%s" "$$"
     fi
-
-    trap '
-        rm -f "$TMP_FILE"
-        rm -f "${TMP_FILE}_slurp"
-    ' EXIT
 
     if [ -n "$jq_path" ]
     then
@@ -105,81 +100,76 @@ JQ()
         jq_args+=( --argjson path2 "$jq_path2" )
     fi
 
-    case $1 in
+    case $jq_action in
         add)
-            if [ -n "$jq_path" ]
+            local add_op
+            if [ "$jq_pre" = true ]
             then
-                jq_commands=( 'getpath($path)' )
+                add_op='(if type == "array" then ($add + .) else $add end)'
+            else
+                add_op='(if type == "array" then (. + $add) else $add end)'
             fi
 
             if [ -n "${4:-}" ]
             then
+                local match_val
+                if [ "$jq_map_bool" = true ]
+                then
+                    match_val='($value|test("true"))'
+                elif [ "$jq_map_string" = true ]
+                then
+                    match_val='$value'
+                else
+                    match_val='($value|tonumber)'
+                fi
+
+                local map_body
+                if [ -n "$jq_path2" ]
+                then
+                    map_body='(select(type == "object" and .[$key] == '"$match_val"') | getpath($path2)) |= '"$add_op"
+                else
+                    map_body='select(type == "object" and .[$key] == '"$match_val"') |= '"$add_op"
+                fi
+
                 if [ -n "$jq_path" ]
                 then
-                    jq_commands+=( '|=' )
-                fi
-
-                if [ -n "$jq_path2" ]
-                then
-                    jq_commands+=( 'map((select(.[$key]==' )
+                    jq_commands=( 'getpath($path) |= (if type == "array" then map('"$map_body"') else [] end)' )
                 else
-                    jq_commands+=( 'map(select(.[$key]==' )
-                fi
-
-                if [ "$map_bool" = true ]
-                then
-                    jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ]
-                then
-                    jq_commands+=( '$value)' )
-                else
-                    jq_commands+=( '($value|tonumber))' )
-                fi
-
-                if [ -n "$jq_path2" ]
-                then
-                    jq_commands+=( '|getpath($path2))' )
+                    jq_commands=( 'if type == "array" then map('"$map_body"') else [] end' )
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ "$file" = true ]
+                if [ "$jq_file" = true ]
                 then
                     slurp_arg=("$5"[@])
                 else
                     jq_args+=( --argjson add "$5" )
                 fi
-
-                if [ "$pre" = true ]
-                then
-                    jq_commands+=( '|=$add+.)' )
-                else
-                    jq_commands+=( '+=$add)' )
-                fi
             else
-                if [ "$file" = true ]
+                if [ -n "$jq_path" ]
+                then
+                    jq_commands=( 'getpath($path) |= '"$add_op" )
+                else
+                    jq_commands=( "$add_op" )
+                fi
+
+                if [ "$jq_file" = true ]
                 then
                     slurp_arg=("$3"[@])
                 else
                     jq_args+=( --argjson add "$3" )
                 fi
-
-                if [ "$pre" = true ]
-                then
-                    jq_commands+=( '|=$add+.' )
-                else
-                    jq_commands+=( '+=$add' )
-                fi
             fi
 
-            if [ "$file" = true ]
+            if [ "$jq_file" = true ]
             then
                 jq_args+=( --slurpfile add "${TMP_FILE}_slurp" )
 
                 if [[ -z ${!slurp_arg:-} ]]
                 then
                     printf '%s' "" > "${TMP_FILE}_slurp"
-                elif [ "$file_json" = true ]
+                elif [ "$jq_file_json" = true ]
                 then
                     printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
                 else
@@ -188,97 +178,97 @@ JQ()
             fi
         ;;
         update)
-            if [ -n "$jq_path" ]
+            local upd_op
+            if [ "$jq_merge" = true ]
             then
-                jq_commands=( 'getpath($path)' )
+                upd_op='|= (if type == "object" then (. * $update) else $update end)'
+            elif [ "$jq_number" = true ]
+            then
+                upd_op='= ($update | tonumber)'
+            elif [ "$jq_bool" = true ]
+            then
+                upd_op='= ($update | test("true"))'
+            else
+                upd_op='= $update'
             fi
 
             if [ -n "${4:-}" ]
             then
+                local match_val
+                if [ "$jq_map_bool" = true ]
+                then
+                    match_val='($value|test("true"))'
+                elif [ "$jq_map_string" = true ]
+                then
+                    match_val='$value'
+                else
+                    match_val='($value|tonumber)'
+                fi
+
+                local map_body
+                if [ -n "$jq_path2" ]
+                then
+                    map_body='(select(type == "object" and .[$key] == '"$match_val"') | getpath($path2)) '"$upd_op"
+                else
+                    map_body='select(type == "object" and .[$key] == '"$match_val"') '"$upd_op"
+                fi
+
                 if [ -n "$jq_path" ]
                 then
-                    jq_commands+=( '|=' )
-                fi
-
-                if [ -n "$jq_path2" ]
-                then
-                    jq_commands+=( 'map((select(.[$key]==' )
+                    jq_commands=( 'getpath($path) |= (if type == "array" then map('"$map_body"') else . end)' )
                 else
-                    jq_commands+=( 'map(select(.[$key]==' )
-                fi
-
-                if [ "$map_bool" = true ]
-                then
-                    jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ]
-                then
-                    jq_commands+=( '$value)' )
-                else
-                    jq_commands+=( '($value|tonumber))' )
-                fi
-
-                if [ -n "$jq_path2" ]
-                then
-                    jq_commands+=( '|getpath($path2))' )
+                    jq_commands=( 'if type == "array" then map('"$map_body"') else . end' )
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ "$file" = true ]
+                if [ "$jq_file" = true ]
                 then
                     slurp_arg=("$5"[@])
-                elif [ "$json" = true ] || [ "$merge" = true ]
+                elif [ "$jq_json" = true ] || [ "$jq_merge" = true ]
                 then
                     jq_args+=( --argjson update "$5" )
                 else
                     jq_args+=( --arg update "$5" )
                 fi
-
-                if [ "$merge" = true ]
-                then
-                    jq_commands+=( '|=.*$update//.)' )
-                elif [ "$number" = true ]
-                then
-                    jq_commands+=( '=($update|tonumber))' )
-                elif [ "$bool" = true ]
-                then
-                    jq_commands+=( '=($update|test("true")))' )
-                else
-                    jq_commands+=( '=$update)' )
-                fi
             else
-                if [ "$file" = true ]
+                if [ -n "$jq_path" ]
+                then
+                    jq_commands=( 'getpath($path) '"$upd_op" )
+                else
+                    if [ "$jq_merge" = true ]
+                    then
+                        jq_commands=( 'if type == "object" then (. * $update) else $update end' )
+                    elif [ "$jq_number" = true ]
+                    then
+                        jq_commands=( '($update | tonumber)' )
+                    elif [ "$jq_bool" = true ]
+                    then
+                        jq_commands=( '($update | test("true"))' )
+                    else
+                        jq_commands=( '$update' )
+                    fi
+                fi
+
+                if [ "$jq_file" = true ]
                 then
                     slurp_arg=("$3"[@])
-                elif [ "$json" = true ] || [ "$merge" = true ]
+                elif [ "$jq_json" = true ] || [ "$jq_merge" = true ]
                 then
                     jq_args+=( --argjson update "$3" )
                 else
                     jq_args+=( --arg update "$3" )
                 fi
-
-                if [ "$merge" = true ]
-                then
-                    jq_commands+=( '|=.*$update//.' )
-                elif [ "$number" = true ]
-                then
-                    jq_commands+=( '=($update|tonumber)' )
-                elif [ "$bool" = true ]
-                then
-                    jq_commands+=( '=($update|test("true"))' )
-                else
-                    jq_commands+=( '=$update' )
-                fi
             fi
 
-            if [ "$file" = true ]
+            if [ "$jq_file" = true ]
             then
                 jq_args+=( --slurpfile update "${TMP_FILE}_slurp" )
 
                 if [[ -z ${!slurp_arg:-} ]]
                 then
                     printf '%s' "" > "${TMP_FILE}_slurp"
-                elif [ "$file_json" = true ]
+                elif [ "$jq_file_json" = true ]
                 then
                     printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
                 else
@@ -289,95 +279,111 @@ JQ()
         delete)
             if [ -n "${3:-}" ]
             then
-                if [ -z "${5:-}" ]
+                local match_val
+                if [ "$jq_map_bool" = true ]
                 then
-                    jq_commands=( 'del(' )
-
-                    if [ -n "$jq_path" ]
-                    then
-                        jq_commands+=( 'getpath($path)[]|' )
-                    else
-                        jq_commands+=( '.[]|' )
-                    fi
-
-                    if [ -n "$jq_path2" ]
-                    then
-                        jq_commands+=( '(select(.[$key]==' )
-                    else
-                        jq_commands+=( 'select(.[$key]==' )
-                    fi
+                    match_val='($value|test("true"))'
+                elif [ "$jq_map_string" = true ]
+                then
+                    match_val='$value'
                 else
-                    if [ -n "$jq_path" ]
-                    then
-                        jq_commands=( 'getpath($path)|=' )
-                    fi
-
-                    if [ -n "$jq_path2" ]
-                    then
-                        jq_commands+=( 'map((select(.[$key]==' )
-                    else
-                        jq_commands+=( 'map(select(.[$key]==' )
-                    fi
-                fi
-
-                if [ "$map_bool" = true ]
-                then
-                    jq_commands+=( '($value|test("true")))' )
-                elif [ "$map_string" = true ]
-                then
-                    jq_commands+=( '$value)' )
-                else
-                    jq_commands+=( '($value|tonumber))' )
-                fi
-
-                if [ -n "$jq_path2" ]
-                then
-                    jq_commands+=( '|getpath($path2))' )
+                    match_val='($value|tonumber)'
                 fi
 
                 jq_args+=( --arg key "$3" --arg value "$4" )
 
-                if [ -n "${5:-}" ]
+                if [ -z "${5:-}" ]
                 then
-                    jq_args+=( --argjson delete "$5" )
-                    jq_commands+=( '-=$delete' )
-                fi
+                    local del_sel
+                    if [ -n "$jq_path2" ]
+                    then
+                        del_sel='(select(type == "object" and .[$key] == '"$match_val"') | getpath($path2))'
+                    else
+                        del_sel='select(type == "object" and .[$key] == '"$match_val"')'
+                    fi
 
-                jq_commands+=( ')' )
-            else
+                    if [ -n "$jq_path" ]
+                    then
+                        jq_commands=( 'if (getpath($path) | type) == "array" then del(getpath($path)[] | '"$del_sel"') else . end' )
+                    else
+                        jq_commands=( 'if type == "array" then del(.[] | '"$del_sel"') else . end' )
+                    fi
+                else
+                    jq_args+=( --argjson delete "$5" )
+                    local del_op='(if type == "array" then (. - $delete) else . end)'
+                    local map_body
+                    if [ -n "$jq_path2" ]
+                    then
+                        map_body='(select(type == "object" and .[$key] == '"$match_val"') | getpath($path2)) |= '"$del_op"
+                    else
+                        map_body='select(type == "object" and .[$key] == '"$match_val"') |= '"$del_op"
+                    fi
+
+                    if [ -n "$jq_path" ]
+                    then
+                        jq_commands=( 'getpath($path) |= (if type == "array" then map('"$map_body"') else . end)' )
+                    else
+                        jq_commands=( 'if type == "array" then map('"$map_body"') else . end' )
+                    fi
+                fi
+            elif [ -n "$jq_path" ]
+            then
                 jq_commands+=( 'del(getpath($path))' )
+            else
+                rm -f "$TMP_FILE" "${TMP_FILE}_slurp"
+                return 1
             fi
+        ;;
+        mutate)
+            jq_commands=( "$3" )
+            shift 3
+            jq_args+=( "$@" )
         ;;
     esac
 
-    {
-        flock -x 200 || { LogErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
+    if command -v flock > /dev/null 2>&1
+    then
+        {
+            flock -x 200 || { LogErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
 
+            if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+            then
+                rm -f "$TMP_FILE"
+                LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
+                jq_rc=1
+            else
+                mv "$TMP_FILE" "$FILE"
+            fi
+
+            rm -f "${TMP_FILE}_slurp"
+        } 200>"$FILE.lock"
+    else
         if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
         then
-            [ ! -s "$TMP_FILE" ] && rm -f "$TMP_FILE"
-            LogInfo "JQ ERROR!! action: $1, file: $FILE, tmp_file: $TMP_FILE, \$3: ${3:-none}, \$4: ${4:-none}, \$5: ${5:-none}"
+            rm -f "$TMP_FILE"
+            LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
+            jq_rc=1
         else
             mv "$TMP_FILE" "$FILE"
         fi
 
         rm -f "${TMP_FILE}_slurp"
-    } 200>"$FILE.lock"
-
-    trap - EXIT
+    fi
 
     jq_path=""
     jq_path2=""
 
-    map_bool=false
-    map_string=false
-    merge=false
-    json=false
-    number=false
-    bool=false
-    pre=false
-    file=false
-    file_json=false
+    jq_map_bool=false
+    jq_map_string=false
+    jq_merge=false
+    jq_json=false
+    jq_number=false
+    jq_bool=false
+    jq_pre=false
+    jq_file=false
+    jq_file_json=false
+
+    return $jq_rc
 }
 
 JQs()
@@ -388,7 +394,27 @@ JQs()
             jq_path=""
         ;;
         "gets")
-            $JQ_FILE -c -r --argjson paths "$jq_path" '$paths[] as $p | "jq_\($p | join("_")): \(getpath($p)? // "")"' <<< "${!2}"
+            local jq_gets_in="${!2:-}"
+            [ -z "$jq_gets_in" ] && jq_gets_in="{}"
+            $JQ_FILE -c -r --argjson paths "$jq_path" '
+                . as $root
+                | $paths[] as $p
+                | (
+                    reduce $p[] as $k ($root;
+                        if type == "object" and ($k | type) == "string" then .[$k]
+                        elif type == "array" and ($k | type) == "number" then .[$k]
+                        else null
+                        end
+                    )
+                  ) as $v
+                | "jq_\($p | join("_")): \(
+                    if ($v | type) == "string" or ($v | type) == "number" or ($v | type) == "boolean" then
+                        ($v | tostring)
+                    else
+                        ""
+                    end
+                )"
+            ' <<< "$jq_gets_in"
             jq_path=""
         ;;
         "add")
@@ -440,37 +466,77 @@ JQs()
         "merge_c")
             local var=$2
             shift 2
-            read -r $var < <($JQ_FILE "@" <<< "${!var}")
+            read -r $var < <($JQ_FILE -c "$@" <<< "${!var}")
+        ;;
+        "query")
+            local src=$2
+            local expr=$3
+            shift 3
+            if [[ $src =~ ^/ ]]
+            then
+                [ -s "$src" ] || return 0
+                $JQ_FILE -r "$@" "$expr" "$src"
+            else
+                [ -n "${!src:-}" ] || return 0
+                $JQ_FILE -r "$@" "$expr" <<< "${!src}"
+            fi
+        ;;
+        "build")
+            local out_var=$2
+            local expr=$3
+            shift 3
+            read -r $out_var < <($JQ_FILE -n -c "$@" '
+                def compact_obj:
+                    if type == "object" then
+                        with_entries(
+                            .value |= compact_obj
+                            | select(.value != null and .value != "" and .value != [] and .value != {})
+                        )
+                    elif type == "array" then
+                        map(compact_obj) | map(select(. != null and . != "" and . != [] and . != {}))
+                    else
+                        .
+                    end;
+                ('"$expr"') | compact_obj
+            ')
         ;;
         "flat")
-            if [[ $2 =~ ^/ ]]
+            local jq_src="$2"
+            local jq_is_file=false
+            if [[ $jq_src =~ ^/ ]]
             then
-                jq_input=$(< $2)
-            else
-                jq_input="$2"
+                if [ ! -s "$jq_src" ]
+                then
+                    printf '{}\n'
+                    return 0
+                fi
+                jq_is_file=true
+            elif [ -z "$jq_src" ]
+            then
+                printf '{}\n'
+                return 0
             fi
 
-            local pre="${3:-.}| if type == \"null\" or . == \"\" then {} else . end"
+            local pre="${3:-.} | if type == \"null\" or . == \"\" then {} else . end"
 
-            if [ -n "${3:-}" ]
+            if [ $# -ge 3 ]
             then
                 shift 3
             else
                 shift 2
             fi
 
-            $JQ_FILE --argjson delims "$json_delimiters" -r -c "$@" '
-
+            local jq_flat_prog='
             def structural_merge:
                 type as $type
                 | if $type == "object" then
                     with_entries(.value |= structural_merge)
                 elif $type == "array" then
                     if length == 0 then []
-                    elif (map(type == "object") | unique | length == 2) then
+                    elif ([ .[] | select(. != null) | type == "object" ] | unique | length == 2) then
                         .
                     elif (map(type == "object") | any) then
-                        ( [ .[] | select(. != null) | keys[] ] | unique ) as $all_keys
+                        ( [ .[] | select(type == "object") | keys[] ] | unique ) as $all_keys
                         | map(. as $obj
                         | if $obj == null or type != "object" then
                             $all_keys | map({key: ., value: null}) | from_entries
@@ -486,7 +552,7 @@ JQs()
                         | from_entries
                     else
                         map(structural_merge)
-                        | if (map(type == "object") | any) then structural_merge else . end
+                        | if ([ .[] | select(. != null) | type == "object" ] | any) then structural_merge else . end
                     end
                 else
                     .
@@ -498,8 +564,6 @@ JQs()
                     with_entries(.value |= finalize_strings($layer + 1))
                 elif $type == "array" then
                     if length == 0 then ""
-                    elif length == 1 and (.[0] | type) == "array" then
-                        .[0] | finalize_strings($layer)
                     else
                         map(
                             (if type == "array" then
@@ -518,7 +582,14 @@ JQs()
                     tostring
                 end;
 
-            '"$pre"' | structural_merge | finalize_strings(0)' <<< "$jq_input"
+            '"$pre"' | structural_merge | finalize_strings(0)'
+
+            if [ "$jq_is_file" = true ]
+            then
+                $JQ_FILE --argjson delims "$json_delimiters" -r -c "$@" "$jq_flat_prog" "$jq_src"
+            else
+                $JQ_FILE --argjson delims "$json_delimiters" -r -c "$@" "$jq_flat_prog" <<< "$jq_src"
+            fi
         ;;
     esac
 }

@@ -1,0 +1,219 @@
+RunSuiteE2eAios()
+{
+    printf '\n=== Suite: e2e (real generated aios.sh via PTY) ===\n'
+
+    # Build aios.sh into a temporary file so running tests never mutates the repo working tree
+    local e2e_built_aios
+    e2e_built_aios=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build.XXXXXX")
+    (
+        set -euo pipefail
+        DEV_PATH="$REPO_ROOT"
+        BUILD_LIBRARY_ONLY=true
+        Include()
+        {
+            local p="$DEV_PATH" n="$1"
+            while [[ $n =~ \/ ]]
+            do
+                p="$p/${n%%/*}"
+                n="${n#*/}"
+            done
+            shift
+            # shellcheck disable=SC1090
+            . "$p/$n" "$@"
+        }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/ver"
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/env"
+        info="[INFO]"
+        Println() { printf '%b\n' "$*"; }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/utils/shfile"
+        Spinner() { shift; "$@"; }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/build"
+        BuildShFile "$e2e_built_aios" > /dev/null
+    )
+    if bash -n "$e2e_built_aios"
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] e2e: rebuilt aios.sh passes bash -n\n'
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] e2e: rebuilt aios.sh failed bash -n\n' >&2
+        rm -f "$e2e_built_aios"
+        return 1
+    fi
+
+    local dup_funcs
+    dup_funcs=$(grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_:]*\(\)[[:space:]]*$' "$e2e_built_aios" \
+        | sed -E 's/^[[:space:]]+//; s/\(\)[[:space:]]*$//' \
+        | sort | uniq -d)
+    AssertEq "" "$dup_funcs" "e2e: rebuilt aios.sh has zero duplicate function definitions"
+
+    E2eSandboxInit "$e2e_built_aios"
+    rm -f "$e2e_built_aios"
+    local x_cfg="$E2E_SANDBOX_DIR/etc/xray/config.json"
+    local v2_cfg="$E2E_SANDBOX_DIR/etc/v2ray/config.json"
+    local pty_mode=""
+    [ "$SHOW_OUTPUT" -eq 1 ] && pty_mode="--verbose"
+
+    # ------------------------------------------------------------------
+    # XRAY E2E — Multi-inbound matrix (xray_full_matrix.json)
+    # ------------------------------------------------------------------
+    E2eLoadFixture xray xray_full_matrix.json
+
+    # 1. Menu 5: 查看入站 -> 全部入站 -> 选择入站 1 (vless-reality)
+    local out
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 5 (inbound 1: vless-reality)" "$out"
+    AssertContains "$out" "用户数: 2" "e2e x menu 5: inbound 1 shows user count 2 despite empty clients[]"
+    AssertContains "$out" "alice@example.test" "e2e x menu 5: inbound 1 shows alice account"
+    AssertContains "$out" "bob@example.test" "e2e x menu 5: inbound 1 shows bob account"
+    AssertContains "$out" "vless://11111111-1111-4111-8111-111111111111@203.0.113.10:443?" "e2e x menu 5: share link includes selected inbound 1"
+    AssertNotContains "$out" "vmess://" "e2e x menu 5: share link excludes unselected inbound 2 (vmess)"
+    AssertNotContains "$out" "trojan://" "e2e x menu 5: share link excludes unselected inbound 3 (trojan)"
+
+    # 2. Menu 5: 查看入站 -> 全部入站 -> 选择入站 2 (nginx-vmess-ws)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 5 (inbound 2: nginx-vmess-ws)" "$out"
+    AssertContains "$out" "vmess-user@example.test" "e2e x menu 5: inbound 2 shows vmess-user"
+    AssertContains "$out" "vmess://" "e2e x menu 5: share link includes selected inbound 2 (vmess)"
+    AssertNotContains "$out" "vless://" "e2e x menu 5: share link excludes unselected inbound 1 (vless)"
+    AssertNotContains "$out" "trojan://" "e2e x menu 5: share link excludes unselected inbound 3 (trojan)"
+
+    # 3. Menu 5: 查看入站 -> 全部入站 -> 选择入站 3 (tls-trojan)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><DOWN><ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 5 (inbound 3: tls-trojan)" "$out"
+    AssertContains "$out" "trojan://trojan-secret-pass@203.0.113.10:8443?" "e2e x menu 5: share link includes selected inbound 3 (trojan)"
+    AssertNotContains "$out" "vless://" "e2e x menu 5: inbound 3 share excludes vless"
+    AssertNotContains "$out" "vmess://" "e2e x menu 5: inbound 3 share excludes vmess"
+
+    # 4. Menu 5: 查看入站 -> 本地 nginx 入站 filter
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<DOWN><ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 5 (nginx filter)" "$out"
+    AssertContains "$out" "nginx-vmess-ws" "e2e x menu 5: nginx filter displays nginx-vmess-ws"
+
+    # 5. Menu 8: 查看出站 -> 选择出站 2 (upstream-vless)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 8 (outbound 2)" "$out"
+    AssertContains "$out" "edge.example.test:443" "e2e x menu 8: shows flat vless outbound address"
+    AssertContains "$out" "dialerProxy" "e2e x menu 8: renders sockopt.dialerProxy"
+
+    # 6. Menu 11 (查看DNS), 13 (查看路由), 15 (查看策略), 17 (查看流量), 18 (重置流量), 19 (查看反向代理)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"11<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "expectedIPs" "e2e x menu 11: renders Xray DNS expectedIPs"
+    AssertContains "$out" "过期缓存: 是" "e2e x menu 11: renders Xray DNS serveStale"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"13<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "cn-direct" "e2e x menu 13: renders Xray routing ruleTag"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"15<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "statsOnline=是" "e2e x menu 15: renders Xray policy statsUserOnline"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"17<ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 17 (stats)" "$out"
+    AssertContains "$out" "2 MB" "e2e x menu 17: renders formatted uplink traffic"
+    AssertContains "$out" "5 MB" "e2e x menu 17: renders formatted downlink traffic"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"18<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "已重置" "e2e x menu 18: resets traffic stats"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"19<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "bridge-1" "e2e x menu 19: renders Xray reverse bridge"
+
+    # 7. Menu 3: 配置域名 -> 选择入站 3 (tls-trojan) -> 修改证书文件路径
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"3<ENTER>"},{"wait":"选择要管理证书的直连入站","send":"<DOWN><DOWN><ENTER>"},{"wait":"选择证书操作","send":"<ENTER>"},{"wait":"certificateFile","send":"/etc/ssl/e2e-updated.crt<ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E x menu 3 (config_domain)" "$out"
+    AssertJsonEq "$x_cfg" '.inbounds[2].streamSettings.tlsSettings.certificates[0].certificateFile' "/etc/ssl/e2e-updated.crt" "e2e x menu 3: updates certificateFile in config.json"
+
+    # 8. Menu 7 (添加入站账号) + Menu 22 (删除入站账号)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"7<ENTER>"},{"wait":"选择要添加账号的入站","send":"<ENTER>"},{"wait":"输入用户 UUID","send":"99999999-9999-4999-8999-999999999999<ENTER>"},{"wait":"输入 flow","send":"<ENTER>"},{"wait":"输入 email","send":"e2e-user@example.test<ENTER>"}]' "$pty_mode")
+    AssertJsonEq "$x_cfg" '.inbounds[0].settings.users | length' "3" "e2e x menu 7: appends new user to inbound 1"
+    AssertJsonEq "$x_cfg" '.inbounds[0].settings.users[2].email' "e2e-user@example.test" "e2e x menu 7: persists new user email"
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"22<ENTER>"},{"wait":"选择要删除账号的入站","send":"<ENTER>"},{"wait":"选择要删除的账号","send":"<DOWN><DOWN><ENTER>"}]' "$pty_mode")
+    AssertJsonEq "$x_cfg" '.inbounds[0].settings.users | length' "2" "e2e x menu 22: deletes added user from inbound 1"
+
+    # 9. Menu 12 (设置DNS: 添加静态 Host)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"12<ENTER>"},{"wait":"选择 Xray DNS 操作","send":"<ENTER>"},{"wait":"输入域名或规则","send":"e2e-host.example.test<ENTER>"},{"wait":"输入目标 IP","send":"10.20.30.40<ENTER>"}]' "$pty_mode")
+    AssertJsonEq "$x_cfg" '.dns.hosts["e2e-host.example.test"]' "10.20.30.40" "e2e x menu 12: adds DNS static host"
+
+    # 10. Menu 21 (删除入站: 删除入站 2 nginx-vmess-ws)
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"21<ENTER>"},{"wait":"选择要删除的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    AssertJsonEq "$x_cfg" '.inbounds | length' "2" "e2e x menu 21: deletes inbound 2"
+
+    # 11. Xray Empty Config Edge Case (empty.json)
+    E2eLoadFixture xray empty.json
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "请先添加入站" "e2e x empty config: handles empty inbounds without crash"
+
+    # ------------------------------------------------------------------
+    # V2RAY E2E — Multi-inbound matrix (v2ray_full_matrix.json)
+    # ------------------------------------------------------------------
+    E2eLoadFixture v2ray v2ray_full_matrix.json
+
+    # 12. V2Ray Menu 5: 选择入站 1 (vmess-direct) -> 只输出 vmess 分享链接
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E v2 menu 5 (inbound 1: vmess-direct)" "$out"
+    AssertContains "$out" "v2-alice@example.test" "e2e v2 menu 5: inbound 1 shows v2-alice"
+    AssertContains "$out" "vmess://" "e2e v2 menu 5: share link includes selected inbound 1 (vmess)"
+    AssertNotContains "$out" "trojan://" "e2e v2 menu 5: share link excludes unselected inbound 2 (trojan)"
+
+    # 13. V2Ray Menu 5: 选择入站 2 (nginx-trojan) -> 只输出 trojan 分享链接
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    ShowCaptured "E2E v2 menu 5 (inbound 2: nginx-trojan)" "$out"
+    AssertContains "$out" "trojan://v2-trojan-pass@203.0.113.10:10002?" "e2e v2 menu 5: share link includes selected inbound 2 (trojan)"
+    AssertNotContains "$out" "vmess://" "e2e v2 menu 5: share link excludes unselected inbound 1 (vmess)"
+
+    # 14. V2Ray Menu 8, 11, 13, 15, 19
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "v2-edge.example.test:443" "e2e v2 menu 8: shows vnext outbound address"
+
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"11<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "expectIPs" "e2e v2 menu 11: renders V2Ray expectIPs"
+
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"13<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "hybrid" "e2e v2 menu 13: renders V2Ray domainMatcher"
+
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"15<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "bufferSize" "e2e v2 menu 15: renders V2Ray policy bufferSize"
+
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"19<ENTER>"}]' "$pty_mode")
+    AssertContains "$out" "v2-br" "e2e v2 menu 19: renders V2Ray reverse bridge"
+
+    # 15. V2Ray Menu 21 (删除入站)
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"21<ENTER>"},{"wait":"选择要删除的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    AssertJsonEq "$v2_cfg" '.inbounds | length' "1" "e2e v2 menu 21: deletes inbound 2"
+
+    # 16. Dynamic generated-config rotation through real aios.sh (Xray + V2Ray diverse protocols)
+    local dyn_spec d_proto d_net d_sec d_expect
+    for dyn_spec in \
+        "vless|xhttp|reality|vless://" \
+        "vmess|ws|tls|vmess://" \
+        "trojan|grpc|tls|trojan://" \
+        "shadowsocks|raw|none|2022-blake3" \
+        "hysteria|hysteria|tls|hysteria" \
+        "wireguard|raw|none|wg-pub-1"
+    do
+        IFS="|" read -r d_proto d_net d_sec d_expect <<< "$dyn_spec"
+        _MatrixBuildXrayInbound "$d_proto" "$d_net" "$d_sec" "dyn-${d_proto}" 15000 > "$x_cfg"
+        out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
+        AssertContains "$out" "dyn-${d_proto}" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders tag"
+        AssertContains "$out" "$d_expect" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
+    done
+
+    for dyn_spec in \
+        "vmess|ws|tls|vmess://" \
+        "vless|grpc|none|v2-vless" \
+        "hysteria2|hysteria2|tls|hysteria2"
+    do
+        IFS="|" read -r d_proto d_net d_sec d_expect <<< "$dyn_spec"
+        _MatrixBuildV2rayConfig "$d_proto" "$d_net" "$d_sec" "v2-${d_proto}" 16000 > "$v2_cfg"
+        out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
+        AssertContains "$out" "v2-${d_proto}" "e2e dynamic v2 (${d_proto}/${d_net}/${d_sec}) renders tag"
+        AssertContains "$out" "$d_expect" "e2e dynamic v2 (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
+    done
+
+    E2eSandboxCleanup
+}

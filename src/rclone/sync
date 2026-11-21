@@ -301,7 +301,7 @@ RcloneSyncEdit()
 
             if [ "$rclone_sync_rsync" != "${rclone_syncs_rsync[rclone_syncs_index]}" ] 
             then
-                bool=true
+                jq_bool=true
                 jq_path='["rclone","sync",'"$rclone_syncs_index"',"rsync"]'
                 JQ update "$SERVICES_CONFIG" "$rclone_sync_rsync"
             fi

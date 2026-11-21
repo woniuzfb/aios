@@ -576,7 +576,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
             Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
         fi
 
-        json=true
+        jq_json=true
         jq_path='["dns"]'
         JQ update /etc/docker/daemon.json '["'"$eth0_ip"'","8.8.8.8"]'
 
@@ -954,7 +954,7 @@ EOF
             Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
         fi
 
-        json=true
+        jq_json=true
         jq_path='["registry-mirrors"]'
         JQ update /etc/docker/daemon.json '["'"$registry_mirrors"'"]'
 

@@ -72,7 +72,7 @@ VipEditUser()
             VipSetUserSum
             jq_path='["users",'"$vip_users_index"',"sum"]'
             JQ update "$VIP_FILE" "$vip_user_sum"
-            number=true
+            jq_number=true
             jq_path='["users",'"$vip_users_index"',"expire"]'
             JQ update "$VIP_FILE" "$vip_user_expire"
             Println "$info 验证类型/到期日修改成功\n"

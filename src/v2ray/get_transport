@@ -37,6 +37,11 @@ V2rayGetTransport()
         ["hy2steriaSettings","congestion","type"],
         ["hy2steriaSettings","congestion","up_mbps"],
         ["hy2steriaSettings","congestion","down_mbps"],
+        ["hysteria2Settings","password"],
+        ["hysteria2Settings","use_udp_extension"],
+        ["hysteria2Settings","congestion","type"],
+        ["hysteria2Settings","congestion","up_mbps"],
+        ["hysteria2Settings","congestion","down_mbps"],
         ["grpcSettings","serviceName"]
     ]'
 
@@ -62,21 +67,28 @@ V2rayGetTransport()
     transport_wsSettings_maxEarlyData=${jq_transport_wsSettings_maxEarlyData:-0}
     transport_wsSettings_useBrowserForwarding=${jq_transport_wsSettings_useBrowserForwarding:-false}
     transport_wsSettings_earlyDataHeaderName=${jq_transport_wsSettings_earlyDataHeaderName:-}
-    transport_httpSettings_host=${jq_transport_wsSettings_host:-}
-    transport_httpSettings_path=${jq_transport_wsSettings_path:-/}
-    transport_httpSettings_method=${jq_transport_wsSettings_method:-PUT}
-    transport_httpSettings_headers=${jq_transport_wsSettings_headers:-}
+    transport_httpSettings_host=${jq_transport_httpSettings_host:-}
+    transport_httpSettings_host="${transport_httpSettings_host%"${delimiters[2]}"}"
+    transport_httpSettings_host="${transport_httpSettings_host//"${delimiters[2]}"/,}"
+    transport_httpSettings_path=${jq_transport_httpSettings_path:-/}
+    transport_httpSettings_method=${jq_transport_httpSettings_method:-PUT}
+    transport_httpSettings_headers=${jq_transport_httpSettings_headers:-}
     transport_quicSettings_security=${jq_transport_quicSettings_security:-none}
     transport_quicSettings_key=${jq_transport_quicSettings_key:-}
     transport_quicSettings_header_type=${jq_transport_quicSettings_header_type:-none}
     transport_dsSettings_path=${jq_transport_dsSettings_path:-}
     transport_dsSettings_abstract=${jq_transport_dsSettings_abstract:-false}
     transport_dsSettings_padding=${jq_transport_dsSettings_padding:-false}
-    transport_hy2steriaSettings_password=${jq_transport_hy2steriaSettings_password:-}
-    transport_hy2steriaSettings_use_udp_extension=${jq_transport_hy2steriaSettings_use_udp_extension:-false}
-    transport_hy2steriaSettings_congestion_type=${jq_transport_hy2steriaSettings_congestion_type:-bbr}
-    transport_hy2steriaSettings_congestion_up_mbps=${jq_transport_hy2steriaSettings_congestion_up_mbps:-0}
-    transport_hy2steriaSettings_congestion_down_mbps=${jq_transport_hy2steriaSettings_congestion_down_mbps:-0}
+    transport_hysteria2Settings_password=${jq_transport_hysteria2Settings_password:-${jq_transport_hy2steriaSettings_password:-}}
+    transport_hysteria2Settings_use_udp_extension=${jq_transport_hysteria2Settings_use_udp_extension:-${jq_transport_hy2steriaSettings_use_udp_extension:-false}}
+    transport_hysteria2Settings_congestion_type=${jq_transport_hysteria2Settings_congestion_type:-${jq_transport_hy2steriaSettings_congestion_type:-bbr}}
+    transport_hysteria2Settings_congestion_up_mbps=${jq_transport_hysteria2Settings_congestion_up_mbps:-${jq_transport_hy2steriaSettings_congestion_up_mbps:-0}}
+    transport_hysteria2Settings_congestion_down_mbps=${jq_transport_hysteria2Settings_congestion_down_mbps:-${jq_transport_hy2steriaSettings_congestion_down_mbps:-0}}
+    transport_hy2steriaSettings_password="$transport_hysteria2Settings_password"
+    transport_hy2steriaSettings_use_udp_extension="$transport_hysteria2Settings_use_udp_extension"
+    transport_hy2steriaSettings_congestion_type="$transport_hysteria2Settings_congestion_type"
+    transport_hy2steriaSettings_congestion_up_mbps="$transport_hysteria2Settings_congestion_up_mbps"
+    transport_hy2steriaSettings_congestion_down_mbps="$transport_hysteria2Settings_congestion_down_mbps"
     transport_grpcSettings_serviceName=${jq_transport_grpcSettings_serviceName:-}
 
 }

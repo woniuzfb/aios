@@ -1,0 +1,106 @@
+XraySetPolicy()
+{
+    local actions=(
+        '添加/修改用户等级策略'
+        '删除用户等级策略'
+        '设置入站上行流量统计'
+        '设置入站下行流量统计'
+        '设置出站上行流量统计'
+        '设置出站下行流量统计'
+    )
+    local action_idx=0
+    echo
+    inquirer list_input_index "选择 Xray 策略操作" actions action_idx
+
+    local sw_opts=( '关闭' '开启' )
+
+    case "$action_idx" in
+        0)
+            local lvl hs ci uo do_s buf
+            local up_idx=1 dn_idx=1 online_idx=1
+            inquirer text_input "用户等级 level (留空自动分配)" lvl ""
+            if [ -z "$lvl" ]
+            then
+                lvl=$(JQs query "$X_CONFIG" '((if (.policy | type) == "object" then (if (.policy.levels | type) == "object" then .policy.levels elif (.policy.level | type) == "object" then .policy.level else {} end) else {} end) | keys | map(tonumber?) | max // -1) + 1')
+                lvl="${lvl:-0}"
+            fi
+            if [[ ! $lvl =~ ^[0-9]+$ ]]
+            then
+                Println "$error 用户等级 level 必须为非负整数\n"
+                return 1
+            fi
+            inquirer text_input "handshake (秒)" hs "60"
+            inquirer text_input "connIdle (秒)" ci "300"
+            inquirer text_input "uplinkOnly (秒)" uo "1"
+            inquirer text_input "downlinkOnly (秒)" do_s "1"
+            inquirer text_input "bufferSize (KB)" buf "0"
+            if [[ ! $hs =~ ^[0-9]+$ ]] || [[ ! $ci =~ ^[0-9]+$ ]] || [[ ! $uo =~ ^[0-9]+$ ]] || [[ ! $do_s =~ ^[0-9]+$ ]] || [[ ! $buf =~ ^[0-9]+$ ]]
+            then
+                Println "$error handshake / connIdle / uplinkOnly / downlinkOnly / bufferSize 必须为非负整数\n"
+                return 1
+            fi
+            inquirer list_input_index "用户上行流量统计 statsUserUplink" sw_opts up_idx
+            inquirer list_input_index "用户下行流量统计 statsUserDownlink" sw_opts dn_idx
+            inquirer list_input_index "用户在线统计 statsUserOnline" sw_opts online_idx
+
+            if ! JQ mutate "$X_CONFIG" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
+                ($lvl): {
+                    "handshake": ($hs | tonumber),
+                    "connIdle": ($ci | tonumber),
+                    "uplinkOnly": ($uo | tonumber),
+                    "downlinkOnly": ($do_s | tonumber),
+                    "bufferSize": ($buf | tonumber),
+                    "statsUserUplink": ($up == "1"),
+                    "statsUserDownlink": ($dn == "1"),
+                    "statsUserOnline": ($online == "1")
+                }
+            }) | del(.policy.level)' \
+                --arg lvl "$lvl" --arg hs "$hs" --arg ci "$ci" --arg uo "$uo" --arg do_s "$do_s" \
+                --arg buf "$buf" --arg up "$up_idx" --arg dn "$dn_idx" --arg online "$online_idx"
+            then
+                Println "$error 更新等级 ${lvl} 策略失败\n"
+                return 1
+            fi
+            Println "$info 已更新等级 ${green}${lvl}${normal} 策略\n"
+        ;;
+        1)
+            local lvls=()
+            local k
+            while IFS= read -r k
+            do
+                [ -n "$k" ] && lvls+=("$k")
+            done < <(JQs query "$X_CONFIG" '(if (.policy | type) == "object" then (if (.policy.levels | type) == "object" then .policy.levels elif (.policy.level | type) == "object" then .policy.level else {} end) else {} end) | keys[]')
+            if [ "${#lvls[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的用户等级策略\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的用户等级" lvls del_idx
+            local del_lvl="${lvls[$del_idx]}"
+            if ! JQ mutate "$X_CONFIG" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
+            then
+                Println "$error 删除等级 ${del_lvl} 策略失败\n"
+                return 1
+            fi
+            Println "$info 已删除等级 ${green}${del_lvl}${normal} 策略\n"
+        ;;
+        2|3|4|5)
+            local sys_keys=( '' '' 'statsInboundUplink' 'statsInboundDownlink' 'statsOutboundUplink' 'statsOutboundDownlink' )
+            local sys_key="${sys_keys[$action_idx]}"
+            local sw_idx=1 sw_bool=false
+            inquirer list_input_index "设置 ${sys_key}" sw_opts sw_idx
+            [ "$sw_idx" -eq 1 ] && sw_bool=true
+            jq_bool=true
+            jq_path='["policy","system","'"$sys_key"'"]'
+            if ! JQ update "$X_CONFIG" "$sw_bool"
+            then
+                Println "$error 更新系统策略 ${sys_key} 失败\n"
+                return 1
+            fi
+            Println "$info 已更新系统策略 ${green}${sys_key}${normal}\n"
+        ;;
+    esac
+
+    ProxyRestartIfActive xray
+}

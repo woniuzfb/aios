@@ -1,6 +1,9 @@
 V2rayConfigDomain()
 {
-    if [ -d "$nginx_prefix" ] 
+    v2ray_name="${v2ray_name:-v2ray}"
+    tls_name="${tls_name:-tls}"
+
+    if [ -d "$nginx_prefix" ]
     then
         echo
         v2ray_config_domain_options=( "$v2ray_name" nginx openresty )
@@ -218,26 +221,41 @@ V2rayConfigDomain()
     then
         if [ -n "${certificates:-}" ] && [ -n "${certificates[certificates_index]}" ] 
         then
-            if [ "$v2ray_name" == "xray" ] 
+            if [ "$v2ray_name" == "xray" ]
             then
-                crt=$($V2CTL_FILE tls cert)
-            elif [ "$usage" == "encipherment" ] 
+                crt=$("$V2CTL_FILE" tls cert)
+            elif [ "${usages[certificates_index]}" == "encipherment" ]
             then
                 echo
                 inquirer list_input "是否是 CA 证书" yn_options ca_yn
-                if [ "$ca_yn" == "$i18n_yes" ] 
+                if [ "$ca_yn" == "$i18n_yes" ]
                 then
-                    crt=$($V2CTL_FILE cert -ca)
+                    if [ -x "${V2CTL_FILE:-}" ]
+                    then
+                        crt=$("$V2CTL_FILE" cert -ca)
+                    else
+                        crt=$("$V2_FILE" tls cert --ca)
+                    fi
                 else
-                    crt=$($V2CTL_FILE cert)
+                    if [ -x "${V2CTL_FILE:-}" ]
+                    then
+                        crt=$("$V2CTL_FILE" cert)
+                    else
+                        crt=$("$V2_FILE" tls cert)
+                    fi
                 fi
             else
-                crt=$($V2CTL_FILE cert -ca)
+                if [ -x "${V2CTL_FILE:-}" ]
+                then
+                    crt=$("$V2CTL_FILE" cert -ca)
+                else
+                    crt=$("$V2_FILE" tls cert --ca)
+                fi
             fi
 
             certificate=$($JQ_FILE "{\"usage\":\"${usages[certificates_index]}\"} * ." <<< "$crt")
 
-            json=true
+            jq_json=true
             jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"']'
             JQ update "$V2_CONFIG" "$certificate"
 
@@ -260,11 +278,13 @@ V2rayConfigDomain()
 
             V2rayDomainUpdateCert "$certificate_domain"
 
-            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
-            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.crt"
-
-            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
-            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.key"
+            local cert_patch=""
+            JQs build cert_patch '{"certificateFile": $crt, "keyFile": $key}' \
+                --arg crt "$AIOS_PREFIX/share/$v2ray_name/$certificate_domain.crt" \
+                --arg key "$AIOS_PREFIX/share/$v2ray_name/$certificate_domain.key"
+            jq_merge=true
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"']'
+            JQ update "$V2_CONFIG" "$cert_patch"
 
             Println "$info $certificate_domain 证书更新成功\n"
         fi

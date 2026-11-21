@@ -29,7 +29,7 @@ ScheduleNowtv()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name nowtv [$chnl_id] 节目表更新成功"
@@ -106,7 +106,7 @@ ScheduleNiotv()
             continue
         fi
 
-        json=true
+        jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info $chnl_name niotv [$chnl_id] 节目表更新成功"
@@ -195,7 +195,7 @@ ScheduleIcable()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] i-cable 节目表更新成功"
@@ -262,7 +262,7 @@ ScheduleJiushi()
             fi
         fi
 
-        json=true
+        jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 就是节目表更新成功"
@@ -313,7 +313,7 @@ ScheduleHboasia()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] hbo亚洲 节目表更新成功"
@@ -397,7 +397,7 @@ ScheduleHbous()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] hbous 节目表更新成功"
@@ -523,7 +523,7 @@ ScheduleOntvtonight()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] ontvtonight 节目表更新成功"
@@ -564,7 +564,7 @@ ScheduleDisneyjr()
 
     if [ -n "$schedule" ] 
     then
-        json=true
+        jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
@@ -612,7 +612,7 @@ ScheduleFoxmovies()
 
     if [ -n "$schedule" ] 
     then
-        json=true
+        jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
@@ -708,7 +708,7 @@ ScheduleAmlh()
 
     if [ -n "$schedule" ] 
     then
-        json=true
+        jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
@@ -733,8 +733,8 @@ ScheduleFoxnews()
 
     if [ -n "$schedule" ] 
     then
-        file=true
-        file_json=true
+        jq_file=true
+        jq_file_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" schedule
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
@@ -773,7 +773,7 @@ ScheduleTvbhk()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] tvbhk 节目表更新成功"
@@ -1180,7 +1180,7 @@ ScheduleTvbhd()
 
     if [ -n "$schedule" ] 
     then
-        json=true
+        jq_json=true
         jq_path='["tvbhd"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
         Println "$info tvbhd [$chnl_id] 节目表更新成功"
@@ -1289,7 +1289,7 @@ ScheduleSingteltv()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] singteltv 节目表更新成功"
@@ -1328,7 +1328,7 @@ ScheduleCntv()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] cntv 节目表更新成功"
@@ -1373,7 +1373,7 @@ ScheduleTvbs()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] tvbs 节目表更新成功"
@@ -1417,7 +1417,7 @@ ScheduleAstro()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] astro 节目表更新成功"
@@ -1479,7 +1479,7 @@ ScheduleNbcsn()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] nbcsn 节目表更新成功"
@@ -1553,8 +1553,8 @@ ScheduleBeinsports()
 
         if [ -n "${schedule:-}" ] 
         then
-            file=true
-            file_json=true
+            jq_file=true
+            jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
             Println "$info $chnl_name [$chnl_id] beinsports 节目表更新成功"
@@ -1631,8 +1631,8 @@ ScheduleBeinsportsau()
 
         if [ -n "${schedule:-}" ] 
         then
-            file=true
-            file_json=true
+            jq_file=true
+            jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
             Println "$info $chnl_name [$chnl_id] beinsports AU 节目表更新成功"
@@ -1673,7 +1673,7 @@ ScheduleSupersport()
 
         if [ "$schedule" != "[]" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] SuperSport 节目表更新成功"
@@ -1720,7 +1720,7 @@ ScheduleBtsport()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] BT Sport 节目表更新成功"
@@ -1749,7 +1749,7 @@ ScheduleBtsportOn()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] BT Sport on 节目表更新成功"
@@ -1837,8 +1837,8 @@ SchedulePremiersports()
 
         if [ -n "${schedule:-}" ] 
         then
-            file=true
-            file_json=true
+            jq_file=true
+            jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
             Println "$info $chnl_name [$chnl_id] Premier Sports 节目表更新成功"
@@ -1888,7 +1888,7 @@ ScheduleSky()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] Sky 节目表更新成功"
@@ -1941,7 +1941,7 @@ Schedule_4gtv()
 
         if [ -n "$schedule" ] 
         then
-            json=true
+            jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] 4gtv 节目表更新成功"
@@ -2095,7 +2095,7 @@ ScheduleAddChannel()
         jq_path='["schedule"]'
         JQ add "$CRON_FILE" "[$new_provider]"
     else
-        map_string=true
+        jq_map_string=true
         jq_path='["schedule"]'
         jq_path2='["chnls"]'
         JQ add "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
@@ -2184,7 +2184,7 @@ ScheduleAdd()
 
 ScheduleDelChannel()
 {
-    map_string=true
+    jq_map_string=true
     jq_path='["schedule"]'
     jq_path2='["chnls"]'
     JQ delete "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
@@ -2249,8 +2249,8 @@ ScheduleDel()
 
         if [ "$chnls_num" == $((chnls_count+1)) ] 
         then
-            map_string=true
-            json=true
+            jq_map_string=true
+            jq_json=true
             jq_path='["schedule"]'
             jq_path2='["chnls"]'
             JQ update "$CRON_FILE" provider "$provider" []
@@ -2607,7 +2607,7 @@ ScheduleRestoreBackup()
         }'
     done
 
-    json=true
+    jq_json=true
     jq_path='["schedule"]'
     JQ update "$CRON_FILE" "[$schedules_list]"
     Println "$info 备份 $backup_name 恢复成功\n"

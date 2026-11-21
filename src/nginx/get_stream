@@ -47,21 +47,21 @@ NginxGetStream()
 
                     if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ]
                     then
-                        if [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_server_name${delimiters[0]}\$upstream" ]
+                        if [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_server_name${delimiters[5]}\$upstream" ]
                         then
                             for((server_name_i=0;server_name_i<${#level_3_directive_d2_arr[@]};server_name_i++));
                             do
                                 nginx_stream_server_name_list="$nginx_stream_server_name_list $((server_name_i+1)).${indent_6}${green}${level_3_directive_d2_arr[server_name_i]}${normal} => ${green}${level_3_args_d2_arr[server_name_i]}${normal}\n"
                                 nginx_stream_server_name+=("${level_3_directive_d2_arr[server_name_i]} => ${level_3_args_d2_arr[server_name_i]}")
                             done
-                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_protocol${delimiters[0]}\$ssl_proxy" ]
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_protocol${delimiters[5]}\$ssl_proxy" ]
                         then
                             for((protocol_i=0;protocol_i<${#level_3_directive_d2_arr[@]};protocol_i++));
                             do
                                 nginx_stream_protocol_list="$nginx_stream_protocol_list $((protocol_i+1)).${indent_6}${green}${level_3_directive_d2_arr[protocol_i]:-''}${normal} => ${green}${level_3_args_d2_arr[protocol_i]}${normal}\n"
                                 nginx_stream_protocol+=("${level_3_directive_d2_arr[protocol_i]:-''} => ${level_3_args_d2_arr[protocol_i]}")
                             done
-                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_alpn_protocols${delimiters[0]}\$proxy_pass" ]
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_alpn_protocols${delimiters[5]}\$proxy_pass" ]
                         then
                             for((alpn_protocols_i=0;alpn_protocols_i<${#level_3_directive_d2_arr[@]};alpn_protocols_i++));
                             do

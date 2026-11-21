@@ -654,7 +654,7 @@ XtreamCodesListChnls()
 
                                         if [ "$change_options_index" -eq 0 ] 
                                         then
-                                            pre=true
+                                            jq_pre=true
                                             jq_path='["channels",'"$chnls_index"',"stream_link"]'
                                             JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                                         else

@@ -441,7 +441,7 @@ ZhLhh()
                 ZhLhhDownload "${book_url}" "${books_bookname[books_index]}"
                 if [ "${books_downloaded[books_index]}" = false ] 
                 then
-                    bool=true
+                    jq_bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"downloaded"]'
                     JQ update "$LIANHUANHUA_CONFIG" true
                 fi
@@ -455,7 +455,7 @@ ZhLhh()
                 books_index=${books_indices[result_index]}
                 if [ "${books_fav[books_index]}" = false ]
                 then
-                    bool=true
+                    jq_bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"fav"]'
                     JQ update "$LIANHUANHUA_CONFIG" true
                 fi
@@ -467,7 +467,7 @@ ZhLhh()
                 books_index=${books_indices[result_index]}
                 if [ "${books_fav[books_index]}" = true ]
                 then
-                    bool=true
+                    jq_bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"fav"]'
                     JQ update "$LIANHUANHUA_CONFIG" false
                 fi
@@ -1112,7 +1112,7 @@ HdlzLhh()
 
                 if [ "${books_downloaded[result_index]}" = false ] 
                 then
-                    bool=true
+                    jq_bool=true
                     jq_path='["books","hdlz",'"$result_index"',"downloaded"]'
                     JQ update "$LIANHUANHUA_CONFIG" true
                 fi
@@ -1132,7 +1132,7 @@ HdlzLhh()
         then
             for result_index in "${result_indices[@]}"
             do
-                bool=true
+                jq_bool=true
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
                 JQ update "$LIANHUANHUA_CONFIG" true
             done
@@ -1140,7 +1140,7 @@ HdlzLhh()
         else
             for result_index in "${result_indices[@]}"
             do
-                bool=true
+                jq_bool=true
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
                 JQ update "$LIANHUANHUA_CONFIG" false
             done

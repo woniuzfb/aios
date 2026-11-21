@@ -1,0 +1,521 @@
+RunSuiteXray()
+{
+    printf '\n=== Suite: xray ===\n'
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    X_CONFIG="$tmpdir/xray.json"
+
+    cat > "$X_CONFIG" <<'EOF'
+{
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "logLevel": "info",
+    "dnsLog": true,
+    "maskAddress": "half"
+  },
+  "api": {
+    "tag": "api",
+    "listen": "127.0.0.1:10085",
+    "services": ["HandlerService", "StatsService"]
+  },
+  "metrics": {
+    "tag": "metrics_out",
+    "listen": "127.0.0.1:11111"
+  },
+  "version": {
+    "min": "25.8.3",
+    "max": ""
+  },
+  "geodata": {
+    "cron": "0 4 * * *",
+    "outbound": "direct",
+    "assets": [{"url": "https://example.test/geoip.dat", "file": "geoip.dat"}]
+  },
+  "fakedns": [
+    {"ipPool": "198.18.0.0/15", "poolSize": 65535}
+  ],
+  "observatory": {
+    "subjectSelector": ["proxy-"],
+    "probeUrl": "https://example.test/generate_204",
+    "probeInterval": "1m",
+    "enableConcurrency": true
+  },
+  "burstObservatory": {
+    "subjectSelector": ["proxy-"],
+    "pingConfig": {
+      "destination": "https://example.test/generate_204",
+      "interval": "30s",
+      "sampling": 5,
+      "timeout": "3s",
+      "httpMethod": "GET"
+    }
+  },
+  "dns": {
+    "hosts": {"example.test": ["127.0.0.1", "::1"]},
+    "servers": [
+      "https://dns.example.test/dns-query",
+      {
+        "address": "223.5.5.5",
+        "port": 53,
+        "domains": ["geosite:cn"],
+        "expectedIPs": ["geoip:cn"],
+        "unexpectedIPs": ["geoip:private"],
+        "skipFallback": true,
+        "finalQuery": true
+      }
+    ],
+    "queryStrategy": "UseIPv4",
+    "disableCache": false,
+    "serveStale": true,
+    "serveExpiredTTL": 3600,
+    "enableParallelQuery": true,
+    "useSystemHosts": true,
+    "tag": "dns_in"
+  },
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "ruleTag": "rule-cn",
+        "domain": ["geosite:cn"],
+        "sourceIP": ["10.0.0.0/8"],
+        "localIP": ["192.168.1.1"],
+        "outboundTag": "direct",
+        "webhook": {"url": "https://hook.example.test/hit"}
+      }
+    ],
+    "balancers": [
+      {"tag": "bal-1", "selector": ["proxy-"], "fallbackTag": "direct", "strategy": {"type": "leastPing"}}
+    ]
+  },
+  "policy": {
+    "level": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "statsUserUplink": true,
+        "statsUserDownlink": true,
+        "statsUserOnline": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "reverse": {
+    "bridges": [{"tag": "bridge-1", "domain": "rev.example.test"}],
+    "portals": [{"tag": "portal-1", "domain": "rev.example.test"}]
+  },
+  "inbounds": [
+    {
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "tag": "vless-reality",
+      "settings": {
+        "decryption": "none",
+        "users": [{"id": "00000000-0000-4000-8000-000000000001", "flow": "xtls-rprx-vision"}]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {"host": "cdn.example.test", "path": "/xhttp", "mode": "auto"},
+        "realitySettings": {
+          "target": "www.example.test:443",
+          "serverNames": ["www.example.test"],
+          "shortIds": ["0123456789abcdef"],
+          "mldsa65Seed": "seed-mock"
+        },
+        "finalmask": {"udp": [{"type": "salamander"}]},
+        "sockopt": {"tcpFastOpen": true, "dialerProxy": "direct"}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls"], "routeOnly": true, "domainsExcluded": ["skip.test"]}
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10000,
+      "protocol": "tunnel",
+      "tag": "nginx-tunnel",
+      "settings": {"rewriteAddress": "127.0.0.1", "rewritePort": 8080, "allowedNetwork": "tcp", "portMap": {"80": "127.0.0.1:8080"}}
+    },
+    {
+      "listen": "0.0.0.0",
+      "port": 8443,
+      "protocol": "hysteria",
+      "tag": "hy-in",
+      "settings": {"version": 2, "users": [{"auth": "pass-mock"}]},
+      "streamSettings": {"network": "hysteria", "security": "tls", "hysteriaSettings": {"version": 2, "udpIdleTimeout": 60}}
+    }
+  ],
+  "outbounds": [
+    {
+      "sendThrough": "0.0.0.0",
+      "protocol": "freedom",
+      "tag": "direct",
+      "targetStrategy": "UseIPv4",
+      "settings": {"domainStrategy": "AsIs", "fragment": {"packets": "tlshello", "length": "10-20", "interval": "10-20"}, "noises": [{"type": "rand", "delay": "10-20"}]}
+    },
+    {
+      "sendThrough": "0.0.0.0",
+      "protocol": "vless",
+      "tag": "proxy-vless",
+      "settings": {"address": "edge.example.test", "port": 443, "id": "00000000-0000-4000-8000-000000000001", "encryption": "none", "flow": "xtls-rprx-vision"},
+      "streamSettings": {"network": "raw", "security": "reality", "sockopt": {"dialerProxy": "direct"}},
+      "mux": {"enabled": false, "concurrency": 8}
+    },
+    {
+      "sendThrough": "0.0.0.0",
+      "protocol": "dns",
+      "tag": "dns-out",
+      "settings": {"rewriteNetwork": "udp", "rewriteAddress": "1.1.1.1", "rewritePort": 53}
+    }
+  ]
+}
+EOF
+
+    # 1. Inbounds index & rendering
+    XrayGetInbounds
+    AssertEq "3" "$inbounds_count" "XrayGetInbounds total count"
+    AssertEq "1" "$inbounds_nginx_count" "XrayGetInbounds nginx count"
+    AssertEq "2" "$inbounds_other_count" "XrayGetInbounds direct count"
+
+    local out
+    out=$(XrayListInbounds direct)
+    ShowCaptured "XrayListInbounds (direct)" "$out"
+    AssertContains "$out" "REALITY:" "Xray renders REALITY"
+    AssertContains "$out" "XHTTP:" "Xray renders XHTTP"
+    AssertContains "$out" "mldsa65Seed: 已配置" "Xray renders mldsa65Seed"
+    AssertContains "$out" "Finalmask:" "Xray renders Finalmask"
+    AssertContains "$out" "仅路由: 是" "Xray renders sniffing.routeOnly"
+    AssertContains "$out" "Hysteria:" "Xray renders Hysteria transport"
+
+    out=$(XrayListInbounds nginx)
+    ShowCaptured "XrayListInbounds (nginx)" "$out"
+    AssertContains "$out" "80 => 127.0.0.1:8080" "Xray renders tunnel portMap"
+
+    # 2. Outbounds index & rendering (must NOT output removed proxySettings)
+    out=$(XrayListOutbounds)
+    ShowCaptured "XrayListOutbounds" "$out"
+    AssertContains "$out" "targetStrategy: UseIPv4" "Xray renders targetStrategy"
+    AssertContains "$out" "fragment: tlshello / 10-20 / 10-20" "Xray renders freedom fragment"
+    AssertContains "$out" "dialerProxy: direct" "Xray renders sockopt.dialerProxy"
+    AssertContains "$out" "edge.example.test" "Xray renders flat vless outbound address"
+    AssertNotContains "$out" "proxySettings:" "Xray omits removed proxySettings"
+
+    # 3. DNS / Routing / Policy / Reverse / Overview
+    out=$(XrayListDns)
+    ShowCaptured "XrayListDns" "$out"
+    AssertContains "$out" "expectedIPs: geoip:cn" "Xray DNS renders expectedIPs"
+    AssertContains "$out" "unexpectedIPs: geoip:private" "Xray DNS renders unexpectedIPs"
+    AssertContains "$out" "过期缓存: 是" "Xray DNS renders serveStale"
+
+    out=$(XrayListRouting)
+    ShowCaptured "XrayListRouting" "$out"
+    AssertContains "$out" "ruleTag: rule-cn" "Xray Routing renders ruleTag"
+    AssertContains "$out" "domain: geosite:cn" "Xray Routing renders singular domain"
+    AssertContains "$out" "sourceIP: 10.0.0.0/8" "Xray Routing renders sourceIP"
+    AssertContains "$out" "webhook: https://hook.example.test/hit" "Xray Routing renders webhook"
+    AssertContains "$out" "fallbackTag: direct" "Xray Routing renders balancer fallbackTag"
+
+    out=$(XrayListPolicy)
+    ShowCaptured "XrayListPolicy" "$out"
+    AssertContains "$out" "statsOnline=是" "Xray Policy renders statsUserOnline"
+
+    out=$(XrayListReverse)
+    ShowCaptured "XrayListReverse" "$out"
+    AssertContains "$out" "bridge-1" "Xray Reverse renders bridge"
+
+    out=$(ProxyRenderOverview "$X_CONFIG" xray)
+    ShowCaptured "Xray Overview" "$out"
+    AssertContains "$out" "maskAddress=half" "Xray Overview renders log.maskAddress"
+    AssertContains "$out" "Metrics: tag=metrics_out" "Xray Overview renders metrics"
+    AssertContains "$out" "BurstObservatory:" "Xray Overview renders burstObservatory"
+    AssertContains "$out" "Geodata: cron=0 4 * * *" "Xray Overview renders geodata"
+    AssertContains "$out" "Version: min=25.8.3" "Xray Overview renders version"
+
+    # 4. Individual getters
+    XrayGetLog
+    AssertEq "info" "$log_loglevel" "XrayGetLog reads camelCase logLevel"
+    AssertEq "half" "$log_maskAddress" "XrayGetLog reads maskAddress"
+    XrayGetRouting
+    AssertEq "1" "$routing_rules_count" "XrayGetRouting rules count"
+    XrayGetBurstObservatory
+    AssertEq "GET" "$burstObservatory_pingConfig_httpMethod" "XrayGetBurstObservatory httpMethod"
+
+    # 5. Interactive end-to-end: add + delete inbound/outbound via mocked inquirer
+    ProxyAddBound "$X_CONFIG" inbounds '{"listen":"127.0.0.1","port":1080,"protocol":"socks","tag":"socks-added","settings":{"auth":"noauth"}}'
+    AssertJsonEq "$X_CONFIG" '.inbounds | length' "4" "ProxyAddBound adds xray inbound"
+
+    MockInquirerReset
+    MockInquirerPush "3"
+    local del_out
+    del_out=$(XrayDeleteInbound)
+    ShowCaptured "XrayDeleteInbound (interactive mock)" "$del_out"
+    AssertContains "$del_out" "socks-added" "XrayDeleteInbound removes selected tag"
+    AssertJsonEq "$X_CONFIG" '.inbounds | length' "3" "XrayDeleteInbound persists deletion"
+
+    MockInquirerReset
+    MockInquirerPush "2"
+    del_out=$(XrayDeleteOutbound)
+    AssertContains "$del_out" "dns-out" "XrayDeleteOutbound removes selected tag"
+    AssertJsonEq "$X_CONFIG" '.outbounds | length' "2" "XrayDeleteOutbound persists deletion"
+
+    # 6. Dynamic multi-step interactive flows (every menu level verified & drained)
+    printf '%s\n' '{}' > "$X_CONFIG"
+
+    # 6a. XrayAddInbound (直连 VLESS + XHTTP + REALITY)
+    MockInquirerReset
+    MockInquirerPush \
+        "0" "0" "0.0.0.0" "443" "vless-new" \
+        "00000000-0000-4000-8000-000000000099" "xtls-rprx-vision" "user1@example.test" "none" \
+        "1" "2" \
+        "cdn.example.test" "/xh" "auto" \
+        "www.example.test:443" "www.example.test,sub.example.test" "privkey-mock" "abcd1234" \
+        "1" "1"
+    out=$(XrayAddInbound)
+    AssertInquirerDrained "XrayAddInbound (direct VLESS+XHTTP+REALITY) drained"
+    ShowCaptured "XrayAddInbound (VLESS+XHTTP+REALITY)" "$out"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].protocol' "vless" "XrayAddInbound writes protocol=vless"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].port' "443" "XrayAddInbound writes numeric port"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users[0].id' "00000000-0000-4000-8000-000000000099" "XrayAddInbound writes settings.users[0].id"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].streamSettings.network' "xhttp" "XrayAddInbound writes network=xhttp"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].streamSettings.realitySettings.serverNames | length' "2" "XrayAddInbound splits serverNames"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].sniffing.routeOnly' "true" "XrayAddInbound writes sniffing.routeOnly"
+
+    # 6a2. XrayAddInbound (本地 nginx 反代入站: 自动加 nginx- 前缀 + VMess)
+    MockInquirerReset
+    MockInquirerPush \
+        "1" "1" "127.0.0.1" "10086" "vmess-ws" \
+        "00000000-0000-4000-8000-000000000088" "vm@example.test" \
+        "2" "0" "/vmws" "" "0"
+    XrayAddInbound > /dev/null
+    AssertInquirerDrained "XrayAddInbound (nginx VMess+WS) drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[1].tag' "nginx-vmess-ws" "XrayAddInbound prefixes nginx- tag"
+
+    # 6b. XrayListInboundAccounts + XrayAddInboundAccount + XrayDeleteInboundAccount
+    MockInquirerReset
+    MockInquirerPush "0"
+    local acc_out
+    acc_out=$(XrayListInboundAccounts direct)
+    AssertInquirerDrained "XrayListInboundAccounts drained"
+    AssertContains "$acc_out" "user1@example.test" "XrayListInboundAccounts shows user email"
+
+    MockInquirerReset
+    MockInquirerPush "0" "00000000-0000-4000-8000-000000000100" "" "user2@example.test"
+    XrayAddInboundAccount > /dev/null
+    AssertInquirerDrained "XrayAddInboundAccount drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users | length' "2" "XrayAddInboundAccount appends user"
+    MockInquirerReset
+    MockInquirerPush "0" "1"
+    XrayDeleteInboundAccount > /dev/null
+    AssertInquirerDrained "XrayDeleteInboundAccount drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users | length' "1" "XrayDeleteInboundAccount deletes selected user"
+
+    # 6c. XrayAddOutbound + XrayListOutboundAccounts
+    MockInquirerReset
+    MockInquirerPush \
+        "3" "proxy-new" "" "UseIPv4" "direct" \
+        "edge.example.test" "443" "00000000-0000-4000-8000-000000000099" "none" "xtls-rprx-vision" \
+        "0" "0"
+    XrayAddOutbound > /dev/null
+    AssertInquirerDrained "XrayAddOutbound drained"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].protocol' "vless" "XrayAddOutbound writes protocol=vless"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].settings.address' "edge.example.test" "XrayAddOutbound writes flat settings.address"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].targetStrategy' "UseIPv4" "XrayAddOutbound writes targetStrategy"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].streamSettings.sockopt.dialerProxy' "direct" "XrayAddOutbound writes sockopt.dialerProxy"
+
+    MockInquirerReset
+    MockInquirerPush "0"
+    local out_acc
+    out_acc=$(XrayListOutboundAccounts)
+    AssertInquirerDrained "XrayListOutboundAccounts drained"
+    AssertContains "$out_acc" "edge.example.test:443" "XrayListOutboundAccounts shows outbound server"
+
+    # 6d. XraySetDns (add host + add server + set queryStrategy + delete host + delete server)
+    MockInquirerReset
+    MockInquirerPush "0" "example.test" "127.0.0.1"
+    XraySetDns > /dev/null
+    AssertInquirerDrained "XraySetDns add host drained"
+    AssertJsonEq "$X_CONFIG" '.dns.hosts["example.test"]' "127.0.0.1" "XraySetDns adds host"
+
+    MockInquirerReset
+    MockInquirerPush "1" "223.5.5.5" "53" "" "geosite:cn" "geoip:cn" "geoip:private" "5000" "1" "1"
+    XraySetDns > /dev/null
+    AssertInquirerDrained "XraySetDns add server drained"
+    AssertJsonEq "$X_CONFIG" '.dns.servers[0].expectedIPs[0]' "geoip:cn" "XraySetDns writes expectedIPs"
+    AssertJsonEq "$X_CONFIG" '.dns.servers[0].finalQuery' "true" "XraySetDns writes finalQuery"
+
+    MockInquirerReset
+    MockInquirerPush "4" "UseSystem"
+    XraySetDns > /dev/null
+    AssertInquirerDrained "XraySetDns queryStrategy drained"
+    AssertJsonEq "$X_CONFIG" '.dns.queryStrategy' "UseSystem" "XraySetDns writes UseSystem"
+
+    MockInquirerReset
+    MockInquirerPush "6" "0"
+    XraySetDns > /dev/null
+    AssertInquirerDrained "XraySetDns delete host drained"
+    AssertJsonEq "$X_CONFIG" '.dns.hosts | length' "0" "XraySetDns deletes host"
+
+    # 6e. XraySetRouting (shortcut inbound->outbound + custom rule + delete rule)
+    MockInquirerReset
+    MockInquirerPush "0" "0" "0" "0"
+    XraySetRouting > /dev/null
+    AssertInquirerDrained "XraySetRouting shortcut drained"
+    AssertJsonEq "$X_CONFIG" '.routing.rules[0].inboundTag[0]' "vless-new" "XraySetRouting shortcut links inbound"
+    AssertJsonEq "$X_CONFIG" '.routing.rules[0].outboundTag' "proxy-new" "XraySetRouting shortcut links outbound"
+
+    MockInquirerReset
+    MockInquirerPush "0" "1" "tcp" "rule-1" "geosite:cn" "" "443" "" "" "10.0.0.0/8" "" "" "http,tls" "vless-new" "" "" "" "proxy-new" ""
+    XraySetRouting > /dev/null
+    AssertInquirerDrained "XraySetRouting custom drained"
+    AssertJsonEq "$X_CONFIG" '.routing.rules[1].ruleTag' "rule-1" "XraySetRouting writes ruleTag"
+    AssertJsonEq "$X_CONFIG" '.routing.rules[1].domain[0]' "geosite:cn" "XraySetRouting writes singular domain"
+    AssertJsonEq "$X_CONFIG" '.routing.rules[1].sourceIP[0]' "10.0.0.0/8" "XraySetRouting writes sourceIP"
+
+    MockInquirerReset
+    MockInquirerPush "3" "0"
+    XraySetRouting > /dev/null
+    AssertInquirerDrained "XraySetRouting delete rule drained"
+    AssertJsonEq "$X_CONFIG" '.routing.rules | length' "1" "XraySetRouting deletes rule"
+
+    # 6f. XraySetPolicy (auto level id + bufferSize + statsUserOnline + system stat + delete level)
+    MockInquirerReset
+    MockInquirerPush "0" "" "60" "300" "1" "1" "512" "1" "1" "1"
+    XraySetPolicy > /dev/null
+    AssertInquirerDrained "XraySetPolicy auto level drained"
+    AssertJsonEq "$X_CONFIG" '.policy.levels["0"].bufferSize' "512" "XraySetPolicy writes levels.bufferSize"
+    AssertJsonEq "$X_CONFIG" '.policy.levels["0"].statsUserOnline' "true" "XraySetPolicy writes levels.statsUserOnline"
+    AssertJsonEq "$X_CONFIG" '.policy | has("level")' "false" "XraySetPolicy does not write invalid singular .policy.level"
+
+    MockInquirerReset
+    MockInquirerPush "2" "1"
+    XraySetPolicy > /dev/null
+    AssertInquirerDrained "XraySetPolicy single system stat drained"
+    AssertJsonEq "$X_CONFIG" '.policy.system.statsInboundUplink' "true" "XraySetPolicy sets single system stat"
+
+    # 6g. XraySetReverse (add + delete bridge)
+    MockInquirerReset
+    MockInquirerPush "0" "br-1" "rev.example.test"
+    XraySetReverse > /dev/null
+    AssertInquirerDrained "XraySetReverse add bridge drained"
+    AssertJsonEq "$X_CONFIG" '.reverse.bridges[0].tag' "br-1" "XraySetReverse writes reverse.bridges[0].tag"
+
+    MockInquirerReset
+    MockInquirerPush "2" "0"
+    XraySetReverse > /dev/null
+    AssertInquirerDrained "XraySetReverse delete bridge drained"
+    AssertJsonEq "$X_CONFIG" '.reverse.bridges | length' "0" "XraySetReverse deletes bridge"
+
+    # 6h. XrayListInboundShare (vless + vmess base64 + single-inbound filter) + XrayAddOutboundAccount + XrayListStats (KB/MB)
+    local share_out
+    share_out=$(XrayListInboundShare "203.0.113.10" "all")
+    ShowCaptured "XrayListInboundShare (all)" "$share_out"
+    AssertContains "$share_out" "vless://00000000-0000-4000-8000-000000000099@203.0.113.10:443?" "XrayListInboundShare generates vless URI"
+    AssertContains "$share_out" "vmess://" "XrayListInboundShare generates vmess base64 URI"
+    AssertContains "$share_out" "security=reality" "XrayListInboundShare includes security=reality"
+    AssertContains "$share_out" "type=xhttp" "XrayListInboundShare includes type=xhttp"
+    local share_only_0
+    share_only_0=$(XrayListInboundShare "203.0.113.10" "0")
+    AssertContains "$share_only_0" "vless://" "XrayListInboundShare(0) includes inbound 0"
+    AssertNotContains "$share_only_0" "vmess://" "XrayListInboundShare(0) excludes inbound 1"
+
+    MockInquirerReset
+    MockInquirerPush "0" "00000000-0000-4000-8000-000000000222"
+    XrayAddOutboundAccount > /dev/null
+    AssertInquirerDrained "XrayAddOutboundAccount drained"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].settings.id' "00000000-0000-4000-8000-000000000222" "XrayAddOutboundAccount updates flat vless UUID"
+
+    local fake_xctl="$tmpdir/mock_xray"
+    cat > "$fake_xctl" <<'MOCKX'
+#!/bin/bash
+printf '%s\n' '{"stat":[{"name":"inbound>>>vless-new>>>traffic>>>uplink","value":2097152},{"name":"user>>>user1@example.test>>>online","value":1}]}'
+MOCKX
+    chmod +x "$fake_xctl"
+    XCTL_FILE="$fake_xctl"
+    local stats_out
+    stats_out=$(XrayListStats)
+    ShowCaptured "XrayListStats" "$stats_out"
+    AssertContains "$stats_out" "[inbound]" "XrayListStats groups by inbound"
+    AssertContains "$stats_out" "2 MB" "XrayListStats formats bytes to MB"
+    local reset_out
+    reset_out=$(XrayResetStats)
+    AssertContains "$reset_out" "已重置" "XrayResetStats succeeds via mocked xray api"
+
+    # 6i. XrayConfigDomain (direct TLS cert add + edit path)
+    JQ mutate "$X_CONFIG" \
+        '.inbounds += [{tag:"tls-direct",listen:"0.0.0.0",port:8443,protocol:"vless",settings:{users:[{id:"00000000-0000-4000-8000-000000000777"}],decryption:"none"},streamSettings:{network:"raw",security:"tls",tlsSettings:{serverName:"tls.example.test",certificates:[]}}}]'
+    NGINX_FILE="/nonexistent/nginx"
+    MockInquirerReset
+    MockInquirerPush "2" "3" "0" "/etc/ssl/test.crt" "/etc/ssl/test.key" "3600"
+    XrayConfigDomain > /dev/null
+    AssertInquirerDrained "XrayConfigDomain add cert drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates[0].certificateFile' "/etc/ssl/test.crt" "XrayConfigDomain adds certificateFile"
+    AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates[0].ocspStapling' "3600" "XrayConfigDomain writes ocspStapling"
+
+    MockInquirerReset
+    MockInquirerPush "2" "0" "/etc/ssl/updated.crt"
+    XrayConfigDomain > /dev/null
+    AssertInquirerDrained "XrayConfigDomain update cert path drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates[0].certificateFile' "/etc/ssl/updated.crt" "XrayConfigDomain updates certificateFile"
+
+    ShowCaptured "Final Generated Xray Config JSON" "$(cat "$X_CONFIG")"
+
+    # 6j. Regression checks for doc-audit fixes
+    # - XraySetDns server clientIP is string (not array)
+    MockInquirerReset
+    MockInquirerPush "1" "8.8.8.8" "53" "203.0.113.5" "geosite:google" "geoip:us" "" "3000" "0" "0"
+    XraySetDns > /dev/null
+    AssertInquirerDrained "XraySetDns clientIP string drained"
+    AssertJsonEq "$X_CONFIG" '.dns.servers[-1].clientIP | type' "string" "XraySetDns writes clientIP as string"
+    AssertJsonEq "$X_CONFIG" '.dns.servers[-1].clientIP' "203.0.113.5" "XraySetDns writes exact clientIP"
+
+    # - VLESS Encryption share link does not leak server decryption private key, SS-2022 multi-user prepends server password, IPv6 bracketed
+    local reg_cfg="$tmpdir/reg_share.json"
+    cat > "$reg_cfg" <<'REGEOF'
+{
+  "inbounds": [
+    {
+      "tag": "vless-enc",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "mlkem768x25519plus.native.600s.SECRET_PRIV_KEY_DO_NOT_LEAK",
+        "users": [{"id": "00000000-0000-4000-8000-000000000333", "email": "enc@example.test"}]
+      },
+      "streamSettings": {"method": "websocket", "security": "tls", "tlsSettings": {"serverName": "enc.example.test"}, "wsSettings": {"path": "/enc", "host": "enc.example.test"}}
+    },
+    {
+      "tag": "ss2022-multi",
+      "listen": "0.0.0.0",
+      "port": 8388,
+      "protocol": "shadowsocks",
+      "settings": {
+        "method": "2022-blake3-aes-128-gcm",
+        "password": "SERVER_KEY_BASE64",
+        "users": [{"password": "USER_KEY_BASE64", "email": "ssu@example.test"}]
+      }
+    }
+  ]
+}
+REGEOF
+    local reg_share
+    reg_share=$(ProxyRenderShareLinks "$reg_cfg" "2001:db8::1" "" "xray")
+    AssertNotContains "$reg_share" "SECRET_PRIV_KEY_DO_NOT_LEAK" "VLESS share link never leaks server decryption private key"
+    AssertContains "$reg_share" "@[2001:db8::1]:443?" "Share link wraps IPv6 host in brackets"
+    AssertContains "$reg_share" "type=ws" "Share link normalizes streamSettings.method=websocket"
+    local ss2022_expected_b64
+    ss2022_expected_b64=$(printf '%s' "2022-blake3-aes-128-gcm:SERVER_KEY_BASE64:USER_KEY_BASE64" | base64 | tr -d '\n')
+    AssertContains "$reg_share" "ss://${ss2022_expected_b64}@[2001:db8::1]:8388#" "SS-2022 multi-user share link includes ServerPassword:UserPassword"
+
+    # 7. Empty config edge case
+    printf '%s\n' '{}' > "$X_CONFIG"
+    XrayGetInbounds
+    AssertEq "0" "$inbounds_count" "Xray handles empty config gracefully"
+
+    rm -rf "$tmpdir"
+}

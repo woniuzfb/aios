@@ -96,14 +96,14 @@ NginxCheckLocalhost()
                                     jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
                                     JQs replace parse_out '["localhost"]'
                                 fi
-                            elif [ "${level_3_directive_d2_arr[level_3_index]}" == "add_header" ] && [ "${level_3_args_d2_arr[level_3_index]}" == 'Access-Control-Allow-Origin'"${delimiters[0]}"'$corsHost' ]
+                            elif [ "${level_3_directive_d2_arr[level_3_index]}" == "add_header" ] && [ "${level_3_args_d2_arr[level_3_index]}" == 'Access-Control-Allow-Origin'"${delimiters[7]}"'$corsHost' ]
                             then
                                 updated=1
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
                                 JQs replace parse_out '["Access-Control-Allow-Origin","$cors_host"]'
                             fi
                         done
-                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] && [ "${level_2_args_d1_arr[level_2_index]}" == '$http_origin'"${delimiters[0]}"'$corsHost' ]
+                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] && [ "${level_2_args_d1_arr[level_2_index]}" == '$http_origin'"${delimiters[5]}"'$corsHost' ]
                     then
                         updated=1
                         jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'

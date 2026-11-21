@@ -1,11 +1,5 @@
 V2rayGetPolicy()
 {
-    SetDelimiters
-
-    jq_payload=$(JQs flat "$V2_CONFIG" '.policy')
-
-    jq_path='["levels"]'
-
     policy_levels_id=()
     policy_levels_handshake=()
     policy_levels_connIdle=()
@@ -13,37 +7,75 @@ V2rayGetPolicy()
     policy_levels_downlinkOnly=()
     policy_levels_statsUserUplink=()
     policy_levels_statsUserDownlink=()
+    policy_levels_stats_user_uplink=()
+    policy_levels_stats_user_downlink=()
     policy_levels_bufferSize=()
+    policy_levels_count=0
 
-    while IFS="^" read -r policy_levels_id policy_levels_handshake policy_levels_connIdle policy_levels_uplinkOnly \
-    policy_levels_downlinkOnly policy_levels_statsUserUplink policy_levels_statsUserDownlink policy_levels_bufferSize; do
-        policy_levels_id+=("$policy_levels_id^")
-        policy_levels_handshake+=("$policy_levels_handshake^")
-        policy_levels_connIdle+=("$policy_levels_connIdle^")
-        policy_levels_uplinkOnly+=("$policy_levels_uplinkOnly^")
-        policy_levels_downlinkOnly+=("$policy_levels_downlinkOnly^")
-        policy_levels_statsUserUplink+=("$policy_levels_statsUserUplink^")
-        policy_levels_statsUserDownlink+=("$policy_levels_statsUserDownlink^")
-        policy_levels_bufferSize+=("$policy_levels_bufferSize^")
-    done < <(JQs get jq_payload '. // {} | to_entries[] | "\(.key)^\(.value.handshake // 4)^\(.value.connIdle // 300)^\(.value.uplinkOnly // 2)^\(.value.downlinkOnly // 5)^\(.value.statsUserUplink // false)^\(.value.statsUserDownlink // false)^\(.value.bufferSize // 4)"')
+    policy_system_stats_inbound_uplink=false
+    policy_system_stats_inbound_downlink=false
+    policy_system_stats_outbound_uplink=false
+    policy_system_stats_outbound_downlink=false
 
-    jq_path='[
-        ["system","statsInboundUplink"],
-        ["system","statsInboundDownlink"],
-        ["system","statsOutboundUplink"],
-        ["system","statsOutboundDownlink"]
-    ]'
+    if [ ! -s "$V2_CONFIG" ]
+    then
+        return 0
+    fi
 
-    while IFS=": " read -r path_name value; do
-        var_name="jq_policy_${path_name#*_}"
-        read -r ${var_name?} <<< "$value"
-    done < <(JQs gets jq_payload)
-
-    policy_system_stats_inbound_uplink=${jq_policy_system_stats_inbound_uplink:-false}
-    policy_system_stats_inbound_downlink=${jq_policy_system_stats_inbound_downlink:-false}
-    policy_system_stats_outbound_uplink=${jq_policy_system_stats_outbound_uplink:-false}
-    policy_system_stats_outbound_downlink=${jq_policy_system_stats_outbound_downlink:-false}
+    SetDelimiters
+    local kind f1 f2 f3 f4 f5 f6 f7 f8 _sentinel
+    while IFS="$field_sep" read -r kind f1 f2 f3 f4 f5 f6 f7 f8 _sentinel
+    do
+        case "$kind" in
+            LVL)
+                policy_levels_id+=("$f1")
+                policy_levels_handshake+=("$f2")
+                policy_levels_connIdle+=("$f3")
+                policy_levels_uplinkOnly+=("$f4")
+                policy_levels_downlinkOnly+=("$f5")
+                policy_levels_statsUserUplink+=("$f6")
+                policy_levels_statsUserDownlink+=("$f7")
+                policy_levels_stats_user_uplink+=("$f6")
+                policy_levels_stats_user_downlink+=("$f7")
+                policy_levels_bufferSize+=("$f8")
+            ;;
+            SYS)
+                policy_system_stats_inbound_uplink="${f1:-false}"
+                policy_system_stats_inbound_downlink="${f2:-false}"
+                policy_system_stats_outbound_uplink="${f3:-false}"
+                policy_system_stats_outbound_downlink="${f4:-false}"
+            ;;
+        esac
+    done < <($JQ_FILE -r --arg sep "$field_sep" '
+        (if (.policy | type) == "object" then .policy else {} end) as $p
+        | (if ($p.levels | type) == "object" then $p.levels elif ($p.level | type) == "object" then $p.level else {} end) as $lvls
+        | (if ($p.system | type) == "object" then $p.system else {} end) as $sys
+        | (
+            $lvls | to_entries[] | select(.value | type == "object")
+            | [
+                "LVL",
+                (.key | tostring),
+                (.value.handshake // 4 | tostring),
+                (.value.connIdle // 300 | tostring),
+                (.value.uplinkOnly // 2 | tostring),
+                (.value.downlinkOnly // 5 | tostring),
+                (.value.statsUserUplink // false | tostring),
+                (.value.statsUserDownlink // false | tostring),
+                (.value.bufferSize // 4 | tostring),
+                "1"
+              ] | join($sep)
+          ),
+          (
+            [
+                "SYS",
+                ($sys.statsInboundUplink // false | tostring),
+                ($sys.statsInboundDownlink // false | tostring),
+                ($sys.statsOutboundUplink // false | tostring),
+                ($sys.statsOutboundDownlink // false | tostring),
+                "", "", "", "", "1"
+            ] | join($sep)
+          )
+    ' "$V2_CONFIG")
 
     policy_levels_count="${#policy_levels_id[@]}"
-
 }

@@ -1,0 +1,23 @@
+XrayListInboundAccounts()
+{
+    XrayListInbounds "${1:-}" || return 1
+
+    if ! ProxySelectBound "$X_CONFIG" inbounds "选择查看账号明细的入站"
+    then
+        inbounds_index=""
+        return 1
+    fi
+
+    local idx="$selected_bound_index"
+    inbounds_index="$idx"
+    local accounts_out
+    accounts_out=$(ProxyRenderInboundAccounts "$X_CONFIG" "$idx")
+
+    if [ -z "$accounts_out" ]
+    then
+        Println "$info 入站 ${green}${inbounds_tag[idx]}${normal} 没有多账号配置\n"
+        return 0
+    fi
+
+    Println "\n=== 入站 ${green}${inbounds_tag[idx]}${normal} 账号明细 ===\n$accounts_out\n"
+}

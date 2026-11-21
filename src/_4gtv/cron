@@ -41,7 +41,7 @@ _4gtvCron()
         if CurlFake -s -Lm 20 \
             -H 'authority: www.4gtv.tv' \
             -H 'referer: https://www.4gtv.tv/channel.html' \
-            "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && /usr/local/bin/imgcat --half-height "$IMG_FILE"
+            "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && "$IMGCAT_FILE" --half-height "$IMG_FILE"
         then
             rm -f "${IMG_FILE:-notfound}"
             Println "$info 输入图片验证码: "
@@ -71,7 +71,7 @@ _4gtvCron()
         fi
     done
 
-    map_string=true
+    jq_map_string=true
     jq_path='["4gtv","accounts"]'
     jq_path2='["token"]'
     JQ update "$SERVICES_CONFIG" email "$_4gtv_acc_email" "$token"

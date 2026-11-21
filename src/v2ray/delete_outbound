@@ -1,8 +1,8 @@
 V2rayDeleteOutbound()
 {
-    V2rayListOutbounds
-    V2raySelectOutbound
-    jq_path='["outbounds",'"$outbounds_index"']'
-    JQ delete "$V2_CONFIG"
-    Println "$info 出站 ${outbounds_tag[outbounds_index]} 删除成功\n"
+    ProxySelectBound "$V2_CONFIG" outbounds "选择要删除的出站" || return 1
+    local target_tag="${outbounds_tag[selected_bound_index]}"
+    ProxyDeleteBound "$V2_CONFIG" outbounds "$selected_bound_index"
+    ProxyRestartIfActive v2ray
+    Println "$info 已删除出站 ${green}${target_tag}${normal}\n"
 }

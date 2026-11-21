@@ -1,0 +1,10 @@
+.memory/
+.venv/
+.vscode/
+
+# Vim swap files
+*.swp
+*.swo
+.*.sw*
+
+.DS_Store

@@ -12,7 +12,7 @@ NginxConfigDirective()
 
                     if [ -n "${level_1_args_arr[level_1_index]}" ]
                     then
-                        IFS="${delimiters[3]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
+                        IFS="${delimiters[4]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}"
                         for arg in "${args[@]}"
                         do
                             level_1_option="$level_1_option ${arg:-''}"

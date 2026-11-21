@@ -65,7 +65,7 @@ CloudflareEditUser()
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["users",'"$cf_users_index"']'
     JQ update "$CF_CONFIG" "$new_user"
     Println "$info 用户修改成功\n"

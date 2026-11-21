@@ -1,0 +1,336 @@
+RunSuiteV2ray()
+{
+    printf '\n=== Suite: v2ray ===\n'
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    V2_CONFIG="$tmpdir/v2ray.json"
+
+    cat > "$V2_CONFIG" <<'EOF'
+{
+  "log": {
+    "access": "/var/log/v2ray/access.log",
+    "error": "/var/log/v2ray/error.log",
+    "loglevel": "warning"
+  },
+  "api": {
+    "tag": "api",
+    "services": ["StatsService"]
+  },
+  "browserForwarder": {
+    "listenAddr": "127.0.0.1",
+    "listenPort": 8088
+  },
+  "observatory": {
+    "subjectSelector": ["proxy-"],
+    "probeURL": "https://example.test/generate_204",
+    "probeInterval": "1m"
+  },
+  "fakedns": [
+    {"ipPool": "198.18.0.0/15", "poolSize": 65535},
+    {"ipPool": "fc00::/18", "poolSize": 65535}
+  ],
+  "dns": {
+    "hosts": {"v2.example.test": "127.0.0.1"},
+    "servers": [
+      "1.1.1.1",
+      {
+        "address": "223.5.5.5",
+        "port": 53,
+        "domains": ["geosite:cn"],
+        "expectIPs": ["geoip:cn"],
+        "skipFallback": true
+      }
+    ],
+    "queryStrategy": "UseIP",
+    "disableCache": true,
+    "tag": "dns_inbound"
+  },
+  "routing": {
+    "domainStrategy": "AsIs",
+    "domainMatcher": "mph",
+    "rules": [
+      {
+        "type": "field",
+        "domains": ["geosite:cn"],
+        "source": ["10.0.0.0/8"],
+        "outboundTag": "direct"
+      }
+    ],
+    "balancers": [
+      {"tag": "bal-v2", "selector": ["proxy-"], "strategy": {"type": "random"}}
+    ]
+  },
+  "policy": {
+    "level": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "statsUserUplink": true,
+        "statsUserDownlink": false
+      }
+    },
+    "system": {
+      "statsInboundUplink": true
+    }
+  },
+  "reverse": {
+    "bridges": [{"tag": "v2-bridge", "domain": "rev.example.test"}],
+    "portals": [{"tag": "v2-portal", "domain": "rev.example.test"}]
+  },
+  "transport": {
+    "wsSettings": {"path": "/ws-global"},
+    "httpSettings": {"host": ["h2.example.test"], "path": "/h2", "method": "POST"},
+    "hysteria2Settings": {
+      "password": "secret",
+      "use_udp_extension": true,
+      "congestion": {"type": "brutal", "up_mbps": 50, "down_mbps": 100}
+    }
+  },
+  "inbounds": [
+    {
+      "listen": "0.0.0.0",
+      "port": 8443,
+      "protocol": "vmess",
+      "tag": "vmess-ws",
+      "settings": {"clients": [{"id": "00000000-0000-4000-8000-000000000002"}]},
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {"path": "/ws", "maxEarlyData": 2048},
+        "tlsSettings": {"serverName": "v2.example.test", "alpn": ["h2", "http/1.1"]}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls"], "metadataOnly": false},
+      "allocate": {"strategy": "random", "refresh": 5, "concurrency": 3}
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 1080,
+      "protocol": "dokodemo-door",
+      "tag": "doko-in",
+      "settings": {"address": "1.1.1.1", "port": 53, "network": "tcp,udp", "followRedirect": true}
+    }
+  ],
+  "outbounds": [
+    {
+      "sendThrough": "0.0.0.0",
+      "protocol": "vmess",
+      "tag": "proxy-vmess",
+      "settings": {
+        "vnext": [{"address": "v2-node.example.test", "port": 443, "users": [{"id": "00000000-0000-4000-8000-000000000002"}]}]
+      },
+      "proxySettings": {"tag": "direct", "transportLayer": true},
+      "mux": {"enabled": true, "concurrency": 8}
+    },
+    {
+      "sendThrough": "0.0.0.0",
+      "protocol": "freedom",
+      "tag": "direct",
+      "settings": {"domainStrategy": "UseIP"}
+    }
+  ]
+}
+EOF
+
+    # 1. Inbounds
+    V2rayGetInbounds
+    AssertEq "2" "$inbounds_count" "V2rayGetInbounds total count"
+    local out
+    out=$(V2rayListInbounds direct)
+    ShowCaptured "V2rayListInbounds (direct)" "$out"
+    AssertContains "$out" "v2.example.test" "V2ray renders TLS serverName"
+    AssertContains "$out" "maxEarlyData: 2048" "V2ray renders WS maxEarlyData"
+    AssertContains "$out" "端口分配: random" "V2ray renders inbound allocate"
+    AssertContains "$out" "1.1.1.1" "V2ray renders dokodemo-door address"
+    AssertNotContains "$out" "仅路由:" "V2ray omits Xray-only sniffing.routeOnly"
+
+    # 2. Outbounds (vnext + proxySettings)
+    out=$(V2rayListOutbounds)
+    ShowCaptured "V2rayListOutbounds" "$out"
+    AssertContains "$out" "v2-node.example.test:443" "V2ray renders vnext server"
+    AssertContains "$out" "proxySettings: direct" "V2ray renders proxySettings"
+    AssertNotContains "$out" "targetStrategy:" "V2ray omits Xray-only targetStrategy"
+
+    # 3. DNS / Routing / Policy / Reverse / Overview
+    out=$(V2rayListDns)
+    ShowCaptured "V2rayListDns" "$out"
+    AssertContains "$out" "expectIPs: geoip:cn" "V2ray DNS renders expectIPs (not expectedIPs)"
+    AssertNotContains "$out" "过期缓存:" "V2ray DNS omits Xray-only serveStale"
+
+    out=$(V2rayListRouting)
+    ShowCaptured "V2rayListRouting" "$out"
+    AssertContains "$out" "domainMatcher: mph" "V2ray Routing renders domainMatcher"
+    AssertContains "$out" "domains: geosite:cn" "V2ray Routing renders plural domains"
+    AssertContains "$out" "source: 10.0.0.0/8" "V2ray Routing renders source"
+
+    out=$(V2rayListPolicy)
+    ShowCaptured "V2rayListPolicy" "$out"
+    AssertNotContains "$out" "statsOnline=" "V2ray Policy omits Xray-only statsUserOnline"
+
+    out=$(V2rayListReverse)
+    AssertContains "$out" "v2-bridge" "V2ray Reverse renders bridge"
+
+    out=$(ProxyRenderOverview "$V2_CONFIG" v2ray)
+    ShowCaptured "V2Ray Overview" "$out"
+    AssertContains "$out" "BrowserForwarder: 127.0.0.1:8088" "V2ray Overview renders browserForwarder"
+    AssertContains "$out" "probe=https://example.test/generate_204" "V2ray Overview reads uppercase probeURL"
+
+    # 4. Transport (hysteria2Settings + hy2steriaSettings alias)
+    V2rayGetTransport
+    AssertEq "h2.example.test" "$transport_httpSettings_host" "V2rayGetTransport httpSettings host"
+    AssertEq "/h2" "$transport_httpSettings_path" "V2rayGetTransport httpSettings path"
+    AssertEq "POST" "$transport_httpSettings_method" "V2rayGetTransport httpSettings method"
+    AssertEq "brutal" "$transport_hysteria2Settings_congestion_type" "V2rayGetTransport hysteria2Settings"
+
+    # Also test legacy hy2steriaSettings alias
+    JQ mutate "$V2_CONFIG" '.transport.hy2steriaSettings = .transport.hysteria2Settings | del(.transport.hysteria2Settings)'
+    V2rayGetTransport
+    AssertEq "brutal" "$transport_hysteria2Settings_congestion_type" "V2rayGetTransport supports hy2steriaSettings alias"
+
+    # 5. Interactive accounts + share + select & delete (verified & drained)
+    MockInquirerReset
+    MockInquirerPush "0"
+    local v2_acc
+    v2_acc=$(V2rayListInboundAccounts direct)
+    AssertInquirerDrained "V2rayListInboundAccounts drained"
+    AssertContains "$v2_acc" "00000000-0000-4000-8000-000000000002" "V2rayListInboundAccounts lists client UUID"
+
+    local v2_share
+    v2_share=$(V2rayListInboundShare "203.0.113.20" "0")
+    AssertContains "$v2_share" "vmess://" "V2rayListInboundShare generates vmess URI"
+
+    MockInquirerReset
+    MockInquirerPush "0" "00000000-0000-4000-8000-000000000009" "0" "u2@example.test" "0"
+    V2rayAddInboundAccount > /dev/null
+    AssertInquirerDrained "V2rayAddInboundAccount drained"
+    AssertJsonEq "$V2_CONFIG" '.inbounds[0].settings.clients | length' "2" "V2rayAddInboundAccount appends to clients[]"
+
+    MockInquirerReset
+    MockInquirerPush "0" "1"
+    V2rayDeleteInboundAccount > /dev/null
+    AssertInquirerDrained "V2rayDeleteInboundAccount drained"
+    AssertJsonEq "$V2_CONFIG" '.inbounds[0].settings.clients | length' "1" "V2rayDeleteInboundAccount deletes from clients[]"
+
+    MockInquirerReset
+    MockInquirerPush "0" "v2-node2.example.test" "8443" "00000000-0000-4000-8000-000000000009" "0" "auto"
+    V2rayAddOutboundAccount > /dev/null
+    AssertInquirerDrained "V2rayAddOutboundAccount drained"
+    AssertJsonEq "$V2_CONFIG" '.outbounds[0].settings.vnext | length' "2" "V2rayAddOutboundAccount appends to vnext[]"
+
+    MockInquirerReset
+    MockInquirerPush "0" "1"
+    V2rayDeleteOutboundAccount > /dev/null
+    AssertInquirerDrained "V2rayDeleteOutboundAccount drained"
+    AssertJsonEq "$V2_CONFIG" '.outbounds[0].settings.vnext | length' "1" "V2rayDeleteOutboundAccount deletes from vnext[]"
+
+    MockInquirerReset
+    MockInquirerPush "1"
+    V2rayDeleteInbound > /dev/null
+    AssertInquirerDrained "V2rayDeleteInbound drained"
+    AssertJsonEq "$V2_CONFIG" '.inbounds | length' "1" "V2rayDeleteInbound deletes selected inbound"
+
+    MockInquirerReset
+    MockInquirerPush "1"
+    V2rayDeleteOutbound > /dev/null
+    AssertInquirerDrained "V2rayDeleteOutbound drained"
+    AssertJsonEq "$V2_CONFIG" '.outbounds | length' "1" "V2rayDeleteOutbound deletes selected outbound"
+
+    # 6. Dynamic multi-step V2Ray write flows (SetDns, SetRouting, SetPolicy, SetReverse)
+    MockInquirerReset
+    MockInquirerPush "1" "223.5.5.5" "53" "" "geosite:cn" "geoip:cn" "1"
+    V2raySetDns > /dev/null
+    AssertInquirerDrained "V2raySetDns add server drained"
+    AssertJsonEq "$V2_CONFIG" '.dns.servers[-1].expectIPs[0]' "geoip:cn" "V2raySetDns writes expectIPs (not expectedIPs)"
+
+    MockInquirerReset
+    MockInquirerPush "7" "0"
+    V2raySetDns > /dev/null
+    AssertInquirerDrained "V2raySetDns delete server drained"
+
+    MockInquirerReset
+    MockInquirerPush "0" "0" "0" "0"
+    V2raySetRouting > /dev/null
+    AssertInquirerDrained "V2raySetRouting shortcut drained"
+    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].type' "field" "V2raySetRouting shortcut writes type=field"
+    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].inboundTag[0]' "vmess-ws" "V2raySetRouting shortcut links inbound"
+
+    MockInquirerReset
+    MockInquirerPush "0" "1" "tcp" "geosite:cn" "" "443" "" "10.0.0.0/8" "" "http,tls" "" "vmess-ws" "proxy-vmess" ""
+    V2raySetRouting > /dev/null
+    AssertInquirerDrained "V2raySetRouting custom drained"
+    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].domains[0]' "geosite:cn" "V2raySetRouting writes plural domains"
+    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].source[0]' "10.0.0.0/8" "V2raySetRouting writes source"
+
+    MockInquirerReset
+    MockInquirerPush "2" "IPIfNonMatch" "mph"
+    V2raySetRouting > /dev/null
+    AssertInquirerDrained "V2raySetRouting domainMatcher drained"
+    AssertJsonEq "$V2_CONFIG" '.routing.domainMatcher' "mph" "V2raySetRouting writes domainMatcher"
+
+    MockInquirerReset
+    MockInquirerPush "0" "1" "4" "300" "2" "5" "512" "1" "0"
+    V2raySetPolicy > /dev/null
+    AssertInquirerDrained "V2raySetPolicy add level drained"
+    AssertJsonEq "$V2_CONFIG" '.policy.levels["1"].bufferSize' "512" "V2raySetPolicy writes levels.bufferSize"
+    AssertJsonEq "$V2_CONFIG" '.policy.levels["1"] | has("statsUserOnline")' "false" "V2raySetPolicy omits Xray-only statsUserOnline"
+    AssertJsonEq "$V2_CONFIG" '.policy | has("level")' "false" "V2raySetPolicy does not write invalid singular .policy.level"
+
+    MockInquirerReset
+    MockInquirerPush "1" "1"
+    V2raySetPolicy > /dev/null
+    AssertInquirerDrained "V2raySetPolicy delete level drained"
+
+    MockInquirerReset
+    MockInquirerPush "0" "v2-br" "rev.example.test"
+    V2raySetReverse > /dev/null
+    AssertInquirerDrained "V2raySetReverse add bridge drained"
+    AssertJsonEq "$V2_CONFIG" '.reverse.bridges[-1].tag' "v2-br" "V2raySetReverse writes reverse.bridges"
+
+    MockInquirerReset
+    MockInquirerPush "2" "0"
+    V2raySetReverse > /dev/null
+    AssertInquirerDrained "V2raySetReverse delete bridge drained"
+
+    # Regression checks for V2Ray doc-audit fixes
+    # - V2raySetDns deletes regex host key containing backslashes
+    JQ mutate "$V2_CONFIG" '.dns.hosts = {"regexp:\\.goo.*\\.com$": "127.0.0.1"}'
+    MockInquirerReset
+    MockInquirerPush "6" "0"
+    V2raySetDns > /dev/null
+    AssertInquirerDrained "V2raySetDns delete regex host drained"
+    AssertJsonEq "$V2_CONFIG" '.dns.hosts | has("regexp:\\.goo.*\\.com$")' "false" "V2raySetDns safely deletes regex host key"
+
+    # - V2Ray share link defaults to tcp (never raw) & supports wsSettings.headers.Host & hysteria2
+    local v2_share_cfg="$tmpdir/v2_share.json"
+    cat > "$v2_share_cfg" <<'V2SEOF'
+{
+  "inbounds": [
+    {
+      "tag": "v2-vless-tcp",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {"decryption": "none", "clients": [{"id": "00000000-0000-4000-8000-000000000444", "email": "v2@example.test"}]},
+      "streamSettings": {"security": "tls", "tlsSettings": {"serverName": "v2.example.test"}}
+    },
+    {
+      "tag": "v2-hy2",
+      "listen": "0.0.0.0",
+      "port": 8443,
+      "protocol": "hysteria2",
+      "settings": {},
+      "streamSettings": {"network": "hysteria2", "security": "tls", "tlsSettings": {"serverName": "hy2.example.test"}, "hysteria2Settings": {"password": "hy2-secret"}}
+    }
+  ]
+}
+V2SEOF
+    local v2_share_out
+    v2_share_out=$(ProxyRenderShareLinks "$v2_share_cfg" "203.0.113.20" "" "v2ray")
+    AssertContains "$v2_share_out" "type=tcp" "V2Ray share link defaults network to tcp"
+    AssertNotContains "$v2_share_out" "type=raw" "V2Ray share link never emits Xray-only type=raw"
+    AssertContains "$v2_share_out" "hysteria2://hy2-secret@203.0.113.20:8443?sni=hy2.example.test#v2-hy2" "V2Ray hysteria2 share link formats cleanly without type/security"
+
+    ShowCaptured "Final Generated V2Ray Config JSON" "$(cat "$V2_CONFIG")"
+
+    rm -rf "$tmpdir"
+}

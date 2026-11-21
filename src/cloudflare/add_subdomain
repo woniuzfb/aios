@@ -103,7 +103,7 @@ CloudflareAddSubdomain()
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
     JQ update "$CF_CONFIG" "$new_zone"
 

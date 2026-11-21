@@ -222,7 +222,7 @@ V2raySetMkcpSeed()
     inquirer text_input "输入混淆密码: " mkcp_seed "$i18n_blank"
 }
 
-V2raySetGrpcServiceName()
+V2raySetStreamGrpcServiceName()
 {
     echo
     inquirer text_input "输入 gRPC 服务的名称: " grpc_service_name "$i18n_random" V2raySetGrpcServiceNameValidator "名称格式错误"
@@ -297,11 +297,11 @@ V2raySetHysteria2Congestion()
     fi
 
     JQs merge_c hysteria2_congestion --arg type "$hysteria2_congestion_type" \
-    --arg up_mbps "$hysteria2_congestion_up_mbps" \
-    --arg down_mbps "$hysteria2_congestion_down_mbps" '. * {
-        "type": "$type",
-        "up_mbps": "$up_mbps" | tonumber,
-        "down_mbps": "$down_mbps" | tonumber
+    --arg up_mbps "${hysteria2_congestion_up_mbps:-0}" \
+    --arg down_mbps "${hysteria2_congestion_down_mbps:-0}" '. * {
+        "type": $type,
+        "up_mbps": ($up_mbps | tonumber),
+        "down_mbps": ($down_mbps | tonumber)
     }'
 }
 
@@ -402,11 +402,11 @@ V2raySetStreamTlsCertificate()
     --arg certificateFile "$stream_tls_certificate_cert_file" \
     --arg keyFile "$stream_tls_certificate_key_file" \
     '. * {
-        "usage": "$usage",
-        "Certificate": "$Certificate",
-        "Key": "$Key",
-        "certificateFile": "$certificateFile",
-        "keyFile": "$keyFile"
+        "usage": $usage,
+        "Certificate": $Certificate,
+        "Key": $Key,
+        "certificateFile": $certificateFile,
+        "keyFile": $keyFile
     }'
 }
 

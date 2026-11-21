@@ -212,7 +212,7 @@ VipAddChannel()
                             fi
                         fi
 
-                        map_string=true
+                        jq_map_string=true
                         jq_path='["hosts",'"$i"',"channels"]'
                         JQ delete "$VIP_FILE" id "$vip_channel_id"
 

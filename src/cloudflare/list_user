@@ -125,7 +125,7 @@ CloudflareListUser()
     while IFS=": " read -r path_name value; do
         var_name=${path_name}
         read -r ${var_name?} <<< "$value"
-    done
+    done < <(JQs gets jq_payload)
 
     cf_workers_requests="$jq_data_viewer_accounts_workersInvocationsAdaptive_sum_requests"
     error_message="$jq_errors_message"

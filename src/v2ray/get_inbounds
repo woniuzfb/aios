@@ -1,229 +1,64 @@
 V2rayGetInbounds()
 {
-    SetDelimiters
+    ProxyLoadInboundsIndex "$V2_CONFIG"
 
-    jq_payload=$(JQs flat "$V2_CONFIG" '.inbounds')
+    inbounds_stream_network=()
+    inbounds_stream_path=()
+    inbounds_stream_tls_server_name=()
+    inbounds_stream_tls_certificates_usage=()
+    inbounds_stream_tls_certificates_certificate_file=()
+    inbounds_stream_tls_certificates_key_file=()
+    inbounds_stream_tls_certificates_certificate=()
 
-    jq_path='[
-        ["listen"],
-        ["port"],
-        ["protocol"],
-        ["settings","address"],
-        ["settings","port"],
-        ["settings","network"],
-        ["settings","timeout"],
-        ["settings","followRedirect"],
-        ["settings","userLevel"],
-        ["settings","allowTransparent"],
-        ["settings","auth"],
-        ["settings","udp"],
-        ["settings","ip"],
-        ["settings","packetEncoding"],
-        ["settings","disableInsecureEncryption"],
-        ["settings","default","level"],
-        ["settings","default","alterId"],
-        ["settings","detour","to"],
-        ["settings","email"],
-        ["settings","method"],
-        ["settings","password"],
-        ["settings","level"],
-        ["settings","ivCheck"],
-        ["settings","decryption"],
-        ["settings","accounts","user"],
-        ["settings","accounts","pass"],
-        ["settings","clients","id"],
-        ["settings","clients","level"],
-        ["settings","clients","alterId"],
-        ["settings","clients","email"],
-        ["settings","clients","password"],
-        ["settings","fallbacks","alpn"],
-        ["settings","fallbacks","path"],
-        ["settings","fallbacks","dest"],
-        ["settings","fallbacks","xver"],
-        ["streamSettings","network"],
-        ["streamSettings","security"],
-        ["streamSettings","tlsSettings","serverName"],
-        ["streamSettings","tlsSettings","disableSystemRoot"],
-        ["streamSettings","tlsSettings","verifyClientCertificate"],
-        ["streamSettings","tlsSettings","pinnedPeerCertificateChainSha256"],
-        ["streamSettings","tlsSettings","alpn"],
-        ["streamSettings","tlsSettings","certificates","usage"],
-        ["streamSettings","tlsSettings","certificates","certificateFile"],
-        ["streamSettings","tlsSettings","certificates","keyFile"],
-        ["streamSettings","tlsSettings","certificates","certificate"],
-        ["streamSettings","tlsSettings","certificates","key"],
-        ["streamSettings","tcpSettings","acceptProxyProtocol"],
-        ["streamSettings","tcpSettings","header","type"],
-        ["streamSettings","tcpSettings","header","request","version"],
-        ["streamSettings","tcpSettings","header","request","method"],
-        ["streamSettings","tcpSettings","header","request","path"],
-        ["streamSettings","tcpSettings","header","request","headers"],
-        ["streamSettings","tcpSettings","header","response","version"],
-        ["streamSettings","tcpSettings","header","response","status"],
-        ["streamSettings","tcpSettings","header","response","reason"],
-        ["streamSettings","tcpSettings","header","response","headers"],
-        ["streamSettings","kcpSettings","mtu"],
-        ["streamSettings","kcpSettings","tti"],
-        ["streamSettings","kcpSettings","uplinkCapacity"],
-        ["streamSettings","kcpSettings","downlinkCapacity"],
-        ["streamSettings","kcpSettings","congestion"],
-        ["streamSettings","kcpSettings","readBufferSize"],
-        ["streamSettings","kcpSettings","writeBufferSize"],
-        ["streamSettings","kcpSettings","header","type"],
-        ["streamSettings","kcpSettings","seed"],
-        ["streamSettings","wsSettings","acceptProxyProtocol"],
-        ["streamSettings","wsSettings","path"],
-        ["streamSettings","wsSettings","maxEarlyData"],
-        ["streamSettings","wsSettings","earlyDataHeaderName"],
-        ["streamSettings","httpSettings","host"],
-        ["streamSettings","httpSettings","path"],
-        ["streamSettings","httpSettings","method"],
-        ["streamSettings","quicSettings","security"],
-        ["streamSettings","quicSettings","key"],
-        ["streamSettings","quicSettings","header","type"],
-        ["streamSettings","dsSettings","path"],
-        ["streamSettings","dsSettings","abstract"],
-        ["streamSettings","dsSettings","padding"],
-        ["streamSettings","grpcSettings","serviceName"],
-        ["streamSettings","sockopt","mark"],
-        ["streamSettings","sockopt","tcpFastOpen"],
-        ["streamSettings","sockopt","tcpFastOpenQueueLength"],
-        ["streamSettings","sockopt","tproxy"],
-        ["streamSettings","sockopt","tcpKeepAliveInterval"],
-        ["streamSettings","sockopt","bindToDevice"],
-        ["streamSettings","sockopt","mptcp"],
-        ["sniffing","enabled"],
-        ["sniffing","destOverride"],
-        ["sniffing","metadataOnly"],
-        ["allocate","strategy"],
-        ["allocate","refresh"],
-        ["allocate","concurrency"],
-        ["tag"]
-    ]'
-
-    while IFS=": " read -r path_name value; do
-        var_name=${path_name}
-        read -r ${var_name?} <<< "$value"
-    done < <(JQs gets jq_payload)
-
-    inbounds_count=0
-    inbounds_nginx_count=0
-    inbounds_other_count=0
-
-    if [ -z "${jq_protocol:-}" ]
+    if [ ! -s "$V2_CONFIG" ]
     then
         return 0
     fi
 
-    IFS="${delimiters[1]}" read -r -a inbounds_listen <<< "$jq_listen"
-    IFS="${delimiters[1]}" read -r -a inbounds_port <<< "$jq_port"
-    IFS="${delimiters[1]}" read -r -a inbounds_protocol <<< "$jq_protocol"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_address <<< "$jq_settings_address"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_port <<< "$jq_settings_port"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_network <<< "$jq_settings_network"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_timeout <<< "$jq_settings_timeout"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_followRedirect <<< "$jq_settings_followRedirect"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_userLevel <<< "$jq_settings_userLevel"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_allowTransparent <<< "$jq_settings_allowTransparent"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_auth <<< "$jq_settings_auth"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_udp <<< "$jq_settings_udp"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_ip <<< "$jq_settings_ip"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_packetEncoding <<< "$jq_settings_packetEncoding"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_disableInsecureEncryption <<< "$jq_settings_disableInsecureEncryption"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_default_level <<< "$jq_settings_default_level"
-    IFS="${delimiters[3]}" read -r -a inbounds_setttings_default_alterId <<< "$jq_settings_default_alterId"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_detour_to <<< "$jq_settings_detour_to"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_email <<< "$jq_settings_email"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_method <<< "$jq_settings_method"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_password <<< "$jq_settings_password"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_level <<< "$jqs_settings_level"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_ivCheck <<< "$jq_settings_ivCheck"
-    IFS="${delimiters[2]}" read -r -a inbounds_settings_decryption <<< "$jq_settings_decryption"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_accounts_user <<< "$jq_settings_accounts_user"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_accounts_pass <<< "$jq_settings_accounts_pass"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_clients_id <<< "$jq_settings_clients_id"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_clients_level <<< "$jq_settings_clients_level"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_clients_alterId <<< "$jq_settings_clients_alterId"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_clients_email <<< "$jq_settings_clients_email"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_clients_password <<< "$jq_settings_clients_password"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_fallbacks_alpn <<< "$jq_settings_fallbacks_alpn"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_fallbacks_path <<< "$jq_settings_fallbacks_path"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_fallbacks_dest <<< "$jq_settings_fallbacks_dest"
-    IFS="${delimiters[3]}" read -r -a inbounds_settings_fallbacks_xver <<< "$jq_settings_fallbacks_xver"
-    IFS="${delimiters[2]}" read -r -a inbounds_streamSettings_network <<< "$jq_streamSettings_network"
-    IFS="${delimiters[2]}" read -r -a inbounds_streamSettings_security <<< "$jq_streamSettings_security"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tlsSettings_serverName <<< "$jq_streamSettings_tlsSettings_serverName"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tlsSettings_disableSystemRoot <<< "$jq_streamSettings_tlsSettings_disableSystemRoot"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tlsSettings_verifyClientCertificate <<< "$jq_streamSettings_tlsSettings_verifyClientCertificate"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tlsSettings_pinnedPeerCertificateChainSha256 <<< "$jq_streamSettings_tlsSettings_pinnedPeerCertificateChainSha256"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tlsSettings_alpn <<< "$jq_streamSettings_tlsSettings_alpn"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tlsSettings_certificates_usage <<< "$jq_streamSettings_tlsSettings_certificates_usage"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tlsSettings_certificates_certificateFile <<< "$jq_streamSettings_tlsSettings_certificates_certificateFile"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tlsSettings_certificates_keyFile <<< "$jq_streamSettings_tlsSettings_certificates_keyFile"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tlsSettings_certificates_certificate <<< "$jq_streamSettings_tlsSettings_certificates_certificate"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tlsSettings_certificates_key <<< "$jq_streamSettings_tlsSettings_certificates_key"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_tcpSettings_acceptProxyProtocol <<< "$jq_streamSettings_tcpSettings_acceptProxyProtocol"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_tcpSettings_header_type <<< "$jq_streamSettings_tcpSettings_header_type"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_request_version <<< "$jq_streamSettings_tcpSettings_header_request_version"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_request_method <<< "$jq_streamSettings_tcpSettings_header_request_method"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_request_path <<< "$jq_streamSettings_tcpSettings_header_request_path"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_request_headers <<< "$jq_streamSettings_tcpSettings_header_request_headers"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_response_version <<< "$jq_streamSettings_tcpSettings_header_response_version"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_response_status <<< "$jq_streamSettings_tcpSettings_header_response_status"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_response_reason <<< "$jq_streamSettings_tcpSettings_header_response_reason"
-    IFS="${delimiters[5]}" read -r -a inbounds_streamSettings_tcpSettings_header_response_headers <<< "$jq_streamSettings_tcpSettings_header_response_headers"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_mtu <<< "$jq_streamSettings_kcpSettings_mtu"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_tti <<< "$jq_streamSettings_kcpSettings_tti"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_uplinkCapacity <<< "$jq_streamSettings_kcpSettings_uplinkCapacity"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_downlinkCapacity <<< "$jq_streamSettings_kcpSettings_downlinkCapacity"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_congestion <<< "$jq_streamSettings_kcpSettings_congestion"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_readBufferSize <<< "$jq_streamSettings_kcpSettings_readBufferSize"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_writeBufferSize <<< "$jq_streamSettings_kcpSettings_writeBufferSize"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_kcpSettings_header_type <<< "$jq_streamSettings_kcpSettings_header_type"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_kcpSettings_seed <<< "$jq_streamSettings_kcpSettings_seed"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_wsSettings_acceptProxyProtocol <<< "$jq_streamSettings_wsSettings_acceptProxyProtocol"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_wsSettings_path <<< "$jq_streamSettings_wsSettings_path"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_wsSettings_maxEarlyData <<< "$jq_streamSettings_wsSettings_maxEarlyData"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_wsSettings_earlyDataHeaderName <<< "$jq_streamSettings_wsSettings_earlyDataHeaderName"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_httpSettings_host <<< "$jq_streamSettings_httpSettings_host"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_httpSettings_path <<< "$jq_streamSettings_httpSettings_path"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_httpSettings_method <<< "$jq_streamSettings_httpSettings_method"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_quicSettings_security <<< "$jq_streamSettings_quicSettings_security"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_quicSettings_key <<< "$jq_streamSettings_quicSettings_key"
-    IFS="${delimiters[4]}" read -r -a inbounds_streamSettings_quicSettings_header_type <<< "$jq_streamSettings_quicSettings_header_type"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_dsSettings_path <<< "$jq_streamSettings_dsSettings_path"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_dsSettings_abstract <<< "$jq_streamSettings_dsSettings_abstract"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_dsSettings_padding <<< "$jq_streamSettings_dsSettings_padding"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_grpcSettings_serviceName <<< "$jq_streamSettings_grpcSettings_serviceName"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_mark <<< "$jq_streamSettings_sockopt_mark"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_tcpFastOpen <<< "$jq_streamSettings_sockopt_tcpFastOpen"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_tcpFastOpenQueueLength <<< "$jq_streamSettings_sockopt_tcpFastOpenQueueLength"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_tproxy <<< "$jq_streamSettings_sockopt_tproxy"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_tcpKeepAliveInterval <<< "$jq_streamSettings_sockopt_tcpKeepAliveInterval"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_bindToDevice <<< "$jq_streamSettings_sockopt_bindToDevice"
-    IFS="${delimiters[3]}" read -r -a inbounds_streamSettings_sockopt_mptcp <<< "$jq_streamSettings_sockopt_mptcp"
-    IFS="${delimiters[2]}" read -r -a inbounds_sniffing_enabled <<< "$jq_sniffing_enabled"
-    IFS="${delimiters[2]}" read -r -a inbounds_sniffing_destOverride <<< "$jq_sniffing_destOverride"
-    IFS="${delimiters[2]}" read -r -a inbounds_sniffing_metadataOnly <<< "$jq_sniffing_metadataOnly"
-    IFS="${delimiters[2]}" read -r -a inbounds_allocate_strategy <<< "$jq_allocate_strategy"
-    IFS="${delimiters[2]}" read -r -a inbounds_allocate_refresh <<< "$jq_allocate_refresh"
-    IFS="${delimiters[2]}" read -r -a inbounds_allocate_concurrency <<< "$jq_allocate_concurrency"
-    IFS="${delimiters[1]}" read -r -a inbounds_tag <<< "$jq_tag"
-
-    inbounds_count=${#inbounds_protocol[@]}
-
-    inbounds_nginx_index=()
-    inbounds_other_index=()
-
-    for((inbounds_i=0;inbounds_i<inbounds_count;inbounds_i++));
+    SetDelimiters
+    local s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
+    while IFS="$field_sep" read -r s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
     do
-        if [ "${inbounds_tag[inbounds_i]:0:6}" == "nginx-" ]
-        then
-            inbounds_nginx_count=$((inbounds_nginx_count+1))
-            inbounds_nginx_index+=("$inbounds_i")
-        else
-            inbounds_other_count=$((inbounds_other_count+1))
-            inbounds_other_index+=("$inbounds_i")
-        fi
-    done
+        inbounds_stream_network+=("$s_net")
+        inbounds_stream_path+=("$s_path")
+        inbounds_stream_tls_server_name+=("$s_sni")
+        inbounds_stream_tls_certificates_usage+=("$s_usage")
+        inbounds_stream_tls_certificates_certificate_file+=("$s_cert_file")
+        inbounds_stream_tls_certificates_key_file+=("$s_key_file")
+        inbounds_stream_tls_certificates_certificate+=("$s_cert")
+    done < <($JQ_FILE -r --arg sep "$field_sep" '
+        def obj($x): if ($x | type) == "object" then $x else {} end;
+        def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+        (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+        | select(type == "object")
+        | obj(.streamSettings) as $st
+        | obj($st.tlsSettings) as $tls
+        | arr_objs($tls.certificates) as $certs
+        | [
+            ($st.network // "tcp" | tostring),
+            (
+                obj($st.wsSettings).path
+                // obj($st.httpSettings).path
+                // obj($st.httpupgradeSettings).path
+                // obj($st.dsSettings).path
+                // ""
+                | tostring
+            ),
+            ($tls.serverName // "" | tostring),
+            ($certs | map(.usage // "encipherment" | tostring) | join("|")),
+            ($certs | map(.certificateFile // "" | tostring) | join("|")),
+            ($certs | map(.keyFile // "" | tostring) | join("|")),
+            ($certs | map(
+                if (.certificate | type) == "array" and (.certificate | length) > 0 then
+                    "inline"
+                elif (.certificate | type) == "string" and .certificate != "" then
+                    .certificate
+                else
+                    ""
+                end
+            ) | join("|")),
+            "1"
+          ]
+        | join($sep)
+    ' "$V2_CONFIG")
 }

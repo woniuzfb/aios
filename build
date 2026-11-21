@@ -1,105 +1,305 @@
 shopt -s extglob
 
+BUILD_BINS=(v2 x nx or pve arm ibm cf cx ali lhh rc cw dr ha)
+
+IsPureFunctionFile()
+{
+    local rel="$1"
+
+    if EleInArray "$rel" pure_yes
+    then
+        return 0
+    fi
+    if EleInArray "$rel" pure_no
+    then
+        return 1
+    fi
+
+    local fpath="$DEV_PATH/$rel"
+    if [ ! -f "$fpath" ]
+    then
+        pure_no+=("$rel")
+        return 1
+    fi
+
+    if ! awk '
+        BEGIN { in_func=0; expect_brace=0; in_here=0; here_tag=""; here_strip=0; in_sq=0; in_dq=0; bad=0 }
+        {
+            if (in_here) {
+                line_chk=$0
+                if (here_strip) sub(/^\t+/, "", line_chk)
+                if (line_chk == here_tag) { in_here=0; here_strip=0 }
+                next
+            }
+            if (in_func) {
+                if (!in_sq && !in_dq && $0 ~ /<<-?[ \t]*['\''"]?[A-Za-z0-9_]+['\''"]?/) {
+                    here_strip=($0 ~ /<<-/)
+                    s=$0
+                    sub(/.*<<-?[ \t]*/, "", s)
+                    sub(/[ \t].*/, "", s)
+                    gsub(/['\''"]/, "", s)
+                    if (s != "") { in_here=1; here_tag=s }
+                }
+                if (!in_sq && !in_dq && $0 ~ /^\}[ \t]*$/) {
+                    in_func=0
+                    next
+                }
+                # Track multiline single/double-quoted strings
+                line=$0
+                gsub(/\\./, "", line)
+                if (!in_dq) {
+                    n_sq = gsub(/'\''/, "&", line)
+                    if (n_sq % 2 == 1) in_sq = !in_sq
+                }
+                if (!in_sq) {
+                    n_dq = gsub(/"/, "&", line)
+                    if (n_dq % 2 == 1) in_dq = !in_dq
+                }
+                next
+            }
+            if ($0 ~ /^[ \t]*$/ || $0 ~ /^[ \t]*#/) next
+            if (expect_brace) {
+                if ($0 ~ /^\{[ \t]*$/) { in_func=1; expect_brace=0; next }
+                bad=1; exit 1
+            }
+            if ($0 ~ /^[A-Za-z_][A-Za-z0-9_:]*\(\)[ \t]*$/) { expect_brace=1; next }
+            if ($0 ~ /^[A-Za-z_][A-Za-z0-9_:]*\(\)[ \t]*\{[ \t]*$/) { in_func=1; next }
+            if ($0 ~ /^Include[ \t]+[^ \t]+/) next
+            bad=1; exit 1
+        }
+        END { if (bad || in_func || expect_brace) exit 1 }
+    ' "$fpath"
+    then
+        pure_no+=("$rel")
+        return 1
+    fi
+
+    # Recursively verify all top-level Include dependencies are also pure
+    local deps dep
+    deps=$(awk '/^Include[ \t]+[^ \t]+/ { print $2 }' "$fpath")
+    for dep in $deps
+    do
+        [ -z "$dep" ] && continue
+        if ! IsPureFunctionFile "$dep"
+        then
+            pure_no+=("$rel")
+            return 1
+        fi
+    done
+
+    pure_yes+=("$rel")
+    return 0
+}
+
+CollectBranchIncludes()
+{
+    local rel="$1"
+    if EleInArray "$rel" scan_seen
+    then
+        return 0
+    fi
+    scan_seen+=("$rel")
+
+    local fpath="$DEV_PATH/$rel"
+    [ ! -f "$fpath" ] && return 0
+
+    local deps dep
+    deps=$(awk '/^[ \t]*Include[ \t]+[^ \t]+/ { print $2 }' "$fpath")
+    for dep in $deps
+    do
+        [ -z "$dep" ] && continue
+        CollectBranchIncludes "$dep"
+    done
+}
+
+BuildHoistPlan()
+{
+    hoist_candidates=()
+    local all_branches=(tv "${BUILD_BINS[@]}" tr)
+    local seen_once=()
+    local seen_multi=()
+    local bin item
+
+    for bin in "${all_branches[@]}"
+    do
+        scan_seen=()
+        CollectBranchIncludes "src/$bin"
+        for item in "${scan_seen[@]}"
+        do
+            [ "$item" == "src/$bin" ] && continue
+            if EleInArray "$item" seen_once
+            then
+                if ! EleInArray "$item" seen_multi
+                then
+                    seen_multi+=("$item")
+                fi
+            else
+                seen_once+=("$item")
+            fi
+        done
+    done
+
+    for item in "${seen_multi[@]}"
+    do
+        if EleInArray "$item" hoisted_files
+        then
+            continue
+        fi
+        if IsPureFunctionFile "$item"
+        then
+            hoist_candidates+=("$item")
+        fi
+    done
+}
+
 ReplaceInclude()
 {
     local replace_path="$DEV_PATH"
     local replace_name="$1"
+    local indent="${2:-}"
 
-    if [ "$replace_name" == "build" ] 
+    if [ "$replace_name" == "build" ]
     then
         return
     fi
 
-    if [ "$replace_name" == "src/\$self" ] 
+    if [ "$replace_name" == "src/\$self" ]
     then
-        echo "${2:-}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ] || [ \"\$self\" == \"aios\" ]"
-        echo "${2:-}then"
-        ReplaceInclude src/tv "    ${2:-}"
-        bins=(v2 x nx or pve arm ibm cf cx ali lhh rc cw dr ha)
-        for bin in "${bins[@]}"
+        BuildHoistPlan
+        local h_item
+        if [ ${#hoist_candidates[@]} -gt 0 ]
+        then
+            for h_item in "${hoist_candidates[@]}"
+            do
+                ReplaceInclude "$h_item" "$indent"
+            done
+        fi
+
+        in_dispatch=1
+        echo
+        echo "${indent}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ] || [ \"\$self\" == \"aios\" ]"
+        echo "${indent}then"
+        branch_files=()
+        ReplaceInclude src/tv "    ${indent}"
+        for bin in "${BUILD_BINS[@]}"
         do
-            echo "${2:-}elif [ \"\$self\" == \"$bin\" ]"
-            echo "${2:-}then"
-            ReplaceInclude src/$bin "    ${2:-}"
+            echo "${indent}elif [ \"\$self\" == \"$bin\" ]"
+            echo "${indent}then"
+            branch_files=()
+            ReplaceInclude "src/$bin" "    ${indent}"
         done
-        echo "${2:-}elif [ \"\$self\" == \"tr\" ]"
-        echo "${2:-}then"
-        ReplaceInclude src/tr "    ${2:-}"
-        echo "${2:-}fi"
+        echo "${indent}elif [ \"\$self\" == \"tr\" ]"
+        echo "${indent}then"
+        branch_files=()
+        ReplaceInclude src/tr "    ${indent}"
+        echo "${indent}fi"
+        in_dispatch=0
         return
     fi
 
-#    if [[ "$replace_name" == @($(JoinByChar '|' "${replace_files[@]//|/\\|}")) ]] 
-#    then
-#        return
-#    fi
+    # Skip pure function libraries already hoisted at top-level or already emitted in this branch
+    if EleInArray "$replace_name" hoisted_files
+    then
+        return
+    fi
+    if [ "${in_dispatch:-0}" -eq 1 ] && EleInArray "$replace_name" branch_files
+    then
+        return
+    fi
+
+    if [ "${in_dispatch:-0}" -eq 0 ]
+    then
+        if IsPureFunctionFile "$replace_name"
+        then
+            hoisted_files+=("$replace_name")
+        fi
+    else
+        if IsPureFunctionFile "$replace_name"
+        then
+            branch_files+=("$replace_name")
+        fi
+    fi
 
     replace_files+=("$replace_name")
 
-    while [[ $replace_name =~ \/ ]] 
+    while [[ $replace_name =~ \/ ]]
     do
         replace_path="$replace_path/${replace_name%%/*}"
         replace_name="${replace_name#*/}"
     done
 
-    local here=false here_tag=""
-    while IFS= read -r line 
+    local here=false here_tag="" here_strip=false line_chk=""
+    while IFS= read -r line
     do
-        if [ "$here" = true ] 
+        if [ "$here" = true ]
         then
             echo "$line"
-            if [ "$line" = "$here_tag" ] 
+            line_chk="$line"
+            if [ "$here_strip" = true ]
+            then
+                line_chk="${line_chk#"${line_chk%%[!$'\t']*}"}"
+            fi
+            if [ "$line_chk" = "$here_tag" ]
             then
                 here=false
+                here_strip=false
             fi
             continue
-        elif [[ $line =~ ^([ ]*)cat([ ]) ]] 
+        elif [[ $line =~ ^([ ]*)cat([ ]).*(\<\<(-?)[[:space:]]*[\'\"]?([A-Za-z0-9_]+)[\'\"]?) ]]
         then
             here=true
-            here_tag="${line#*<<}"
-            here_tag="${here_tag#"${here_tag%%[![:space:]]*}"}"
-            here_tag=${here_tag%% *}
-            here_tag=${here_tag#-}
+            here_strip=false
+            [ "${BASH_REMATCH[4]}" = "-" ] && here_strip=true
+            here_tag="${BASH_REMATCH[5]}"
         fi
-        if [ -z "$line" ] 
+        if [ -z "$line" ]
         then
             echo
         elif [ "$here" = true ]
         then
             echo "$line"
-        elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]] 
+        elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]]
         then
-            ReplaceInclude ${BASH_REMATCH[2]} "${2:-}${BASH_REMATCH[1]}"
+            ReplaceInclude "${BASH_REMATCH[2]}" "${indent}${BASH_REMATCH[1]}"
         elif [[ $line =~ ^([ ]*)\$\{ ]] || [[ $line =~ ^([ ]*)\` ]] || [[ $line =~ ^([ ]*)\— ]]
         then
             echo "$line"
         else
-            echo "${2:-}$line"
+            echo "${indent}$line"
         fi
     done < "$replace_path/$replace_name"
 }
 
 BuildShFile()
 {
+    local out_file="${1:-$DEV_PATH/aios.sh}"
     replace_files=()
+    hoisted_files=()
+    branch_files=()
+    pure_yes=()
+    pure_no=()
+    in_dispatch=0
 
-    ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$DEV_PATH/aios.sh"
+    ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$out_file"
 
-    if [ "$INSTALL_SH" = true ] 
+    if [ "$INSTALL_SH" = true ]
     then
-        cp -f "$DEV_PATH/aios.sh" "$SH_FILE"
+        cp -f "$out_file" "$SH_FILE"
     fi
 }
 
-if [ "${1:-}" == "install" ] 
+if [ "${1:-}" == "install" ]
 then
     INSTALL_SH=true
 else
     INSTALL_SH=false
 fi
 
-Spinner "Building aios.sh" BuildShFile
+if [ "${BUILD_LIBRARY_ONLY:-false}" != true ]
+then
+    Spinner "Building aios.sh" BuildShFile
 
-Println "$info new aios.sh created! For devs only!!\n"
+    Println "$info new aios.sh created! For devs only!!\n"
 
-exit 0
+    exit 0
+fi

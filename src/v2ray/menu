@@ -7,23 +7,7 @@ case $* in
     ;;
 esac
 
-if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
-then
-    nginx_prefix="/usr/local/openresty/nginx"
-    nginx_name="openresty"
-    nginx_ctl="or"
-elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
-then
-    nginx_prefix="/usr/local/nginx"
-    nginx_name="nginx"
-    nginx_ctl="nx"
-else
-    nginx_prefix="/usr/local/nginx"
-    nginx_name="nginx"
-    nginx_ctl="nx"
-fi
-
-NGINX_FILE="$nginx_prefix/sbin/nginx"
+ProxyDetectNginx
 
 Println "  v2ray 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -80,8 +64,7 @@ case $v2ray_num in
         ServiceControl status v2ray
     ;;
     5)
-        V2rayListInboundAccounts
-        V2rayListInboundShare
+        V2rayListInboundAccounts && V2rayListInboundShare
     ;;
     6)
         V2rayAddInbound
@@ -141,31 +124,10 @@ case $v2ray_num in
         V2rayDeleteOutboundAccount
     ;;
     25)
-        if [ ! -e "$V2_CONFIG" ]
-        then
-            Println "$error v2ray 未安装...\n" && exit 1
-        fi
-        echo
-        if ServiceControl is-active v2ray
-        then
-            ExitOnList y "`eval_gettext \"v2ray 正在运行, 是否关闭\"`"
-
-            ServiceControl stop v2ray > /dev/null 2>&1
-            Println "$info v2ray 已关闭\n"
-        else
-            ExitOnList y "`eval_gettext \"v2ray 未运行, 是否开启\"`"
-
-            ServiceControl start v2ray > /dev/null 2>&1
-            Println "$info v2ray 已开启\n"
-        fi
+        ProxyToggleService v2ray "$V2_CONFIG"
     ;;
     26)
-        if [ ! -e "$V2_CONFIG" ]
-        then
-            Println "$error v2ray 未安装...\n" && exit 1
-        fi
-        ServiceControl restart v2ray > /dev/null 2>&1
-        Println "$info v2ray 已重启\n"
+        ProxyRestartService v2ray "$V2_CONFIG"
     ;;
     *) Println "$error $i18n_input_correct_number [1-26]\n"
     ;;

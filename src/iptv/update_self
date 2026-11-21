@@ -265,7 +265,7 @@ then
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["default"]'
     JQ update "$CHANNELS_FILE" "$default"
 
@@ -497,8 +497,8 @@ then
         new_channels+=("$new_channel")
     done
 
-    file=true
-    file_json=true
+    jq_file=true
+    jq_file_json=true
     jq_path='["channels"]'
     JQ update "$CHANNELS_FILE" new_channels
 fi

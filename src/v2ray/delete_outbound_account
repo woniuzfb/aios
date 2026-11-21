@@ -1,51 +1,41 @@
 V2rayDeleteOutboundAccount()
 {
-    V2rayListOutboundAccounts
-
-    if [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
+    ProxySelectBound "$V2_CONFIG" outbounds "选择要删除服务端/账号的出站" || return 1
+    local idx="$selected_bound_index"
+    local protocol="${outbounds_protocol[idx]}"
+    local field="servers"
+    if [ "$protocol" == "vmess" ] || [ "$protocol" == "vless" ]
     then
-        Println "$error 请直接删除此出站\n"
-        exit 1
+        field="vnext"
     fi
 
-    echo -e "# ${green}$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
-    echo "`gettext \"输入序号\"`"
-    while read -p "$i18n_default_cancel" accounts_index
+    local opts=()
+    local line
+    while IFS= read -r line
     do
-        case "$accounts_index" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
-            ;;
-            *)
-                if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
-                then
-                    accounts_index=$((accounts_index-1))
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
-            ;;
-        esac
-    done
+        [ -n "$line" ] && opts+=("$line")
+    done < <(JQs query "$V2_CONFIG" '
+        (if (.outbounds | type) == "array" and (.outbounds[$i] | type) == "object"
+            and (.outbounds[$i].settings | type) == "object"
+            and (.outbounds[$i].settings[$f] | type) == "array"
+         then .outbounds[$i].settings[$f]
+         else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | "\(.key + 1). \(.value.address // ""):\(.value.port // "")"
+    ' --argjson i "$idx" --arg f "$field")
 
-    if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
+    if [ "${#opts[@]}" -eq 0 ]
     then
-        group_name="servers"
-    else
-        group_name="vnext"
+        Println "$error 该出站没有可删除的服务端/账号\n"
+        return 1
     fi
 
-    if [ "$accounts_index" == "$accounts_count" ] 
-    then
-        json=true
-        jq_path='["outbounds",'"$outbounds_index"',"settings","'"$group_name"'",0,"users"]'
-        JQ update "$V2_CONFIG" []
-    else
-        jq_path='["outbounds",'"$outbounds_index"',"settings","'"$group_name"'",0,"users",'"$accounts_index"']'
-        JQ delete "$V2_CONFIG"
-    fi
-    Println "$info 出站账号删除成功\n"
+    local srv_idx=0
+    echo
+    inquirer list_input_index "选择要删除的服务端/账号" opts srv_idx
+    jq_path='["outbounds",'"$idx"',"settings","'"$field"'",'"$srv_idx"']'
+    JQ delete "$V2_CONFIG"
+    ProxyRestartIfActive v2ray
+    Println "$info 已删除服务端 ${green}${opts[srv_idx]}${normal}\n"
 }

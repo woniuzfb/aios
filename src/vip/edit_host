@@ -57,7 +57,7 @@ VipEditHost()
         2) 
             Println "原端口: ${red}$vip_host_port${normal}"
             VipSetHostPort
-            number=true
+            jq_number=true
             jq_path='["hosts",'"$vip_hosts_index"',"port"]'
             JQ update "$VIP_FILE" "$vip_host_port"
             Println "$info 端口 修改成功\n"

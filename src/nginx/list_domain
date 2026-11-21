@@ -96,7 +96,7 @@ NginxListDomain()
                         IFS="${delimiters[8]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
                         IFS="${delimiters[8]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                        if [ "${level_3_args}" == "=${delimiters[8]}/" ] && [ "$skip_find_nodejs" -eq 0 ]
+                        if [ "${level_3_args}" == "=${delimiters[7]}/" ] && [ "$skip_find_nodejs" -eq 0 ]
                         then
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do

@@ -1,6 +1,24 @@
 inquirer()
 {
-    DepInstall tput
+    local _inq_mock_tty=false
+    if [ ! -t 0 ] || [ ! -t 1 ]
+    then
+        _inq_mock_tty=true
+        tput()
+        {
+            case "${1:-}" in
+                cols) printf '%s\n' "${COLUMNS:-${DEFAULT_TERM_COLS:-140}}" ;;
+                lines) printf '%s\n' "${LINES:-${DEFAULT_TERM_LINES:-40}}" ;;
+                *) return 0 ;;
+            esac
+        }
+        stty()
+        {
+            return 0
+        }
+    else
+        DepInstall tput
+    fi
 
     inquirer:print() {
         tput el
@@ -2215,7 +2233,13 @@ inquirer()
     normal='\033[0m'
 
     shift
-    inquirer:$option "$@"
+    local _inq_rc=0
+    inquirer:$option "$@" || _inq_rc=$?
+    if [ "$_inq_mock_tty" = true ]
+    then
+        unset -f tput stty
+    fi
+    return $_inq_rc
 }
 
 ExitOnList()

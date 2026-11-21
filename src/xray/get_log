@@ -8,18 +8,20 @@ XrayGetLog()
         ["access"],
         ["error"],
         ["loglevel"],
+        ["logLevel"],
         ["dnsLog"],
         ["maskAddress"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name="$path_name"
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
 
-    log_access="${jq_access:-none}"
-    log_error="${jq_error:-none}"
-    log_loglevel="${jq_loglevel:-warning}"
+    log_access="${jq_access:-stdout}"
+    log_error="${jq_error:-stdout}"
+    log_loglevel="${jq_loglevel:-${jq_logLevel:-warning}}"
     log_dnsLog="${jq_dnsLog:-false}"
     log_maskAddress="${jq_maskAddress:-}"
 

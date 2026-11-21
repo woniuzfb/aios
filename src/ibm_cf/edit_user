@@ -68,7 +68,7 @@ IbmEditUser()
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["users",'"$ibm_users_index"']'
     JQ update "$IBM_CONFIG" "$new_user"
     Println "$info 用户修改成功\n"

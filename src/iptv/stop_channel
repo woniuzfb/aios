@@ -97,7 +97,7 @@ StopChannelsForce()
             "flv_status": "off"
         }'
 
-        merge=true
+        jq_merge=true
         jq_path='["channels"]'
         JQ update "$CHANNELS_FILE" pid "${chnls_pid[i]}" "$update"
 

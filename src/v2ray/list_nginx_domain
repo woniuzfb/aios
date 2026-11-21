@@ -75,11 +75,11 @@ V2rayNginxListDomain()
                 if [ "$level_3_directive" == "listen" ]
                 then
                     [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
-                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[8]}/ }"
+                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[7]}/ }"
                 elif [ "$level_3_directive" == "server_name" ]
                 then
                     [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
-                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[8]}/, }"
+                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[7]}/, }"
                 elif [ "$level_3_directive" == "location" ]
                 then
                     if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
@@ -89,7 +89,7 @@ V2rayNginxListDomain()
                         IFS="${delimiters[8]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3"
                         IFS="${delimiters[8]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3"
 
-                        if [[ ${level_3_args} =~ ^=${delimiters[8]}(.+) ]]
+                        if [[ ${level_3_args} =~ ^=${delimiters[7]}(.+) ]]
                         then
                             v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
@@ -99,7 +99,7 @@ V2rayNginxListDomain()
                                     if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://127.0.0.1:(.+) ]]
                                     then
                                         v2ray_nginx_domain_server_proxies="$v2ray_nginx_domain_server_proxies$level_3_index|$level_4_index|${BASH_REMATCH[1]}|$v2ray_nginx_domain_server_proxy_path "
-                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}路径: ${green}$v2ray_nginx_domain_server_proxy_path${normal} => $v2ray_name 端口: ${green}${BASH_REMATCH[1]}${normal}\n"
+                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}路径: ${green}$v2ray_nginx_domain_server_proxy_path${normal} => ${v2ray_name:-v2ray} 端口: ${green}${BASH_REMATCH[1]}${normal}\n"
                                     fi
                                     break
                                 fi

@@ -11,14 +11,14 @@ EditChannelSchedule()
         then
             inquirer date_pick "设置开始日期" schedule_start_time
 
-            number=true
+            jq_number=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"start_time"]'
             JQ update "$CHANNELS_FILE" "$schedule_start_time"
         elif [ "$channel_schedule_options_index" -eq 1 ] 
         then
             inquirer date_pick "设置结束日期" schedule_end_time
 
-            number=true
+            jq_number=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"end_time"]'
             JQ update "$CHANNELS_FILE" "$schedule_end_time"
         elif [ "$channel_schedule_options_index" -eq 2 ] 
@@ -32,7 +32,7 @@ EditChannelSchedule()
                 schedule_loop=true
             fi
 
-            bool=true
+            jq_bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"loop"]'
             JQ update "$CHANNELS_FILE" "$schedule_loop"
         elif [ "$channel_schedule_options_index" -eq 3 ] 
@@ -46,7 +46,7 @@ EditChannelSchedule()
                 schedule_auto_remove=true
             fi
 
-            bool=true
+            jq_bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"auto_remove"]'
             JQ update "$CHANNELS_FILE" "$schedule_auto_remove"
         elif [ "$channel_schedule_options_index" -eq 4 ] 
@@ -71,11 +71,11 @@ EditChannelSchedule()
                 schedule_hls_change_once=false
             fi
 
-            bool=true
+            jq_bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change"]'
             JQ update "$CHANNELS_FILE" "$schedule_hls_change"
 
-            bool=true
+            jq_bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change_once"]'
             JQ update "$CHANNELS_FILE" "$schedule_hls_change_once"
         elif [ "$channel_schedule_options_index" -eq 5 ] 
@@ -114,7 +114,7 @@ EditChannelSchedule()
             schedule_status_options=( '等待' '进行' '结束' )
             inquirer list_input_index "设置状态" schedule_status_options schedule_status
 
-            number=true
+            jq_number=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
             JQ update "$CHANNELS_FILE" "$schedule_status"
         fi

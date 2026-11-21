@@ -1,0 +1,251 @@
+PASS_COUNT=0
+FAIL_COUNT=0
+SHOW_OUTPUT="${SHOW_OUTPUT:-0}"
+
+MOCK_INQUIRER_QUEUE=()
+MOCK_INQUIRER_POS=0
+MOCK_INQUIRER_TRACE=()
+MOCK_SERVICE_CALLS=()
+MOCK_INQUIRER_STATE_DIR=""
+
+StripAnsi()
+{
+    printf '%b' "$1" | sed -E $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' | tr -d '\r'
+}
+
+ShowCaptured()
+{
+    local title="$1"
+    local body="$2"
+
+    if [ "$SHOW_OUTPUT" -eq 1 ]
+    then
+        printf '\n--- [OUTPUT] %s ---\n' "$title"
+        StripAnsi "$body"
+        printf '\n--- [END] %s ---\n' "$title"
+    fi
+}
+
+AssertEq()
+{
+    local expected="$1"
+    local actual="$2"
+    local label="$3"
+
+    if [ "$expected" == "$actual" ]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s\n' "$label"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s\n  expected: %q\n  actual:   %q\n' "$label" "$expected" "$actual" >&2
+    fi
+}
+
+AssertContains()
+{
+    local haystack="$1"
+    local needle="$2"
+    local label="$3"
+    local plain
+    plain=$(StripAnsi "$haystack")
+
+    if [[ "$plain" == *"$needle"* ]]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s\n' "$label"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s\n  missing substring: %q\n' "$label" "$needle" >&2
+    fi
+}
+
+AssertNotContains()
+{
+    local haystack="$1"
+    local needle="$2"
+    local label="$3"
+    local plain
+    plain=$(StripAnsi "$haystack")
+
+    if [[ "$plain" != *"$needle"* ]]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s\n' "$label"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s\n  unexpected substring: %q\n' "$label" "$needle" >&2
+    fi
+}
+
+AssertJsonEq()
+{
+    local file="$1"
+    local expr="$2"
+    local expected="$3"
+    local label="$4"
+    local actual
+    actual=$($JQ_FILE -r "$expr" "$file")
+    AssertEq "$expected" "$actual" "$label"
+}
+
+_MockInquirerEnsureStateDir()
+{
+    if [ -z "${MOCK_INQUIRER_STATE_DIR:-}" ] || [ ! -d "$MOCK_INQUIRER_STATE_DIR" ]
+    then
+        MOCK_INQUIRER_STATE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aios-mock-inq.XXXXXX")
+        printf '0\n' > "$MOCK_INQUIRER_STATE_DIR/pos"
+        : > "$MOCK_INQUIRER_STATE_DIR/trace"
+    fi
+}
+
+MockInquirerReset()
+{
+    MOCK_INQUIRER_QUEUE=()
+    MOCK_INQUIRER_POS=0
+    MOCK_INQUIRER_TRACE=()
+    _MockInquirerEnsureStateDir
+    printf '0\n' > "$MOCK_INQUIRER_STATE_DIR/pos"
+    : > "$MOCK_INQUIRER_STATE_DIR/trace"
+}
+
+MockInquirerCleanup()
+{
+    if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -d "$MOCK_INQUIRER_STATE_DIR" ]
+    then
+        rm -rf "$MOCK_INQUIRER_STATE_DIR"
+        MOCK_INQUIRER_STATE_DIR=""
+    fi
+}
+
+MockInquirerPush()
+{
+    local val
+    for val in "$@"
+    do
+        MOCK_INQUIRER_QUEUE+=("$val")
+    done
+}
+
+AssertInquirerDrained()
+{
+    local label="$1"
+    local pos="$MOCK_INQUIRER_POS"
+    if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -f "$MOCK_INQUIRER_STATE_DIR/pos" ]
+    then
+        pos=$(cat "$MOCK_INQUIRER_STATE_DIR/pos")
+        MOCK_INQUIRER_POS="$pos"
+    fi
+
+    if [ "$SHOW_OUTPUT" -eq 1 ] && [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -s "$MOCK_INQUIRER_STATE_DIR/trace" ]
+    then
+        printf '\n--- [TRACE] %s ---\n' "$label"
+        cat "$MOCK_INQUIRER_STATE_DIR/trace"
+        printf -- '--- [END TRACE] %s ---\n' "$label"
+    fi
+
+    local remaining=$(( ${#MOCK_INQUIRER_QUEUE[@]} - pos ))
+    if [ "$remaining" -eq 0 ]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s (steps=%d)\n' "$label" "$pos"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s: %d unused mock input(s) left in queue (consumed=%d, queued=%d)\n' "$label" "$remaining" "$pos" "${#MOCK_INQUIRER_QUEUE[@]}" >&2
+    fi
+}
+
+inquirer()
+{
+    local kind="$1"
+    local prompt="$2"
+    shift 2
+    local out_var=""
+    local next_val=""
+    local pos="$MOCK_INQUIRER_POS"
+
+    if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -f "$MOCK_INQUIRER_STATE_DIR/pos" ]
+    then
+        pos=$(cat "$MOCK_INQUIRER_STATE_DIR/pos")
+    fi
+
+    if [ "$pos" -ge "${#MOCK_INQUIRER_QUEUE[@]}" ]
+    then
+        printf '[FAIL] inquirer(%s "%s"): mock queue exhausted at step %d\n' "$kind" "$prompt" "$pos" >&2
+        return 1
+    fi
+
+    next_val="${MOCK_INQUIRER_QUEUE[$pos]}"
+    pos=$((pos + 1))
+    MOCK_INQUIRER_POS="$pos"
+    if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -d "$MOCK_INQUIRER_STATE_DIR" ]
+    then
+        printf '%d\n' "$pos" > "$MOCK_INQUIRER_STATE_DIR/pos"
+    fi
+
+    local trace_line=""
+    case "$kind" in
+        list_input_index)
+            local arr_name="$1"
+            out_var="$2"
+            local opts_len=0
+            eval "opts_len=\${#${arr_name}[@]}"
+            if ! [[ "$next_val" =~ ^[0-9]+$ ]] || [ "$next_val" -ge "$opts_len" ]
+            then
+                printf '[FAIL] inquirer(list_input_index "%s"): index %q out of range [0..%d)\n' "$prompt" "$next_val" "$opts_len" >&2
+                return 1
+            fi
+            local chosen_label=""
+            eval "chosen_label=\"\${${arr_name}[$next_val]}\""
+            trace_line="[STEP $pos] $kind \"$prompt\" => [$next_val] $chosen_label"
+            read -r "${out_var}" <<< "$next_val"
+        ;;
+        list_input|list_input_ny)
+            local arr_name="$1"
+            out_var="$2"
+            trace_line="[STEP $pos] $kind \"$prompt\" => $next_val"
+            read -r "${out_var}" <<< "$next_val"
+        ;;
+        text_input)
+            out_var="$1"
+            trace_line="[STEP $pos] $kind \"$prompt\" => \"$next_val\""
+            read -r "${out_var}" <<< "$next_val"
+        ;;
+        checkbox_input|checkbox_input_indices)
+            local arr_name="$1"
+            out_var="$2"
+            trace_line="[STEP $pos] $kind \"$prompt\" => [$next_val]"
+            IFS="," read -r -a "${out_var}" <<< "$next_val"
+        ;;
+        *)
+            return 1
+        ;;
+    esac
+
+    MOCK_INQUIRER_TRACE+=("$trace_line")
+    if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -d "$MOCK_INQUIRER_STATE_DIR" ]
+    then
+        printf '%s\n' "$trace_line" >> "$MOCK_INQUIRER_STATE_DIR/trace"
+    fi
+}
+
+ServiceControl()
+{
+    MOCK_SERVICE_CALLS+=("$*")
+    return 0
+}
+
+ExitOnList()
+{
+    return 0
+}
+
+gettext()
+{
+    printf '%s' "$1"
+}
+
+eval_gettext()
+{
+    printf '%s' "$1"
+}

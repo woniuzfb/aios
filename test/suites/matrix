@@ -1,0 +1,563 @@
+_MatrixBuildXrayInbound()
+{
+    local proto="$1"
+    local net="$2"
+    local sec="$3"
+    local tag="$4"
+    local port="$5"
+    local extra_mode="${6:-default}"
+
+    $JQ_FILE -n \
+        --arg p "$proto" --arg net "$net" --arg sec "$sec" \
+        --arg tag "$tag" --argjson port "$port" --arg em "$extra_mode" '
+        def make_settings:
+            if $p == "vless" then
+                (if $em == "empty_clients_with_users" then {clients:[]} else {} end) + {
+                    decryption: "none",
+                    users: [
+                        {id: "11111111-1111-4111-8111-111111111111", email: "u1@matrix.test", flow: (if $sec == "reality" and $net == "raw" then "xtls-rprx-vision" else "" end), level: 0},
+                        {id: "22222222-2222-4222-8222-222222222222", email: "u2@matrix.test", level: 1}
+                    ]
+                }
+            elif $p == "vmess" then
+                {users: [{id: "33333333-3333-4333-8333-333333333333", email: "vm@matrix.test", level: 0}]}
+            elif $p == "trojan" then
+                {
+                    users: [{password: "trj-pass-123", email: "tr@matrix.test", level: 0}],
+                    fallbacks: [{dest: 8080, xver: 1}]
+                }
+            elif $p == "shadowsocks" then
+                if $em == "multi_user" then
+                    {method: "2022-blake3-aes-128-gcm", password: "server-key-base64==", users: [{password: "user-key-1==", email: "ss1@matrix.test"}, {password: "user-key-2==", email: "ss2@matrix.test"}]}
+                else
+                    {method: (if $em == "default" then "2022-blake3-aes-256-gcm" else $em end), password: "ss-password-base64==", network: "tcp,udp", ivCheck: true}
+                end
+            elif $p == "hysteria" then
+                {version: 2, users: [{auth: "hy2-secret-token", email: "hy2@matrix.test"}]}
+            elif $p == "socks" then
+                {auth: (if $em == "noauth" then "noauth" else "password" end), udp: true, accounts: [{user: "suser", pass: "spass"}]}
+            elif $p == "http" then
+                {allowTransparent: true, accounts: [{user: "huser", pass: "hpass"}]}
+            elif $p == "tunnel" then
+                {address: "127.0.0.1", port: 8080, network: "tcp,udp", followRedirect: true, portMap: {"80": "127.0.0.1:8080"}}
+            elif $p == "wireguard" then
+                {mtu: 1420, secretKey: "wg-priv-key", peers: [{publicKey: "wg-pub-1", allowedIPs: ["10.0.0.2/32"], keepAlive: 25}]}
+            elif $p == "tun" then
+                {name: "xray0", mtu: 1500, gateway: ["172.19.0.1/30"], dns: ["1.1.1.1"]}
+            elif $p == "masque" then
+                {address: ["10.9.0.1/24"], mtu: 1280, users: [{email: "mq@matrix.test"}]}
+            else {} end;
+
+        def make_net:
+            if $net == "xhttp" then {xhttpSettings: {path: "/xhttp-m", mode: "auto", host: "xh.matrix.test"}}
+            elif $net == "ws" then {wsSettings: {path: "/ws-m", host: "ws.matrix.test", heartbeatPeriod: 30}}
+            elif $net == "grpc" then {grpcSettings: {serviceName: "grpc-m", multiMode: true}}
+            elif $net == "httpupgrade" then {httpupgradeSettings: {path: "/hu-m", host: "hu.matrix.test"}}
+            elif $net == "kcp" then {kcpSettings: {mtu: 1350, congestion: true, seed: "kcp-seed"}}
+            elif $net == "splithttp" then {splithttpSettings: {path: "/sh-m", mode: "auto"}}
+            elif $net == "hysteria" then {hysteriaSettings: {version: 2, congestion: "bbr"}}
+            elif $net == "raw" then {rawSettings: {header: {type: "none"}}}
+            else {} end;
+
+        def make_sec:
+            if $sec == "tls" then
+                {tlsSettings: {serverName: "tls.matrix.test", alpn: ["h2", "http/1.1"], certificates: [{usage: "encipherment", certificateFile: "/etc/ssl/m.crt", keyFile: "/etc/ssl/m.key", ocspStapling: 3600}]}}
+            elif $sec == "reality" then
+                {realitySettings: {target: "www.example.com:443", serverNames: ["www.example.com"], privateKey: "priv-m", shortIds: ["abcd1234"], mldsa65Seed: "seed-m"}}
+            else {} end;
+
+        {
+            inbounds: [
+                {
+                    tag: $tag,
+                    listen: (if ($tag | startswith("nginx-")) then "127.0.0.1" else "0.0.0.0" end),
+                    port: $port,
+                    protocol: $p,
+                    settings: make_settings,
+                    streamSettings: ({network: $net, security: $sec} + make_net + make_sec),
+                    sniffing: {enabled: true, destOverride: ["http", "tls", "quic"], routeOnly: true}
+                }
+            ]
+        }'
+}
+
+_MatrixBuildXrayOutbound()
+{
+    local proto="$1"
+    local net="$2"
+    local sec="$3"
+    local tag="$4"
+    local dialer="${5:-}"
+
+    $JQ_FILE -n \
+        --arg p "$proto" --arg net "$net" --arg sec "$sec" \
+        --arg tag "$tag" --arg dialer "$dialer" '
+        def make_settings:
+            if $p == "vless" then {address: "out.matrix.test", port: 443, id: "aaaa1111-1111-4111-8111-111111111111", encryption: "none", flow: "xtls-rprx-vision"}
+            elif $p == "vmess" then {address: "vm-out.matrix.test", port: 443, id: "bbbb2222-2222-4222-8222-222222222222", security: "auto"}
+            elif $p == "trojan" then {address: "tr-out.matrix.test", port: 443, password: "tr-out-pass"}
+            elif $p == "shadowsocks" then {address: "ss-out.matrix.test", port: 8388, method: "2022-blake3-aes-128-gcm", password: "ss-out-key=="}
+            elif $p == "hysteria" then {version: 2, address: "hy-out.matrix.test", port: 443}
+            elif $p == "socks" then {address: "127.0.0.1", port: 1080, user: "su", pass: "sp"}
+            elif $p == "http" then {address: "127.0.0.1", port: 8080, user: "hu", pass: "hp"}
+            elif $p == "wireguard" then {secretKey: "wg-out-priv", address: ["10.0.0.2/32"], peers: [{endpoint: "wg.matrix.test:51820", publicKey: "wg-out-pub"}]}
+            elif $p == "freedom" then {domainStrategy: "UseIPv4", fragment: {packets: "tlshello", length: "100-200", interval: "10-20"}}
+            elif $p == "blackhole" then {response: {type: "http"}}
+            elif $p == "dns" then {network: "udp", address: "8.8.8.8", port: 53}
+            elif $p == "loopback" then {inboundTag: "in-loop"}
+            else {} end;
+
+        {
+            outbounds: [
+                ({
+                    tag: $tag,
+                    protocol: $p,
+                    targetStrategy: "UseIP",
+                    settings: make_settings,
+                    streamSettings: (
+                        {network: $net, security: $sec}
+                        + (if ($dialer | length) > 0 then {sockopt: {dialerProxy: $dialer, tcpFastOpen: true}} else {} end)
+                    )
+                })
+            ]
+        }'
+}
+
+_MatrixBuildV2rayConfig()
+{
+    local proto="$1"
+    local net="$2"
+    local sec="$3"
+    local tag="$4"
+    local port="$5"
+
+    $JQ_FILE -n \
+        --arg p "$proto" --arg net "$net" --arg sec "$sec" \
+        --arg tag "$tag" --argjson port "$port" '
+        def make_in_settings:
+            if $p == "vmess" then {clients: [{id: "55555555-5555-4555-8555-555555555555", alterId: 0, email: "v2m@matrix.test"}]}
+            elif $p == "vless" then {decryption: "none", clients: [{id: "66666666-6666-4666-8666-666666666666", email: "v2l@matrix.test"}]}
+            elif $p == "trojan" then {clients: [{password: "v2tr-pass", email: "v2t@matrix.test"}]}
+            elif $p == "shadowsocks" then {method: "aes-256-gcm", password: "v2ss-pass", network: "tcp,udp"}
+            elif $p == "socks" then {auth: "password", udp: true, accounts: [{user: "v2su", pass: "v2sp"}]}
+            elif $p == "http" then {accounts: [{user: "v2hu", pass: "v2hp"}]}
+            elif $p == "dokodemo-door" then {address: "127.0.0.1", port: 8080, network: "tcp,udp", followRedirect: true}
+            elif $p == "hysteria2" then {clients: [{password: "v2hy2-pass", email: "v2h@matrix.test"}]}
+            else {} end;
+
+        def make_out_settings:
+            if $p == "vmess" or $p == "vless" then
+                {vnext: [{address: "v2out.matrix.test", port: 443, users: [{id: "77777777-7777-4777-8777-777777777777"}]}]}
+            elif $p == "trojan" or $p == "shadowsocks" then
+                {servers: [{address: "v2out.matrix.test", port: 443, password: "v2out-pass", method: "aes-256-gcm"}]}
+            else {} end;
+
+        {
+            inbounds: [
+                {
+                    tag: $tag,
+                    listen: (if ($tag | startswith("nginx-")) then "127.0.0.1" else "0.0.0.0" end),
+                    port: $port,
+                    protocol: $p,
+                    settings: make_in_settings,
+                    streamSettings: (
+                        {network: $net, security: $sec}
+                        + (if $net == "ws" then {wsSettings: {path: "/v2ws", maxEarlyData: 2048}}
+                           elif $net == "grpc" then {grpcSettings: {serviceName: "v2grpc"}}
+                           elif $net == "http" then {httpSettings: {host: ["h2.matrix.test"], path: "/v2h2"}}
+                           elif $net == "quic" then {quicSettings: {security: "aes-128-gcm", key: "qkey"}}
+                           elif $net == "kcp" then {kcpSettings: {mtu: 1350, seed: "v2kcp"}}
+                           elif $net == "hysteria2" then {hysteria2Settings: {password: "v2hy2-pass"}}
+                           else {} end)
+                        + (if $sec == "tls" then {tlsSettings: {serverName: "v2tls.matrix.test"}} else {} end)
+                    ),
+                    allocate: {strategy: "always"}
+                }
+            ],
+            outbounds: [
+                {
+                    tag: ("out-" + $tag),
+                    protocol: (if $p == "dokodemo-door" or $p == "hysteria2" then "freedom" else $p end),
+                    settings: make_out_settings,
+                    proxySettings: {tag: "direct", transportLayer: true}
+                }
+            ]
+        }'
+}
+
+_MatrixBuildNginxAst()
+{
+    local srv_count="$1"
+    local with_null="$2"
+    local with_stream="$3"
+
+    $JQ_FILE -n --argjson n "$srv_count" --argjson wn "$with_null" --argjson ws "$with_stream" '
+        def make_srv($i):
+            {
+                directive: "server",
+                args: [],
+                block: (
+                    [
+                        {directive: "listen", args: ["\((443 + $i))", "ssl", "http2"]},
+                        {directive: "server_name", args: ["site\($i).matrix.test"]},
+                        {directive: "ssl_certificate", args: ["/etc/ssl/site\($i).crt"]},
+                        {directive: "location", args: ["=", "/ws\($i)"], block: [
+                            {directive: "proxy_pass", args: ["http://127.0.0.1:\((10000 + $i))"]}
+                        ]}
+                    ] + (if $wn == 1 then [null] else [] end)
+                )
+            };
+
+        {
+            config: [{
+                parsed: (
+                    [
+                        {directive: "worker_processes", args: ["auto"]},
+                        {
+                            directive: "http",
+                            args: [],
+                            block: ([range(0; $n) | make_srv(.)] + (if $wn == 1 then [null] else [] end))
+                        }
+                    ] + (if $ws == 1 then [{
+                        directive: "stream",
+                        args: [],
+                        block: [
+                            {directive: "map", args: ["$ssl_preread_server_name", "$backend_name"], block: [
+                                {directive: "site0.matrix.test", args: ["xray_backend"]}
+                            ]},
+                            {directive: "upstream", args: ["xray_backend"], block: [
+                                {directive: "server", args: ["127.0.0.1:4443"]}
+                            ]}
+                        ]
+                    }] else [] end)
+                )
+            }]
+        }'
+}
+
+RunSuiteMatrix()
+{
+    printf '\n=== Suite: matrix (150+ dynamic combinatorial datasets) ===\n'
+
+    local tmpdir
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/aios-matrix.XXXXXX")
+    local cfg="$tmpdir/config.json"
+    local dataset_count=0
+    local matrix_fail=0
+
+    # 1. Xray Inbound Cartesian Matrix (65 distinct configs)
+    local proto net sec tag rendered share_out
+    local port=10000
+
+    # 1a. VLESS x 7 transports x 3 security = 21 datasets
+    for net in raw xhttp ws grpc httpupgrade kcp splithttp
+    do
+        for sec in none tls reality
+        do
+            port=$((port + 1))
+            tag="x-vless-${net}-${sec}"
+            _MatrixBuildXrayInbound "vless" "$net" "$sec" "$tag" "$port" "empty_clients_with_users" > "$cfg"
+            ProxyLoadInboundsIndex "$cfg"
+            rendered=$(ProxyRenderInbounds "$cfg" "all" "xray")
+            share_out=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "0")
+            dataset_count=$((dataset_count + 1))
+
+            if [ "$inbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]] || [[ "$rendered" != *"用户数:"* ]] || [[ "$share_out" != *"vless://"* ]]
+            then
+                matrix_fail=$((matrix_fail + 1))
+                printf '[FAIL] matrix xray inbound %s (count=%s)\n' "$tag" "$inbounds_count" >&2
+            fi
+        done
+    done
+
+    # 1b. VMess x 6 transports x 2 security = 12 datasets (half nginx- prefixed)
+    local toggle=0
+    for net in raw ws grpc httpupgrade xhttp kcp
+    do
+        for sec in none tls
+        do
+            port=$((port + 1))
+            if [ $((toggle % 2)) -eq 0 ]
+            then
+                tag="nginx-vmess-${net}-${sec}"
+            else
+                tag="x-vmess-${net}-${sec}"
+            fi
+            toggle=$((toggle + 1))
+            _MatrixBuildXrayInbound "vmess" "$net" "$sec" "$tag" "$port" > "$cfg"
+            ProxyLoadInboundsIndex "$cfg"
+            rendered=$(ProxyRenderInbounds "$cfg" "all" "xray")
+            share_out=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "0")
+            dataset_count=$((dataset_count + 1))
+
+            if [ "$inbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]] || [[ "$share_out" != *"vmess://"* ]]
+            then
+                matrix_fail=$((matrix_fail + 1))
+                printf '[FAIL] matrix xray inbound %s\n' "$tag" >&2
+            fi
+        done
+    done
+
+    # 1c. Trojan x 4 transports x 3 security = 12 datasets
+    for net in raw ws grpc xhttp
+    do
+        for sec in none tls reality
+        do
+            port=$((port + 1))
+            tag="x-trojan-${net}-${sec}"
+            _MatrixBuildXrayInbound "trojan" "$net" "$sec" "$tag" "$port" > "$cfg"
+            ProxyLoadInboundsIndex "$cfg"
+            rendered=$(ProxyRenderInbounds "$cfg" "all" "xray")
+            share_out=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "0")
+            dataset_count=$((dataset_count + 1))
+
+            if [ "$inbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]] || [[ "$share_out" != *"trojan://"* ]]
+            then
+                matrix_fail=$((matrix_fail + 1))
+                printf '[FAIL] matrix xray inbound %s\n' "$tag" >&2
+            fi
+        done
+    done
+
+    # 1d. Shadowsocks x 5 ciphers x 2 user modes = 10 datasets
+    local cipher u_mode
+    for cipher in 2022-blake3-aes-128-gcm 2022-blake3-aes-256-gcm 2022-blake3-chacha20-poly1305 aes-256-gcm chacha20-ietf-poly1305
+    do
+        for u_mode in "$cipher" "multi_user"
+        do
+            port=$((port + 1))
+            tag="x-ss-${port}"
+            _MatrixBuildXrayInbound "shadowsocks" "raw" "none" "$tag" "$port" "$u_mode" > "$cfg"
+            ProxyLoadInboundsIndex "$cfg"
+            rendered=$(ProxyRenderInbounds "$cfg" "all" "xray")
+            dataset_count=$((dataset_count + 1))
+
+            if [ "$inbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]]
+            then
+                matrix_fail=$((matrix_fail + 1))
+                printf '[FAIL] matrix xray ss %s\n' "$tag" >&2
+            fi
+        done
+    done
+
+    # 1e. Other Xray protocols + multi-inbound isolation = 10 datasets
+    for proto in hysteria socks http tunnel wireguard tun masque
+    do
+        port=$((port + 1))
+        net="raw"
+        sec="none"
+        [ "$proto" == "hysteria" ] && net="hysteria" && sec="tls"
+        tag="x-${proto}-${port}"
+        _MatrixBuildXrayInbound "$proto" "$net" "$sec" "$tag" "$port" > "$cfg"
+        ProxyLoadInboundsIndex "$cfg"
+        rendered=$(ProxyRenderInbounds "$cfg" "all" "xray")
+        dataset_count=$((dataset_count + 1))
+
+        if [ "$inbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]]
+        then
+            matrix_fail=$((matrix_fail + 1))
+            printf '[FAIL] matrix xray proto %s\n' "$tag" >&2
+        fi
+    done
+
+    port=$((port + 1))
+    _MatrixBuildXrayInbound "socks" "raw" "none" "x-socks-noauth" "$port" "noauth" > "$cfg"
+    ProxyLoadInboundsIndex "$cfg"
+    dataset_count=$((dataset_count + 1))
+    [ "$inbounds_count" -eq 1 ] || matrix_fail=$((matrix_fail + 1))
+
+    local ib1 ib2 ib3
+    ib1=$(_MatrixBuildXrayInbound "vless" "xhttp" "reality" "multi-vless" 1443)
+    ib2=$(_MatrixBuildXrayInbound "vmess" "ws" "none" "nginx-multi-vmess" 10443)
+    ib3=$(_MatrixBuildXrayInbound "trojan" "grpc" "tls" "multi-trojan" 2443)
+    $JQ_FILE -n --argjson a "$ib1" --argjson b "$ib2" --argjson c "$ib3" \
+        '{inbounds: ($a.inbounds + $b.inbounds + $c.inbounds)}' > "$cfg"
+    local s0 s1 s2
+    s0=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "0")
+    s1=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "1")
+    s2=$(ProxyRenderShareLinks "$cfg" "203.0.113.10" "2")
+    dataset_count=$((dataset_count + 2))
+    if [[ "$s0" != *"vless://"* ]] || [[ "$s0" == *"vmess://"* ]] || [[ "$s1" != *"vmess://"* ]] || [[ "$s1" == *"trojan://"* ]] || [[ "$s2" != *"trojan://"* ]] || [[ "$s2" == *"vless://"* ]]
+    then
+        matrix_fail=$((matrix_fail + 1))
+        printf '[FAIL] matrix multi-inbound share isolation\n' >&2
+    fi
+
+    # 2. Xray Outbound Matrix (20 distinct configs)
+    local dialer
+    for proto in vless vmess trojan shadowsocks hysteria socks http wireguard freedom blackhole
+    do
+        for dialer in "" "proxy-chain"
+        do
+            tag="out-${proto}-${dialer:-direct}"
+            _MatrixBuildXrayOutbound "$proto" "raw" "tls" "$tag" "$dialer" > "$cfg"
+            ProxyLoadOutboundsIndex "$cfg"
+            rendered=$(ProxyRenderOutbounds "$cfg" "xray")
+            dataset_count=$((dataset_count + 1))
+
+            if [ "$outbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]]
+            then
+                matrix_fail=$((matrix_fail + 1))
+                printf '[FAIL] matrix xray outbound %s\n' "$tag" >&2
+            fi
+        done
+    done
+
+    # 3. V2Ray Inbound + Outbound Matrix (33 distinct configs)
+    for proto in vmess vless trojan shadowsocks socks http dokodemo-door hysteria2
+    do
+        local nets="tcp ws grpc"
+        [ "$proto" == "hysteria2" ] && nets="hysteria2"
+        [ "$proto" == "vmess" ] && nets="tcp ws grpc http quic kcp"
+        [ "$proto" == "vless" ] && nets="tcp ws grpc http"
+        for net in $nets
+        do
+            for sec in none tls
+            do
+                [ "$proto" == "hysteria2" ] && [ "$sec" == "none" ] && continue
+                [ "$proto" == "dokodemo-door" ] && [ "$sec" == "tls" ] && continue
+                [ "$proto" == "socks" ] && [ "$sec" == "tls" ] && continue
+                [ "$proto" == "http" ] && [ "$sec" == "tls" ] && continue
+                [ "$proto" == "shadowsocks" ] && [ "$sec" == "tls" ] && continue
+                [ "$proto" == "trojan" ] && [ "$sec" == "none" ] && continue
+                port=$((port + 1))
+                tag="v2-${proto}-${net}-${sec}"
+                _MatrixBuildV2rayConfig "$proto" "$net" "$sec" "$tag" "$port" > "$cfg"
+                ProxyLoadInboundsIndex "$cfg"
+                ProxyLoadOutboundsIndex "$cfg"
+                rendered=$(ProxyRenderInbounds "$cfg" "all" "v2ray")
+                local out_r
+                out_r=$(ProxyRenderOutbounds "$cfg" "v2ray")
+                dataset_count=$((dataset_count + 1))
+
+                if [ "$inbounds_count" -ne 1 ] || [ "$outbounds_count" -ne 1 ] || [[ "$rendered" != *"$tag"* ]] || [[ "$out_r" != *"proxySettings"* ]]
+                then
+                    matrix_fail=$((matrix_fail + 1))
+                    printf '[FAIL] matrix v2ray %s\n' "$tag" >&2
+                fi
+            done
+        done
+    done
+
+    # 4. DNS / Routing / Policy / Reverse / Edge Cases (25 distinct configs)
+    local qs
+    for qs in UseIP UseIPv4 UseIPv6 UseSystem
+    do
+        $JQ_FILE -n --arg qs "$qs" '{
+            dns: {
+                hosts: {"a.test": "1.1.1.1", "b.test": ["2.2.2.2", "3.3.3.3"]},
+                servers: ["8.8.8.8", {address: "223.5.5.5", port: 53, domains: ["geosite:cn"], expectedIPs: ["geoip:cn"], unexpectedIPs: ["geoip:private"], finalQuery: true}],
+                queryStrategy: $qs, serveStale: true, enableParallelQuery: true
+            }
+        }' > "$cfg"
+        rendered=$(ProxyRenderDns "$cfg" "xray")
+        dataset_count=$((dataset_count + 1))
+        [[ "$rendered" == *"$qs"* ]] && [[ "$rendered" == *"expectedIPs"* ]] || matrix_fail=$((matrix_fail + 1))
+    done
+
+    for qs in UseIP UseIPv4 UseIPv6
+    do
+        $JQ_FILE -n --arg qs "$qs" '{
+            dns: {
+                clientIp: "1.2.3.4",
+                servers: [{address: "1.1.1.1", expectIPs: ["geoip:!cn"]}],
+                queryStrategy: $qs
+            }
+        }' > "$cfg"
+        rendered=$(ProxyRenderDns "$cfg" "v2ray")
+        dataset_count=$((dataset_count + 1))
+        [[ "$rendered" == *"expectIPs"* ]] && [[ "$rendered" != *"expectedIPs"* ]] || matrix_fail=$((matrix_fail + 1))
+    done
+
+    local dm
+    for dm in linear mph hybrid
+    do
+        $JQ_FILE -n --arg dm "$dm" '{
+            routing: {
+                domainStrategy: "IPIfNonMatch",
+                domainMatcher: $dm,
+                rules: [{type: "field", domains: ["geosite:cn"], source: ["10.0.0.0/8"], outboundTag: "direct"}]
+            }
+        }' > "$cfg"
+        rendered=$(ProxyRenderRouting "$cfg" "v2ray")
+        dataset_count=$((dataset_count + 1))
+        [[ "$rendered" == *"$dm"* ]] || matrix_fail=$((matrix_fail + 1))
+    done
+
+    local ds
+    for ds in AsIs IPIfNonMatch IPOnDemand
+    do
+        $JQ_FILE -n --arg ds "$ds" '{
+            routing: {
+                domainStrategy: $ds,
+                rules: [{ruleTag: ("r-" + $ds), domain: ["geosite:cn"], sourceIP: ["192.168.0.0/16"], outboundTag: "direct"}],
+                balancers: [{tag: "b1", selector: ["out-a"], fallbackTag: "direct"}]
+            }
+        }' > "$cfg"
+        rendered=$(ProxyRenderRouting "$cfg" "xray")
+        dataset_count=$((dataset_count + 1))
+        [[ "$rendered" == *"r-$ds"* ]] && [[ "$rendered" == *"fallbackTag"* ]] || matrix_fail=$((matrix_fail + 1))
+    done
+
+    local pkey
+    for pkey in level levels
+    do
+        $JQ_FILE -n --arg pk "$pkey" '{policy: {($pk): {"0": {handshake: 4, connIdle: 300, bufferSize: 256, statsUserOnline: true}}, system: {statsInboundUplink: true}}}' > "$cfg"
+        local rx rv
+        rx=$(ProxyRenderPolicy "$cfg" "xray")
+        rv=$(ProxyRenderPolicy "$cfg" "v2ray")
+        dataset_count=$((dataset_count + 2))
+        [[ "$rx" == *"statsOnline"* ]] && [[ "$rv" != *"statsOnline"* ]] || matrix_fail=$((matrix_fail + 1))
+    done
+
+    local edge_json
+    for edge_json in \
+        '{}' \
+        '{"inbounds":[]}' \
+        '{"inbounds":null,"outbounds":null}' \
+        '{"inbounds":[{"tag":"range-port","port":"10000-10010","protocol":"dokodemo-door"}]}' \
+        '{"inbounds":[{"tag":"no-stream","port":1234,"protocol":"vless","settings":{"users":[{"id":"u"}]}}]}' \
+        '{"outbounds":[{"tag":"min-out","protocol":"freedom"}]}' \
+        '{"reverse":{"bridges":[{"tag":"b1","domain":"a.test"},{"tag":"b2","domain":"b.test"}],"portals":[{"tag":"p1","domain":"c.test"}]}}' \
+        '{"log":{"logLevel":"debug","maskAddress":"full"},"metrics":{"tag":"m"},"burstObservatory":{"subjectSelector":["a"]}}'
+    do
+        printf '%s\n' "$edge_json" > "$cfg"
+        ProxyLoadInboundsIndex "$cfg"
+        ProxyLoadOutboundsIndex "$cfg"
+        ProxyRenderOverview "$cfg" "xray" > /dev/null
+        dataset_count=$((dataset_count + 1))
+    done
+
+    # 5. Nginx AST Combinatorial Matrix (16 distinct configs)
+    local sc wn ws
+    for sc in 0 1 2 5
+    do
+        for wn in 0 1
+        do
+            for ws in 0 1
+            do
+                parse_out=$(_MatrixBuildNginxAst "$sc" "$wn" "$ws")
+                NginxGetConfig parse_out
+                dataset_count=$((dataset_count + 1))
+                local expected_l1=$((2 + ws))
+                if [ "$level_1_count" -ne "$expected_l1" ]
+                then
+                    matrix_fail=$((matrix_fail + 1))
+                    printf '[FAIL] matrix nginx sc=%s wn=%s ws=%s expected_l1=%s actual=%s\n' "$sc" "$wn" "$ws" "$expected_l1" "$level_1_count" >&2
+                fi
+            done
+        done
+    done
+
+    rm -rf "$tmpdir"
+
+    AssertEq "0" "$matrix_fail" "matrix: all $dataset_count combinatorial datasets passed (xray + v2ray + dns/routing/policy/edge + nginx)"
+    if [ "$dataset_count" -ge 100 ]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] matrix: dataset count >= 100 (actual=%d)\n' "$dataset_count"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] matrix: dataset count < 100 (actual=%d)\n' "$dataset_count" >&2
+    fi
+}

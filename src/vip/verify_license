@@ -13,7 +13,7 @@ VipVerifyLicense()
 
         while IFS= read -r license_ip 
         do
-            map_string=true
+            jq_map_string=true
             jq_path='["users"]'
             JQ delete "$VIP_FILE" ip "$license_ip"
         done < <($JQ_FILE -r '.ip' <<< "$vip_user")

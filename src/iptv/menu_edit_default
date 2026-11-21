@@ -88,12 +88,12 @@ EditDefaultMenu()
             ;;
             8)
                 SetSegLength
-                number=true
+                jq_number=true
                 EditDefault seg_length
             ;;
             9)
                 SetSegCount
-                number=true
+                jq_number=true
                 EditDefault seg_count
             ;;
             10)
@@ -126,16 +126,16 @@ EditDefaultMenu()
             ;;
             17)
                 SetConst
-                bool=true
+                jq_bool=true
                 EditDefault const "$const"
-                bool=true
+                jq_bool=true
                 EditDefault const_cbr "$const_cbr"
             ;;
             18)
                 SetEncrypt
-                bool=true
+                jq_bool=true
                 EditDefault encrypt "$encrypt"
-                bool=true
+                jq_bool=true
                 EditDefault encrypt_session "$encrypt_session"
             ;;
             19)
@@ -156,7 +156,7 @@ EditDefaultMenu()
             ;;
             23)
                 SetSync
-                bool=true
+                jq_bool=true
                 EditDefault sync "$sync"
             ;;
             24)
@@ -177,42 +177,42 @@ EditDefaultMenu()
             ;;
             28)
                 SetFlvDelaySeconds
-                number=true
+                jq_number=true
                 EditDefault flv_delay_seconds
             ;;
             29)
                 SetFlvRestartNums
-                number=true
+                jq_number=true
                 EditDefault flv_restart_nums
             ;;
             30)
                 SetHlsDelaySeconds
-                number=true
+                jq_number=true
                 EditDefault hls_delay_seconds
             ;;
             31)
                 SetHlsMinBitrate
-                number=true
+                jq_number=true
                 EditDefault hls_min_bitrate
             ;;
             32)
                 SetHlsMaxSegSize
-                number=true
+                jq_number=true
                 EditDefault hls_max_seg_size
             ;;
             33)
                 SetHlsRestartNums
-                number=true
+                jq_number=true
                 EditDefault hls_restart_nums
             ;;
             34)
                 SetHlsKeyPeriod
-                number=true
+                jq_number=true
                 EditDefault hls_key_period
             ;;
             35)
                 SetHlsEndList
-                bool=true
+                jq_bool=true
                 EditDefault hls_end_list
             ;;
             36)
@@ -221,45 +221,45 @@ EditDefaultMenu()
             ;;
             37)
                 SetAntiDDosSynFlood
-                bool=true
+                jq_bool=true
                 EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood"
                 if [ "$anti_ddos_syn_flood" = true ] 
                 then
-                    number=true
+                    jq_number=true
                     EditDefault anti_ddos_syn_flood_delay_seconds
-                    number=true
+                    jq_number=true
                     EditDefault anti_ddos_syn_flood_seconds
                 fi
             ;;
             38)
                 SetAntiDDos
-                bool=true
+                jq_bool=true
                 EditDefault anti_ddos "$anti_ddos"
                 if [ "$anti_ddos" = true ] 
                 then
-                    number=true
+                    jq_number=true
                     EditDefault anti_ddos_seconds
-                    number=true
+                    jq_number=true
                     EditDefault anti_ddos_level
                 fi
             ;;
             39)
                 SetAntiLeech
-                bool=true
+                jq_bool=true
                 EditDefault anti_leech "$anti_leech"
                 if [ "$anti_leech" = true ] 
                 then
-                    number=true
+                    jq_number=true
                     EditDefault anti_leech_restart_nums
-                    bool=true
+                    jq_bool=true
                     EditDefault anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes"
-                    bool=true
+                    jq_bool=true
                     EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes"
                 fi
             ;;
             40)
                 SetRecheckPeriod
-                number=true
+                jq_number=true
                 EditDefault recheck_period
             ;;
         esac

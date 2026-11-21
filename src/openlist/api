@@ -95,6 +95,8 @@ OpenList.fs.get()
         --data '{"path":"/","password":""}'
     )
 
+    jq_payload=$(JQs flat "$response")
+
     jq_path='[
         ["code"],
         ["message"],
@@ -141,6 +143,8 @@ OpenList.public.settings()
         -H "User-Agent: $USER_AGENT_BROWSER" \
         -H "Authorization: $openlist_acc_token"
     )
+
+    jq_payload=$(JQs flat "$response")
 
     jq_path='[
         ["code"],

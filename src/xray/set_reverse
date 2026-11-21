@@ -1,0 +1,62 @@
+XraySetReverse()
+{
+    Println "$tip 注意: Xray 顶层 reverse 配置已废弃，推荐使用 VLESS 反向代理\n"
+
+    local actions=( '添加 Bridge' '添加 Portal' '删除 Bridge' '删除 Portal' )
+    local action_idx=0
+    echo
+    inquirer list_input_index "选择 Xray 反向代理操作" actions action_idx
+
+    case "$action_idx" in
+        0|1)
+            local r_tag r_domain item_json=""
+            inquirer text_input "输入 tag" r_tag ""
+            inquirer text_input "输入 domain" r_domain ""
+            JQs build item_json '{"tag": $t, "domain": $d}' --arg t "$r_tag" --arg d "$r_domain"
+            if [ "$action_idx" -eq 0 ]
+            then
+                jq_path='["reverse","bridges"]'
+                if ! JQ add "$X_CONFIG" "[$item_json]"
+                then
+                    Println "$error 添加 Bridge 失败\n"
+                    return 1
+                fi
+                Println "$info 已添加 Bridge ${green}${r_tag}${normal}\n"
+            else
+                jq_path='["reverse","portals"]'
+                if ! JQ add "$X_CONFIG" "[$item_json]"
+                then
+                    Println "$error 添加 Portal 失败\n"
+                    return 1
+                fi
+                Println "$info 已添加 Portal ${green}${r_tag}${normal}\n"
+            fi
+        ;;
+        2|3)
+            local r_key="bridges"
+            [ "$action_idx" -eq 3 ] && r_key="portals"
+            local r_opts=()
+            local line
+            while IFS= read -r line
+            do
+                [ -n "$line" ] && r_opts+=("$line")
+            done < <(JQs query "$X_CONFIG" 'if (.reverse | type) == "object" and (.reverse[$k] | type) == "array" then (.reverse[$k] | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.tag // "") (\(.value.domain // ""))") else empty end' --arg k "$r_key")
+            if [ "${#r_opts[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的 ${r_key}\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的 ${r_key}" r_opts del_idx
+            jq_path='["reverse","'"$r_key"'",'"$del_idx"']'
+            if ! JQ delete "$X_CONFIG"
+            then
+                Println "$error 删除 ${r_key} 失败\n"
+                return 1
+            fi
+            Println "$info 已删除 ${r_key}: ${green}${r_opts[$del_idx]}${normal}\n"
+        ;;
+    esac
+
+    ProxyRestartIfActive xray
+}

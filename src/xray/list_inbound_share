@@ -1,0 +1,23 @@
+XrayListInboundShare()
+{
+    local host="${1:-}"
+    local only_idx="${2:-${inbounds_index:-}}"
+    if [ "$only_idx" == "all" ]
+    then
+        only_idx=""
+    fi
+
+    local links
+    links=$(ProxyRenderShareLinks "$X_CONFIG" "$host" "$only_idx" "xray")
+
+    if [ -n "$links" ]
+    then
+        Println "\n=== Xray 分享链接 ===\n$links\n"
+        if [ "${3:-}" == "qr" ]
+        then
+            local first_link
+            first_link=$(printf '%s\n' "$links" | head -n 1)
+            ProxyPrintQrCode "$first_link"
+        fi
+    fi
+}

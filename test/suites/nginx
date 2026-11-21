@@ -1,0 +1,216 @@
+RunSuiteNginx()
+{
+    printf '\n=== Suite: nginx ===\n'
+
+    # Case 1: Single server block + non-block top directive + stream 3 maps + upstream + 5-level nesting
+    parse_out='{
+      "status": "ok",
+      "errors": [],
+      "config": [
+        {
+          "file": "/tmp/nginx.conf",
+          "status": "ok",
+          "errors": [],
+          "parsed": [
+            {"directive": "worker_processes", "args": ["auto"]},
+            {
+              "directive": "http",
+              "args": [],
+              "block": [
+                {
+                  "directive": "server",
+                  "args": [],
+                  "block": [
+                    {"directive": "listen", "args": ["80", "default_server"]},
+                    {"directive": "server_name", "args": ["localhost"]},
+                    {"directive": "location", "args": ["/flv"], "block": []},
+                    {
+                      "directive": "location",
+                      "args": ["=", "/"],
+                      "block": [
+                        {"directive": "proxy_pass", "args": ["http://nodejs_backend"]},
+                        {
+                          "directive": "if",
+                          "args": ["($request_method", "=", "OPTIONS)"],
+                          "block": [
+                            {"directive": "return", "args": ["204"]}
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "directive": "stream",
+              "args": [],
+              "block": [
+                {
+                  "directive": "map",
+                  "args": ["$ssl_preread_server_name", "$upstream"],
+                  "block": [
+                    {"directive": "alpha.example.test", "args": ["up_alpha"]},
+                    {"directive": "beta.example.test", "args": ["up_beta"]}
+                  ]
+                },
+                {
+                  "directive": "map",
+                  "args": ["$ssl_preread_protocol", "$ssl_proxy"],
+                  "block": [
+                    {"directive": "TLSv1.3", "args": ["tls_up"]}
+                  ]
+                },
+                {
+                  "directive": "map",
+                  "args": ["$ssl_preread_alpn_protocols", "$proxy_pass"],
+                  "block": [
+                    {"directive": "h2", "args": ["h2_up"]}
+                  ]
+                },
+                {
+                  "directive": "upstream",
+                  "args": ["up_alpha"],
+                  "block": [
+                    {"directive": "server", "args": ["127.0.0.1:8443"]}
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }'
+
+    NginxGetConfig
+    AssertEq "3" "$level_1_count" "NginxGetConfig 1-server level_1_count"
+    AssertEq "worker_processes" "${level_1_directive_arr[0]}" "NginxGetConfig level_1[0] worker_processes"
+    AssertEq "http" "${level_1_directive_arr[1]}" "NginxGetConfig level_1[1] http"
+    AssertEq "stream" "${level_1_directive_arr[2]}" "NginxGetConfig level_1[2] stream"
+    AssertEq "3" "$level_5_d1_count" "NginxGetConfig captures 5-level nested directive"
+
+    NginxGetStream
+    AssertEq "2" "$nginx_stream_server_name_count" "NginxGetStream server_name map count"
+    AssertEq "alpha.example.test => up_alpha" "${nginx_stream_server_name[0]}" "NginxGetStream server_name[0]"
+    AssertEq "1" "$nginx_stream_protocol_count" "NginxGetStream protocol map count"
+    AssertEq "TLSv1.3 => tls_up" "${nginx_stream_protocol[0]}" "NginxGetStream protocol[0]"
+    AssertEq "1" "$nginx_stream_alpn_protocols_count" "NginxGetStream alpn map count"
+    AssertEq "h2 => h2_up" "${nginx_stream_alpn_protocols[0]}" "NginxGetStream alpn[0]"
+    AssertEq "1" "$nginx_stream_upstream_count" "NginxGetStream upstream count"
+    AssertEq "up_alpha => 127.0.0.1:8443" "${nginx_stream_upstream[0]}" "NginxGetStream upstream[0]"
+
+    NginxCheckLocalhost() { :; }
+    nginx_prefix="/tmp/nginx"
+    local lh_out
+    lh_out=$(NginxListLocalhost)
+    ShowCaptured "NginxListLocalhost (1 server)" "$lh_out"
+    AssertContains "$lh_out" "80 default_server" "NginxListLocalhost 1-server listen args"
+    AssertContains "$lh_out" "flv: 已配置" "NginxListLocalhost 1-server /flv"
+    AssertContains "$lh_out" "nodejs: 已配置" "NginxListLocalhost 1-server nodejs"
+
+    # Case 2: Multiple servers + multi-domain server_name (must have zero delimiter drift)
+    parse_out='{
+      "status": "ok",
+      "errors": [],
+      "config": [
+        {
+          "file": "/tmp/nginx/conf/sites_available/multi.example.test.conf",
+          "status": "ok",
+          "errors": [],
+          "parsed": [
+            {
+              "directive": "http",
+              "args": [],
+              "block": [
+                {
+                  "directive": "server",
+                  "args": [],
+                  "block": [
+                    {"directive": "listen", "args": ["80"]},
+                    {"directive": "server_name", "args": ["a.example.test", "b.example.test"]},
+                    {"directive": "root", "args": ["/var/www/site1"]}
+                  ]
+                },
+                {
+                  "directive": "server",
+                  "args": [],
+                  "block": [
+                    {"directive": "listen", "args": ["443", "ssl", "http2"]},
+                    {"directive": "server_name", "args": ["c.example.test"]},
+                    {
+                      "directive": "location",
+                      "args": ["=", "/"],
+                      "block": [
+                        {"directive": "proxy_pass", "args": ["http://nodejs_two"]}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }'
+
+    NginxGetConfig
+    NginxListDomains() { nginx_domains=("multi.example.test"); nginx_domains_count=1; }
+    NginxSelectDomain() { nginx_domains_index=0; }
+    NginxParseConfig() { :; }
+    local dom_out
+    dom_out=$(NginxListDomain)
+    ShowCaptured "NginxListDomain (2 servers)" "$dom_out"
+    AssertContains "$dom_out" "a.example.test, b.example.test" "NginxListDomain multi-domain server_name"
+    AssertContains "$dom_out" "443 ssl http2" "NginxListDomain 2nd server listen args"
+    AssertContains "$dom_out" "nodejs: 已配置" "NginxListDomain 2nd server nodejs"
+
+    # Case 3: V2rayListNginxDomain parses exact location (= /path) with delimiters[7]
+    parse_out='{
+      "status": "ok",
+      "errors": [],
+      "config": [
+        {
+          "file": "/tmp/nginx/conf/sites_available/site.example.test.conf",
+          "status": "ok",
+          "errors": [],
+          "parsed": [
+            {
+              "directive": "http",
+              "args": [],
+              "block": [
+                {
+                  "directive": "server",
+                  "args": [],
+                  "block": [
+                    {"directive": "listen", "args": ["443", "ssl"]},
+                    {"directive": "server_name", "args": ["site.example.test"]},
+                    {
+                      "directive": "location",
+                      "args": ["=", "/ws-path"],
+                      "block": [
+                        {"directive": "proxy_pass", "args": ["http://127.0.0.1:10000"]}
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }'
+    v2ray_nginx_domains=("site.example.test")
+    v2ray_nginx_domains_count=1
+    V2rayNginxSelectDomain() { v2ray_nginx_domains_index=0; }
+    local v2_nx_out
+    v2_nx_out=$(V2rayNginxListDomain)
+    ShowCaptured "V2rayNginxListDomain" "$v2_nx_out"
+    AssertContains "$v2_nx_out" "site.example.test" "V2rayNginxListDomain parses domain"
+    AssertContains "$v2_nx_out" "443 ssl" "V2rayNginxListDomain parses listen args"
+    AssertContains "$v2_nx_out" "/ws-path" "V2rayNginxListDomain parses exact location = /ws-path"
+
+    # Case 4: Empty parsed block
+    parse_out='{"status":"ok","errors":[],"config":[{"file":"/tmp/empty.conf","status":"ok","errors":[],"parsed":[]}]}'
+    NginxGetConfig
+    AssertEq "0" "$level_1_count" "NginxGetConfig empty parsed returns level_1_count=0"
+}

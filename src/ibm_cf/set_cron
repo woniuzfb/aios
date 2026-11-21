@@ -207,7 +207,7 @@ IbmSetCfAppCron()
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["cf","cron"]'
     JQ update "$IBM_CONFIG" "$cron"
     Println "$info 定时重启任务设置成功\n"

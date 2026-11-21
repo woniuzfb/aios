@@ -1,0 +1,214 @@
+#!/bin/bash
+
+set -euo pipefail
+
+REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+DEV_PATH="$REPO_ROOT"
+
+SHOW_OUTPUT=0
+TARGET_SUITE="all"
+
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        --show-output|-v)
+            SHOW_OUTPUT=1
+            shift
+        ;;
+        core|nginx|xray|v2ray|matrix|types|e2e|all)
+            TARGET_SUITE="$1"
+            shift
+        ;;
+        *)
+            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|e2e]\n' "$0" >&2
+            exit 2
+        ;;
+    esac
+done
+
+Include()
+{
+    local inc_path="$DEV_PATH"
+    local inc_name="$1"
+    while [[ $inc_name =~ \/ ]]
+    do
+        inc_path="$inc_path/${inc_name%%/*}"
+        inc_name="${inc_name#*/}"
+    done
+    shift
+    case "$inc_path/$inc_name" in
+        "$DEV_PATH/utils/i18n"|"$DEV_PATH/utils/system"|"$DEV_PATH/utils/inquirer"|"$DEV_PATH/utils/spinner"|"$DEV_PATH/utils/progress"|"$DEV_PATH/utils/shfile"|"$DEV_PATH/utils/build"|"$DEV_PATH/utils/git"|"$DEV_PATH/utils/curl"|"$DEV_PATH/utils/log")
+            return 0
+        ;;
+    esac
+    # shellcheck disable=SC1090
+    . "$inc_path/$inc_name" "$@"
+}
+
+# shellcheck disable=SC1091
+. "$DEV_PATH/ver"
+# shellcheck disable=SC1091
+. "$DEV_PATH/env"
+
+JQ_FILE=$(command -v jq)
+dist="test"
+info="[INFO]"
+error="[ERROR]"
+tip="[TIP]"
+LogInfo() { :; }
+LogErr() { :; }
+
+# shellcheck disable=SC1091
+. "$DEV_PATH/core"
+# shellcheck disable=SC1091
+. "$DEV_PATH/utils/jq"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/common"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/nginx/get_config"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/nginx/get_stream"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/nginx/list_localhost"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/nginx/list_domain"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/get_inbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_inbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_inbound_accounts"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/add_inbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/delete_inbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/inbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/get_outbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_outbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_outbound_accounts"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/add_outbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/delete_outbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/get_routing"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/get_burstObservatory"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/get_log"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_dns"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/set_dns"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_routing"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/set_routing"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_policy"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/set_policy"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_reverse"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/set_reverse"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/stats"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/list_inbound_share"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/outbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/xray/config_domain"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/get_inbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_inbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_inbound_accounts"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_inbound_share"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/add_inbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/delete_inbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/delete_inbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/get_outbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_outbounds"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_outbound_accounts"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/add_outbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/delete_outbound_account"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/delete_outbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/get_transport"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_dns"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_dns"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_routing"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_routing"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_policy"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_policy"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_reverse"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_reverse"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/list_nginx_domain"
+
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/lib/harness"
+trap 'MockInquirerCleanup; E2eSandboxCleanup' EXIT
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/lib/sandbox"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/core_jq"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/nginx"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/xray"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/v2ray"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/matrix"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/type_safety"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/e2e_aios"
+
+case "$TARGET_SUITE" in
+    core) RunSuiteCoreJq ;;
+    nginx) RunSuiteNginx ;;
+    xray) RunSuiteXray ;;
+    v2ray) RunSuiteV2ray ;;
+    matrix) RunSuiteMatrix ;;
+    types) RunSuiteTypeSafety ;;
+    e2e) RunSuiteE2eAios ;;
+    all)
+        RunSuiteCoreJq
+        RunSuiteNginx
+        RunSuiteXray
+        RunSuiteV2ray
+        RunSuiteMatrix
+        RunSuiteTypeSafety
+        RunSuiteE2eAios
+    ;;
+esac
+
+printf '\nSummary: %d passed, %d failed\n' "$PASS_COUNT" "$FAIL_COUNT"
+[ "$FAIL_COUNT" -eq 0 ]

@@ -1,12 +1,34 @@
 V2rayGetTraffic()
 {
+    local raw_out=""
+    if [ -x "${V2CTL_FILE:-}" ]
+    then
+        raw_out=$("$V2CTL_FILE" api --server="$api_inbound_listen:$api_inbound_port" StatsService.GetStats 'name: "'"$1"'>>>'"$2"'>>>traffic>>>'"$3"'" reset: false' 2> /dev/null)
+    elif [ -x "${V2_FILE:-}" ]
+    then
+        raw_out=$("$V2_FILE" api stats --server="$api_inbound_listen:$api_inbound_port" --name="$1>>>$2>>>traffic>>>$3" 2> /dev/null)
+    else
+        Println "$error 未找到 v2ctl 或 v2ray 可执行文件\n" >&2
+        return 1
+    fi
+
+    local line val=""
     while IFS= read -r line
     do
-        if [[ $line =~ value: ]] 
+        if [[ "$line" =~ value:[[:space:]]*([0-9]+) ]]
         then
-            echo ${line#*:} | numfmt --to=iec --suffix=B
+            val="${BASH_REMATCH[1]}"
+            break
+        elif [[ "$line" =~ \"value\":[[:space:]]*\"?([0-9]+)\"? ]]
+        then
+            val="${BASH_REMATCH[1]}"
             break
         fi
-    done < <($V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.GetStats 'name: "'"$1"'>>>'"$2"'>>>traffic>>>'"$3"'" reset: false' 2> /dev/null)
+    done <<< "$raw_out"
+
+    if [ -n "$val" ]
+    then
+        echo "$val" | numfmt --to=iec --suffix=B
+    fi
     return 0
 }

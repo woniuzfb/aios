@@ -14,7 +14,7 @@ HlsStreamCreatorPlus()
             rand_pid=$!
         done
 
-        number=true
+        jq_number=true
         jq_path='["channels"]'
         jq_path2='["pid"]'
         JQ update "$CHANNELS_FILE" pid "$pid" "$rand_pid"
@@ -835,7 +835,7 @@ HlsStreamCreatorPlus()
             {
                 flock -x 201
 
-    file=true
+    jq_file=true
     jq_path='["channels"]'
     jq_path2='["stream_link"]'
     JQ update "$CHANNELS_FILE" pid "$chnl_pid" chnl_stream_links
@@ -862,7 +862,7 @@ HlsStreamCreatorPlus()
         }'
     )
 
-    merge=true
+    jq_merge=true
     jq_path='["channels"]'
     JQ update "$CHANNELS_FILE" pid "$chnl_pid" "$update"
 

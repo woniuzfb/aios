@@ -135,7 +135,7 @@ EditStreamLink()
         unset new_array
     fi
 
-    file=true
+    jq_file=true
     jq_path='["channels",'"$chnls_index"',"stream_link"]'
     JQ update "$CHANNELS_FILE" stream_links
     Println "$info 直播源修改成功 !\n"
@@ -144,7 +144,7 @@ EditStreamLink()
 EditLive()
 {
     SetLive
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"live"]'
     JQ update "$CHANNELS_FILE" "$live"
     Println "$info 无限时长直播修改成功 !\n"
@@ -232,7 +232,7 @@ EditSegName()
 EditSegLength()
 {
     SetSegLength
-    number=true
+    jq_number=true
     jq_path='["channels",'"$chnls_index"',"seg_length"]'
     JQ update "$CHANNELS_FILE" "$seg_length"
     Println "$info 分片时长修改成功 !\n"
@@ -241,7 +241,7 @@ EditSegLength()
 EditSegCount()
 {
     SetSegCount
-    number=true
+    jq_number=true
     jq_path='["channels",'"$chnls_index"',"seg_count"]'
     JQ update "$CHANNELS_FILE" "$seg_count"
     Println "$info 分片数目修改成功 !\n"
@@ -274,7 +274,7 @@ EditVideoAudioShift()
 EditSubtitle()
 {
     SetSubtitle
-    json=true
+    jq_json=true
     jq_path='["channels",'"$chnls_index"',"subtitle"]'
     JQ update "$CHANNELS_FILE" "$subtitle"
     Println "$info 字幕修改成功 !\n"
@@ -315,10 +315,10 @@ EditResolution()
 EditConst()
 {
     SetConst
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"const"]'
     JQ update "$CHANNELS_FILE" "$const"
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"const_cbr"]'
     JQ update "$CHANNELS_FILE" "$const_cbr"
     Println "$info 固定码率修改成功 !\n"
@@ -331,7 +331,7 @@ EditEncrypt()
         "encrypt": '"$encrypt"',
         "encrypt_session": '"$encrypt_session"'
     }'
-    merge=true
+    jq_merge=true
     jq_path='["channels",'"$chnls_index"']'
     JQ update "$CHANNELS_FILE" "$update"
     Println "$info 加密设置修改成功 !\n"
@@ -380,7 +380,7 @@ EditChannelName()
 EditSync()
 {
     SetSync
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"sync"]'
     JQ update "$CHANNELS_FILE" "$sync"
     Println "$info sync 修改成功 !\n"
@@ -413,7 +413,7 @@ EditSyncPairs()
 EditHlsEndList()
 {
     SetHlsEndList
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"hls_end_list"]'
     JQ update "$CHANNELS_FILE" "$hls_end_list"
     Println "$info hls_end_list 修改成功 !\n"
@@ -422,7 +422,7 @@ EditHlsEndList()
 EditFlvH265()
 {
     SetFlvH265
-    bool=true
+    jq_bool=true
     jq_path='["channels",'"$chnls_index"',"flv_h265"]'
     JQ update "$CHANNELS_FILE" "$flv_h265"
     Println "$info 是否推流 h265 修改成功 !\n"
@@ -647,7 +647,7 @@ EditChannelAll()
         }'
     )
 
-    merge=true
+    jq_merge=true
     jq_path='["channels",'"$chnls_index"']'
     JQ update "$CHANNELS_FILE" "$update"
 
@@ -667,7 +667,7 @@ EditForSecurity()
         }'
     )
 
-    merge=true
+    jq_merge=true
     jq_path='["channels",'"$chnls_index"']'
     JQ update "$CHANNELS_FILE" "$update"
 

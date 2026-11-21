@@ -415,7 +415,7 @@ V2raySetSocksPort()
     inquirer text_input "socks 服务器端口号: " socks_port 1080 V2raySetSocksPortValidator
 }
 
-V2raySetShadowsocksMethod()
+V2raySetProxyShadowsocksMethod()
 {
     Println "$tip none 不加密方式下，服务器端不会验证密码"
     shadowsocks_method_options=(

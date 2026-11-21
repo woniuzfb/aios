@@ -1,0 +1,273 @@
+RunSuiteCoreJq()
+{
+    printf '\n=== Suite: core & utils/jq ===\n'
+
+    local f
+    for f in \
+        "$DEV_PATH/core" "$DEV_PATH/env" "$DEV_PATH/ver" \
+        "$DEV_PATH/build" "$DEV_PATH/make" "$DEV_PATH/debug" \
+        "$DEV_PATH/utils/jq" "$DEV_PATH/src/proxy/common" \
+        "$DEV_PATH/src/v2" "$DEV_PATH/src/x" \
+        "$DEV_PATH/src/nginx/get_config" "$DEV_PATH/src/nginx/list_domain" \
+        "$DEV_PATH/src/nginx/list_localhost" "$DEV_PATH/src/nginx/get_stream" \
+        "$DEV_PATH/src/nginx/check_localhost" "$DEV_PATH/src/nginx/config_directive" \
+        "$DEV_PATH/src/v2ray/list_nginx_domain" \
+        "$DEV_PATH/src/xray/get_inbounds" "$DEV_PATH/src/xray/list_inbounds" \
+        "$DEV_PATH/src/xray/get_outbounds" "$DEV_PATH/src/xray/list_outbounds" \
+        "$DEV_PATH/src/xray/get_routing" "$DEV_PATH/src/xray/get_burstObservatory" \
+        "$DEV_PATH/src/xray/get_log" "$DEV_PATH/src/xray/list_dns" "$DEV_PATH/src/xray/set_dns" \
+        "$DEV_PATH/src/xray/list_routing" "$DEV_PATH/src/xray/set_routing" \
+        "$DEV_PATH/src/xray/list_policy" "$DEV_PATH/src/xray/set_policy" \
+        "$DEV_PATH/src/xray/list_reverse" "$DEV_PATH/src/xray/set_reverse" \
+        "$DEV_PATH/src/xray/add_inbound" "$DEV_PATH/src/xray/delete_inbound" \
+        "$DEV_PATH/src/xray/add_outbound" "$DEV_PATH/src/xray/delete_outbound" \
+        "$DEV_PATH/src/xray/inbound_account" "$DEV_PATH/src/xray/outbound_account" \
+        "$DEV_PATH/src/xray/list_inbound_accounts" "$DEV_PATH/src/xray/list_outbound_accounts" \
+        "$DEV_PATH/src/xray/stats" "$DEV_PATH/src/xray/list_inbound_share" \
+        "$DEV_PATH/src/xray/config_domain" "$DEV_PATH/src/xray/menu" \
+        "$DEV_PATH/src/v2ray/get_inbounds" "$DEV_PATH/src/v2ray/list_inbounds" \
+        "$DEV_PATH/src/v2ray/list_inbound_accounts" "$DEV_PATH/src/v2ray/list_inbound_share" \
+        "$DEV_PATH/src/v2ray/add_inbound_account" "$DEV_PATH/src/v2ray/delete_inbound_account" \
+        "$DEV_PATH/src/v2ray/delete_inbound" "$DEV_PATH/src/v2ray/get_outbounds" \
+        "$DEV_PATH/src/v2ray/list_outbounds" "$DEV_PATH/src/v2ray/list_outbound_accounts" \
+        "$DEV_PATH/src/v2ray/add_outbound_account" "$DEV_PATH/src/v2ray/delete_outbound_account" \
+        "$DEV_PATH/src/v2ray/delete_outbound" \
+        "$DEV_PATH/src/v2ray/get_transport" "$DEV_PATH/src/v2ray/list_dns" "$DEV_PATH/src/v2ray/set_dns" \
+        "$DEV_PATH/src/v2ray/list_routing" "$DEV_PATH/src/v2ray/set_routing" \
+        "$DEV_PATH/src/v2ray/list_policy" "$DEV_PATH/src/v2ray/set_policy" \
+        "$DEV_PATH/src/v2ray/list_reverse" "$DEV_PATH/src/v2ray/set_reverse" \
+        "$DEV_PATH/src/v2ray/stream" "$DEV_PATH/src/v2ray/proxy" "$DEV_PATH/src/v2ray/menu" \
+        "$DEV_PATH/src/openlist/api" "$DEV_PATH/src/openlist/app" "$DEV_PATH/src/openlist/acc" \
+        "$DEV_PATH/src/cloudflare/get_workers" "$DEV_PATH/src/cloudflare/list_user" \
+        "$DEV_PATH/src/cloudflare/monitor_workers" "$DEV_PATH/src/lhh"
+    do
+        if bash -n "$f"
+        then
+            PASS_COUNT=$((PASS_COUNT + 1))
+            printf '[PASS] syntax: %s\n' "${f#"$DEV_PATH/"}"
+        else
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] syntax: %s\n' "${f#"$DEV_PATH/"}" >&2
+        fi
+    done
+
+    local sh_files
+    sh_files=$(find "$DEV_PATH/test" "$DEV_PATH/src" "$DEV_PATH/utils" -name '*.sh' 2> /dev/null || true)
+    AssertEq "" "$sh_files" "no .sh suffix files in test/, src/, utils/"
+
+    SetDelimiters
+
+    local obj='{"a":1}'
+    JQs merge_c obj --arg b 'hello "world"' '. * {"b": $b}'
+    AssertEq '{"a":1,"b":"hello \"world\""}' "$obj" "JQs merge_c preserves quotes and passes args"
+
+    local built=""
+    JQs build built '{"tag": $tag, "empty_s": "", "empty_a": [], "empty_o": {}, "nested": {"ok": true, "drop": null, "zero": 0}}' --arg tag "t1"
+    AssertEq '{"tag":"t1","nested":{"ok":true,"zero":0}}' "$built" "JQs build compacts empties while preserving false/0"
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    local cfg="$tmpdir/config.json"
+    printf '%s\n' '{"inbounds":[{"tag":"a","port":443}]}' > "$cfg"
+
+    local q_out
+    q_out=$(JQs query "$cfg" '.inbounds[0].tag')
+    AssertEq "a" "$q_out" "JQs query reads directly from file"
+
+    JQ mutate "$cfg" '.inbounds += [{"tag":"b","port":8443}]'
+    AssertJsonEq "$cfg" '.inbounds | length' "2" "JQ mutate atomically appends item"
+
+    local mixed_json='{"items":[{"name":"a"},{"name":"b","sub":{"k":"v"}}]}'
+    local flat_out
+    flat_out=$(JQs flat "$mixed_json")
+    local sub_k
+    sub_k=$($JQ_FILE -r '.items.sub.k // ""' <<< "$flat_out")
+    AssertContains "$sub_k" "v" "JQs flat handles null mixed with object elements"
+
+    local empty_flat
+    empty_flat=$(JQs flat '{}')
+    AssertEq "{}" "$empty_flat" "JQs flat handles empty object"
+
+    local missing_flat
+    missing_flat=$(JQs flat "$tmpdir/nonexistent.json")
+    AssertEq "{}" "$missing_flat" "JQs flat handles nonexistent file path without parsing path as JSON"
+
+    local missing_query
+    missing_query=$(JQs query "$tmpdir/nonexistent.json" '.inbounds | length')
+    AssertEq "" "$missing_query" "JQs query handles nonexistent file path safely"
+
+    # P1 smoke & type-safety: CloudflareGetWorkers / CloudflareGetUsers
+    local cf_cfg="$tmpdir/cf.json"
+    printf '%s\n' '{"users":[{"email":"a@b.com","pass":"p1","token":"t1","key":"k1"},null,"bad"],"workers":[{"name":"w1","path":"p1","project_name":"proj1","upstream":"u1"},{"name":"w2","path":"p2","project_name":"proj2","upstream":""}]}' > "$cf_cfg"
+    CF_CONFIG="$cf_cfg"
+    source "$DEV_PATH/src/cloudflare/get_workers"
+    source "$DEV_PATH/src/cloudflare/get_users"
+
+    CloudflareGetWorkers
+    AssertEq "2" "$cf_workers_count" "CloudflareGetWorkers parses all workers via JQs flat"
+    AssertEq "w1" "${cf_workers_name[0]}" "CloudflareGetWorkers parses name via JQs flat"
+    AssertEq "u1" "${cf_workers_upstream[0]}" "CloudflareGetWorkers parses upstream via JQs flat"
+    AssertEq "2" "${#cf_workers_upstream[@]}" "CloudflareGetWorkers preserves trailing empty upstream via JQs flat"
+
+    CloudflareGetUsers
+    AssertEq "1" "$cf_users_count" "CloudflareGetUsers ignores null/non-object elements"
+    AssertEq "a@b.com" "${cf_users_email[0]}" "CloudflareGetUsers parses email via SetDelimiters"
+    AssertEq "k1" "${cf_users_api_key[0]}" "CloudflareGetUsers parses api_key via SetDelimiters"
+
+    printf '%s\n' '{"users":"bad","workers":null}' > "$cf_cfg"
+    CloudflareGetWorkers
+    AssertEq "0" "$cf_workers_count" "CloudflareGetWorkers handles null workers safely"
+    CloudflareGetUsers
+    AssertEq "0" "$cf_users_count" "CloudflareGetUsers handles wrong-type users safely"
+
+    # P3 smoke & type-safety: ServiceGet via JQs flat (including trailing empty fields)
+    local svc_cfg="$tmpdir/services.json"
+    SERVICES_CONFIG="$svc_cfg"
+    SERVICES_ROOT="$tmpdir"
+    source "$DEV_PATH/src/service/get"
+
+    printf '%s\n' '{
+        "4gtv": {"proxy": "http://p:8080", "accounts": [{"email": "u1@e.com", "password": "pw", "token": "tk"}, {"email": "u2@e.com", "password": "pw2", "token": ""}]},
+        "openlist": [{"name": "ol1", "url": "http://ol", "accs": [{"username": "a1", "password": "p1", "token": "t1"}, {"username": "a2", "password": "p2", "token": ""}]}],
+        "rclone": {
+            "remote": [{"name": "r1", "type": "webdav", "url": "http://u", "vendor": "other", "user": "u", "pass": "p", "mount": [{"path": "/a", "mount_path": "/m", "flags": "--ro"}, {"path": "/b", "mount_path": "/m2", "flags": ""}]}],
+            "serve": [{"remote": "r1", "protocol": "webdav", "addr": [":8080", ":8081"], "htpasswd": "h1", "args": "", "accs": [{"user": "su", "pass": "sp"}]}],
+            "sync": [{"rsync": true, "source": "/s", "target": "/t", "args": "-a", "exclude_before": ["*.tmp"], "include": ["*.mp4"], "exclude_after": ["*"]}]
+        },
+        "kcc": {"format": "EPUB", "process": true, "args": "-m", "output": "/out", "source": ["/s1", "/s2"]},
+        "iperf": [{"name": "ip1", "type": "client", "target": "1.1.1.1", "args": "-t 10"}],
+        "custom_ts": {"accounts": [{"user_name": "tu", "phone_number": "123", "password": "tp", "access_token": "tat", "device_no": "d1", "device_id": "id1", "refresh": "rf1"}]}
+    }' > "$svc_cfg"
+
+    ServiceGet 4gtv
+    AssertEq "http://p:8080" "$d_4gtv_proxy" "ServiceGet 4gtv parses proxy"
+    AssertEq "2" "$_4gtv_accs_count" "ServiceGet 4gtv parses account count"
+    AssertEq "2" "${#_4gtv_accs_token[@]}" "ServiceGet 4gtv preserves trailing empty token"
+
+    ServiceGet openlist
+    AssertEq "1" "$openlists_count" "ServiceGet openlist parses count"
+    local ol_tokens=()
+    IFS="${delimiters[4]}" read -ra ol_tokens <<< "${openlists_acc_token[0]}"
+    AssertEq "2" "${#ol_tokens[@]}" "ServiceGet openlist preserves trailing empty acc token via JQs flat"
+
+    ServiceGet rclone
+    AssertEq "1" "$rclone_remotes_count" "ServiceGet rclone remote parses count"
+    local rc_flags=()
+    IFS="${delimiters[5]}" read -ra rc_flags <<< "${rclone_remotes_mount_flag[0]}"
+    AssertEq "2" "${#rc_flags[@]}" "ServiceGet rclone remote preserves trailing empty mount flag via JQs flat"
+
+    ServiceGet rclone serve
+    AssertEq "1" "$rclone_serves_count" "ServiceGet rclone serve parses count"
+    local rc_addrs=()
+    IFS="${delimiters[4]}" read -ra rc_addrs <<< "${rclone_serves_addr[0]}"
+    AssertEq "2" "${#rc_addrs[@]}" "ServiceGet rclone serve splits addr via delimiter[4]"
+
+    ServiceGet rclone sync
+    AssertEq "1" "$rclone_syncs_count" "ServiceGet rclone sync parses count"
+    AssertEq "*.tmp${delimiters[4]}" "${rclone_syncs_exclude_before[0]}" "ServiceGet rclone sync preserves delimiter[4] via JQs flat"
+
+    ServiceGet kcc
+    AssertEq "EPUB" "$kcc_format" "ServiceGet kcc parses format"
+    AssertEq "2" "${#kcc_sources[@]}" "ServiceGet kcc parses source array"
+
+    ServiceGet iperf
+    AssertEq "1" "$iperf_count" "ServiceGet iperf parses count"
+
+    ServiceGet custom_ts
+    AssertEq "1" "$ts_accs_count" "ServiceGet default branch fixes var_name bug"
+    AssertEq "tu" "${ts_accs_user_name[0]}" "ServiceGet default branch parses user_name"
+
+    printf '%s\n' '{"4gtv":"bad","openlist":123,"rclone":null,"kcc":[],"iperf":"bad","custom_ts":{"accounts":"bad"}}' > "$svc_cfg"
+    ServiceGet 4gtv
+    AssertEq "0" "$_4gtv_accs_count" "ServiceGet 4gtv handles wrong-type safely"
+    ServiceGet openlist
+    AssertEq "0" "$openlists_count" "ServiceGet openlist handles wrong-type safely"
+    ServiceGet rclone
+    AssertEq "0" "$rclone_remotes_count" "ServiceGet rclone handles null safely"
+    ServiceGet custom_ts
+    AssertEq "0" "$ts_accs_count" "ServiceGet default branch handles wrong-type safely"
+
+    # Hardened JQ() unit & type-safety tests (all modes + polymorphic/null resilience)
+    local jqf="$tmpdir/jq_test.json"
+    printf '%s\n' '{"items":[{"id":1,"name":"a","tags":["x"],"meta":{"k":1}},null,"bad"],"empty_arr":null}' > "$jqf"
+
+    jq_path='["empty_arr"]'
+    JQ add "$jqf" '[{"id":9}]'
+    AssertJsonEq "$jqf" '.empty_arr | length' "1" "JQ add heals null target into array"
+
+    jq_pre=true
+    jq_path='["empty_arr"]'
+    JQ add "$jqf" '[{"id":0}]'
+    AssertJsonEq "$jqf" '.empty_arr[0].id' "0" "JQ add pre prepends element"
+
+    jq_path='["items"]'
+    jq_path2='["tags"]'
+    JQ add "$jqf" id 1 '["y"]'
+    AssertJsonEq "$jqf" '.items[0].tags | length' "2" "JQ add with jq_path2 skips null/scalar elements"
+
+    local slurp_items=( '{"id":2}' '{"id":3}' )
+    jq_file=true
+    jq_file_json=true
+    jq_path='["empty_arr"]'
+    JQ add "$jqf" slurp_items
+    AssertJsonEq "$jqf" '.empty_arr | length' "4" "JQ add file=true slurpfile appends safely"
+
+    jq_path='["default","save_dir"]'
+    JQ update "$jqf" "/tmp/out"
+    AssertJsonEq "$jqf" '.default.save_dir' "/tmp/out" "JQ update creates nested missing path"
+
+    jq_number=true
+    jq_path='["items",0,"port"]'
+    JQ update "$jqf" "8080"
+    AssertJsonEq "$jqf" '.items[0].port' "8080" "JQ update number writes numeric value"
+
+    jq_bool=true
+    jq_path='["items",0,"enabled"]'
+    JQ update "$jqf" "true"
+    AssertJsonEq "$jqf" '.items[0].enabled' "true" "JQ update bool writes boolean value"
+
+    jq_merge=true
+    jq_path='["items",0,"meta"]'
+    JQ update "$jqf" '{"k2":2}'
+    AssertJsonEq "$jqf" '.items[0].meta.k' "1" "JQ update merge preserves existing key"
+    AssertJsonEq "$jqf" '.items[0].meta.k2' "2" "JQ update merge adds new key"
+
+    jq_map_string=true
+    jq_path='["items"]'
+    jq_path2='["name"]'
+    JQ update "$jqf" name "a" "a_new"
+    AssertJsonEq "$jqf" '.items[0].name' "a_new" "JQ update conditional with jq_path2 skips null/scalar"
+
+    jq_map_string=true
+    jq_path='["items"]'
+    jq_path2='["tags"]'
+    JQ delete "$jqf" name "a_new" '["x"]'
+    AssertJsonEq "$jqf" '.items[0].tags | length' "1" "JQ delete conditional -= removes tag safely"
+
+    jq_map_string=true
+    jq_path='["items"]'
+    JQ delete "$jqf" name "a_new"
+    AssertJsonEq "$jqf" '.items | map(select(type == "object")) | length' "0" "JQ delete conditional removes matching object safely"
+
+    jq_path='["empty_arr",0]'
+    JQ delete "$jqf"
+    AssertJsonEq "$jqf" '.empty_arr | length' "3" "JQ delete by index removes element"
+
+    # ServiceControl cold-start (unset dist) + single-arg start/stop/restart under set -u
+    local sc_out=""
+    local sc_rc=0
+    sc_out=$(
+        source "$DEV_PATH/src/service/control"
+        unset dist
+        eval "$(sed -n '1,40p' "$DEV_PATH/utils/system")"
+        HOME="$tmpdir"
+        mkdir -p "$HOME/Library/LaunchAgents"
+        printf '<plist/>' > "$HOME/Library/LaunchAgents/xray.plist"
+        launchctl() { echo "mock_launchctl:$*"; return 0; }
+        ServiceControl restart xray
+    ) || sc_rc=$?
+    AssertEq "0" "$sc_rc" "ServiceControl restart xray succeeds without prior DistCheck or \$2"
+    AssertContains "$sc_out" "mock_launchctl:load" "ServiceControl restart xray invokes launchctl load"
+
+    rm -rf "$tmpdir"
+}

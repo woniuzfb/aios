@@ -96,8 +96,8 @@ SortChannelSchedules()
         new_schedules+=("$new_schedule")
     done
 
-    file=true
-    file_json=true
+    jq_file=true
+    jq_file_json=true
     jq_path='["channels",'"$chnls_index"',"schedule"]'
     JQ update "$CHANNELS_FILE" new_schedules
 

@@ -26,7 +26,7 @@ CloudflareWorkersMonitorMoveZone()
         MonitorErr "move zone 删除源站 $err_code, $msg"
         exit 1
     else
-        map_string=true
+        jq_map_string=true
         jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
         JQ delete "$CF_CONFIG" name "$cf_zone_name"
         Println "$info $cf_zone_name 删除成功"
@@ -657,7 +657,7 @@ CloudflareWorkersMonitor()
                                     }'
                                 )
 
-                                map_string=true
+                                jq_map_string=true
                                 jq_path='["users"]'
                                 JQ delete "$CF_CONFIG" email "${cf_users_email[cf_users_index]}"
                                 jq_path='["users"]'

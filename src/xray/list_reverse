@@ -1,0 +1,13 @@
+XrayListReverse()
+{
+    Println "$tip 注意: Xray 顶层 reverse 配置已废弃，推荐使用 VLESS 反向代理\n"
+
+    local out
+    out=$(ProxyRenderReverse "$X_CONFIG" xray)
+    if [ -z "$out" ]
+    then
+        Println "$error 未配置反向代理\n"
+        return 1
+    fi
+    Println "\n=== Xray 反向代理配置 ===\n$out\n"
+}

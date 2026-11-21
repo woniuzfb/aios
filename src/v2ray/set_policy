@@ -1,147 +1,104 @@
 V2raySetPolicy()
 {
-    V2rayListPolicy
-    switch_options=( '开启' '关闭' )
+    local actions=(
+        '添加/修改用户等级策略'
+        '删除用户等级策略'
+        '设置入站上行流量统计'
+        '设置入站下行流量统计'
+        '设置出站上行流量统计'
+        '设置出站下行流量统计'
+    )
+    local action_idx=0
     echo
-    set_policy_options=( '添加策略等级' '开关入站上行流量统计' '开关入站下行流量统计' '开关出站上行流量统计' '开关出站下行流量统计' '删除策略等级' )
-    inquirer list_input "选择操作" set_policy_options set_policy_option
-    echo
-    if [ "$set_policy_option" == "添加策略等级" ] 
-    then
-        inquirer text_input "输入新的用户等级(数字): " policy_level_id "自动"
-        if [ "$policy_level_id" == "自动" ] 
-        then
-            for((policy_level_id=0;policy_level_id<$((policy_levels_count+1));policy_level_id++));
-            do
-                policy_level_id_found=0
-                for level_id in "${policy_levels_id[@]}"
-                do
-                    if [ "$level_id" -eq "$policy_level_id" ] 
-                    then
-                        policy_level_id_found=1
-                        break
-                    fi
-                done
-                if [ "$policy_level_id_found" -eq 0 ] 
-                then
-                    break
-                fi
-            done
-            Println "$info 用户等级: ${green}$policy_level_id${normal}"
-        elif [[ ! $policy_level_id =~ ^[0-9]+$ ]] 
-        then
-            Println "$error 必须是数字\n"
-            exit 1
-        else
-            policy_level_id_found=0
-            for level_id in "${policy_levels_id[@]}"
-            do
-                if [ "$level_id" -eq "$policy_level_id" ] 
-                then
-                    policy_level_id_found=1
-                    break
-                fi
-            done
-            if [ "$policy_level_id_found" -eq 1 ] 
+    inquirer list_input_index "选择 V2Ray 策略操作" actions action_idx
+
+    local sw_opts=( '关闭' '开启' )
+
+    case "$action_idx" in
+        0)
+            local lvl hs ci uo do_s buf
+            local up_idx=1 dn_idx=1
+            inquirer text_input "用户等级 level (留空自动分配)" lvl ""
+            if [ -z "$lvl" ]
             then
-                Println "$error 等级 $policy_level_id 已经存在\n"
-                exit 1
+                lvl=$(JQs query "$V2_CONFIG" '((if (.policy | type) == "object" then (if (.policy.levels | type) == "object" then .policy.levels elif (.policy.level | type) == "object" then .policy.level else {} end) else {} end) | keys | map(tonumber?) | max // -1) + 1')
+                lvl="${lvl:-0}"
             fi
-        fi
-        echo
-        inquirer text_input "入站握手时间限制: " policy_level_handshake 4
-        echo
-        inquirer text_input "入站出站连接空闲的时间限制: " policy_level_conn_idle 300
-        echo
-        inquirer text_input "出站线路关闭后的时间限制: " policy_level_uplink_only 2
-        echo
-        inquirer text_input "入站线路关闭后的时间限制: " policy_level_downlink_only 300
-        echo
-        inquirer text_input "每个连接的缓存大小: " policy_level_buffer_size 512
-        echo
-        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_uplink
-        if [ "$policy_level_stats_user_uplink" == "开启" ] 
-        then
-            policy_level_stats_user_uplink=true
-        else
-            policy_level_stats_user_uplink=false
-        fi
-        echo
-        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_downlink
-        if [ "$policy_level_stats_user_downlink" == "开启" ] 
-        then
-            policy_level_stats_user_downlink=true
-        else
-            policy_level_stats_user_downlink=false
-        fi
-        new_policy_level=$(
-        $JQ_FILE -n --arg handshake "$policy_level_handshake" --arg connIdle "$policy_level_conn_idle" \
-        --arg uplinkOnly "$policy_level_uplink_only" --arg downlinkOnly "$policy_level_downlink_only" \
-        --arg statsUserUplink "$policy_level_stats_user_uplink" --arg statsUserDownlink "$policy_level_stats_user_downlink" \
-        --arg bufferSize "$policy_level_buffer_size" \
-        '{
-            "handshake": $handshake | tonumber,
-            "connIdle": $connIdle | tonumber,
-            "uplinkOnly": $uplinkOnly | tonumber,
-            "downlinkOnly": $downlinkOnly | tonumber,
-            "statsUserUplink": $statsUserUplink | test("true"),
-            "statsUserDownlink": $statsUserDownlink | test("true"),
-            "bufferSize": $bufferSize | tonumber
-        }')
-        json=true
-        jq_path='["policy","levels",'"$policy_level_id"']'
-        JQ update "$V2_CONFIG" "$new_policy_level"
-        Println "$info 策略等级添加成功\n"
-    elif [ "$set_policy_option" == "开关入站上行流量统计" ] 
-    then
-        inquirer list_input "所有入站代理的上行流量统计" switch_options policy_system_stats_inbound_uplink
-        if [ "$policy_system_stats_inbound_uplink" == "开启" ] 
-        then
-            policy_system_stats_inbound_uplink=true
-        else
-            policy_system_stats_inbound_uplink=false
-        fi
-        bool=true
-        jq_path='["policy","system","statsInboundUplink"]'
-        JQ update "$V2_CONFIG" "$policy_system_stats_inbound_uplink"
-        Println "$info 入站上行流量统计设置成功\n"
-    elif [ "$set_policy_option" == "开关入站下行流量统计" ] 
-    then
-        inquirer list_input "所有入站代理的下行流量统计" switch_options policy_system_stats_inbound_downlink
-        if [ "$policy_system_stats_inbound_downlink" == "开启" ] 
-        then
-            policy_system_stats_inbound_downlink=true
-        else
-            policy_system_stats_inbound_downlink=false
-        fi
-        bool=true
-        jq_path='["policy","system","statsInboundDownlink"]'
-        JQ update "$V2_CONFIG" "$policy_system_stats_inbound_downlink"
-        Println "$info 入站下行流量统计设置成功\n"
-    elif [ "$set_policy_option" == "开关出站上行流量统计" ] 
-    then
-        inquirer list_input "所有出站代理的上行流量统计" switch_options policy_system_stats_outbound_uplink
-        if [ "$policy_system_stats_outbound_uplink" == "开启" ] 
-        then
-            policy_system_stats_outbound_uplink=true
-        else
-            policy_system_stats_outbound_uplink=false
-        fi
-        bool=true
-        jq_path='["policy","system","statsOutboundUplink"]'
-        JQ update "$V2_CONFIG" "$policy_system_stats_outbound_uplink"
-        Println "$info 出站上行流量统计设置成功\n"
-    else
-        inquirer list_input "所有出站代理的下行流量统计" switch_options policy_system_stats_outbound_downlink
-        if [ "$policy_system_stats_outbound_downlink" == "开启" ] 
-        then
-            policy_system_stats_outbound_downlink=true
-        else
-            policy_system_stats_outbound_downlink=false
-        fi
-        bool=true
-        jq_path='["policy","system","statsOutboundDownlink"]'
-        JQ update "$V2_CONFIG" "$policy_system_stats_outbound_downlink"
-        Println "$info 出站下行流量统计设置成功\n"
-    fi
+            inquirer text_input "handshake (秒)" hs "4"
+            inquirer text_input "connIdle (秒)" ci "300"
+            inquirer text_input "uplinkOnly (秒)" uo "2"
+            inquirer text_input "downlinkOnly (秒)" do_s "5"
+            inquirer text_input "bufferSize (KB)" buf "512"
+            inquirer list_input_index "用户上行流量统计 statsUserUplink" sw_opts up_idx
+            inquirer list_input_index "用户下行流量统计 statsUserDownlink" sw_opts dn_idx
+
+            local num_val
+            for num_val in "$lvl" "$hs" "$ci" "$uo" "$do_s" "$buf"
+            do
+                if ! [[ "$num_val" =~ ^[0-9]+$ ]]
+                then
+                    Println "$error 策略数值参数必须为非负整数: ${num_val}\n"
+                    return 1
+                fi
+            done
+
+            if ! JQ mutate "$V2_CONFIG" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
+                ($lvl): {
+                    "handshake": ($hs | tonumber),
+                    "connIdle": ($ci | tonumber),
+                    "uplinkOnly": ($uo | tonumber),
+                    "downlinkOnly": ($do_s | tonumber),
+                    "bufferSize": ($buf | tonumber),
+                    "statsUserUplink": ($up == "1"),
+                    "statsUserDownlink": ($dn == "1")
+                }
+            }) | del(.policy.level)' \
+                --arg lvl "$lvl" --arg hs "$hs" --arg ci "$ci" --arg uo "$uo" --arg do_s "$do_s" \
+                --arg buf "$buf" --arg up "$up_idx" --arg dn "$dn_idx"
+            then
+                Println "$error 更新等级 ${lvl} 策略失败\n"
+                return 1
+            fi
+            Println "$info 已更新等级 ${green}${lvl}${normal} 策略\n"
+        ;;
+        1)
+            local lvls=()
+            local k
+            while IFS= read -r k
+            do
+                [ -n "$k" ] && lvls+=("$k")
+            done < <(JQs query "$V2_CONFIG" '(if (.policy | type) == "object" then (if (.policy.levels | type) == "object" then .policy.levels elif (.policy.level | type) == "object" then .policy.level else {} end) else {} end) | keys[]')
+            if [ "${#lvls[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的用户等级策略\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的用户等级" lvls del_idx
+            local del_lvl="${lvls[$del_idx]}"
+            if ! JQ mutate "$V2_CONFIG" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
+            then
+                Println "$error 删除等级 ${del_lvl} 策略失败\n"
+                return 1
+            fi
+            Println "$info 已删除等级 ${green}${del_lvl}${normal} 策略\n"
+        ;;
+        2|3|4|5)
+            local sys_keys=( '' '' 'statsInboundUplink' 'statsInboundDownlink' 'statsOutboundUplink' 'statsOutboundDownlink' )
+            local sys_key="${sys_keys[$action_idx]}"
+            local sw_idx=1 sw_bool=false
+            inquirer list_input_index "设置 ${sys_key}" sw_opts sw_idx
+            [ "$sw_idx" -eq 1 ] && sw_bool=true
+            jq_bool=true
+            jq_path='["policy","system","'"$sys_key"'"]'
+            if ! JQ update "$V2_CONFIG" "$sw_bool"
+            then
+                Println "$error 更新系统策略 ${sys_key} 失败\n"
+                return 1
+            fi
+            Println "$info 已更新系统策略 ${green}${sys_key}${normal}\n"
+        ;;
+    esac
+
+    ProxyRestartIfActive v2ray
 }

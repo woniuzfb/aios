@@ -130,7 +130,7 @@ KccConfig()
         }'
     )
 
-    json=true
+    jq_json=true
     jq_path='["kcc"]'
     JQ update "$SERVICES_CONFIG" "$kcc_payload"
 
@@ -172,7 +172,7 @@ KccConfigEdit()
 
                 if [ "$new_kcc_process" != "$kcc_process" ] 
                 then
-                    bool=true
+                    jq_bool=true
                     jq_path='["kcc","process"]'
                     JQ update "$SERVICES_CONFIG" "$new_kcc_process"
                     Println "$info 是否处理图片修改成功\n"
@@ -226,7 +226,7 @@ KccConfigEdit()
                         fi
                     fi
                 done
-                json=true
+                jq_json=true
                 jq_path='["kcc","source"]'
                 JQ update "$SERVICES_CONFIG" "$(ToJsonArray kcc_sources)"
                 Println "$info 源图片目录添加成功\n"
@@ -270,7 +270,7 @@ KccConfigEdit()
 
                 if [ "$kcc_source_update" = true ] 
                 then
-                    json=true
+                    jq_json=true
                     jq_path='["kcc","source"]'
                     JQ update "$SERVICES_CONFIG" "$(ToJsonArray kcc_sources)"
                     Println "$info 源图片目录修改成功\n"
@@ -291,7 +291,7 @@ KccConfigEdit()
                     unset kcc_sources[$kcc_sources_index]
                 done
 
-                json=true
+                jq_json=true
                 jq_path='["kcc","source"]'
 
                 if [ "${#kcc_sources[@]}" -eq 0 ]

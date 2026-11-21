@@ -30,7 +30,7 @@ Edit4gtvAcc()
                             password: $password
                         }'
                     )
-                    json=true
+                    jq_json=true
                     jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
                     JQ update "$SERVICES_CONFIG" "$new_acc"
                     Println "$info 账号修改成功\n"

@@ -3,27 +3,15 @@ case $* in
         [ ! -e "$X_CONFIG" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         editor "$X_CONFIG" && exit 0
     ;;
+    "qr")
+        XrayListInboundAccounts && XrayListInboundShare "" "" "qr"
+        exit 0
+    ;;
     *)
     ;;
 esac
 
-if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
-then
-    nginx_prefix="/usr/local/openresty/nginx"
-    nginx_name="openresty"
-    nginx_ctl="or"
-elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
-then
-    nginx_prefix="/usr/local/nginx"
-    nginx_name="nginx"
-    nginx_ctl="nx"
-else
-    nginx_prefix="/usr/local/nginx"
-    nginx_name="nginx"
-    nginx_ctl="nx"
-fi
-
-NGINX_FILE="$nginx_prefix/sbin/nginx"
+ProxyDetectNginx
 
 Println "  xray 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -62,10 +50,11 @@ Println "  xray 管理面板 ${normal}${red}[v$sh_ver]${normal}
 ————————————
  ${green}25.${normal} 开关
  ${green}26.${normal} 重启
+ ${green}27.${normal} 查看入站二维码
 
- ${tip} 输入: x 打开面板
+ ${tip} 输入: x 打开面板 (x qr 查看分享二维码)
 "
-read -p "`gettext \"输入序号\"` [1-26]: " xray_num
+read -p "`gettext \"输入序号\"` [1-27]: " xray_num
 case $xray_num in
     1)
         XrayInstall
@@ -77,11 +66,10 @@ case $xray_num in
         XrayConfigDomain
     ;;
     4)
-        XrayStatus
+        ServiceControl status xray
     ;;
     5)
-        XrayListInboundAccounts
-        XrayListInboundShare
+        XrayListInboundAccounts && XrayListInboundShare
     ;;
     6)
         XrayAddInbound
@@ -141,33 +129,15 @@ case $xray_num in
         XrayDeleteOutboundAccount
     ;;
     25)
-        if [ ! -e "$X_CONFIG" ]
-        then
-            Println "$error xray 未安装...\n" && exit 1
-        fi
-        echo
-        if ServiceControl is-active xray
-        then
-            ExitOnList y "`eval_gettext \"xray 正在运行, 是否关闭\"`"
-
-            ServiceControl stop xray > /dev/null 2>&1
-            Println "$info xray 已关闭\n"
-        else
-            ExitOnList y "`eval_gettext \"xray 未运行, 是否开启\"`"
-
-            ServiceControl start xray > /dev/null 2>&1
-            Println "$info xray 已开启\n"
-        fi
+        ProxyToggleService xray "$X_CONFIG"
     ;;
     26)
-        if [ ! -e "$X_CONFIG" ]
-        then
-            Println "$error xray 未安装...\n" && exit 1
-        fi
-        ServiceControl restart xray > /dev/null 2>&1
-        Println "$info xray 已重启\n"
+        ProxyRestartService xray "$X_CONFIG"
     ;;
-    *) Println "$error $i18n_input_correct_number [1-26]\n"
+    27)
+        XrayListInboundAccounts && XrayListInboundShare "" "" "qr"
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-27]\n"
     ;;
 esac
 

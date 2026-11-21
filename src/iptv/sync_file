@@ -140,7 +140,7 @@ SyncFile()
                 then
                     JQ add "${chnl_sync_files[sync_i]}" "[{$jq_channel_new}]"
                 else
-                    merge=true
+                    jq_merge=true
                     JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "{$jq_channel_new}"
                 fi
             fi

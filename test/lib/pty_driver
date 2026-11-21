@@ -1,0 +1,199 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CMD_PATH=""
+STEPS_JSON=""
+TIMEOUT_S=5
+VERBOSE=0
+
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        --cmd)
+            CMD_PATH="$2"
+            shift 2
+        ;;
+        --steps)
+            STEPS_JSON="$2"
+            shift 2
+        ;;
+        --timeout)
+            TIMEOUT_S="$2"
+            shift 2
+        ;;
+        --verbose|-v)
+            VERBOSE=1
+            shift
+        ;;
+        *)
+            printf 'Usage: %s --cmd <path> --steps <json> [--timeout <sec>] [--verbose]\n' "$0" >&2
+            exit 2
+        ;;
+    esac
+done
+
+if [ -z "$CMD_PATH" ]
+then
+    printf 'missing --cmd\n' >&2
+    exit 2
+fi
+
+JQ_BIN="${JQ_FILE:-$(command -v jq)}"
+WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aios-tty.XXXXXX")
+IN_FIFO="$WORK_DIR/in"
+OUT_LOG="$WORK_DIR/out"
+CHILD_PID=""
+
+CleanupDriver()
+{
+    exec 3>&- 2> /dev/null || true
+    if [ -n "${CHILD_PID:-}" ] && kill -0 "$CHILD_PID" 2> /dev/null
+    then
+        kill -9 "$CHILD_PID" 2> /dev/null || true
+        wait "$CHILD_PID" 2> /dev/null || true
+    fi
+    rm -rf "$WORK_DIR"
+}
+trap CleanupDriver EXIT
+
+mkfifo "$IN_FIFO"
+: > "$OUT_LOG"
+
+StripAnsiStream()
+{
+    sed -E $'s/\x1b\\[[0-9;?]*[ -/]*[@-~]//g' | tr -d '\r'
+}
+
+ExpandAndSend()
+{
+    local spec="$1"
+    local out="$spec"
+    out="${out//<ENTER>/\\n}"
+    out="${out//<CR>/\\r}"
+    out="${out//<LF>/\\n}"
+    out="${out//<DOWN>/\\033[B}"
+    out="${out//<UP>/\\033[A}"
+    out="${out//<RIGHT>/\\033[C}"
+    out="${out//<LEFT>/\\033[D}"
+    out="${out//<SPACE>/ }"
+    out="${out//<TAB>/\\t}"
+    out="${out//<BS>/\\177}"
+    out="${out//<ESC>/\\033}"
+    printf '%b' "$out" >&3
+}
+
+FileSize()
+{
+    wc -c < "$1" | tr -d ' '
+}
+
+WaitForPattern()
+{
+    local offset="$1"
+    local pattern="$2"
+    local max_ticks=$((TIMEOUT_S * 20))
+    local ticks=0
+
+    while [ "$ticks" -lt "$max_ticks" ]
+    do
+        if [ -n "$pattern" ]
+        then
+            if tail -c +"$((offset + 1))" "$OUT_LOG" 2> /dev/null | StripAnsiStream | LC_ALL=C grep -qF "$pattern"
+            then
+                sleep 0.04
+                return 0
+            fi
+        else
+            if ! kill -0 "$CHILD_PID" 2> /dev/null
+            then
+                return 0
+            fi
+        fi
+
+        if ! kill -0 "$CHILD_PID" 2> /dev/null
+        then
+            return 0
+        fi
+        sleep 0.05
+        ticks=$((ticks + 1))
+    done
+    return 1
+}
+
+exec 3<>"$IN_FIFO"
+
+TERM=xterm-256color COLUMNS=140 LINES=40 "$CMD_PATH" < "$IN_FIFO" > "$OUT_LOG" 2>&1 &
+CHILD_PID=$!
+
+STEP_WAITS=()
+STEP_SENDS=()
+
+if [ -n "$STEPS_JSON" ]
+then
+    while IFS=$'\t' read -r w_val s_val
+    do
+        STEP_WAITS+=("$w_val")
+        STEP_SENDS+=("$s_val")
+    done < <("$JQ_BIN" -r '.[] | [(.wait // ""), (.send // "")] | @tsv' <<< "$STEPS_JSON")
+fi
+
+OFFSET=0
+STEP_COUNT=${#STEP_WAITS[@]}
+STEP_IDX=0
+
+while [ "$STEP_IDX" -lt "$STEP_COUNT" ]
+do
+    w_pat="${STEP_WAITS[$STEP_IDX]}"
+    s_keys="${STEP_SENDS[$STEP_IDX]}"
+
+    WaitForPattern "$OFFSET" "$w_pat" || true
+    NEW_SIZE=$(FileSize "$OUT_LOG")
+
+    if [ "$VERBOSE" -eq 1 ]
+    then
+        printf '\n=== [TTY STEP %d] send=%s ===\n' "$STEP_IDX" "$s_keys"
+        tail -c +"$((OFFSET + 1))" "$OUT_LOG" | StripAnsiStream
+    fi
+    OFFSET="$NEW_SIZE"
+
+    if ! kill -0 "$CHILD_PID" 2> /dev/null
+    then
+        break
+    fi
+
+    if [ -n "$s_keys" ]
+    then
+        ExpandAndSend "$s_keys"
+    fi
+
+    STEP_IDX=$((STEP_IDX + 1))
+done
+
+# Wait for process to finish cleanly
+WaitForPattern "$OFFSET" "" || true
+EXIT_CODE=0
+if kill -0 "$CHILD_PID" 2> /dev/null
+then
+    kill -9 "$CHILD_PID" 2> /dev/null || true
+    wait "$CHILD_PID" 2> /dev/null || true
+    EXIT_CODE=124
+else
+    wait "$CHILD_PID" || EXIT_CODE=$?
+fi
+CHILD_PID=""
+
+if [ "$VERBOSE" -eq 1 ]
+then
+    printf '\n=== [TTY STEP %d] send= ===\n' "$STEP_IDX"
+    tail -c +"$((OFFSET + 1))" "$OUT_LOG" | StripAnsiStream
+    printf '\n=== [TTY EXIT] code=%d ===\n' "$EXIT_CODE"
+else
+    StripAnsiStream < "$OUT_LOG"
+fi
+
+if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 1 ]
+then
+    exit 0
+fi
+exit 1

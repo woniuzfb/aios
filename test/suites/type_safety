@@ -1,0 +1,240 @@
+_TypeSafetyRunAllRenderers()
+{
+    local cfg="$1"
+    local mode="$2"
+    local label="$3"
+    local err_file="$4"
+
+    : > "$err_file"
+    ProxyLoadInboundsIndex "$cfg" 2>> "$err_file" || true
+    ProxyLoadOutboundsIndex "$cfg" 2>> "$err_file" || true
+    ProxyRenderInbounds "$cfg" "all" "$mode" > /dev/null 2>> "$err_file" || true
+    ProxyRenderOutbounds "$cfg" "$mode" > /dev/null 2>> "$err_file" || true
+    ProxyRenderInboundAccounts "$cfg" "0" > /dev/null 2>> "$err_file" || true
+    ProxyRenderOutboundAccounts "$cfg" "0" > /dev/null 2>> "$err_file" || true
+    ProxyRenderShareLinks "$cfg" "203.0.113.10" "0" > /dev/null 2>> "$err_file" || true
+    ProxyRenderDns "$cfg" "$mode" > /dev/null 2>> "$err_file" || true
+    ProxyRenderRouting "$cfg" "$mode" > /dev/null 2>> "$err_file" || true
+    ProxyRenderPolicy "$cfg" "$mode" > /dev/null 2>> "$err_file" || true
+    ProxyRenderReverse "$cfg" > /dev/null 2>> "$err_file" || true
+    ProxyRenderOverview "$cfg" "$mode" > /dev/null 2>> "$err_file" || true
+
+    if [ -s "$err_file" ]
+    then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] type_safety (%s) [%s]: stderr not empty:\n' "$mode" "$label" >&2
+        head -n 6 "$err_file" | sed 's/^/  /' >&2
+    else
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] type_safety (%s): %s\n' "$mode" "$label"
+    fi
+    return 0
+}
+
+RunSuiteTypeSafety()
+{
+    printf '\n=== Suite: type_safety (polymorphic, null, missing & wrong-type resilience) ===\n'
+
+    local tmpdir
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/aios-types.XXXXXX")
+    local cfg="$tmpdir/config.json"
+    local err_file="$tmpdir/stderr.log"
+
+    # 1. Polymorphic dns.servers (mixed string + object + null + number) & dns.hosts (string + array + null)
+    cat > "$cfg" <<'JSON'
+{
+  "dns": {
+    "hosts": {
+      "single.test": "1.1.1.1",
+      "multi.test": ["2.2.2.2", "2001:db8::1"],
+      "null.test": null,
+      "num.test": 12345
+    },
+    "servers": [
+      "8.8.8.8",
+      "https+local://1.1.1.1/dns-query",
+      {"address": "223.5.5.5", "port": 53, "domains": ["geosite:cn"], "expectedIPs": ["geoip:cn"]},
+      {"address": "9.9.9.9", "domains": "wrong-scalar-domain", "expectedIPs": null, "expectIPs": "wrong-scalar"},
+      null,
+      123
+    ]
+  }
+}
+JSON
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "dns.servers mixed string/object/null + dns.hosts string/array/null" "$err_file"
+    _TypeSafetyRunAllRenderers "$cfg" "v2ray" "dns.servers mixed string/object/null + dns.hosts string/array/null" "$err_file"
+
+    # 2. Polymorphic fakedns: single object vs array of objects vs null vs wrong scalar
+    printf '%s\n' '{"fakedns":{"ipPool":"198.18.0.0/15","poolSize":65535}}' > "$cfg"
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "fakedns as single object" "$err_file"
+    printf '%s\n' '{"fakedns":[{"ipPool":"198.18.0.0/15","poolSize":65535},{"ipPool":"fc00::/18","poolSize":65535}]}' > "$cfg"
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "fakedns as array of objects" "$err_file"
+    printf '%s\n' '{"fakedns":"invalid-string"}' > "$cfg"
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "fakedns as wrong scalar string" "$err_file"
+
+    # 3. Polymorphic port (number | range string | env:var | null) & fallbacks.dest (number | string | unix | null)
+    cat > "$cfg" <<'JSON'
+{
+  "inbounds": [
+    {
+      "tag": "poly-port-num",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "users": [{"id": "11111111-1111-4111-8111-111111111111"}],
+        "fallbacks": [
+          {"dest": 8080},
+          {"dest": "127.0.0.1:8081", "alpn": "h2", "path": "/fb"},
+          {"dest": "/dev/shm/uds.sock", "xver": 1},
+          {"dest": null},
+          "wrong-fallback-string"
+        ]
+      }
+    },
+    {"tag": "poly-port-range", "port": "10000-10010", "protocol": "dokodemo-door", "settings": {"address": "127.0.0.1", "port": "80-90"}},
+    {"tag": "poly-port-env", "port": "env:XRAY_PORT", "protocol": "vmess", "settings": {"clients": [], "users": [{"id": "22222222-2222-4222-8222-222222222222"}]}},
+    {"tag": "poly-port-null", "port": null, "protocol": "trojan", "settings": null}
+  ]
+}
+JSON
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "inbounds port (num/range/env/null) + fallbacks.dest (num/str/uds/null/wrong)" "$err_file"
+    _TypeSafetyRunAllRenderers "$cfg" "v2ray" "inbounds port (num/range/env/null) + fallbacks.dest (num/str/uds/null/wrong)" "$err_file"
+
+    # 4. Polymorphic streamSettings: TLS inline cert arrays vs file strings, REALITY dest(num/str) vs target, headers map<string, string|array>
+    cat > "$cfg" <<'JSON'
+{
+  "inbounds": [
+    {
+      "tag": "poly-stream-tls",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {"users": [{"id": "11111111-1111-4111-8111-111111111111"}]},
+      "streamSettings": {
+        "network": "raw",
+        "security": "tls",
+        "rawSettings": {
+          "header": {
+            "type": "http",
+            "request": {
+              "path": ["/", "/alt"],
+              "headers": {"Host": ["a.test", "b.test"], "User-Agent": "single-ua"}
+            }
+          }
+        },
+        "tlsSettings": {
+          "serverName": "sni.test",
+          "alpn": ["h2"],
+          "certificates": [
+            {"usage": "encipherment", "certificateFile": "/etc/a.crt", "keyFile": "/etc/a.key"},
+            {"usage": "issue", "certificate": ["-----BEGIN CERT-----"], "key": ["-----BEGIN KEY-----"]},
+            null,
+            "bad-cert-entry"
+          ]
+        }
+      }
+    },
+    {
+      "tag": "poly-stream-reality",
+      "port": 8443,
+      "protocol": "vless",
+      "settings": {"users": [{"id": "22222222-2222-4222-8222-222222222222"}]},
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {"path": "/xh", "extra": "not-an-object"},
+        "realitySettings": {"dest": 443, "serverNames": "wrong-scalar-sni", "shortIds": null}
+      }
+    }
+  ]
+}
+JSON
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "streamSettings TLS inline/file/null certs + REALITY dest(num)/scalar serverNames + xhttp extra" "$err_file"
+
+    # 5. Polymorphic routing: port/sourcePort/localPort/vlessRoute (num|str), attrs (string in Xray vs object in V2Ray), domain vs domains, balancers
+    cat > "$cfg" <<'JSON'
+{
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "domainMatcher": "hybrid",
+    "rules": [
+      {"ruleTag": "r-num-ports", "port": 443, "sourcePort": 12345, "localPort": 80, "vlessRoute": 1, "domain": ["a.test"], "attrs": "attrs[':method'] == 'GET'", "outboundTag": "direct"},
+      {"type": "field", "port": "80,443,1000-2000", "sourcePort": "1024-65535", "domains": ["b.test"], "source": ["10.0.0.0/8"], "attrs": {":method": "POST"}, "network": ["tcp", "udp"], "outboundTag": "direct"},
+      {"domain": "wrong-scalar-domain", "ip": null, "inboundTag": 123, "protocol": "http", "outboundTag": "direct"},
+      null,
+      "wrong-rule-string"
+    ],
+    "balancers": [
+      {"tag": "b1", "selector": ["out-1"], "strategy": {"type": "leastPing"}, "fallbackTag": "direct"},
+      {"tag": "b2", "selector": "wrong-scalar-selector", "strategy": "wrong-scalar-strategy"},
+      null
+    ]
+  }
+}
+JSON
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "routing polymorphic ports/attrs(str vs obj)/network(str vs arr)/wrong-type rules & balancers" "$err_file"
+    _TypeSafetyRunAllRenderers "$cfg" "v2ray" "routing polymorphic ports/attrs(str vs obj)/network(str vs arr)/wrong-type rules & balancers" "$err_file"
+
+    # 6. Polymorphic outbounds: flat Xray vs nested V2Ray vnext/servers, freedom network(str|arr) & fragment, wrong types
+    cat > "$cfg" <<'JSON'
+{
+  "outbounds": [
+    {"tag": "o-flat", "protocol": "vless", "settings": {"address": "a.test", "port": "443", "id": "u1"}, "streamSettings": {"sockopt": {"dialerProxy": "direct"}}},
+    {"tag": "o-vnext", "protocol": "vmess", "settings": {"vnext": [{"address": "b.test", "port": 443, "users": [{"id": "u2"}]}, null, "bad-vnext"]}, "proxySettings": {"tag": "direct"}},
+    {"tag": "o-servers", "protocol": "trojan", "settings": {"servers": [{"address": "c.test", "port": 443, "password": "pw"}, null]}, "proxySettings": "wrong-proxy-str"},
+    {"tag": "o-freedom", "protocol": "freedom", "settings": {"fragment": {"packets": "tlshello", "length": "10-20", "interval": "5-10"}, "noises": [{"type": "rand", "packet": "10-20"}]}},
+    {"tag": "o-bad-settings", "protocol": "vless", "settings": "not-an-object", "streamSettings": "not-an-object", "mux": "not-an-object"},
+    null,
+    "wrong-outbound-string"
+  ]
+}
+JSON
+    _TypeSafetyRunAllRenderers "$cfg" "xray" "outbounds flat/vnext/servers/null/wrong-type settings & streamSettings" "$err_file"
+    _TypeSafetyRunAllRenderers "$cfg" "v2ray" "outbounds flat/vnext/servers/null/wrong-type settings & streamSettings" "$err_file"
+
+    # 7. Completely wrong top-level section types (object where array expected, array where object expected, scalars, nulls)
+    local wrong_case idx=0
+    for wrong_case in \
+        '{"inbounds":"not-an-array","outbounds":"not-an-array","dns":"not-an-object","routing":"not-an-object","policy":"not-an-object","reverse":"not-an-object","log":"not-an-object"}' \
+        '{"inbounds":{},"outbounds":{},"dns":[],"routing":[],"policy":[],"reverse":[],"log":[]}' \
+        '{"inbounds":null,"outbounds":null,"dns":null,"routing":null,"policy":null,"reverse":null,"log":null,"api":null,"metrics":null,"observatory":null,"burstObservatory":null,"fakedns":null,"transport":null,"browserForwarder":null}' \
+        '{"inbounds":[null,123,"str",{}],"outbounds":[null,123,"str",{}]}' \
+        '{"policy":{"level":"not-an-object","system":"not-an-object"}}' \
+        '{"policy":{"levels":[1,2,3],"system":null}}' \
+        '{"reverse":{"bridges":"not-an-array","portals":123}}' \
+        '{"inbounds":[{"tag":"bad-users","protocol":"vless","port":443,"settings":{"users":"not-an-array","clients":123,"accounts":true}}]}' \
+        '{"inbounds":[{"tag":"bad-sniff","protocol":"vless","port":443,"sniffing":"not-an-object","allocate":"not-an-object"}]}' \
+        '{"observatory":{"subjectSelector":"wrong-str","selector":123,"probeUrl":null},"burstObservatory":{"subjectSelector":null,"pingConfig":"not-an-object"}}'
+    do
+        idx=$((idx + 1))
+        printf '%s\n' "$wrong_case" > "$cfg"
+        _TypeSafetyRunAllRenderers "$cfg" "xray" "malformed/wrong-type case #$idx" "$err_file"
+        _TypeSafetyRunAllRenderers "$cfg" "v2ray" "malformed/wrong-type case #$idx" "$err_file"
+    done
+
+    # 8. Nginx AST malformed & mixed-type resilience
+    local nx_case nx_idx=0
+    for nx_case in \
+        '{}' \
+        '{"config":null}' \
+        '{"config":[]}' \
+        '{"config":[{"parsed":null}]}' \
+        '{"config":[{"parsed":[null,123,"bad",{"directive":"http","args":"not-array","block":"not-array"}]}]}' \
+        '{"config":[{"parsed":[{"directive":"http","args":[],"block":[null,{"directive":"server","args":null,"block":[null,{"directive":"listen","args":["443"]}]}]}]}]}'
+    do
+        nx_idx=$((nx_idx + 1))
+        : > "$err_file"
+        parse_out="$nx_case"
+        NginxGetConfig parse_out 2>> "$err_file" || true
+        if [ -s "$err_file" ]
+        then
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] type_safety (nginx): malformed case #%d stderr:\n' "$nx_idx" >&2
+            head -n 5 "$err_file" | sed 's/^/  /' >&2
+        else
+            PASS_COUNT=$((PASS_COUNT + 1))
+            printf '[PASS] type_safety (nginx): malformed case #%d\n' "$nx_idx"
+        fi
+    done
+
+    rm -rf "$tmpdir"
+}

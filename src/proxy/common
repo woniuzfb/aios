@@ -1,0 +1,1391 @@
+ProxyDetectNginx()
+{
+    if { [ -d "$OPENRESTY_PREFIX_DEFAULT" ] && [ ! -d "$NGINX_PREFIX_DEFAULT" ]; } || { [ -s "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid" ] && kill -0 "$(< "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid")" 2> /dev/null; }
+    then
+        nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
+        nginx_name="openresty"
+        nginx_ctl="or"
+    else
+        nginx_prefix="$NGINX_PREFIX_DEFAULT"
+        nginx_name="nginx"
+        nginx_ctl="nx"
+    fi
+
+    NGINX_FILE="$nginx_prefix/sbin/nginx"
+}
+
+ProxyGetFreeTag()
+{
+    local config_file="$1"
+    local prefix="${2:-}"
+    local candidate
+
+    while true
+    do
+        candidate="${prefix}$(RandStr)"
+        if [ ! -e "$config_file" ] || ! grep -q '"tag"[[:space:]]*:[[:space:]]*"'"$candidate"'"' < "$config_file"
+        then
+            echo "$candidate"
+            return 0
+        fi
+    done
+}
+
+ProxyLoadInboundsIndex()
+{
+    local config_file="$1"
+
+    inbounds_count=0
+    inbounds_nginx_count=0
+    inbounds_other_count=0
+    inbounds_json_index=()
+    inbounds_listen=()
+    inbounds_port=()
+    inbounds_protocol=()
+    inbounds_tag=()
+    inbounds_nginx_index=()
+    inbounds_other_index=()
+
+    if [ ! -s "$config_file" ]
+    then
+        return 0
+    fi
+
+    SetDelimiters
+    local real_idx listen port protocol tag
+    while IFS="$field_sep" read -r real_idx listen port protocol tag
+    do
+        inbounds_json_index+=("$real_idx")
+        inbounds_listen[real_idx]="$listen"
+        inbounds_port[real_idx]="$port"
+        inbounds_protocol[real_idx]="$protocol"
+        inbounds_tag[real_idx]="$tag"
+
+        if [[ "$tag" == "${PROXY_NGINX_PREFIX}"* ]]
+        then
+            inbounds_nginx_count=$((inbounds_nginx_count + 1))
+            inbounds_nginx_index+=("$real_idx")
+        else
+            inbounds_other_count=$((inbounds_other_count + 1))
+            inbounds_other_index+=("$real_idx")
+        fi
+    done < <($JQ_FILE -r --arg sep "$field_sep" '
+        (if (.inbounds | type) == "array" then .inbounds else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | [
+            (.key | tostring),
+            (.value.listen // "0.0.0.0" | tostring),
+            (.value.port // "" | tostring),
+            (.value.protocol // "" | tostring),
+            (.value.tag // "" | tostring)
+          ]
+        | join($sep)
+    ' "$config_file")
+
+    inbounds_count=${#inbounds_json_index[@]}
+}
+
+ProxyLoadOutboundsIndex()
+{
+    local config_file="$1"
+
+    outbounds_count=0
+    outbounds_json_index=()
+    outbounds_sendThrough=()
+    outbounds_protocol=()
+    outbounds_tag=()
+
+    if [ ! -s "$config_file" ]
+    then
+        return 0
+    fi
+
+    SetDelimiters
+    local real_idx send_through protocol tag
+    while IFS="$field_sep" read -r real_idx send_through protocol tag
+    do
+        outbounds_json_index+=("$real_idx")
+        outbounds_sendThrough[real_idx]="$send_through"
+        outbounds_protocol[real_idx]="$protocol"
+        outbounds_tag[real_idx]="$tag"
+    done < <($JQ_FILE -r --arg sep "$field_sep" '
+        (if (.outbounds | type) == "array" then .outbounds else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | [
+            (.key | tostring),
+            (.value.sendThrough // "0.0.0.0" | tostring),
+            (.value.protocol // "" | tostring),
+            (.value.tag // "" | tostring)
+          ]
+        | join($sep)
+    ' "$config_file")
+
+    outbounds_count=${#outbounds_json_index[@]}
+}
+
+ProxyRenderInbounds()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+    local filter_mode="${3:-all}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg filter "$filter_mode" \
+        --arg nginx_prefix "${PROXY_NGINX_PREFIX:-nginx-}" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+        --arg ind "$indent_6" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def bv($v): if $v == true then "\($g)开启\($n)" else "\($r)关闭\($n)" end;
+    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def arr($a): if ($a | type) == "array" then ($a | map(tostring) | join(", ")) else ($a // "" | tostring) end;
+    def kv($obj): if ($obj | type) == "object" then ($obj | to_entries | map("\(.key) => \(.value | tostring)") | join(", ")) else "" end;
+    def line($label; $val): if ($val // "" | tostring) != "" then "\($label): \(cv($val))" else empty end;
+    def bline($label; $val): if $val != null then "\($label): \(yv($val))" else empty end;
+
+    def render_sniffing($s):
+        if ($s | type) != "object" then []
+        else [
+            "流量探测: \(bv($s.enabled // false)) 仅元数据: \(yv($s.metadataOnly // false))"
+            + (if ($s.destOverride | type) == "array" and ($s.destOverride | length) > 0 then " 目标重置: \(cv(arr($s.destOverride)))" else "" end)
+            + (if $core == "xray" and ($s.routeOnly // false) == true then " 仅路由: \(yv(true))" else "" end),
+            (if $core == "xray" and ($s.domainsExcluded | type) == "array" and ($s.domainsExcluded | length) > 0 then "排除域名: \(cv(arr($s.domainsExcluded)))" else empty end),
+            (if $core == "xray" and ($s.ipsExcluded | type) == "array" and ($s.ipsExcluded | length) > 0 then "排除IP: \(cv(arr($s.ipsExcluded)))" else empty end)
+        ] end;
+
+    def render_stream($st):
+        if ($st | type) != "object" then []
+        else [
+            "传输方式: \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) 传输安全: \(cv($st.security // "none"))",
+            (if ($st.tlsSettings | type) == "object" then
+                ($st.tlsSettings) as $t
+                | "TLS: " + ([
+                    line("SNI"; $t.serverName),
+                    line("ALPN"; arr($t.alpn // [])),
+                    line("minVersion"; $t.minVersion),
+                    line("maxVersion"; $t.maxVersion),
+                    line("cipherSuites"; $t.cipherSuites),
+                    line("fingerprint"; $t.fingerprint),
+                    bline("rejectUnknownSni"; $t.rejectUnknownSni),
+                    bline("disableSystemRoot"; $t.disableSystemRoot),
+                    bline("enableSessionResumption"; $t.enableSessionResumption),
+                    bline("verifyClientCertificate"; $t.verifyClientCertificate),
+                    bline("allowInsecure"; $t.allowInsecure),
+                    line("verifyPeerCertByName"; arr($t.verifyPeerCertByName)),
+                    bline("useSystemCA"; $t.useSystemCA),
+                    line("pinnedPeerCertSha256"; $t.pinnedPeerCertSha256),
+                    line("pinnedPeerCertificateChainSha256"; arr($t.pinnedPeerCertificateChainSha256 // [])),
+                    line("curvePreferences"; arr($t.curvePreferences // [])),
+                    (if ($t.echServerKeys // "") != "" then "echServerKeys: \(cv("已配置"))" else empty end),
+                    (if ($t.echConfigList // "") != "" then "echConfigList: \(cv("已配置"))" else empty end)
+                ] | join(" ")),
+                ((if ($t.certificates | type) == "array" then $t.certificates else [] end) | to_entries[]
+                    | select(.value | type == "object")
+                    | "  证书\(.key + 1): " + ([
+                        line("usage"; .value.usage),
+                        line("cert"; (.value.certificateFile // (if (.value.certificate | type) == "array" and (.value.certificate | length) > 0 then "<inline>" else null end))),
+                        line("key"; (.value.keyFile // (if (.value.key | type) == "array" and (.value.key | length) > 0 then "<inline>" else null end))),
+                        line("ocspStapling"; .value.ocspStapling),
+                        bline("oneTimeLoading"; .value.oneTimeLoading),
+                        bline("buildChain"; .value.buildChain)
+                    ] | join(" "))
+                )
+            else empty end),
+            (if ($st.realitySettings | type) == "object" then
+                ($st.realitySettings) as $rl
+                | "REALITY: " + ([
+                    bline("show"; $rl.show),
+                    line("target"; ($rl.target // $rl.dest)),
+                    line("serverNames"; arr($rl.serverNames // [])),
+                    line("shortIds"; arr($rl.shortIds // [])),
+                    line("xver"; $rl.xver),
+                    line("minClientVer"; $rl.minClientVer),
+                    line("maxClientVer"; $rl.maxClientVer),
+                    line("maxTimeDiff"; $rl.maxTimeDiff),
+                    (if ($rl.mldsa65Seed // "") != "" then "mldsa65Seed: \(cv("已配置"))" else empty end),
+                    (if ($rl.limitFallbackUpload | type) == "object" then "limitUpload: \(cv("\($rl.limitFallbackUpload.afterBytes // 0)/\($rl.limitFallbackUpload.bytesPerSec // 0)/\($rl.limitFallbackUpload.burstBytesPerSec // 0)"))" else empty end),
+                    (if ($rl.limitFallbackDownload | type) == "object" then "limitDownload: \(cv("\($rl.limitFallbackDownload.afterBytes // 0)/\($rl.limitFallbackDownload.bytesPerSec // 0)/\($rl.limitFallbackDownload.burstBytesPerSec // 0)"))" else empty end)
+                ] | join(" "))
+            else empty end),
+            (if (($st.rawSettings // $st.tcpSettings) | type) == "object" then
+                ($st.rawSettings // $st.tcpSettings) as $raw
+                | (if ($raw.header | type) == "object" then $raw.header else {} end) as $hdr
+                | "RAW/TCP: " + ([
+                    bline("acceptProxyProtocol"; $raw.acceptProxyProtocol),
+                    line("header"; $hdr.type),
+                    line("reqPath"; (if ($hdr.request | type) == "object" then arr($hdr.request.path // []) else "" end))
+                ] | join(" "))
+            else empty end),
+            (if ($st.wsSettings | type) == "object" then
+                "WebSocket: " + ([
+                    bline("acceptProxyProtocol"; $st.wsSettings.acceptProxyProtocol),
+                    line("path"; $st.wsSettings.path),
+                    line("host"; $st.wsSettings.host),
+                    line("headers"; kv($st.wsSettings.headers)),
+                    line("maxEarlyData"; $st.wsSettings.maxEarlyData),
+                    line("earlyDataHeaderName"; $st.wsSettings.earlyDataHeaderName),
+                    bline("useBrowserForwarding"; $st.wsSettings.useBrowserForwarding),
+                    line("heartbeatPeriod"; $st.wsSettings.heartbeatPeriod)
+                ] | join(" "))
+            else empty end),
+            (if (($st.xhttpSettings // $st.splithttpSettings) | type) == "object" then
+                ($st.xhttpSettings // $st.splithttpSettings) as $xh
+                | (if ($xh.extra | type) == "object" then $xh.extra else {} end) as $ex
+                | "XHTTP: " + ([
+                    line("host"; $xh.host),
+                    line("path"; $xh.path),
+                    line("mode"; $xh.mode),
+                    line("xPaddingBytes"; $ex.xPaddingBytes),
+                    bline("noSSEHeader"; $ex.noSSEHeader),
+                    line("scMaxEachPostBytes"; $ex.scMaxEachPostBytes)
+                ] | join(" "))
+            else empty end),
+            (if ($st.grpcSettings | type) == "object" then
+                "gRPC: " + ([
+                    line("serviceName"; $st.grpcSettings.serviceName),
+                    line("authority"; $st.grpcSettings.authority),
+                    bline("multiMode"; $st.grpcSettings.multiMode),
+                    line("idle_timeout"; $st.grpcSettings.idle_timeout),
+                    line("health_check_timeout"; $st.grpcSettings.health_check_timeout),
+                    bline("permit_without_stream"; $st.grpcSettings.permit_without_stream),
+                    line("initial_windows_size"; $st.grpcSettings.initial_windows_size)
+                ] | join(" "))
+            else empty end),
+            (if ($st.httpupgradeSettings | type) == "object" then
+                "HTTPUpgrade: " + ([
+                    bline("acceptProxyProtocol"; $st.httpupgradeSettings.acceptProxyProtocol),
+                    line("host"; $st.httpupgradeSettings.host),
+                    line("path"; $st.httpupgradeSettings.path)
+                ] | join(" "))
+            else empty end),
+            (if ($st.httpSettings | type) == "object" then
+                "HTTP/2: " + ([
+                    line("host"; arr($st.httpSettings.host // [])),
+                    line("path"; $st.httpSettings.path),
+                    line("method"; $st.httpSettings.method),
+                    line("headers"; kv($st.httpSettings.headers))
+                ] | join(" "))
+            else empty end),
+            (if ($st.kcpSettings | type) == "object" then
+                "mKCP: " + ([
+                    line("mtu"; $st.kcpSettings.mtu),
+                    line("tti"; $st.kcpSettings.tti),
+                    line("uplinkCapacity"; $st.kcpSettings.uplinkCapacity),
+                    line("downlinkCapacity"; $st.kcpSettings.downlinkCapacity),
+                    bline("congestion"; $st.kcpSettings.congestion),
+                    line("readBufferSize"; $st.kcpSettings.readBufferSize),
+                    line("writeBufferSize"; $st.kcpSettings.writeBufferSize),
+                    line("header"; (if ($st.kcpSettings.header | type) == "object" then $st.kcpSettings.header.type else null end)),
+                    line("seed"; $st.kcpSettings.seed)
+                ] | join(" "))
+            else empty end),
+            (if ($st.quicSettings | type) == "object" then
+                "QUIC: " + ([line("security"; $st.quicSettings.security), line("key"; $st.quicSettings.key), line("header"; (if ($st.quicSettings.header | type) == "object" then $st.quicSettings.header.type else null end))] | join(" "))
+            else empty end),
+            (if ($st.dsSettings | type) == "object" then
+                "DomainSocket: " + ([line("path"; $st.dsSettings.path), bline("abstract"; $st.dsSettings.abstract), bline("padding"; $st.dsSettings.padding)] | join(" "))
+            else empty end),
+            (if ($st.hysteriaSettings | type) == "object" then
+                "Hysteria: " + ([
+                    line("version"; $st.hysteriaSettings.version),
+                    line("auth"; $st.hysteriaSettings.auth),
+                    line("udpIdleTimeout"; $st.hysteriaSettings.udpIdleTimeout),
+                    line("masquerade"; (if ($st.hysteriaSettings.masquerade | type) == "object" then $st.hysteriaSettings.masquerade.type else null end))
+                ] | join(" "))
+            else empty end),
+            (if (($st.hysteria2Settings // $st.hy2steriaSettings) | type) == "object" then
+                ($st.hysteria2Settings // $st.hy2steriaSettings) as $hy2
+                | (if ($hy2.congestion | type) == "object" then $hy2.congestion else {} end) as $cg
+                | "Hysteria2: " + ([line("password"; $hy2.password), line("congestion"; $cg.type), line("up_mbps"; $cg.up_mbps), line("down_mbps"; $cg.down_mbps), bline("use_udp_extension"; $hy2.use_udp_extension)] | join(" "))
+            else empty end),
+            (if ($st.masqueSettings | type) == "object" then
+                ($st.masqueSettings) as $mq
+                | "MASQUE: " + ([line("uri"; $mq.uri), line("mtu"; $mq.mtu), bline("enableUdp"; $mq.enableUdp)] | join(" "))
+            else empty end),
+            (if ($st.finalmask | type) == "object" then
+                "Finalmask: " + ([
+                    (if ($st.finalmask.tcp | type) == "array" and ($st.finalmask.tcp | length) > 0 then "tcp: \(cv($st.finalmask.tcp | map(select(type == "object") | .type // empty | tostring) | join(",")))" else empty end),
+                    (if ($st.finalmask.udp | type) == "array" and ($st.finalmask.udp | length) > 0 then "udp: \(cv($st.finalmask.udp | map(select(type == "object") | .type // empty | tostring) | join(",")))" else empty end)
+                ] | join(" "))
+            else empty end),
+            (if ($st.sockopt | type) == "object" then
+                ($st.sockopt) as $so
+                | "Sockopt: " + ([
+                    line("tproxy"; $so.tproxy),
+                    line("tcpFastOpen"; $so.tcpFastOpen),
+                    line("mark"; $so.mark),
+                    line("dialerProxy"; $so.dialerProxy),
+                    line("domainStrategy"; $so.domainStrategy),
+                    bline("acceptProxyProtocol"; $so.acceptProxyProtocol),
+                    line("tcpMaxSeg"; $so.tcpMaxSeg),
+                    line("tcpKeepAliveIdle"; $so.tcpKeepAliveIdle),
+                    line("tcpKeepAliveInterval"; $so.tcpKeepAliveInterval),
+                    line("tcpUserTimeout"; $so.tcpUserTimeout),
+                    line("tcpcongestion"; $so.tcpcongestion),
+                    line("interface"; ($so.interface // $so.bindToDevice)),
+                    bline("V6Only"; $so.V6Only),
+                    bline("tcpMptcp"; (if $so.tcpMptcp != null then $so.tcpMptcp else $so.mptcp end))
+                ] | join(" "))
+            else empty end)
+        ] end;
+
+    def render_fallbacks($fbs):
+        if ($fbs | type) == "array" and ($fbs | length) > 0 then
+            ($fbs | to_entries | map(
+                select(.value | type == "object")
+                | "  Fallback\(.key + 1): " + ([
+                    line("name"; .value.name),
+                    line("alpn"; .value.alpn),
+                    line("path"; .value.path),
+                    line("dest"; .value.dest),
+                    line("xver"; .value.xver)
+                ] | join(" "))
+            ))
+        else [] end;
+
+    def ulist($s):
+        if ($s.users | type) == "array" and ($s.users | length) > 0 then ($s.users | map(select(type == "object")))
+        elif ($s.clients | type) == "array" and ($s.clients | length) > 0 then ($s.clients | map(select(type == "object")))
+        elif ($s.accounts | type) == "array" and ($s.accounts | length) > 0 then ($s.accounts | map(select(type == "object")))
+        else [] end;
+
+    def render_settings($p; $s):
+        if ($s | type) != "object" then []
+        elif $p == "vless" or $p == "vmess" or $p == "trojan" then
+            ulist($s) as $us
+            | [
+                ([
+                    line("decryption"; $s.decryption),
+                    bline("disableInsecureEncryption"; $s.disableInsecureEncryption),
+                    line("detour"; (if ($s.detour | type) == "object" then $s.detour.to else null end)),
+                    line("packetEncoding"; $s.packetEncoding),
+                    (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)
+                ] | join(" "))
+              ] + render_fallbacks($s.fallbacks)
+        elif $p == "shadowsocks" then
+            ulist($s) as $us
+            | [
+                ([
+                    line("method"; $s.method),
+                    line("network"; $s.network),
+                    (if $core == "v2ray" then bline("udp"; $s.udp) else empty end),
+                    line("email"; $s.email),
+                    bline("ivCheck"; $s.ivCheck),
+                    line("packetEncoding"; $s.packetEncoding),
+                    (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)
+                ] | join(" "))
+            ]
+        elif $p == "tunnel" or $p == "dokodemo-door" then
+            [
+                ([
+                    line("目标地址"; ($s.rewriteAddress // $s.address)),
+                    line("目标端口"; ($s.rewritePort // $s.port)),
+                    line("网络"; ($s.allowedNetwork // $s.network // "tcp")),
+                    line("timeout"; $s.timeout),
+                    (if $s.followRedirect == true then "followRedirect: \(yv(true))" else empty end)
+                ] | join(" ")),
+                (if ($s.portMap | type) == "object" then "端口映射: \(cv(kv($s.portMap)))" else empty end)
+            ]
+        elif $p == "socks" or $p == "http" then
+            ulist($s) as $us
+            | [
+                ([
+                    line("auth"; $s.auth),
+                    (if $s.udp == true then "UDP: \(yv(true))" else empty end),
+                    line("ip"; $s.ip),
+                    bline("allowTransparent"; $s.allowTransparent),
+                    line("timeout"; $s.timeout),
+                    line("packetEncoding"; $s.packetEncoding),
+                    (if ($us | length) > 0 then "账号数: \(cv($us | length))" else empty end)
+                ] | join(" "))
+            ]
+        elif $p == "wireguard" then
+            (if ($s.peers | type) == "array" then ($s.peers | map(select(type == "object"))) else [] end) as $prs
+            | [
+                ([line("mtu"; $s.mtu), (if ($prs | length) > 0 then "Peers: \(cv($prs | length))" else empty end)] | join(" "))
+            ] + ($prs | to_entries | map("  Peer\(.key + 1): " + ([line("publicKey"; .value.publicKey), line("allowedIPs"; arr(.value.allowedIPs // [])), line("keepAlive"; .value.keepAlive)] | join(" "))))
+        elif $p == "tun" then
+            [
+                ([line("name"; $s.name), line("mtu"; $s.mtu), line("gateway"; arr($s.gateway // [])), line("dns"; arr($s.dns // [])), line("autoOutboundsInterface"; $s.autoOutboundsInterface)] | join(" "))
+            ]
+        elif $p == "masque" then
+            ulist($s) as $us
+            | [
+                ([line("address"; arr($s.address // [])), line("mtu"; $s.mtu), (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)] | join(" "))
+            ]
+        elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" then
+            ulist($s) as $us
+            | [
+                ([line("version"; $s.version), line("auth"; $s.auth), line("password"; $s.password), (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)] | join(" "))
+            ]
+        else [] end;
+
+    (if (.inbounds | type) == "array" then .inbounds else [] end)
+    | [ to_entries[]
+        | select(.value | type == "object")
+        | select(
+            if $filter == "nginx" then ((.value.tag // "" | tostring) | startswith($nginx_prefix))
+            elif $filter == "direct" then (((.value.tag // "" | tostring) | startswith($nginx_prefix)) | not)
+            else true end
+          )
+      ]
+    | to_entries[]
+    | (.key + 1) as $num
+    | .value.value as $inb
+    | (
+        [
+            "监听地址: \(cv($inb.listen // "0.0.0.0")) 监听端口: \(cv($inb.port // ""))",
+            "传输协议: \(cv($inb.protocol // "")) 标识: \(cv($inb.tag // ""))"
+        ]
+        + render_settings($inb.protocol // ""; $inb.settings)
+        + render_stream($inb.streamSettings)
+        + render_sniffing($inb.sniffing)
+        + (if $core == "v2ray" and ($inb.allocate | type) == "object" then ["端口分配: \(cv($inb.allocate.strategy // "always")) refresh: \(cv($inb.allocate.refresh // 5)) concurrency: \(cv($inb.allocate.concurrency // 3))"] else [] end)
+      )
+    | map(select(. != ""))
+    | " \($g)\($num).\($n)\($ind)" + join("\n\($ind)") + "\n"
+    ' "$config_file"
+}
+
+ProxyRenderOutbounds()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+        --arg ind "$indent_6" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def bv($v): if $v == true then "\($g)开启\($n)" else "\($r)关闭\($n)" end;
+    def arr($a): if ($a | type) == "array" then ($a | map(tostring) | join(", ")) else ($a // "" | tostring) end;
+    def line($label; $val): if ($val // "" | tostring) != "" then "\($label): \(cv($val))" else empty end;
+
+    def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+
+    def render_out_settings($p; $s):
+        if ($s | type) != "object" then []
+        elif $p == "freedom" then
+            [
+                ([line("domainStrategy"; $s.domainStrategy), line("redirect"; $s.redirect), line("proxyProtocol"; $s.proxyProtocol)] | join(" ")),
+                (if ($s.fragment | type) == "object" then "fragment: \(cv("\($s.fragment.packets // "") / \($s.fragment.length // "") / \($s.fragment.interval // "")"))" else empty end),
+                (if ($s.noises | type) == "array" and ($s.noises | length) > 0 then "noises: \(cv($s.noises | length))" else empty end),
+                (if ($s.finalRules | type) == "array" and ($s.finalRules | length) > 0 then "finalRules: \(cv($s.finalRules | length))" else empty end)
+            ]
+        elif $p == "blackhole" then
+            [([line("response"; (if ($s.response | type) == "object" then ($s.response.type // "none") else "none" end))] | join(" "))]
+        elif $p == "dns" then
+            [
+                ([line("network"; ($s.rewriteNetwork // $s.network)), line("address"; ($s.rewriteAddress // $s.address)), line("port"; ($s.rewritePort // $s.port))] | join(" ")),
+                (if ($s.rules | type) == "array" and ($s.rules | length) > 0 then "rules: \(cv($s.rules | length))" else empty end)
+            ]
+        elif $p == "loopback" then
+            [([line("inboundTag"; $s.inboundTag)] | join(" "))]
+        elif $p == "vless" or $p == "vmess" then
+            arr_objs($s.vnext) as $vn
+            | if ($vn | length) > 0 then
+                [($vn | map("\(.address // ""):\(.port // "") (users: \(arr_objs(.users) | length))") | join("; ")) | "服务端: \(cv(.))"]
+            else
+                [([line("address"; $s.address), line("port"; $s.port), line("flow"; $s.flow), line("encryption"; ($s.encryption // $s.security))] | join(" "))]
+            end
+        elif $p == "trojan" or $p == "shadowsocks" or $p == "socks" or $p == "http" then
+            arr_objs($s.servers) as $sv
+            | if ($sv | length) > 0 then
+                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "服务端: \(cv(.))"]
+            else
+                [([line("address"; $s.address), line("port"; $s.port), line("method"; $s.method)] | join(" "))]
+            end
+        elif $p == "wireguard" then
+            [([line("mtu"; $s.mtu), line("address"; arr($s.address // [])), (if ($s.peers | type) == "array" and ($s.peers | length) > 0 then "Peers: \(cv($s.peers | length))" else empty end)] | join(" "))]
+        elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" or $p == "masque" then
+            arr_objs($s.servers) as $sv
+            | if ($sv | length) > 0 then
+                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "服务端: \(cv(.))"]
+              else
+                [([line("address"; $s.address), line("port"; $s.port), line("version"; $s.version)] | join(" "))]
+              end
+        else [] end;
+
+    (if (.outbounds | type) == "array" then .outbounds else [] end)
+    | to_entries[]
+    | select(.value | type == "object")
+    | (.key + 1) as $num
+    | .value as $out
+    | (
+        [
+            "发送地址: \(cv($out.sendThrough // "0.0.0.0")) 传输协议: \(cv($out.protocol // ""))",
+            "标识: \(cv($out.tag // ""))"
+            + (if $core == "xray" and ($out.targetStrategy // "") != "" then " targetStrategy: \(cv($out.targetStrategy))" else "" end),
+            (if $core == "v2ray" and ($out.proxySettings | type) == "object" then "proxySettings: \(cv($out.proxySettings.tag // ""))" else empty end),
+            (if ($out.mux | type) == "object" then
+                "Mux: \(bv($out.mux.enabled // false)) 并发: \(cv($out.mux.concurrency // 8))"
+                + (if $core == "xray" and ($out.mux.xudpConcurrency // "") != "" then " xudpConcurrency: \(cv($out.mux.xudpConcurrency))" else "" end)
+                + (if $core == "xray" and ($out.mux.xudpProxyUDP443 // "") != "" then " xudpProxyUDP443: \(cv($out.mux.xudpProxyUDP443))" else "" end)
+             else empty end)
+        ]
+        + render_out_settings($out.protocol // ""; $out.settings)
+        + (if ($out.streamSettings | type) == "object" then
+            ($out.streamSettings) as $st
+            | [
+                "传输方式: \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) 传输安全: \(cv($st.security // "none"))",
+                (if ($st.tlsSettings | type) == "object" then
+                    ($st.tlsSettings) as $t
+                    | ([
+                        line("serverName"; $t.serverName),
+                        line("fingerprint"; $t.fingerprint),
+                        line("ALPN"; arr($t.alpn // [])),
+                        (if $t.allowInsecure == true then "allowInsecure: \(cv("是"))" else empty end)
+                      ] | join(" ")) as $tsum
+                    | if $tsum != "" then "TLS: \($tsum)" else empty end
+                 else empty end),
+                (if ($st.realitySettings | type) == "object" then
+                    ($st.realitySettings) as $rl
+                    | ([
+                        line("serverName"; $rl.serverName),
+                        line("fingerprint"; $rl.fingerprint),
+                        line("shortId"; $rl.shortId),
+                        line("spiderX"; $rl.spiderX),
+                        (if ($rl.publicKey // $rl.password // "") != "" then "publicKey: \(cv("已配置"))" else empty end)
+                      ] | join(" ")) as $rsum
+                    | if $rsum != "" then "REALITY: \($rsum)" else empty end
+                 else empty end),
+                (if ($st.sockopt | type) == "object" and ($st.sockopt.dialerProxy // "") != "" then "dialerProxy: \(cv($st.sockopt.dialerProxy))" else empty end)
+            ]
+          else [] end)
+      )
+    | map(select(. != ""))
+    | " \($g)\($num).\($n)\($ind)" + join("\n\($ind)") + "\n"
+    ' "$config_file"
+}
+
+ProxyRenderInboundAccounts()
+{
+    local config_file="$1"
+    local idx="$2"
+
+    JQs query "$config_file" '
+        def cv($v): "\($g)\($v)\($n)";
+        def fld($k; $v): if ($v // "" | tostring) != "" then "\($k): \(cv($v))" else empty end;
+        def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+        (if type == "object" and (.inbounds | type) == "array" and ((.inbounds[$i] // null) | type) == "object" then .inbounds[$i] else {} end) as $inb
+        | (if ($inb.settings | type) == "object" then $inb.settings else {} end) as $s
+        | (if (arr_objs($s.users) | length) > 0 then arr_objs($s.users)
+           elif (arr_objs($s.clients) | length) > 0 then arr_objs($s.clients)
+           elif (arr_objs($s.accounts) | length) > 0 then arr_objs($s.accounts)
+           else [] end) as $list
+        | if ($list | length) > 0 then
+            $list | to_entries[]
+            | "  \(.key + 1). " + ([
+                fld("id"; .value.id),
+                fld("email"; .value.email),
+                fld("flow"; .value.flow),
+                fld("alterId"; .value.alterId),
+                fld("password"; .value.password),
+                fld("user"; .value.user),
+                fld("pass"; .value.pass),
+                fld("auth"; .value.auth),
+                fld("method"; .value.method),
+                fld("level"; .value.level)
+            ] | join(" "))
+          elif ($s.password // "") != "" then
+            "  1. " + ([fld("method"; $s.method), fld("password"; $s.password), fld("email"; $s.email), fld("level"; $s.level)] | join(" "))
+          else
+            empty
+          end
+    ' --argjson i "$idx" --arg g "$green" --arg n "$normal"
+}
+
+ProxyRenderOutboundAccounts()
+{
+    local config_file="$1"
+    local idx="$2"
+
+    JQs query "$config_file" '
+        def cv($v): "\($g)\($v)\($n)";
+        def fld($k; $v): if ($v // "" | tostring) != "" then "\($k): \(cv($v))" else empty end;
+        def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+        (if type == "object" and (.outbounds | type) == "array" and ((.outbounds[$i] // null) | type) == "object" then .outbounds[$i] else {} end) as $out
+        | (if ($out.settings | type) == "object" then $out.settings else {} end) as $s
+        | arr_objs($s.vnext) as $vn
+        | arr_objs($s.servers) as $sv
+        | arr_objs($s.peers) as $pr
+        | if ($vn | length) > 0 then
+            $vn[] as $v
+            | arr_objs($v.users) | to_entries[]
+            | "  \(.key + 1). \($v.address // ""):\($v.port // "") " + ([fld("id"; .value.id), fld("flow"; .value.flow), fld("alterId"; .value.alterId), fld("security"; .value.security), fld("encryption"; .value.encryption), fld("level"; .value.level)] | join(" "))
+          elif ($sv | length) > 0 then
+            $sv | to_entries[]
+            | .value as $srv
+            | (.key + 1) as $si
+            | arr_objs($srv.users) as $susers
+            | if ($susers | length) > 0 then
+                $susers | to_entries[]
+                | "  \($si).\(.key + 1). \($srv.address // ""):\($srv.port // "") " + ([fld("user"; .value.user), fld("pass"; .value.pass), fld("level"; .value.level)] | join(" "))
+              else
+                "  \($si). \($srv.address // ""):\($srv.port // "") " + ([fld("method"; $srv.method), fld("password"; $srv.password), fld("user"; $srv.user), fld("pass"; $srv.pass), fld("email"; $srv.email), fld("level"; $srv.level)] | join(" "))
+              end
+          elif ($pr | length) > 0 then
+            $pr | to_entries[]
+            | "  \(.key + 1). " + ([fld("endpoint"; .value.endpoint), fld("publicKey"; .value.publicKey), fld("keepAlive"; .value.keepAlive)] | join(" "))
+          elif ($s.address // "") != "" then
+            "  1. \($s.address):\($s.port // "") " + ([fld("id"; $s.id), fld("flow"; $s.flow), fld("password"; $s.password), fld("method"; $s.method), fld("user"; $s.user), fld("pass"; $s.pass), fld("encryption"; $s.encryption), fld("security"; $s.security), fld("email"; $s.email), fld("level"; $s.level)] | join(" "))
+          else
+            empty
+          end
+    ' --argjson i "$idx" --arg g "$green" --arg n "$normal"
+}
+
+ProxyRenderShareLinks()
+{
+    local config_file="$1"
+    local host="${2:-}"
+    local only_idx="${3:-}"
+    local core_type="${4:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 0
+    fi
+
+    if [ -z "$host" ]
+    then
+        if ! host=$(GetServerIp) || [ -z "$host" ]
+        then
+            host="$PROXY_DEFAULT_HOST"
+        fi
+    fi
+
+    SetDelimiters
+
+    local xray_bin=""
+    if [ -n "${XRAY_FILE:-}" ] && [ -x "$XRAY_FILE" ]
+    then
+        xray_bin="$XRAY_FILE"
+    elif command -v xray > /dev/null 2>&1
+    then
+        xray_bin="xray"
+    fi
+
+    local pbk_map="{}"
+    if [ -n "$xray_bin" ]
+    then
+        local priv_keys
+        priv_keys=$($JQ_FILE -r '
+            (if (.inbounds | type) == "array" then .inbounds else [] end)
+            | map(
+                select(type == "object")
+                | select((.streamSettings | type) == "object" and (.streamSettings.realitySettings | type) == "object")
+                | .streamSettings.realitySettings.privateKey
+                | select(type == "string" and length > 0)
+              )
+            | unique[]
+        ' "$config_file" 2> /dev/null)
+
+        if [ -n "$priv_keys" ]
+        then
+            local priv_key pub_out pub_val pbk_pairs=""
+            while IFS= read -r priv_key
+            do
+                [ -z "$priv_key" ] && continue
+                pub_out=$("$xray_bin" x25519 -i "$priv_key" 2> /dev/null) || continue
+                pub_val=$(printf '%s\n' "$pub_out" | awk '/^(Password|Public key):/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); print; exit}')
+                if [ -n "$pub_val" ]
+                then
+                    pbk_pairs="${pbk_pairs}${priv_key}${field_sep}${pub_val}"$'\n'
+                fi
+            done <<< "$priv_keys"
+
+            if [ -n "$pbk_pairs" ]
+            then
+                pbk_map=$($JQ_FILE -Rn --arg sep "$field_sep" '
+                    [inputs | select(length > 0) | split($sep) | select(length >= 2) | {key: .[0], value: .[1]}]
+                    | from_entries
+                ' <<< "$pbk_pairs")
+                [ -z "$pbk_map" ] && pbk_map="{}"
+            fi
+        fi
+    fi
+
+    local raw_lines
+    raw_lines=$($JQ_FILE -r --arg sep "$field_sep" --arg host "$host" --arg only "$only_idx" --arg core "$core_type" --argjson pbk_map "$pbk_map" '
+        def q($k; $v): if (($v | type) == "string" or ($v | type) == "number" or ($v | type) == "boolean") and ($v | tostring) != "" then "\($k)=\($v | tostring | @uri)" else empty end;
+        def obj($x): if ($x | type) == "object" then $x else {} end;
+        def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+        def first_str($x): if ($x | type) == "array" then ($x[0] // "" | tostring) elif ($x | type) == "string" then $x else "" end;
+        def fmt_host($h): if ($h | contains(":")) and (($h | startswith("[")) | not) then "[\($h)]" else $h end;
+        (if (.inbounds | type) == "array" then .inbounds else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | select($only == "" or (.key | tostring) == $only)
+        | .value as $inb
+        | ($inb.protocol // "" | tostring) as $p
+        | ($inb.port // "" | tostring) as $port
+        | ($inb.tag // $p | tostring) as $tag
+        | obj($inb.settings) as $set
+        | obj($inb.streamSettings) as $st
+        | ($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end) | tostring) as $net
+        | ($st.security // "none" | tostring) as $sec
+        | obj($st.realitySettings) as $rl
+        | obj($st.tlsSettings) as $tls
+        | (if (arr_objs($set.users) | length) > 0 then arr_objs($set.users)
+           elif (arr_objs($set.clients) | length) > 0 then arr_objs($set.clients)
+           else [] end) as $users
+        | (
+            (if $net == "websocket" then "ws"
+             elif $net == "mkcp" then "kcp"
+             elif $net == "splithttp" then "xhttp"
+             else $net end) as $uri_net
+            | [
+                q("type"; $uri_net),
+                q("security"; $sec),
+                (if $sec == "reality" then
+                    ($rl.privateKey // "" | tostring) as $priv
+                    | (if $priv != "" and ($pbk_map[$priv] // "") != "" then $pbk_map[$priv]
+                       else ($rl.publicKey // $rl.password // "") end) as $pbk
+                    | q("pbk"; $pbk),
+                      q("sni"; first_str($rl.serverNames)),
+                      q("sid"; first_str($rl.shortIds)),
+                      q("fp"; ($rl.fingerprint // "chrome")),
+                      q("spx"; ($rl.spiderX // "")),
+                      q("pqv"; ($rl.mldsa65Verify // ""))
+                elif $sec == "tls" then
+                    q("sni"; ($tls.serverName // "")),
+                    q("alpn"; (if ($tls.alpn | type) == "array" and ($tls.alpn | length) > 0 then ($tls.alpn | map(tostring) | join(",")) else "" end))
+                else empty end),
+                (if $net == "xhttp" or $net == "splithttp" then
+                    obj($st.xhttpSettings // $st.splithttpSettings) as $xh
+                    | q("path"; ($xh.path // "/")),
+                      q("host"; ($xh.host // "")),
+                      q("mode"; ($xh.mode // "auto")),
+                      (if ($xh.extra | type) == "object" and ($xh.extra | length) > 0 then q("extra"; ($xh.extra | tojson)) else empty end)
+                elif $net == "ws" or $net == "websocket" then
+                    obj($st.wsSettings) as $ws
+                    | obj($ws.headers) as $wsh
+                    | q("path"; ($ws.path // "/")),
+                      q("host"; ($ws.host // $wsh.Host // $wsh.host // ""))
+                elif $net == "grpc" then
+                    obj($st.grpcSettings) as $gr
+                    | q("serviceName"; ($gr.serviceName // "")),
+                      q("authority"; ($gr.authority // "")),
+                      (if $gr.multiMode == true then q("mode"; "multi") else empty end)
+                elif $net == "httpupgrade" then
+                    obj($st.httpupgradeSettings) as $hu
+                    | q("path"; ($hu.path // "/")),
+                      q("host"; ($hu.host // ""))
+                elif $net == "kcp" or $net == "mkcp" then
+                    obj($st.kcpSettings) as $ks
+                    | obj($ks.header) as $kh
+                    | q("headerType"; ($kh.type // "")),
+                      q("seed"; ($ks.seed // ""))
+                elif $net == "h2" or $net == "http" then
+                    obj($st.httpSettings) as $hs
+                    | q("path"; ($hs.path // "/")),
+                      q("host"; first_str($hs.host))
+                else empty end)
+            ] | join("&")
+          ) as $qs
+        | if $p == "vless" then
+            $users[]
+            | ((.flow // $set.flow // "") | tostring) as $flow
+            | (($set.decryption // "") | tostring) as $dec
+            | "PLAIN\($sep)vless://\(.id // "")@\(fmt_host($host)):\($port)?\($qs)"
+              + (if $flow != "" then "&flow=\($flow | @uri)" else "" end)
+              + (if $dec == "" or $dec == "none" then "&encryption=none" else "&encryption=VLESS_CLIENT_ENCRYPTION_REQUIRED" end)
+              + "#\((.email // $tag | tostring) | @uri)"
+          elif $p == "vmess" then
+            obj($st.rawSettings) as $rs
+            | obj($st.tcpSettings) as $ts
+            | obj($st.wsSettings) as $ws
+            | obj($ws.headers) as $wsh
+            | obj($st.xhttpSettings // $st.splithttpSettings) as $xh
+            | obj($st.httpupgradeSettings) as $hu
+            | obj($st.httpSettings) as $hs
+            | obj($st.grpcSettings) as $gr
+            | obj($st.kcpSettings) as $ks
+            | (if $net == "raw" then "tcp"
+               elif $net == "websocket" then "ws"
+               elif $net == "mkcp" then "kcp"
+               elif $net == "http" then "h2"
+               else $net end) as $vnet
+            | $users[]
+            | "VMESS\($sep)" + ({
+                "v": "2",
+                "ps": (.email // $tag | tostring),
+                "add": $host,
+                "port": $port,
+                "id": (.id // "" | tostring),
+                "aid": ((.alterId // 0) | tostring),
+                "net": $vnet,
+                "type": (obj($rs.header).type // obj($ts.header).type // obj($ks.header).type // "none"),
+                "host": ($ws.host // $wsh.Host // $xh.host // $hu.host // first_str($hs.host)),
+                "path": ($ws.path // $xh.path // $hu.path // $hs.path // $gr.serviceName // $ks.seed // ""),
+                "tls": (if $sec == "tls" then "tls" else "" end),
+                "sni": ($tls.serverName // "")
+              } | tojson)
+          elif $p == "trojan" then
+            $users[]
+            | "PLAIN\($sep)trojan://\(.password // "" | tostring | @uri)@\(fmt_host($host)):\($port)?\($qs)#\((.email // $tag | tostring) | @uri)"
+          elif $p == "shadowsocks" then
+            ($set.method // "" | tostring) as $smethod
+            | if ($users | length) > 0 then
+                $users[]
+                | if ($smethod | startswith("2022-")) then
+                    "SS\($sep)\($smethod):\($set.password // ""):\(.password // "")\($sep)\(fmt_host($host)):\($port)\($sep)\((.email // $tag | tostring) | @uri)"
+                  else
+                    "SS\($sep)\(.method // $smethod):\(.password // "")\($sep)\(fmt_host($host)):\($port)\($sep)\((.email // $tag | tostring) | @uri)"
+                  end
+              elif ($set.password // "") != "" then
+                "SS\($sep)\($smethod):\($set.password // "")\($sep)\(fmt_host($host)):\($port)\($sep)\((($set.email // $tag | tostring) | @uri))"
+              else empty end
+          elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" then
+            ([q("sni"; ($tls.serverName // ""))] | join("&")) as $hy_qs
+            | (if $hy_qs != "" then "?\($hy_qs)" else "" end) as $hy_qpart
+            | if ($users | length) > 0 then
+                $users[]
+                | "PLAIN\($sep)hysteria2://\(.auth // .password // "" | tostring | @uri)@\(fmt_host($host)):\($port)\($hy_qpart)#\((.email // $tag | tostring) | @uri)"
+              else
+                (obj($st.hysteriaSettings).auth // obj($st.hysteria2Settings // $st.hy2steriaSettings).password // $set.auth // $set.password // "" | tostring) as $hy_auth
+                | if $hy_auth != "" then
+                    "PLAIN\($sep)hysteria2://\($hy_auth | @uri)@\(fmt_host($host)):\($port)\($hy_qpart)#\($tag | @uri)"
+                  else empty end
+              end
+          else empty end
+    ' "$config_file")
+
+    local kind p1 p2 p3 b64
+    while IFS="$field_sep" read -r kind p1 p2 p3
+    do
+        [ -z "$kind" ] && continue
+        case "$kind" in
+            PLAIN)
+                printf '%s\n' "$p1"
+            ;;
+            VMESS)
+                b64=$(printf '%s' "$p1" | base64 | tr -d '\n')
+                printf 'vmess://%s\n' "$b64"
+            ;;
+            SS)
+                b64=$(printf '%s' "$p1" | base64 | tr -d '\n')
+                printf 'ss://%s@%s#%s\n' "$b64" "$p2" "$p3"
+            ;;
+        esac
+    done <<< "$raw_lines"
+}
+
+ProxyPrintQrCode()
+{
+    local link="$1"
+    if [ -z "$link" ]
+    then
+        return 0
+    fi
+
+    echo
+    ExitOnList y "`gettext \"打印二维码\"`"
+
+    if [ ! -e "$IMGCAT_FILE" ]
+    then
+        ImgcatInstall
+    fi
+    if ! command -v convert > /dev/null 2>&1
+    then
+        Println "$info 安装 ImageMagick"
+        ImageMagickInstall
+    fi
+    DepInstall qrencode
+    local qr_tmp qr_png
+    qr_tmp=$(mktemp "${TMPDIR:-/tmp}/aios_share_link.XXXXXX")
+    qr_png="${qr_tmp}.png"
+    mv -f "$qr_tmp" "$qr_png"
+    qrencode -s 1 -o "$qr_png" "$link"
+    "$IMGCAT_FILE" --half-height "$qr_png"
+    rm -f "$qr_tmp" "$qr_png"
+}
+
+ProxyFormatStatsJson()
+{
+    local raw_stats="$1"
+
+    $JQ_FILE -r --arg g "$green" --arg n "$normal" '
+        def fmt_bytes($b):
+            ($b | tonumber? // 0) as $v
+            | if $v >= 1099511627776 then "\(($v / 1099511627776 * 100 | floor) / 100) TB"
+              elif $v >= 1073741824 then "\(($v / 1073741824 * 100 | floor) / 100) GB"
+              elif $v >= 1048576 then "\(($v / 1048576 * 100 | floor) / 100) MB"
+              elif $v >= 1024 then "\(($v / 1024 * 100 | floor) / 100) KB"
+              else "\($v) B" end;
+        (if (type == "object") and (.stat | type) == "array" then (.stat | map(select(type == "object" and (.name | type) == "string"))) else [] end)
+        | if length == 0 then
+            ""
+          else
+            group_by(.name | split(">>>")[0])
+            | map(
+                (.[0].name | split(">>>")[0]) as $grp
+                | "[\($grp)]\n" + (
+                    map(
+                        (.name | split(">>>")) as $parts
+                        | if ($parts[2] // "") == "traffic" then
+                            "  \($parts[1] // .name) (\($parts[3] // "")): \($g)\(fmt_bytes(.value // 0))\($n) (\(.value // 0) B)"
+                          else
+                            "  \(.name): \($g)\(.value // 0)\($n)"
+                          end
+                    ) | join("\n")
+                )
+            )
+            | join("\n")
+          end
+    ' <<< "$raw_stats"
+}
+
+ProxyRenderDns()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+        --arg ind "$indent_6" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
+
+    (if (.dns | type) == "object" then .dns else {} end) as $d
+    | if ($d | length) == 0 then
+        ""
+      else
+        (
+            [
+                "查询策略: \(cv($d.queryStrategy // "UseIP"))"
+                + (if ($d.tag // "" | tostring) != "" then " 标识: \(cv($d.tag))" else "" end)
+                + (if ($d.clientIp // $d.clientIP // "") != "" then " clientIp: \(cv($d.clientIp // $d.clientIP))" else "" end),
+                "禁用缓存: \(yv($d.disableCache // false)) 禁用回退: \(yv($d.disableFallback // false)) 匹配不回退: \(yv($d.disableFallbackIfMatch // false))"
+            ]
+            + (if $core == "xray" then
+                [
+                    "过期缓存: \(yv($d.serveStale // false))"
+                    + (if ($d.serveExpiredTTL // 0) != 0 then " TTL: \(cv($d.serveExpiredTTL))" else "" end)
+                    + " 并行查询: \(yv($d.enableParallelQuery // false)) 系统Hosts: \(yv($d.useSystemHosts // false))"
+                ]
+              else [] end)
+            + (if ($d.hosts | type) == "object" and ($d.hosts | length) > 0 then
+                ["Hosts:"] + ($d.hosts | to_entries | map("  \(.key) => \(cv(arr(.value)))"))
+              else [] end)
+            + (if ($d.servers | type) == "array" and ($d.servers | length) > 0 then
+                ["DNS 服务器 (\($d.servers | length)):"]
+                + ($d.servers | to_entries | map(
+                    (.key + 1) as $i
+                    | .value as $s
+                    | if ($s | type) == "string" then
+                        "  \($i). \(cv($s))"
+                      elif ($s | type) == "object" then
+                        "  \($i). \(cv($s.address // ""))"
+                        + (if $s.port != null then ":\(cv($s.port))" else "" end)
+                        + (if ($s.tag // "" | tostring) != "" then " tag: \(cv($s.tag))" else "" end)
+                        + (if ($s.queryStrategy // "" | tostring) != "" then " queryStrategy: \(cv($s.queryStrategy))" else "" end)
+                        + (if ($s.clientIP // $s.clientIp // "" | tostring) != "" then " clientIP: \(cv($s.clientIP // $s.clientIp))" else "" end)
+                        + (if $s.timeoutMs != null then " timeoutMs: \(cv($s.timeoutMs))" else "" end)
+                        + (if $s.disableCache != null then " disableCache: \(yv($s.disableCache))" else "" end)
+                        + (if (arr($s.domains) | length) > 0 then " 域名: \(cv(arr($s.domains)))" else "" end)
+                        + (if $core == "xray" and (arr($s.expectedIPs) | length) > 0 then " expectedIPs: \(cv(arr($s.expectedIPs)))" else "" end)
+                        + (if $core == "xray" and (arr($s.unexpectedIPs) | length) > 0 then " unexpectedIPs: \(cv(arr($s.unexpectedIPs)))" else "" end)
+                        + (if $core == "v2ray" and (arr($s.expectIPs) | length) > 0 then " expectIPs: \(cv(arr($s.expectIPs)))" else "" end)
+                        + (if $s.skipFallback == true then " skipFallback: \(yv(true))" else "" end)
+                        + (if $core == "xray" and $s.finalQuery == true then " finalQuery: \(yv(true))" else "" end)
+                      else empty end
+                  ))
+              else [] end)
+        )
+        | join("\n")
+      end
+    ' "$config_file"
+}
+
+ProxyRenderRouting()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+        --arg ind "$indent_6" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
+    def kv($obj): if ($obj | type) == "object" then ($obj | to_entries | map("\(.key)=\(.value | tostring)") | join(", ")) else ($obj // "" | tostring) end;
+    def fld($k; $v): if ($v // "" | tostring) != "" then "\($k): \(cv($v))" else empty end;
+
+    (if (.routing | type) == "object" then .routing else {} end) as $rt
+    | if ($rt | length) == 0 then
+        ""
+      else
+        (
+            [
+                "域名解析策略: \(cv($rt.domainStrategy // "AsIs"))"
+                + (if $core == "v2ray" and ($rt.domainMatcher // "") != "" then " domainMatcher: \(cv($rt.domainMatcher))" else "" end)
+            ]
+            + (if ($rt.rules | type) == "array" and ($rt.rules | length) > 0 then
+                ["路由规则 (\($rt.rules | length)):"]
+                + ($rt.rules | to_entries | map(
+                    select(.value | type == "object")
+                    | (.key + 1) as $i
+                    | .value as $ru
+                    | "  \($i). " + ([
+                        (if $core == "xray" then fld("ruleTag"; $ru.ruleTag) else fld("type"; $ru.type) end),
+                        fld("outboundTag"; $ru.outboundTag),
+                        fld("balancerTag"; $ru.balancerTag),
+                        fld("network"; arr($ru.network)),
+                        fld("port"; $ru.port),
+                        fld("sourcePort"; $ru.sourcePort),
+                        (if $core == "xray" then fld("localPort"; $ru.localPort) else empty end),
+                        (if $core == "xray" then fld("domain"; arr($ru.domain // [])) else fld("domains"; arr($ru.domains // $ru.domain // [])) end),
+                        fld("ip"; arr($ru.ip // [])),
+                        (if $core == "xray" then fld("sourceIP"; arr($ru.sourceIP // $ru.source // [])) else fld("source"; arr($ru.source // [])) end),
+                        (if $core == "xray" then fld("localIP"; arr($ru.localIP // [])) else empty end),
+                        fld("inboundTag"; arr($ru.inboundTag // [])),
+                        fld("protocol"; arr($ru.protocol // [])),
+                        fld("user"; arr($ru.user // [])),
+                        (if $core == "xray" then fld("process"; arr($ru.process // [])) else empty end),
+                        (if $core == "xray" then fld("vlessRoute"; $ru.vlessRoute) else empty end),
+                        (if $ru.attrs != null then fld("attrs"; kv($ru.attrs)) else empty end),
+                        (if $core == "xray" and ($ru.webhook | type) == "object" then fld("webhook"; $ru.webhook.url) else empty end)
+                    ] | join(" "))
+                  ))
+              else [] end)
+            + (if ($rt.balancers | type) == "array" and ($rt.balancers | length) > 0 then
+                ["负载均衡 (\($rt.balancers | length)):"]
+                + ($rt.balancers | to_entries | map(
+                    select(.value | type == "object")
+                    | (.key + 1) as $i
+                    | .value as $b
+                    | "  \($i). tag: \(cv($b.tag // "")) selector: \(cv(arr($b.selector // [])))"
+                    + (if ($b.strategy | type) == "object" and ($b.strategy.type // "") != "" then " strategy: \(cv($b.strategy.type))" else "" end)
+                    + (if $core == "xray" and ($b.fallbackTag // "") != "" then " fallbackTag: \(cv($b.fallbackTag))" else "" end)
+                  ))
+              else [] end)
+        )
+        | join("\n")
+      end
+    ' "$config_file"
+}
+
+ProxyRenderPolicy()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+
+    (if (.policy | type) == "object" then .policy else {} end) as $p
+    | if ($p | length) == 0 then
+        ""
+      else
+        (if ($p.levels | type) == "object" then $p.levels elif ($p.level | type) == "object" then $p.level else {} end) as $lvls
+        | (if ($p.system | type) == "object" then $p.system else {} end) as $sys
+        | (if $core == "xray" then 60 else 4 end) as $def_hs
+        | (if $core == "xray" then 1 else 2 end) as $def_up
+        | (if $core == "xray" then 1 else 5 end) as $def_down
+        | (
+            (if ($lvls | length) > 0 then
+                ["用户等级策略:"]
+                + ($lvls | to_entries | map(
+                    select(.value | type == "object")
+                    | "  Level \(cv(.key)): handshake=\(cv(.value.handshake // $def_hs)) connIdle=\(cv(.value.connIdle // 300)) uplinkOnly=\(cv(.value.uplinkOnly // $def_up)) downlinkOnly=\(cv(.value.downlinkOnly // $def_down)) bufferSize=\(cv(.value.bufferSize // "auto")) statsUp=\(yv(.value.statsUserUplink // false)) statsDown=\(yv(.value.statsUserDownlink // false))"
+                    + (if $core == "xray" then " statsOnline=\(yv(.value.statsUserOnline // false))" else "" end)
+                  ))
+              else [] end)
+            + (if ($sys | length) > 0 then
+                [
+                    "系统策略: inboundUp=\(yv($sys.statsInboundUplink // false)) inboundDown=\(yv($sys.statsInboundDownlink // false)) outboundUp=\(yv($sys.statsOutboundUplink // false)) outboundDown=\(yv($sys.statsOutboundDownlink // false))"
+                ]
+              else [] end)
+        )
+        | join("\n")
+      end
+    ' "$config_file"
+}
+
+ProxyRenderReverse()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg n "$normal" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+
+    (if (.reverse | type) == "object" then .reverse else {} end) as $rev
+    | [
+        (if ($rev.bridges | type) == "array" and ($rev.bridges | length) > 0 then
+            ["Bridges:"] + ($rev.bridges | to_entries | map(select(.value | type == "object") | "  \(.key + 1). tag: \(cv(.value.tag // "")) domain: \(cv(.value.domain // ""))"))
+          else [] end),
+        (if ($rev.portals | type) == "array" and ($rev.portals | length) > 0 then
+            ["Portals:"] + ($rev.portals | to_entries | map(select(.value | type == "object") | "  \(.key + 1). tag: \(cv(.value.tag // "")) domain: \(cv(.value.domain // ""))"))
+          else [] end)
+      ]
+    | flatten
+    | join("\n")
+    ' "$config_file"
+}
+
+ProxyRenderOverview()
+{
+    local config_file="$1"
+    local core_type="${2:-xray}"
+
+    if [ ! -s "$config_file" ]
+    then
+        return 1
+    fi
+
+    $JQ_FILE -r \
+        --arg core "$core_type" \
+        --arg g "$green" \
+        --arg r "$red" \
+        --arg n "$normal" \
+    '
+    def cv($v): "\($g)\($v)\($n)";
+    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
+
+    [
+        (if (.log | type) == "object" then
+            (if (.log.access | type) == "string" and (.log.access | length) > 0 then .log.access else "stdout" end) as $lacc
+            | (if (.log.error | type) == "string" and (.log.error | length) > 0 then .log.error else "stdout" end) as $lerr
+            | "Log: level=\(cv(.log.logLevel // .log.loglevel // "warning")) access=\(cv($lacc)) error=\(cv($lerr))"
+              + (if $core == "xray" then " dnsLog=\(yv(.log.dnsLog // false))" + (if (.log.maskAddress // "") != "" then " maskAddress=\(cv(.log.maskAddress))" else "" end) else "" end)
+        else empty end),
+        (if (.api | type) == "object" then
+            "API: tag=\(cv(.api.tag // ""))"
+            + (if $core == "xray" and (.api.listen // "") != "" then " listen=\(cv(.api.listen))" else "" end)
+            + " services=\(cv(arr(.api.services // [])))"
+        else empty end),
+        (if (.stats | type) == "object" then
+            "Stats: \(cv("已启用"))"
+        else empty end),
+        (if (.env | type) == "object" and (.env | length) > 0 then
+            "Env: \(cv(.env | to_entries | map("\(.key)=\(.value | tostring)") | join(", ")))"
+        else empty end),
+        (if (.transport | type) == "object" and (.transport | length) > 0 then
+            "Transport: \(cv(.transport | keys | join(", ")))"
+        else empty end),
+        (if (.fakedns | type) == "array" then
+            "FakeDNS: " + (.fakedns | map(select(type == "object") | "\(.ipPool // "")(\(.poolSize // 65535))") | join(", ") | cv(.))
+        elif (.fakedns | type) == "object" then
+            "FakeDNS: \(cv("\(.fakedns.ipPool // "")(\(.fakedns.poolSize // 65535))"))"
+        else empty end),
+        (if (.observatory | type) == "object" then
+            "Observatory: selector=\(cv(arr(.observatory.subjectSelector // .observatory.selector // []))) probe=\(cv(.observatory.probeUrl // .observatory.probeURL // "")) interval=\(cv(.observatory.probeInterval // ""))"
+            + (if $core == "xray" then " concurrency=\(yv(.observatory.enableConcurrency // false))" else "" end)
+        else empty end),
+        (if $core == "xray" and (.burstObservatory | type) == "object" then
+            (if (.burstObservatory.pingConfig | type) == "object" then .burstObservatory.pingConfig else {} end) as $pc
+            | "BurstObservatory: selector=\(cv(arr(.burstObservatory.subjectSelector // []))) dest=\(cv($pc.destination // "")) interval=\(cv($pc.interval // ""))"
+        else empty end),
+        (if $core == "xray" and (.metrics | type) == "object" then
+            "Metrics: tag=\(cv(.metrics.tag // "")) listen=\(cv(.metrics.listen // ""))"
+        else empty end),
+        (if $core == "xray" and (.geodata | type) == "object" then
+            "Geodata: cron=\(cv(.geodata.cron // "")) outbound=\(cv(.geodata.outbound // "")) assets=\(cv((if (.geodata.assets | type) == "array" then (.geodata.assets | length) else 0 end)))"
+        else empty end),
+        (if $core == "xray" and (.version | type) == "object" then
+            "Version: min=\(cv(.version.min // "")) max=\(cv(.version.max // ""))"
+        else empty end),
+        (if $core == "v2ray" and (.browserForwarder | type) == "object" then
+            "BrowserForwarder: \(cv("\(.browserForwarder.listenAddr // ""):\(.browserForwarder.listenPort // "")"))"
+        else empty end)
+    ] | join("\n")
+    ' "$config_file"
+}
+
+ProxyAddBound()
+{
+    local config_file="$1"
+    local bound_type="$2"
+    local bound_json="$3"
+    local rc=0
+
+    jq_path='["'"$bound_type"'"]'
+    JQ add "$config_file" "[$bound_json]" || rc=$?
+    jq_path=""
+    return "$rc"
+}
+
+ProxyDeleteBound()
+{
+    local config_file="$1"
+    local bound_type="$2"
+    local bound_index="$3"
+    local rc=0
+
+    jq_path='["'"$bound_type"'",'"$bound_index"']'
+    JQ delete "$config_file" || rc=$?
+    jq_path=""
+    return "$rc"
+}
+
+ProxySelectBound()
+{
+    local config_file="$1"
+    local bound_type="$2"
+    local prompt_title="$3"
+
+    local options=()
+    local i ridx
+    if [ "$bound_type" == "inbounds" ]
+    then
+        ProxyLoadInboundsIndex "$config_file"
+        if [ "$inbounds_count" -eq 0 ]
+        then
+            Println "$error 请先添加入站\n"
+            return 1
+        fi
+        for ((i=0; i<inbounds_count; i++))
+        do
+            ridx="${inbounds_json_index[i]}"
+            options+=("$((i+1)). [${inbounds_protocol[ridx]}] ${inbounds_tag[ridx]} (${inbounds_listen[ridx]}:${inbounds_port[ridx]})")
+        done
+        echo
+        inquirer list_input_index "$prompt_title" options selected_bound_index
+        selected_bound_index="${inbounds_json_index[selected_bound_index]}"
+    else
+        ProxyLoadOutboundsIndex "$config_file"
+        if [ "$outbounds_count" -eq 0 ]
+        then
+            Println "$error 没有出站\n"
+            return 1
+        fi
+        for ((i=0; i<outbounds_count; i++))
+        do
+            ridx="${outbounds_json_index[i]}"
+            options+=("$((i+1)). [${outbounds_protocol[ridx]}] ${outbounds_tag[ridx]} (${outbounds_sendThrough[ridx]})")
+        done
+        echo
+        inquirer list_input_index "$prompt_title" options selected_bound_index
+        selected_bound_index="${outbounds_json_index[selected_bound_index]}"
+    fi
+}
+
+ProxyToggleService()
+{
+    local service_name="$1"
+    local config_file="$2"
+
+    if [ ! -e "$config_file" ]
+    then
+        Println "$error $service_name 未安装...\n"
+        exit 1
+    fi
+
+    echo
+    local err_msg=""
+    if ServiceControl is-active "$service_name"
+    then
+        ExitOnList y "`eval_gettext \"\\\$service_name 正在运行, 是否关闭\"`"
+        if err_msg=$(ServiceControl stop "$service_name" 2>&1)
+        then
+            Println "$info $service_name 已关闭\n"
+        else
+            Println "$error $service_name 关闭失败: ${err_msg}\n"
+            return 1
+        fi
+    else
+        ExitOnList y "`eval_gettext \"\\\$service_name 未运行, 是否开启\"`"
+        if err_msg=$(ServiceControl start "$service_name" 2>&1)
+        then
+            Println "$info $service_name 已开启\n"
+        else
+            Println "$error $service_name 开启失败: ${err_msg}\n"
+            return 1
+        fi
+    fi
+}
+
+ProxyRestartService()
+{
+    local service_name="$1"
+    local config_file="$2"
+
+    if [ ! -e "$config_file" ]
+    then
+        Println "$error $service_name 未安装...\n"
+        exit 1
+    fi
+
+    local err_msg=""
+    if err_msg=$(ServiceControl restart "$service_name" 2>&1)
+    then
+        Println "$info $service_name 已重启\n"
+    else
+        Println "$error $service_name 重启失败: ${err_msg}\n"
+        return 1
+    fi
+}
+
+ProxyRestartIfActive()
+{
+    local service_name="$1"
+    if ServiceControl is-active "$service_name"
+    then
+        local err_msg=""
+        if ! err_msg=$(ServiceControl restart "$service_name" 2>&1)
+        then
+            Println "$error $service_name 重启失败: ${err_msg}\n"
+            return 1
+        fi
+    fi
+}

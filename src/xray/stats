@@ -1,0 +1,77 @@
+XrayGetApiServer()
+{
+    local api_server
+    api_server=$(JQs query "$X_CONFIG" '
+        def normalize_host($h):
+            if $h == "" or $h == "0.0.0.0" or $h == "::" or $h == "[::]" then "127.0.0.1" else $h end;
+        if (.api | type) == "object" and (.api.listen | type) == "string" and .api.listen != "" then
+            (.api.listen | sub("^(0\\.0\\.0\\.0|\\[::\\]|::):"; "127.0.0.1:"))
+        else
+            ((if (.api | type) == "object" and (.api.tag | type) == "string" then .api.tag else "api" end) as $api_tag
+            | first(
+                (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+                | select(type == "object" and .tag == $api_tag)
+                | "\(normalize_host(.listen // "127.0.0.1")):\(.port // 10085)"
+            ) // $def_api)
+        end
+    ' --arg def_api "$XRAY_DEFAULT_API" | head -n 1)
+    printf '%s' "${api_server:-$XRAY_DEFAULT_API}"
+}
+
+XrayListStats()
+{
+    local api_server
+    api_server=$(XrayGetApiServer)
+
+    local raw_stats
+    if ! raw_stats=$("$XCTL_FILE" api statsquery --server="$api_server" 2>&1)
+    then
+        Println "$error 无法连接 Xray API ($api_server), 请确认已开启 api 与 stats: ${raw_stats}\n"
+        return 1
+    fi
+
+    if ! printf '%s' "$raw_stats" | $JQ_FILE -e . > /dev/null 2>&1
+    then
+        Println "$error Xray API 返回非合法 JSON ($api_server): ${raw_stats}\n"
+        return 1
+    fi
+
+    local formatted
+    formatted=$(ProxyFormatStatsJson "$raw_stats")
+
+    if [ -z "$formatted" ]
+    then
+        Println "$info 暂无流量统计数据\n"
+        return 0
+    fi
+
+    Println "\n=== Xray 流量统计 ===\n$formatted\n"
+}
+
+XrayResetStats()
+{
+    if [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ] && [ -t 0 ]
+    then
+        local confirm_opts=( '否' '是' )
+        local confirm_idx=0
+        echo
+        inquirer list_input_index "确认重置 Xray 所有流量统计?" confirm_opts confirm_idx
+        if [ "$confirm_idx" -ne 1 ]
+        then
+            Println "$info 已取消重置流量统计\n"
+            return 0
+        fi
+    fi
+
+    local api_server
+    api_server=$(XrayGetApiServer)
+
+    local err_msg=""
+    if err_msg=$("$XCTL_FILE" api statsquery --server="$api_server" --reset 2>&1)
+    then
+        Println "$info 已重置 Xray 流量统计\n"
+    else
+        Println "$error 重置 Xray 流量统计失败 ($api_server): ${err_msg}\n"
+        return 1
+    fi
+}

@@ -1,8 +1,11 @@
 V2rayNginxDomainServerUpdateCert()
 {
+    v2ray_name="${v2ray_name:-v2ray}"
     v2ray_nginx_domain_server_name=${v2ray_nginx_domain_servers_name[v2ray_nginx_domain_servers_index]}
 
-    if [[ $v2ray_nginx_domain_server_name =~ , ]] 
+    AcmeCheck
+
+    if [[ $v2ray_nginx_domain_server_name =~ , ]]
     then
         IFS="," read -r -a domains <<< "$v2ray_nginx_domain_server_name"
 
@@ -11,17 +14,23 @@ V2rayNginxDomainServerUpdateCert()
 
         for domain in "${domains_selected[@]}"
         do
-            NginxDomainUpdateCert "$domain"
-            cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
-            cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
-            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+            V2rayDomainUpdateCert "$domain"
+            if [ -d "$nginx_prefix/conf/sites_crt" ]
+            then
+                cp -f "/usr/local/share/$v2ray_name/$domain.crt" "$nginx_prefix/conf/sites_crt/$domain.crt"
+                cp -f "/usr/local/share/$v2ray_name/$domain.key" "$nginx_prefix/conf/sites_crt/$domain.key"
+            fi
+            chown "$v2ray_name:$v2ray_name" "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/share/$v2ray_name/$domain.key"
         done
 
         return 0
     fi
 
-    NginxDomainUpdateCert "$v2ray_nginx_domain_server_name"
-    cp -f "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.crt" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt"
-    cp -f "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.key" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key"
-    chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+    V2rayDomainUpdateCert "$v2ray_nginx_domain_server_name"
+    if [ -d "$nginx_prefix/conf/sites_crt" ]
+    then
+        cp -f "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.crt"
+        cp -f "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.key"
+    fi
+    chown "$v2ray_name:$v2ray_name" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key"
 }

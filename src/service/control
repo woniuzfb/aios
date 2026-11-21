@@ -84,18 +84,23 @@ ServiceControlStart()
         return 0
     fi
 
-    local var=("$2"[@])
     local args=() arg arr
 
-    if [[ -n "${!var:-}" ]]
+    if [ -n "${2:-}" ]
     then
-        args=("${!var}")
-        if [[ ! -x "${args[0]}" ]]
+        local var=("$2"[@])
+        if [[ -n "${!var:-}" ]]
         then
-            echo "${args[0]} 不存在"
-            return 1
+            args=("${!var}")
+            if [[ ! -x "${args[0]}" ]]
+            then
+                echo "${args[0]} 不存在"
+                return 1
+            fi
         fi
-    elif [ ! -f "$service_file" ]
+    fi
+
+    if [ "${#args[@]}" -eq 0 ] && [ ! -f "$service_file" ]
     then
         echo "$service_file 不存在"
         return 1
@@ -133,6 +138,11 @@ EOF
     else
         if [ ! -f "$service_file" ] || [ -n "${3:-}" ]
         then
+            local work_dir="/"
+            if [ "${#args[@]}" -gt 0 ]
+            then
+                work_dir="${args[0]%/*}/"
+            fi
 cat > "$service_file" <<EOF
 [Unit]
 Description=${service_label}
@@ -141,7 +151,7 @@ Wants=network-online.target
 
 [Service]
 ExecStart=${args[*]}
-WorkingDirectory=${args[0]%/*}/
+WorkingDirectory=${work_dir}
 StartLimitInterval=60s
 StartLimitBurst=5
 RestartSec=5
@@ -177,17 +187,17 @@ ServiceControlRestart()
 {
     if ServiceControlIsActive "$1"
     then
-        ServiceControlStop
+        ServiceControlStop "$1"
     fi
 
-    ServiceControlStart
+    ServiceControlStart "$@"
 }
 
 ServiceControlDisable()
 {
     if ServiceControlIsActive "$1"
     then
-        ServiceControlStop
+        ServiceControlStop "$1"
     fi
 
     if [ "$dist" == "mac" ]
@@ -215,6 +225,8 @@ ServiceControlRename()
 
 ServiceControl()
 {
+    DistCheck
+
     local cmd=$1
     shift
     case $cmd in

@@ -39,7 +39,8 @@ XrayGetRouting()
         ["balancers","strategy","settings","costs","value"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name="jq_routing_${path_name#*_}"
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
@@ -65,27 +66,36 @@ XrayGetRouting()
         routing_balancers_count=${#routing_balancers_tag[@]}
     fi
 
-    if [ -z "${jq_routing_rules_network:-}" ]
+    routing_rules_count=0
+    if [ -s "$X_CONFIG" ]
     then
-        routing_rules_count=0
+        routing_rules_count=$($JQ_FILE -r '(.routing.rules // []) | length' "$X_CONFIG" 2>/dev/null)
+        routing_rules_count="${routing_rules_count:-0}"
+    fi
+
+    if [ "$routing_rules_count" -eq 0 ]
+    then
         return 0
     fi
 
-    IFS="${delimiters[1]}" read -r -a routing_domainStrategy <<< "$jq_routing_domainStrategy"
-    IFS="${delimiters[2]}" read -r -a routing_rules_type <<< "$jq_routing_rules_type"
-    IFS="${delimiters[2]}" read -r -a routing_rules_domains <<< "$jq_routing_rules_domains"
-    IFS="${delimiters[2]}" read -r -a routing_rules_ip <<< "$jq_routing_rules_ip"
-    IFS="${delimiters[2]}" read -r -a routing_rules_port <<< "$jq_routing_rules_port"
-    IFS="${delimiters[2]}" read -r -a routing_rules_sourcePort <<< "$jq_routing_rules_sourcePort"
-    IFS="${delimiters[2]}" read -r -a routing_rules_network <<< "$jq_routing_rules_network"
-    IFS="${delimiters[2]}" read -r -a routing_rules_source <<< "$jq_routing_rules_source"
-    IFS="${delimiters[2]}" read -r -a routing_rules_user <<< "$jq_routing_rules_user"
-    IFS="${delimiters[2]}" read -r -a routing_rules_inboundTag <<< "$jq_routing_rules_inboundTag"
-    IFS="${delimiters[2]}" read -r -a routing_rules_protocol <<< "$jq_routing_rules_protocol"
-    IFS="${delimiters[2]}" read -r -a routing_rules_attrs <<< "$jq_routing_rules_attrs"
-    IFS="${delimiters[2]}" read -r -a routing_rules_outboundTag <<< "$jq_routing_rules_outboundTag"
-    IFS="${delimiters[2]}" read -r -a routing_rules_balancerTag <<< "$jq_routing_rules_balancerTag"
-
-    routing_rules_count=${#routing_rules_type[@]}
-
+    IFS="${delimiters[2]}" read -r -a routing_rules_domain <<< "${jq_routing_rules_domain:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_ip <<< "${jq_routing_rules_ip:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_port <<< "${jq_routing_rules_port:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_sourcePort <<< "${jq_routing_rules_sourcePort:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_localPort <<< "${jq_routing_rules_localPort:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_network <<< "${jq_routing_rules_network:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_sourceIP <<< "${jq_routing_rules_sourceIP:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_localIP <<< "${jq_routing_rules_localIP:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_user <<< "${jq_routing_rules_user:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_vlessRoute <<< "${jq_routing_rules_vlessRoute:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_inboundTag <<< "${jq_routing_rules_inboundTag:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_protocol <<< "${jq_routing_rules_protocol:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_attrs <<< "${jq_routing_rules_attrs:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_process <<< "${jq_routing_rules_process:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_outboundTag <<< "${jq_routing_rules_outboundTag:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_balancerTag <<< "${jq_routing_rules_balancerTag:-}"
+    IFS="${delimiters[2]}" read -r -a routing_rules_ruleTag <<< "${jq_routing_rules_ruleTag:-}"
+    IFS="${delimiters[3]}" read -r -a routing_rules_webhook_url <<< "${jq_routing_rules_webhook_url:-}"
+    IFS="${delimiters[3]}" read -r -a routing_rules_webhook_deduplication <<< "${jq_routing_rules_webhook_deduplication:-}"
+    IFS="${delimiters[3]}" read -r -a routing_rules_webhook_headers <<< "${jq_routing_rules_webhook_headers:-}"
 }

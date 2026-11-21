@@ -1,6 +1,13 @@
 Include utils/imagemagick "$@"
 Include utils/imgcat "$@"
+Include src/proxy/common "$@"
+Include src/nginx/parse_config "$@"
+Include src/nginx/get_config "$@"
+Include src/nginx/build_conf "$@"
+Include src/nginx/check_acme "$@"
 Include src/v2ray/get_free_tag "$@"
+Include src/v2ray/set_bound "$@"
+Include src/v2ray/add_inbound "$@"
 Include src/v2ray/inbound "$@"
 Include src/v2ray/stream "$@"
 Include src/v2ray/get_inbounds "$@"
@@ -52,7 +59,7 @@ Include src/service/control "$@"
 
 ShFileCheck
 
-if [ "$dist" != "mac" ][ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
+if [ "$dist" != "mac" ] && [ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
 then
     ServiceControl disable v2ray
     rm -rf /usr/bin/v2ray/

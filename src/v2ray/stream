@@ -7,7 +7,7 @@ V2rayStreamTransport()
 
 V2rayStreamTcpSettings()
 {
-    if [ "${1:-inbound}" != "inbound" ] 
+    if [ "${1:-inbound}" != "inbound" ]
     then
         return
     fi
@@ -15,7 +15,7 @@ V2rayStreamTcpSettings()
     V2raySetTcpProxyProtocol
 
     JQs merge_c stream_transport_settings --arg acceptProxyProtocol "$tcp_accept_proxy_protocol" '. * {
-        "acceptProxyProtocol": $acceptProxyProtocol | test("true")
+        "acceptProxyProtocol": ($acceptProxyProtocol | test("true"))
     }'
 }
 
@@ -23,15 +23,15 @@ V2rayStreamWebSocketSettings()
 {
     V2raySetWebSocketPath
 
-    if [ "${1:-inbound}" == "inbound" ] 
+    if [ "${1:-inbound}" == "inbound" ]
     then
         V2raySetWebSocketAcceptProxyProtocol
-        V2raySetWebSocketInboundMaxEarlyData
+        V2raySetWebsocketInboundMaxEarlyData
         V2raySetWebsocketUseBrowserForwarding
 
-        if [ "$ws_max_early_data" -gt 0 ] 
+        if [ "$ws_max_early_data" -gt 0 ]
         then
-            V2raySetWebSocketEarlyDataHeaderName
+            V2raySetWebsocketEarlyDataHeaderName
         else
             ws_early_data_header_name=""
         fi
@@ -40,25 +40,24 @@ V2rayStreamWebSocketSettings()
         --arg path "$ws_path" --arg maxEarlyData "$ws_max_early_data" \
         --arg useBrowserForwarding "$ws_use_browser_forwarding" \
         --arg earlyDataHeaderName "$ws_early_data_header_name" '. * {
-            "acceptProxyProtocol": $acceptProxyProtocol | test("true"),
+            "acceptProxyProtocol": ($acceptProxyProtocol | test("true")),
             "path": $path,
-            "maxEarlyData": $maxEarlyData | tonumber,
-            "useBrowserForwarding": $useBrowserForwarding | test("true"),
+            "maxEarlyData": ($maxEarlyData | tonumber),
+            "useBrowserForwarding": ($useBrowserForwarding | test("true")),
             "earlyDataHeaderName": $earlyDataHeaderName
         }'
     else
         V2raySetWebSocketHeaders
-        V2raySetOutboundMaxEarlyData
-        V2raySetEarlyDataHeaderName
+        V2raySetWebsocketOutboundMaxEarlyData
+        V2raySetWebsocketEarlyDataHeaderName
 
-        JQs merge_c stream_transport_settings --arg acceptProxyProtocol "$ws_accept_proxy_protocol" \
+        JQs merge_c stream_transport_settings \
         --arg path "$ws_path" --argjson headers "$ws_headers" \
         --arg maxEarlyData "$ws_max_early_data" \
         --arg earlyDataHeaderName "$ws_early_data_header_name" '. * {
-            "acceptProxyProtocol": $acceptProxyProtocol | test("true"),
             "path": $path,
             "headers": $headers,
-            "maxEarlyData": $maxEarlyData | tonumber,
+            "maxEarlyData": ($maxEarlyData | tonumber),
             "earlyDataHeaderName": $earlyDataHeaderName
         }'
     fi
@@ -80,23 +79,23 @@ V2rayStreamMkcpSettings()
     --arg downlinkCapacity "$mkcp_downlink_capacity" --arg congestion "$mkcp_congestion" \
     --arg readBufferSize "$mkcp_read_buffer_size" --arg writeBufferSize "$mkcp_write_buffer_size" \
     --arg seed "$mkcp_seed" '. * {
-        "mtu": $mtu | tonumber,
-        "tti": $tti | tonumber,
-        "uplinkCapacity": $uplinkCapacity | tonumber,
-        "downlinkCapacity": $downlinkCapacity | tonumber,
-        "congestion": $congestion | test("true"),
-        "readBufferSize": $readBufferSize | tonumber,
-        "writeBufferSize": $writeBufferSize | tonumber,
-        "seed": "$seed"
+        "mtu": ($mtu | tonumber),
+        "tti": ($tti | tonumber),
+        "uplinkCapacity": ($uplinkCapacity | tonumber),
+        "downlinkCapacity": ($downlinkCapacity | tonumber),
+        "congestion": ($congestion | test("true")),
+        "readBufferSize": ($readBufferSize | tonumber),
+        "writeBufferSize": ($writeBufferSize | tonumber),
+        "seed": $seed
     }'
 }
 
 V2rayStreamGrpcSettings()
 {
-    V2raySetGrpcServiceName
+    V2raySetStreamGrpcServiceName
 
     JQs merge_c stream_transport_settings --arg serviceName "$grpc_service_name" '. * {
-        "serviceName": "$serviceName"
+        "serviceName": $serviceName
     }'
 }
 
@@ -109,7 +108,7 @@ V2rayStreamMeekSettings()
 {
     V2raySetMeekUrl
     JQs merge_c stream_transport_settings --arg url "$meek_url" '. * {
-        "url": "$url"
+        "url": $url
     }'
 }
 
@@ -120,8 +119,8 @@ V2rayStreamHttpupgradeSettings()
 
     JQs merge_c stream_transport_settings --arg path "$httpupgrade_path" \
     --arg host "$httpupgrade_host" '. * {
-        "path": "$path",
-        "host": "$host"
+        "path": $path,
+        "host": $host
     }'
 }
 
@@ -134,9 +133,9 @@ V2rayStreamHysteria2Settings()
     JQs merge_c stream_transport_settings --arg password "$hysteria2_password" \
     --arg use_udp_extension "$hysteria2_use_udp_extension" \
     --argjson congestion "$hysteria2_congestion" '. * {
-        "password": "$password",
-        "use_udp_extension": "$use_udp_extension" | test("true"),
-        "congestion": "$congestion"
+        "password": $password,
+        "use_udp_extension": ($use_udp_extension | test("true")),
+        "congestion": $congestion
     }'
 }
 
@@ -152,20 +151,20 @@ V2rayStreamTlsSettings()
     V2raySetStreamTlsDisableSystemRoot
     V2raySetStreamTlsChainSha256
 
-    if [ -z "${stream_tls_chain_sha256:-}" ] 
+    if [ -z "${stream_tls_chain_sha256:-}" ]
     then
         stream_tls_allow_insecure=false
     else
         V2raySetStreamTlsAllowInsecure
     fi
 
-    while true 
+    while true
     do
-        if [ "$stream_tls_disable_system_root" = false ] 
+        if [ "$stream_tls_disable_system_root" = false ]
         then
             echo
             inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
-            if [ "$continue_yn" = false ] 
+            if [ "$continue_yn" = false ]
             then
                 break
             fi
@@ -176,22 +175,21 @@ V2rayStreamTlsSettings()
 
         JQs merge_c stream_security_settings --argjson certificates "[$stream_tls_certificate]" \
         '. * {
-                "certificates": $certificates
-            }
+            "certificates": $certificates
         }'
 
-        if [ "$stream_tls_disable_system_root" = true ] 
+        if [ "$stream_tls_disable_system_root" = true ]
         then
             echo
             inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
-            if [ "$continue_yn" = false ] 
+            if [ "$continue_yn" = false ]
             then
                 break
             fi
         fi
     done
 
-    if [ "$v2ray_v4" = true ] 
+    if [ "$v2ray_v4" = true ]
     then
         V2raySetStreamTlsVerifyClientCertificate
 
@@ -201,12 +199,12 @@ V2rayStreamTlsSettings()
         --arg disableSystemRoot "$stream_tls_disable_system_root" \
         --arg verifyClientCertificate "$stream_tls_verify_client_certificate" \
         --argjson pinnedPeerCertificateChainSha256 "[$stream_tls_chain_sha256]" '. * {
-            "serverName": "$serverName",
-            "alpn": "$alpn",
-            "allowInsecure": "$allowInsecure" | test("true"),
-            "disableSystemRoot": "$disableSystemRoot" | test("true"),
-            "verifyClientCertificate": $verifyClientCertificate | test("true"),
-            "pinnedPeerCertificateChainSha256": "$pinnedPeerCertificateChainSha256"
+            "serverName": $serverName,
+            "alpn": $alpn,
+            "allowInsecure": ($allowInsecure | test("true")),
+            "disableSystemRoot": ($disableSystemRoot | test("true")),
+            "verifyClientCertificate": ($verifyClientCertificate | test("true")),
+            "pinnedPeerCertificateChainSha256": $pinnedPeerCertificateChainSha256
         }'
 
         return
@@ -217,11 +215,11 @@ V2rayStreamTlsSettings()
     --arg disableSystemRoot "$stream_tls_disable_system_root" \
     --argjson pinnedPeerCertificateChainSha256 "[$stream_tls_chain_sha256]" \
     --arg allowInsecureIfPinnedPeerCertificate "$stream_tls_allow_insecure" '. * {
-        "serverName": "$serverName",
-        "nextProtocol": "$nextProtocol",
-        "disableSystemRoot": "$disableSystemRoot" | test("true"),
-        "pinnedPeerCertificateChainSha256": "$pinnedPeerCertificateChainSha256",
-        "allowInsecureIfPinnedPeerCertificate": "$allowInsecureIfPinnedPeerCertificate" | test("true")
+        "serverName": $serverName,
+        "nextProtocol": $nextProtocol,
+        "disableSystemRoot": ($disableSystemRoot | test("true")),
+        "pinnedPeerCertificateChainSha256": $pinnedPeerCertificateChainSha256,
+        "allowInsecureIfPinnedPeerCertificate": ($allowInsecureIfPinnedPeerCertificate | test("true"))
     }'
 }
 
@@ -260,13 +258,11 @@ V2rayStreamUtlsSettings()
     JQs merge_c stream_security_settings --argjson tlsConfig "$stream_utls_tls_config" \
     --arg imitate "$stream_utls_imitate" \
     --arg noSNI "$stream_utls_noSNI" \
-    --arg forceAlpn "$stream_utls_force_alpn" \
-    --arg allowInsecureIfPinnedPeerCertificate "$stream_tls_allow_insecure" \
-    --argjson certificate "$stream_tls_certificate" '. * {
-        "tlsConfig": "$tlsConfig",
-        "imitate": "$imitate",
-        "noSNI": "$noSNI" | test("true"),
-        "forceAlpn": "$forceAlpn"
+    --arg forceAlpn "$stream_utls_force_alpn" '. * {
+        "tlsConfig": $tlsConfig,
+        "imitate": $imitate,
+        "noSNI": ($noSNI | test("true")),
+        "forceAlpn": $forceAlpn
     }'
 }
 
@@ -280,7 +276,7 @@ V2rayStreamSocketTFO()
     echo
     inquirer list_input_yn "socket TCP Fast Open 使用系统默认设置" tf_options stream_socket_tfo_system
 
-    if [ "$stream_socket_tfo_system" = false ] 
+    if [ "$stream_socket_tfo_system" = false ]
     then
         V2raySetStreamSocketTFO
     fi
@@ -311,7 +307,7 @@ V2rayStreamSocketMptcp()
     echo
     inquirer list_input_yn "socket 多路径 TCP 使用系统默认设置" tf_options stream_socket_mptcp_system
 
-    if [ "$stream_socket_mptcp_system" = false ] 
+    if [ "$stream_socket_mptcp_system" = false ]
     then
         V2raySetStreamSocketMptcp
     fi
@@ -321,25 +317,25 @@ V2rayStreamSocketSettings()
 {
     stream_socket_settings='{}'
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         V2rayStreamSocketMark
 
         JQs merge_c stream_socket_settings --arg mark "$stream_socket_mark" '. * {
-            "mark": "$mark" | tonumber
+            "mark": ($mark | tonumber)
         }'
     fi
 
     V2rayStreamSocketTFO
 
-    if [ "$stream_socket_tfo_system" = false ] 
+    if [ "$stream_socket_tfo_system" = false ]
     then
         JQs merge_c stream_socket_settings --arg tcpFastOpen "$stream_socket_tfo" '. * {
-            "tcpFastOpen": "$tcpFastOpen" | test("true")
+            "tcpFastOpen": ($tcpFastOpen | test("true"))
         }'
     fi
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         V2rayStreamSocketTFOQL
         V2rayStreamSocketTproxy
@@ -347,26 +343,26 @@ V2rayStreamSocketSettings()
 
         JQs merge_c stream_socket_settings --arg tcpFastOpenQueueLength "$stream_socket_tfoql" \
         --arg tproxy "$stream_socket_tproxy" --arg tcpKeepAliveInterval "$stream_socket_tcp_keep_alive_interval" '. * {
-            "tcpFastOpenQueueLength": "$tcpFastOpenQueueLength" | tonumber,
-            "$tproxy": "$tproxy",
-            "$tcpKeepAliveInterval": "$tcpKeepAliveInterval" | tonumber
+            "tcpFastOpenQueueLength": ($tcpFastOpenQueueLength | tonumber),
+            "tproxy": $tproxy,
+            "tcpKeepAliveInterval": ($tcpKeepAliveInterval | tonumber)
         }'
     fi
 
     V2rayStreamSocketBindToDevice
 
     JQs merge_c stream_socket_settings --arg bindToDevice "$stream_socket_bind_to_device" '. * {
-        "bindToDevice": "$bindToDevice"
+        "bindToDevice": $bindToDevice
     }'
 
-    if [ "$dist" != "mac" ] 
+    if [ "$dist" != "mac" ]
     then
         V2rayStreamSocketMptcp
 
-        if [ "$stream_socket_mptcp_system" = false ] 
+        if [ "$stream_socket_mptcp_system" = false ]
         then
             JQs merge_c stream_socket_settings --arg mptcp "$stream_socket_mptcp" '. * {
-                "mptcp": "$mptcp" | test("true")
+                "mptcp": ($mptcp | test("true"))
             }'
         fi
     fi
@@ -378,7 +374,7 @@ V2rayStream()
 
     stream_transport_settings='{}'
 
-    case $stream_transport_options in
+    case $stream_transports_index in
         0) V2rayStreamTcpSettings "$@"
         ;;
         1) V2rayStreamWebSocketSettings "$@"
@@ -407,13 +403,13 @@ V2rayStream()
         tls) V2rayStreamTlsSettings
         ;;
         utls)
-            if [ "$stream_transport_options" -gt 1 ] 
+            if [ "$stream_transports_index" -gt 1 ]
             then
                 Println "$error 仅可以在 TCP, WebSocket 传输方式中使用 uTLS\n"
             fi
             V2rayStreamUtlsSettings
         ;;
-        *) 
+        *)
         ;;
     esac
 

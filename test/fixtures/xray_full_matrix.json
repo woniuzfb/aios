@@ -1,0 +1,180 @@
+{
+  "log": {
+    "logLevel": "warning",
+    "maskAddress": "half"
+  },
+  "dns": {
+    "hosts": {
+      "dns.example.test": "1.1.1.1"
+    },
+    "servers": [
+      {
+        "address": "223.5.5.5",
+        "port": 53,
+        "domains": ["geosite:cn"],
+        "expectedIPs": ["geoip:cn"],
+        "unexpectedIPs": ["geoip:private"],
+        "finalQuery": true
+      }
+    ],
+    "queryStrategy": "UseIP",
+    "serveStale": true
+  },
+  "inbounds": [
+    {
+      "tag": "vless-reality",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [],
+        "users": [
+          {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "flow": "xtls-rprx-vision",
+            "email": "alice@example.test",
+            "level": 0
+          },
+          {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "flow": "xtls-rprx-vision",
+            "email": "bob@example.test",
+            "level": 0
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {
+          "path": "/xhttp-path",
+          "mode": "auto"
+        },
+        "realitySettings": {
+          "target": "www.example.com:443",
+          "serverNames": ["www.example.com"],
+          "privateKey": "priv-key-aaa",
+          "shortIds": ["a1b2c3d4"]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"],
+        "routeOnly": true
+      }
+    },
+    {
+      "tag": "nginx-vmess-ws",
+      "listen": "127.0.0.1",
+      "port": 10001,
+      "protocol": "vmess",
+      "settings": {
+        "users": [
+          {
+            "id": "33333333-3333-4333-8333-333333333333",
+            "email": "vmess-user@example.test",
+            "level": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "none",
+        "wsSettings": {
+          "path": "/ws-vmess",
+          "host": "ws.example.test"
+        }
+      }
+    },
+    {
+      "tag": "tls-trojan",
+      "listen": "0.0.0.0",
+      "port": 8443,
+      "protocol": "trojan",
+      "settings": {
+        "users": [
+          {
+            "password": "trojan-secret-pass",
+            "email": "trojan@example.test",
+            "level": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "tls",
+        "tlsSettings": {
+          "serverName": "trojan.example.test",
+          "certificates": [
+            {
+              "usage": "encipherment",
+              "certificateFile": "/etc/ssl/trojan.crt",
+              "keyFile": "/etc/ssl/trojan.key",
+              "ocspStapling": 3600
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "targetStrategy": "UseIPv4",
+      "settings": {}
+    },
+    {
+      "tag": "upstream-vless",
+      "protocol": "vless",
+      "settings": {
+        "address": "edge.example.test",
+        "port": 443,
+        "id": "44444444-4444-4444-8444-444444444444",
+        "encryption": "none",
+        "flow": "xtls-rprx-vision"
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "tls",
+        "sockopt": {
+          "dialerProxy": "direct"
+        }
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      {
+        "ruleTag": "cn-direct",
+        "domain": ["geosite:cn"],
+        "outboundTag": "direct"
+      }
+    ]
+  },
+  "policy": {
+    "level": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "statsUserUplink": true,
+        "statsUserDownlink": true,
+        "statsUserOnline": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  },
+  "reverse": {
+    "bridges": [
+      {
+        "tag": "bridge-1",
+        "domain": "rev.example.test"
+      }
+    ]
+  }
+}

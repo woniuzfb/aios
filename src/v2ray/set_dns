@@ -1,178 +1,154 @@
 V2raySetDns()
 {
+    local actions=(
+        '添加静态 IP (hosts)'
+        '添加 DNS 服务器'
+        '设置 clientIp'
+        '设置 DNS 标识 tag'
+        '设置 queryStrategy'
+        '设置缓存与回退开关'
+        '删除静态 IP (hosts)'
+        '删除 DNS 服务器'
+    )
+    local action_idx=0
     echo
-    set_dns_options=( '添加静态 IP' '添加 DNS 服务器' '设置用于 DNS 查询的 IP 地址' '设置 DNS 标签' '设置 DNS 查询使用的网络类型' 
-    '禁用 DNS 缓存' '禁用 DNS 回退查询' '禁用优先匹配域名列表命中时执行 DNS 回退查询' '删除静态 IP' '删除 DNS 服务器' )
-    inquirer list_input_index "选择操作" set_dns_options set_dns_options_index
-    if [ "$set_dns_options_index" -eq 0 ] 
-    then
-        Println "$tip 格式如 v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        ExitOnText "输入域名" hosts_domain
+    inquirer list_input_index "选择 V2Ray DNS 操作" actions action_idx
 
-        Println "$tip 格式如 127.0.0.1, v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        ExitOnText "输入地址" hosts_address
+    case "$action_idx" in
+        0)
+            local domain ips
+            Println "$tip 格式如 v2fly.org, domain:v2fly.org, geosite:cn"
+            inquirer text_input "输入域名或规则" domain ""
+            inquirer text_input "输入目标 IP/域名 (逗号分隔)" ips ""
+            JQ mutate "$V2_CONFIG" '
+                def trim: gsub("^[ \t]+|[ \t]+$"; "");
+                .dns.hosts = ((.dns.hosts // {}) + {
+                    ($d | trim): (
+                        if ($v | contains(",")) then
+                            ($v | split(",") | map(trim) | map(select(. != "")))
+                        else
+                            ($v | trim)
+                        end
+                    )
+                })' --arg d "$domain" --arg v "$ips"
+            Println "$info 静态 IP 添加成功: ${green}${domain}${normal}\n"
+        ;;
+        1)
+            local addr port client_ip domains expect_ips
+            local skip_fb_opts=( '否' '是' )
+            local skip_fb_idx=0
+            inquirer text_input "输入 DNS 地址 (如 1.1.1.1, https://...)" addr "1.1.1.1"
+            inquirer text_input "输入端口 (留空默认)" port ""
+            inquirer text_input "输入服务器级 clientIp (可留空)" client_ip ""
+            inquirer text_input "输入匹配 domains (逗号分隔, 可留空)" domains ""
+            inquirer text_input "输入 expectIPs (逗号分隔, 可留空)" expect_ips ""
+            inquirer list_input_index "跳过回退 skipFallback" skip_fb_opts skip_fb_idx
 
-        jq_path='["dns","hosts","'"$hosts_domain"'"]'
-        JQ update "$V2_CONFIG" "$hosts_address"
-        Println "$info 静态 IP 添加成功\n"
-    elif [ "$set_dns_options_index" -eq 1 ] 
-    then
-        Println "$tip 格式如: localhost, 8.8.8.8, https://host:port/dns-query, https+local://host:port/dns-query"
-        ExitOnText "输入服务器地址: " dns_server_address
+            if [ -n "$port" ] && { ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; }
+            then
+                Println "$error DNS 端口必须为 1-65535 的整数: ${port}\n"
+                return 1
+            fi
 
-        if [ "$dns_server_address" == "localhost" ] || [[ $dns_server_address =~ ^http ]]
-        then
+            local srv_json=""
+            if [ -z "$port" ] && [ -z "$client_ip" ] && [ -z "$domains" ] && [ -z "$expect_ips" ] && [ "$skip_fb_idx" -eq 0 ]
+            then
+                JQs build srv_json '$addr' --arg addr "$addr"
+            else
+                JQs build srv_json '
+                    def csv: split(",") | map(gsub("^[ \t]+|[ \t]+$"; "")) | map(select(. != ""));
+                    {
+                        "address": $addr,
+                        "port": (if $port != "" then ($port | tonumber) else null end),
+                        "clientIp": $cip,
+                        "domains": (if $dom != "" then ($dom | csv) else null end),
+                        "expectIPs": (if $eip != "" then ($eip | csv) else null end),
+                        "skipFallback": (if $sf == "1" then true else null end)
+                    }' --arg addr "$addr" --arg port "$port" --arg cip "$client_ip" --arg dom "$domains" \
+                    --arg eip "$expect_ips" --arg sf "$skip_fb_idx"
+            fi
             jq_path='["dns","servers"]'
-            JQ add "$V2_CONFIG" ["\"$dns_server_address\""]
-            Println "$info DNS 服务器添加成功\n"
-            return 0
-        fi
-        echo
-        inquirer text_input "输入服务器端口: " dns_server_port 53
-        Println "$tip 用于 DNS 查询时通知 DNS 服务器, 客户端所在的地理位置"
-        inquirer text_input "输入通知 DNS 的 IP 地址: " dns_server_client_ip "$i18n_blank"
-        Println "$tip 优先使用此服务器进行查询, 多个域名用空格分隔, 格式和路由配置中相同"
-        inquirer text_input "输入域名: " dns_server_domain "$i18n_blank"
-        Println "$tip 当配置此项时, $v2ray_name DNS 会对返回的 IP 的进行校验, 只返回包含列表中的地址, 多个 IP 范围用空格分隔, 格式和路由配置中相同"
-        inquirer text_input "输入 IP 范围: " dns_server_expect_ips "$i18n_blank"
-        if [ -z "$dns_server_client_ip" ] && [ -z "$dns_server_domain" ] && [ -z "$dns_server_expect_ips" ] && [ "$dns_server_port" -eq 53 ]
-        then
-            jq_path='["dns","servers"]'
-            JQ add "$V2_CONFIG" ["\"$dns_server_address\""]
-            Println "$info DNS 服务器添加成功\n"
-            return 0
-        fi
-        new_dns_server=$(
-        $JQ_FILE -n --arg address "$dns_server_address" --arg port "$dns_server_port" \
-        '{
-            "address": $address,
-            "port": $port | tonumber
-        }')
-        if [ -n "$dns_server_client_ip" ] 
-        then
-            new_dns_server=$(
-            $JQ_FILE --arg clientIp "$dns_server_client_ip" \
-            '. * 
-            {
-                "clientIp": $clientIp
-            }' <<< "$new_dns_server")
-        fi
-        if [ -n "$dns_server_domain" ] 
-        then
-            IFS=" " read -r -a domains <<< "$dns_server_domain"
-            printf -v dns_server_domain ',"%s"' "${domains[@]}"
-            dns_server_domain=${dns_server_domain:1}
-            new_dns_server=$(
-            $JQ_FILE --argjson domains "[$dns_server_domain]" \
-            '. * 
-            {
-                "domains": $domains
-            }' <<< "$new_dns_server")
-        fi
-        if [ -n "$dns_server_expect_ips" ] 
-        then
-            IFS=" " read -r -a expect_ips <<< "$dns_server_expect_ips"
-            printf -v dns_server_expect_ips ',"%s"' "${expect_ips[@]}"
-            dns_server_expect_ips=${dns_server_expect_ips:1}
-            new_dns_server=$(
-            $JQ_FILE --argjson expectIPs "[$dns_server_expect_ips]" \
-            '. * 
-            {
-                "expectIPs": $expectIPs
-            }' <<< "$new_dns_server")
-        fi
-        jq_path='["dns","servers"]'
-        JQ add "$V2_CONFIG" "[$new_dns_server]"
-        Println "$info DNS 服务器添加成功\n"
-    elif [ "$set_dns_options_index" -eq 2 ] 
-    then
-        Println "$tip 用于 DNS 查询时通知服务器客户端的所在位置, 不能是私有地址"
-        ExitOnText "输入 IP 地址: " dns_client_ip
+            JQ add "$V2_CONFIG" "[$srv_json]"
+            Println "$info DNS 服务器添加成功: ${green}${addr}${normal}\n"
+        ;;
+        2)
+            local cip
+            inquirer text_input "输入全局 clientIp (留空清除)" cip ""
+            jq_path='["dns","clientIp"]'
+            if [ -z "$cip" ]
+            then
+                JQ delete "$V2_CONFIG"
+            else
+                JQ update "$V2_CONFIG" "$cip"
+            fi
+            Println "$info DNS clientIp 设置成功\n"
+        ;;
+        3)
+            local dtag
+            inquirer text_input "输入 DNS 标识 tag" dtag "dns_inbound"
+            jq_path='["dns","tag"]'
+            JQ update "$V2_CONFIG" "$dtag"
+            Println "$info DNS tag 设置成功: ${green}${dtag}${normal}\n"
+        ;;
+        4)
+            local qs_options=( 'UseIP' 'UseIPv4' 'UseIPv6' )
+            local qs=""
+            inquirer list_input "选择 DNS 查询策略 queryStrategy" qs_options qs
+            jq_path='["dns","queryStrategy"]'
+            JQ update "$V2_CONFIG" "$qs"
+            Println "$info queryStrategy 已设置为 ${green}${qs}${normal}\n"
+        ;;
+        5)
+            local yn_opts=( '否' '是' )
+            local dc_idx=0 df_idx=0 dfm_idx=0
+            inquirer list_input_index "禁用缓存 disableCache" yn_opts dc_idx
+            inquirer list_input_index "禁用回退 disableFallback" yn_opts df_idx
+            inquirer list_input_index "匹配时不回退 disableFallbackIfMatch" yn_opts dfm_idx
 
-        jq_path='["dns","clientIp"]'
-        JQ update "$V2_CONFIG" "$dns_client_ip"
-        Println "$info IP 地址设置成功\n"
-    elif [ "$set_dns_options_index" -eq 3 ] 
-    then
-        Println "$tip 可在路由使用 inboundTag 进行匹配"
-        ExitOnText "输入 DNS 标签: " dns_tag
+            JQ mutate "$V2_CONFIG" '.dns = ((.dns // {}) * {
+                "disableCache": ($dc == "1"),
+                "disableFallback": ($df == "1"),
+                "disableFallbackIfMatch": ($dfm == "1")
+            })' --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx"
+            Println "$info V2Ray DNS 全局开关已更新\n"
+        ;;
+        6)
+            local host_keys=()
+            local k
+            while IFS= read -r k
+            do
+                [ -n "$k" ] && host_keys+=("$k")
+            done < <(JQs query "$V2_CONFIG" 'if (.dns | type) == "object" and (.dns.hosts | type) == "object" then (.dns.hosts | keys[]) else empty end')
+            if [ "${#host_keys[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的静态 IP\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的静态 IP" host_keys del_idx
+            local del_key="${host_keys[$del_idx]}"
+            JQ mutate "$V2_CONFIG" 'del(.dns.hosts[$k])' --arg k "$del_key"
+            Println "$info 已删除静态 IP: ${green}${del_key}${normal}\n"
+        ;;
+        7)
+            local srv_opts=()
+            local line
+            while IFS= read -r line
+            do
+                [ -n "$line" ] && srv_opts+=("$line")
+            done < <(JQs query "$V2_CONFIG" 'if (.dns | type) == "object" and (.dns.servers | type) == "array" then (.dns.servers | to_entries[] | "\(.key + 1). \(if (.value | type) == "string" then .value elif (.value | type) == "object" then (.value.address // "server") else "server" end)") else empty end')
+            if [ "${#srv_opts[@]}" -eq 0 ]
+            then
+                Println "$error 没有可删除的 DNS 服务器\n"
+                return 1
+            fi
+            local del_idx=0
+            inquirer list_input_index "选择要删除的 DNS 服务器" srv_opts del_idx
+            jq_path='["dns","servers",'"$del_idx"']'
+            JQ delete "$V2_CONFIG"
+            Println "$info 已删除 DNS 服务器: ${green}${srv_opts[$del_idx]}${normal}\n"
+        ;;
+    esac
 
-        jq_path='["dns","tag"]'
-        JQ update "$V2_CONFIG" "$dns_tag"
-        Println "$info DNS 标签设置成功\n"
-    elif [ "$set_dns_options_index" -eq 4 ] 
-    then
-        echo
-        query_strategy_options=( 'UseIP' 'UseIPv4' 'UseIPv6' )
-        inquirer list_input "选择 DNS 查询所使用的网络类型" query_strategy_options query_strategy
-        jq_path='["dns","queryStrategy"]'
-        JQ update "$V2_CONFIG" "$query_strategy"
-        Println "$info DNS 查询所使用的网络类型设置成功\n"
-    elif [ "$set_dns_options_index" -eq 5 ] 
-    then
-        echo
-        inquirer list_input "禁用 DNS 缓存" ny_options ny_option
-        if [ "$ny_option" == "$i18n_no" ] 
-        then
-            disable_cache=false
-        else
-            disable_cache=true
-        fi
-        bool=true
-        jq_path='["dns","disableCache"]'
-        JQ update "$V2_CONFIG" "$disable_cache"
-        Println "$info DNS 缓存设置成功\n"
-    elif [ "$set_dns_options_index" -eq 6 ] 
-    then
-        echo
-        inquirer list_input "禁用 DNS 回退查询" ny_options ny_option
-        if [ "$ny_option" == "$i18n_no" ] 
-        then
-            disable_fallback=false
-        else
-            disable_fallback=true
-        fi
-        bool=true
-        jq_path='["dns","disableFallback"]'
-        JQ update "$V2_CONFIG" "$disable_fallback"
-        Println "$info DNS 回退查询设置成功\n"
-    elif [ "$set_dns_options_index" -eq 7 ] 
-    then
-        echo
-        inquirer list_input "禁用优先匹配域名列表命中时执行 DNS 回退查询" ny_options ny_option
-        if [ "$ny_option" == "$i18n_no" ] 
-        then
-            disable_fallback_if_match=false
-        else
-            disable_fallback_if_match=true
-        fi
-        bool=true
-        jq_path='["dns","disableFallbackIfMatch"]'
-        JQ update "$V2_CONFIG" "$disable_fallback_if_match"
-        Println "$info DNS 优先匹配域名列表命中时执行 DNS 回退查询设置成功\n"
-    elif [ "$set_dns_options_index" -eq 8 ] 
-    then
-        V2rayListDns
-        [ "$dns_hosts_count" -eq 0 ] && exit 1
-        echo
-        ExitOnText "输入静态 IP 序号: " dns_host_num
-
-        dns_host_index=$((dns_host_num-1))
-        jq_path='["dns","hosts",'"$dns_host_index"']'
-        JQ delete "$V2_CONFIG"
-        Println "$info 静态 IP: ${dns_hosts_domain[dns_host_index]} => ${dns_hosts_address[dns_host_index]//,/, } 删除成功\n"
-    else
-        V2rayListDns
-        [ "$dns_servers_count" -eq 0 ] && exit 1
-        echo
-        ExitOnText "输入 DNS 服务器序号: " dns_server_num
-
-        dns_server_index=$((dns_server_num-1))
-        jq_path='["dns","servers",'"$dns_server_index"']'
-        JQ delete "$V2_CONFIG"
-        if [[ ${dns_servers[dns_server_index]} =~ ^(.+)\|(.*)\|(.*)\|(.*)$ ]] 
-        then
-            Println "$info DNS 服务器: ${BASH_REMATCH[1]}:${BASH_REMATCH[2]:-53} 删除成功\n"
-        fi
-    fi
+    ProxyRestartIfActive v2ray
 }

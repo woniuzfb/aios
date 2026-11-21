@@ -1,0 +1,11 @@
+XrayListRouting()
+{
+    local out
+    out=$(ProxyRenderRouting "$X_CONFIG" xray)
+    if [ -z "$out" ]
+    then
+        Println "$error 未配置路由\n"
+        return 1
+    fi
+    Println "\n=== Xray 路由配置 ===\n$out\n"
+}

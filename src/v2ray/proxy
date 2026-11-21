@@ -96,26 +96,13 @@ V2rayProxyVlessSettings()
             V2raySetProxyDecryption
             V2raySetProxyFallbacks
 
-            JQs merge_c proxy_protocol_settings --argjson clients "$vmess_clients" \
-            --arg disableInsecureEncryption "$disable_insecure_encryption" '. * {
+            JQs merge_c proxy_protocol_settings --argjson clients "$vless_clients" \
+            --arg decryption "${proxy_decryption:-none}" \
+            --argjson fallbacks "${proxy_fallbacks:-[]}" '. * {
                 "clients": $clients,
-                "disableInsecureEncryption": $disableInsecureEncryption | test("true")
+                "decryption": $decryption,
+                "fallbacks": $fallbacks
             }'
-
-            V2rayDetourTo
-
-            if [ -n "$detour_to" ] 
-            then
-                V2raySetVmessUserDefault
-
-                JQs merge_c proxy_protocol_settings --argjson default "$vmess_user_default" \
-                --arg to "$detour_to" '. * {
-                    "default": $default,
-                    "detour": {
-                        "to": $to
-                    }
-                }'
-            fi
 
             return
         fi
@@ -180,12 +167,14 @@ V2rayProxyVliteuSettings()
     --arg enableFec "$vliteu_enable_fec" --arg enableStabilization "$vliteu_enable_stabilization" \
     --arg enableRenegotiation "$vliteu_enable_renegotiation" \
     --arg handshakeMaskingPaddingSize "$vliteu_handshake_masking_padding_size" '. * {
+        "address": $address,
+        "port": ($port | tonumber),
         "password": $password,
-        "scramblePacket": $scramblePacket | test("true"),
-        "enableFec": $enableFec | test("true"),
-        "enableStabilization": $enableStabilization | test("true"),
-        "enableRenegotiation": $enableRenegotiation | test("true"),
-        "handshakeMaskingPaddingSize": $handshakeMaskingPaddingSize | tonumber
+        "scramblePacket": ($scramblePacket | test("true")),
+        "enableFec": ($enableFec | test("true")),
+        "enableStabilization": ($enableStabilization | test("true")),
+        "enableRenegotiation": ($enableRenegotiation | test("true")),
+        "handshakeMaskingPaddingSize": ($handshakeMaskingPaddingSize | tonumber)
     }'
 }
 
@@ -239,10 +228,10 @@ V2rayProxySocksSettings()
 
 V2rayProxyShadowsocksSettings()
 {
-    if [ "${1:-inbound}" == "inbound" ] 
+    if [ "${1:-inbound}" == "inbound" ]
     then
-        V2raySetShadowsocksMethod
-        if [ "$shadowsocks_packet_encoding" != "None" ] 
+        V2raySetProxyShadowsocksMethod
+        if [ "$shadowsocks_method" != "none" ]
         then
             V2raySetShadowsocksPasswordInbound
         else
@@ -252,11 +241,11 @@ V2rayProxyShadowsocksSettings()
         V2raySetShadowsocksPacketEncoding
 
         JQs merge_c proxy_protocol_settings --arg method "$shadowsocks_method" \
-        --arg password "$shadowsocks_password" --arg networks "$shadowsocks_networks" \
+        --arg password "$shadowsocks_password" --arg network "$shadowsocks_networks" \
         --arg packetEncoding "$shadowsocks_packet_encoding" '. * {
             "method": $method,
             "password": $password,
-            "networks": $networks,
+            "network": $network,
             "packetEncoding": $packetEncoding
         }'
         return
@@ -264,9 +253,9 @@ V2rayProxyShadowsocksSettings()
 
     V2raySetShadowsocksAddress
     V2raySetShadowsocksPort
-    V2raySetShadowsocksMethod
+    V2raySetProxyShadowsocksMethod
 
-    if [ "$shadowsocks_packet_encoding" != "None" ] 
+    if [ "$shadowsocks_method" != "none" ]
     then
         V2raySetShadowsocksPasswordOutbound
     else
@@ -277,7 +266,7 @@ V2rayProxyShadowsocksSettings()
     --arg port "$shadowsocks_port" --arg method "$shadowsocks_method" \
     --arg password "$shadowsocks_password" '. * {
         "address": $address,
-        "port": $port | tonumber,
+        "port": ($port | tonumber),
         "method": $method,
         "password": $password
     }'
@@ -291,12 +280,12 @@ V2rayProxyDokodemoSettings()
     V2raySetDokodemoFollowRedirect
 
     JQs merge_c proxy_protocol_settings --arg address "$dokodemo_address" \
-    --arg port "$dokodemo_port" --arg networks "$dokodemo_networks" \
+    --arg port "$dokodemo_port" --arg network "$dokodemo_networks" \
     --arg followRedirect "$dokodemo_follow_redirect" '. * {
         "address": $address,
-        "port": $port | tonumber,
-        "networks": $networks,
-        "followRedirect": $followRedirect | test("true")
+        "port": ($port | tonumber),
+        "network": $network,
+        "followRedirect": ($followRedirect | test("true"))
     }'
 }
 

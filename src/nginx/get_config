@@ -2,44 +2,73 @@ NginxGetConfig()
 {
     SetDelimiters
 
-    jq_payload=$(JQs flat "$parse_out")
+    local jq_status="" jq_errors_error=""
+    local jq_l1_dir="" jq_l1_args=""
+    local jq_l2_dir="" jq_l2_args=""
+    local jq_l3_dir="" jq_l3_args=""
+    local jq_l4_dir="" jq_l4_args=""
+    local jq_l5_dir="" jq_l5_args=""
+    local key val
 
-    jq_path='[
-        ["status"],
-        ["errors","error"],
-        ["config","parsed","directive"],
-        ["config","parsed","args"],
-        ["config","parsed","block","directive"],
-        ["config","parsed","block","args"],
-        ["config","parsed","block","block","directive"],
-        ["config","parsed","block","block","args"],
-        ["config","parsed","block","block","block","directive"],
-        ["config","parsed","block","block","block","args"],
-        ["config","parsed","block","block","block","block","directive"],
-        ["config","parsed","block","block","block","block","args"]
-    ]'
-
-    while IFS=": " read -r path_name value; do
-        var_name=${path_name}
-        read -r ${var_name?} <<< "$value"
-    done < <(JQs gets jq_payload)
+    while IFS="$field_sep" read -r key val
+    do
+        case "$key" in
+            status) jq_status="$val" ;;
+            errors) jq_errors_error="$val" ;;
+            l1_dir) jq_l1_dir="$val" ;;
+            l1_args) jq_l1_args="$val" ;;
+            l2_dir) jq_l2_dir="$val" ;;
+            l2_args) jq_l2_args="$val" ;;
+            l3_dir) jq_l3_dir="$val" ;;
+            l3_args) jq_l3_args="$val" ;;
+            l4_dir) jq_l4_dir="$val" ;;
+            l4_args) jq_l4_args="$val" ;;
+            l5_dir) jq_l5_dir="$val" ;;
+            l5_args) jq_l5_args="$val" ;;
+        esac
+    done < <($JQ_FILE -r --arg sep "$field_sep" --argjson d "$json_delimiters" '
+        def jp($sep): if length == 0 then "" else map((. // "") + $sep) | join("") end;
+        def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
+        def ea($sep): if (.args | type) == "array" then (.args | map(tostring) | join($sep)) else (.args // "" | tostring) end;
+        def b: arr_objs(.block);
+        (if (.config | type) == "array" and ((.config[0] // null) | type) == "object" then arr_objs(.config[0].parsed) else [] end) as $l1
+        | ($l1 | map(b)) as $l2
+        | ($l2 | map(map(b))) as $l3
+        | ($l3 | map(map(map(b)))) as $l4
+        | ($l4 | map(map(map(map(b))))) as $l5
+        | [
+            ["status", (if (.status | type) == "string" then .status else "" end)],
+            ["errors", (if (.errors | type) == "array" then (.errors | map(if type == "object" then (.error // "") else tostring end) | join($d[0])) else "" end)],
+            ["l1_dir", ($l1 | map(.directive // "") | jp($d[3]))],
+            ["l1_args", ($l1 | map(ea($d[4])) | jp($d[3]))],
+            ["l2_dir", (if ($l2 | map(length) | add // 0) == 0 then "" else ($l2 | map(map(.directive // "") | jp($d[4])) | jp($d[3])) end)],
+            ["l2_args", (if ($l2 | map(length) | add // 0) == 0 then "" else ($l2 | map(map(ea($d[5])) | jp($d[4])) | jp($d[3])) end)],
+            ["l3_dir", (if ($l3 | map(map(length) | add // 0) | add // 0) == 0 then "" else ($l3 | map(map(map(.directive // "") | jp($d[6])) | jp($d[5])) | jp($d[4])) end)],
+            ["l3_args", (if ($l3 | map(map(length) | add // 0) | add // 0) == 0 then "" else ($l3 | map(map(map(ea($d[7])) | jp($d[6])) | jp($d[5])) | jp($d[4])) end)],
+            ["l4_dir", (if ($l4 | map(map(map(length) | add // 0) | add // 0) | add // 0) == 0 then "" else ($l4 | map(map(map(map(.directive // "") | jp($d[8])) | jp($d[7])) | jp($d[6])) | jp($d[5])) end)],
+            ["l4_args", (if ($l4 | map(map(map(length) | add // 0) | add // 0) | add // 0) == 0 then "" else ($l4 | map(map(map(map(ea($d[9])) | jp($d[8])) | jp($d[7])) | jp($d[6])) | jp($d[5])) end)],
+            ["l5_dir", (if ($l5 | map(map(map(map(length) | add // 0) | add // 0) | add // 0) | add // 0) == 0 then "" else ($l5 | map(map(map(map(map(.directive // "") | jp($d[10])) | jp($d[9])) | jp($d[8])) | jp($d[7])) | jp($d[6])) end)],
+            ["l5_args", (if ($l5 | map(map(map(map(length) | add // 0) | add // 0) | add // 0) | add // 0) == 0 then "" else ($l5 | map(map(map(map(map(ea($d[11])) | jp($d[10])) | jp($d[9])) | jp($d[8])) | jp($d[7])) | jp($d[6])) end)]
+          ][]
+        | "\(.[0])\($sep)\(.[1])"
+    ' <<< "$parse_out")
 
     status="$jq_status"
     error_message="$jq_errors_error"
-    level_1_directive="$jq_config_parsed_directive"
-    level_1_args="$jq_config_parsed_args"
-    level_2_directive="$jq_config_parsed_block_directive"
-    level_2_args="$jq_config_parsed_block_args"
-    level_3_directive="$jq_config_parsed_block_block_directive"
-    level_3_args="$jq_config_parsed_block_block_args"
-    level_4_directive="$jq_config_parsed_block_block_block_directive"
-    level_4_args="$jq_config_parsed_block_block_block_args"
-    level_5_directive="$jq_config_parsed_block_block_block_block_directive"
-    level_5_args="$jq_config_parsed_block_block_block_block_args"
+    level_1_directive="$jq_l1_dir"
+    level_1_args="$jq_l1_args"
+    level_2_directive="$jq_l2_dir"
+    level_2_args="$jq_l2_args"
+    level_3_directive="$jq_l3_dir"
+    level_3_args="$jq_l3_args"
+    level_4_directive="$jq_l4_dir"
+    level_4_args="$jq_l4_args"
+    level_5_directive="$jq_l5_dir"
+    level_5_args="$jq_l5_args"
 
     if [ "$status" == "failed" ]
     then
-        Println "$error ${error_message//$'\x02'/$'\n'}\n"
+        Println "$error ${error_message//${delimiters[0]}/$'\n'}\n"
         exit 1
     fi
 
@@ -54,6 +83,17 @@ NginxGetConfig()
     level_3_d1_count=0
     level_4_d1_count=0
     level_5_d1_count=0
+
+    level_1_directive_arr=()
+    level_1_args_arr=()
+    level_2_directive_arr=()
+    level_2_args_arr=()
+    level_3_directive_arr=()
+    level_3_args_arr=()
+    level_4_directive_arr=()
+    level_4_args_arr=()
+    level_5_directive_arr=()
+    level_5_args_arr=()
 
     if [ -z "$level_1_directive" ]
     then
@@ -70,8 +110,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[4]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
-    IFS="${delimiters[4]}" read -r -a level_2_args_arr <<< "$level_2_args"
+    IFS="${delimiters[3]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
+    IFS="${delimiters[3]}" read -r -a level_2_args_arr <<< "$level_2_args"
 
     level_2_d1_count=${#level_2_directive_arr[@]}
 
@@ -80,8 +120,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[5]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
-    IFS="${delimiters[5]}" read -r -a level_3_args_arr <<< "$level_3_args"
+    IFS="${delimiters[4]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
+    IFS="${delimiters[4]}" read -r -a level_3_args_arr <<< "$level_3_args"
 
     level_3_d1_count=${#level_3_directive_arr[@]}
 
@@ -90,8 +130,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[6]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
-    IFS="${delimiters[6]}" read -r -a level_4_args_arr <<< "$level_4_args"
+    IFS="${delimiters[5]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
+    IFS="${delimiters[5]}" read -r -a level_4_args_arr <<< "$level_4_args"
 
     level_4_d1_count=${#level_4_directive_arr[@]}
 
@@ -100,8 +140,8 @@ NginxGetConfig()
         return 0
     fi
 
-    IFS="${delimiters[7]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
-    IFS="${delimiters[7]}" read -r -a level_5_args_arr <<< "$level_5_args"
+    IFS="${delimiters[6]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
+    IFS="${delimiters[6]}" read -r -a level_5_args_arr <<< "$level_5_args"
 
     level_5_d1_count=${#level_5_directive_arr[@]}
 }

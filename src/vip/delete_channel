@@ -11,7 +11,7 @@ VipDelChannel()
         then
             for((vip_hosts_index=0;vip_hosts_index<vip_hosts_count;vip_hosts_index++));
             do
-                json=true
+                jq_json=true
                 jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
                 JQ update "$VIP_FILE" []
             done
@@ -30,7 +30,7 @@ VipDelChannel()
     do
         if [ "$vip_channels_num" == $((vip_channels_count+1)) ] 
         then
-            json=true
+            jq_json=true
             jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
             JQ update "$VIP_FILE" []
 
