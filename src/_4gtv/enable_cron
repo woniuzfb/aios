@@ -1,13 +1,15 @@
 Enable4gtvCron()
 {
-    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv 4g -" 2> /dev/null
+    if crontab -l 2> /dev/null | grep -Fq -- "$AIOS_PREFIX/bin/tv 4g -"
     then
         Println "$error 定时任务 (每5天注册账号) 已开启 !\n"
     else
-        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-        printf '%s\n' "0 0 */5 * * $AIOS_PREFIX/bin/tv 4g -" >> "$IPTV_ROOT/cron_tmp"
-        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
-        rm -f "$IPTV_ROOT/cron_tmp"
+        local cron_tmp
+        cron_tmp=$(mktemp "${TMPDIR:-/tmp}/aios-cron.XXXXXX")
+        crontab -l > "$cron_tmp" 2> /dev/null || true
+        printf '%s\n' "0 0 */5 * * $AIOS_PREFIX/bin/tv 4g -" >> "$cron_tmp"
+        crontab "$cron_tmp" > /dev/null
+        rm -f "$cron_tmp"
         Println "$info 定时任务 (每5天注册账号) 开启成功\n"
     fi
 }

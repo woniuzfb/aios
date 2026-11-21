@@ -69,7 +69,7 @@ XrayGetRouting()
     routing_rules_count=0
     if [ -s "$X_CONFIG" ]
     then
-        routing_rules_count=$($JQ_FILE -r '(.routing.rules // []) | length' "$X_CONFIG" 2>/dev/null)
+        routing_rules_count=$($JQ_FILE -r '(.routing.rules // []) | length' "$X_CONFIG" 2> /dev/null)
         routing_rules_count="${routing_rules_count:-0}"
     fi
 

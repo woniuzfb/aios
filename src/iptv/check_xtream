@@ -80,14 +80,14 @@ CheckIfXtreamCodes()
 
                 printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                profile=$(CurlFake xtream_codes -s -Lm 10\
-                    -H "$chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                profile=$(CurlFake xtream_codes -s -Lm 10 \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
                 exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
                 if [ -z "$exp_date" ] 
@@ -117,7 +117,7 @@ CheckIfXtreamCodes()
                     server=${chnl_xc_proxy%\/}
                     IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL "$server/?cmd=$chnl_cmd&check=1" \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                     if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                     then
@@ -138,7 +138,7 @@ CheckIfXtreamCodes()
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 

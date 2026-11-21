@@ -81,7 +81,7 @@ DelChannelSchedules()
                     fi
                 done
 
-                new_array=($(printf '%s\n' "${new_array[@]}" | sort -nr))
+                new_array=($(printf '%s\n' "${new_array[@]}" | sort -nru))
 
                 for chnl_schedules_index in "${new_array[@]}"
                 do

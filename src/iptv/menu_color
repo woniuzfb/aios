@@ -4,7 +4,13 @@ inquirer list_input_index "选择操作" color_options color_options_index
 
 if [ "$color_options_index" -eq 1 ] 
 then
-    sed -E -i '/(bg_black|red|green|yellow|blue|cyan|white)=/d' "$i18n_FILE"
+    FilterFileLines "bg_black=" "$i18n_FILE"
+    FilterFileLines "red=" "$i18n_FILE"
+    FilterFileLines "green=" "$i18n_FILE"
+    FilterFileLines "yellow=" "$i18n_FILE"
+    FilterFileLines "blue=" "$i18n_FILE"
+    FilterFileLines "cyan=" "$i18n_FILE"
+    FilterFileLines "white=" "$i18n_FILE"
     Println "$info 颜色重置成功\n"
     exit 0
 fi
@@ -19,31 +25,31 @@ inquirer color_pick "设置 ${color_options[color_options_index]}" color_pick
 
 if [ "$color_options_index" -eq 0 ] 
 then
-    sed -i '/red=/d' "$i18n_FILE"
-    printf "red='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "red=" "$i18n_FILE"
+    printf "red='%s'\n" "$color_pick" >> "$i18n_FILE"
 elif [ "$color_options_index" -eq 1 ] 
 then
-    sed -i '/green=/d' "$i18n_FILE"
-    printf "green='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "green=" "$i18n_FILE"
+    printf "green='%s'\n" "$color_pick" >> "$i18n_FILE"
 elif [ "$color_options_index" -eq 2 ] 
 then
-    sed -i '/yellow=/d' "$i18n_FILE"
-    printf "yellow='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "yellow=" "$i18n_FILE"
+    printf "yellow='%s'\n" "$color_pick" >> "$i18n_FILE"
 elif [ "$color_options_index" -eq 3 ] 
 then
-    sed -i '/blue=/d' "$i18n_FILE"
-    printf "blue='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "blue=" "$i18n_FILE"
+    printf "blue='%s'\n" "$color_pick" >> "$i18n_FILE"
 elif [ "$color_options_index" -eq 4 ] 
 then
-    sed -i '/cyan=/d' "$i18n_FILE"
-    printf "cyan='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "cyan=" "$i18n_FILE"
+    printf "cyan='%s'\n" "$color_pick" >> "$i18n_FILE"
 elif [ "$color_options_index" -eq 5 ] 
 then
-    sed -i '/white=/d' "$i18n_FILE"
-    printf "white='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "white=" "$i18n_FILE"
+    printf "white='%s'\n" "$color_pick" >> "$i18n_FILE"
 else
-    sed -i '/bg_black=/d' "$i18n_FILE"
-    printf "bg_black='%s'" "$color_pick" >> "$i18n_FILE"
+    FilterFileLines "bg_black=" "$i18n_FILE"
+    printf "bg_black='%s'\n" "$color_pick" >> "$i18n_FILE"
 fi
 
 Println "$info 颜色设置成功\n"

@@ -1,14 +1,8 @@
 Add4gtvLink()
 {
-    if [[ $stream_link_url =~ \.m3u8$ ]] 
+    if [[ $stream_link_url =~ \.m3u8$ ]]
     then
         Println "$error 你的 IP 可能已被禁\n"
-
-        if [ "$monitor" = true ] 
-        then
-            return 0
-        fi
-
         return 1
     fi
 
@@ -18,13 +12,19 @@ Add4gtvLink()
     stream_urls_list=""
     stream_urls_count=0
 
-    while IFS= read -r line 
+    local header_clean=${headers%\\r\\n}
+    header_clean=${header_clean%$'\r\n'}
+    header_clean=${header_clean%$'\n'}
+    header_clean=${header_clean%$'\r'}
+
+    local line
+    while IFS= read -r line
     do
-        if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+        if [[ $line =~ RESOLUTION=([^ ]+) ]]
         then
             stream_url_resolution=${BASH_REMATCH[1]%%,*}
             stream_urls_resolution+=("$stream_url_resolution")
-            if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+            if [[ $line =~ BANDWIDTH=([^ ]+) ]]
             then
                 stream_url_bitrate=${BASH_REMATCH[1]%%,*}
                 stream_url_bitrate=$((stream_url_bitrate/1000))
@@ -32,7 +32,7 @@ Add4gtvLink()
                 stream_url_bitrate=""
             fi
             stream_urls_bitrate+=("$stream_url_bitrate")
-            if [ -n "$stream_url_bitrate" ] 
+            if [ -n "$stream_url_bitrate" ]
             then
                 stream_url_bitrate_text=" [ $stream_url_bitrate k ]"
             else
@@ -40,17 +40,18 @@ Add4gtvLink()
             fi
             stream_urls_count=$((stream_urls_count+1))
             stream_urls_list="$stream_urls_list ${green}$stream_urls_count.${normal}${indent_6}$stream_url_resolution$stream_url_bitrate_text\n\n"
-        elif [[ $line =~ m3u8 ]] 
+        elif [[ $line =~ m3u8 ]]
         then
             stream_urls+=("$stream_link_url_path/$line")
         fi
-    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_link_url")
+    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "$header_clean" "$stream_link_url")
 
-    if [ -n "$stream_urls_list" ] 
+    if [ -n "$stream_urls_list" ]
     then
         stream_url_root=${stream_link%%|*}
 
-        if [[ $stream_link =~ \|([^|]+)$ ]] 
+        local i j stream_url_num start end
+        if [[ $stream_link =~ \|([^|]+)$ ]]
         then
             choose=0
             stream_url_quality=${BASH_REMATCH[1]}
@@ -74,14 +75,15 @@ Add4gtvLink()
                 Println "$error ${stream_url_qualities[i]} 不存在 !"
                 choose=1
                 Println "$error 请重新选择 $channel_name 分辨率"
+                break
             done
         else
             choose=1
         fi
 
-        if [ "$choose" -eq 1 ] 
+        if [ "$choose" -eq 1 ]
         then
-            if [ -z "${kind:-}" ] 
+            if [ -z "${kind:-}" ]
             then
                 stream_urls_select_all=$((stream_urls_count+1))
                 stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}全部\n"
@@ -93,11 +95,11 @@ Add4gtvLink()
                 echo "选择分辨率"
             fi
 
-            while read -p "(默认: $stream_urls_count): " stream_urls_num 
+            while read -r -p "(默认: $stream_urls_count): " stream_urls_num
             do
                 stream_urls_num=${stream_urls_num:-$stream_urls_count}
 
-                if [ "$stream_urls_num" == "$stream_urls_select_all" ] 
+                if [ "$stream_urls_num" == "$stream_urls_select_all" ]
                 then
                     stream_url_qualities=()
                     stream_url_video_indices=()
@@ -119,9 +121,15 @@ Add4gtvLink()
                 do
                     case "$stream_url_num" in
                         *"-"*)
+                            if [[ ! $stream_url_num =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+                            then
+                                error_no=3
+                                break
+                            fi
                             stream_url_num_start=${stream_url_num%-*}
                             stream_url_num_end=${stream_url_num#*-}
-                            if [[ $stream_url_num_start == *[!0-9]* ]] || [[ $stream_url_num_end == *[!0-9]* ]] || [ "$stream_url_num_start" -eq 0 ] || [ "$stream_url_num_end" -eq 0 ] || [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
+
+                            if [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
                             then
                                 error_no=3
                                 break
@@ -132,7 +140,7 @@ Add4gtvLink()
                             break
                         ;;
                         *)
-                            if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ] 
+                            if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ]
                             then
                                 error_no=2
                                 break
@@ -151,7 +159,7 @@ Add4gtvLink()
 
                         for stream_url_num in "${stream_urls_num_arr[@]}"
                         do
-                            if [[ $stream_url_num =~ - ]] 
+                            if [[ $stream_url_num =~ - ]]
                             then
                                 start=${stream_url_num%-*}
                                 end=${stream_url_num#*-}
@@ -178,9 +186,9 @@ Add4gtvLink()
         stream_url_quality=${stream_url_quality:1}
         stream_links[0]="$stream_url_root|$stream_url_quality"
 
-        if [ -n "${_4gtv_proxy_command:-}" ] 
+        if [ -n "${_4gtv_proxy_command[*]:-}" ] && [ "${#_4gtv_proxy_command[@]}" -gt 0 ] && [[ $stream_link == https://* ]]
         then
-            stream_link="http://${stream_link:8}"
+            stream_link="http://${stream_link#https://}"
         fi
     else
         Println "$error 频道 [ $channel_name ] 不可用\n"

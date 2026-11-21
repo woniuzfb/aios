@@ -29,6 +29,7 @@ GetChannel()
     jq_path='[
         ["pid"],
         ["status"],
+        ["hide"],
         ["stream_link"],
         ["live"],
         ["proxy"],
@@ -50,6 +51,7 @@ GetChannel()
         ["bitrate"],
         ["resolution"],
         ["const"],
+        ["const_cbr"],
         ["encrypt"],
         ["encrypt_session"],
         ["keyinfo_name"],
@@ -83,10 +85,14 @@ GetChannel()
         ["schedule","status"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name="chnl_${path_name#*_}"
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
+
+    chnl_hide=${chnl_hide:-false}
+    chnl_const_cbr=${chnl_const_cbr:-false}
 
     IFS="${delimiters[1]}" read -ra chnl_stream_links <<< "$chnl_stream_link"
 

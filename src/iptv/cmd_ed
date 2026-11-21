@@ -1,8 +1,2 @@
-DepInstall vim
-if [ "$dist" == "rpm" ] 
-then
-    alternatives --config editor
-else
-    update-alternatives --config editor
-fi
-exit 0
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+RunEditor "$IPTV_CONFIG" && exit 0

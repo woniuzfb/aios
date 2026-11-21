@@ -2,13 +2,13 @@ Edit4gtvAcc()
 {
     List4gtvAccs
 
-    if [ "$_4gtv_accs_count" -eq 0 ] 
+    if [ "$_4gtv_accs_count" -eq 0 ]
     then
         exit 1
     fi
 
     echo -e "选择账号"
-    while read -p "$i18n_default_cancel" _4gtv_accs_num
+    while read -r -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
@@ -30,10 +30,16 @@ Edit4gtvAcc()
                             password: $password
                         }'
                     )
-                    jq_json=true
+                    jq_merge=true
                     jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
-                    JQ update "$SERVICES_CONFIG" "$new_acc"
-                    Println "$info 账号修改成功\n"
+
+                    if JQ update "$SERVICES_CONFIG" "$new_acc"
+                    then
+                        Println "$info 账号修改成功\n"
+                    else
+                        Println "$error 账号修改失败\n"
+                        return 1
+                    fi
                     break
                 else
                     Println "$error $i18n_input_correct_no\n"

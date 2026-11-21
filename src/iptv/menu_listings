@@ -1693,20 +1693,6 @@ ScheduleBtsport()
     printf -v today '%(%Y-%m-%d)T' -1
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
-    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/"  https://widgets.metabroadcast.com/config/1/btsport_v4.js)
-    #bt_prop="${bt_prop#*=}"
-    #bt_prop="${bt_prop%;*}"
-    #bt_prop="${bt_prop%;*}"
-    #bt_channels=$($JQ_FILE -r '.epg.modules.common.channels|join(",")' <<< "$bt_prop")
-    #api_key=$($JQ_FILE -r '.epg.modules.common.apiKey' <<< "$bt_prop")
-
-    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" https://www.player.bt.com/)
-    #bt_prop="${bt_prop##*src=\"}"
-    #bt_prop="${bt_prop%%\"*}"
-    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" https://www.player.bt.com/$bt_prop)
-    #bt_prop="${bt_prop##*_yvContentEnabled\?\"}"
-    #api_key="${bt_prop%%\"*}"
-
     api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
 
     for chnl in "${btsport_chnls[@]}"
@@ -2632,7 +2618,7 @@ ScheduleDisableCron()
     if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
     then
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-        sed -i "/\/usr\/local\/bin\/tv s/d" "$IPTV_ROOT/cron_tmp"
+        FilterFileLines "$AIOS_PREFIX/bin/tv s" "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
         Println "$info 计划任务已关闭\n"
@@ -3394,7 +3380,6 @@ Schedule()
     )
 
     btsport_chnls=(
-        #"btsportespn:BT Sport//ESPN"
         "btsportultimate:hspr:BT Sport Ultimate"
         "btsport1:hspc:BT Sport 1"
         "btsport2:hspd:BT Sport 2"

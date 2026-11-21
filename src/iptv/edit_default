@@ -1,12 +1,20 @@
 EditDefault()
 {
-    jq_path='["default","'"$1"'"]'
+    jq_path='["'"$1"'"]'
 
-    if [ -n "${2:-}" ] 
+    if [ -n "${2:-}" ]
     then
-        JQ update "$CHANNELS_FILE" "$2"
+        if ! JQ update "$IPTV_CONFIG" "$2"
+        then
+            Println "$error $1 修改失败\n"
+            return 1
+        fi
     else
-        JQ update "$CHANNELS_FILE" "${!1}"
+        if ! JQ update "$IPTV_CONFIG" "${!1}"
+        then
+            Println "$error $1 修改失败\n"
+            return 1
+        fi
     fi
 
     Println "$info $1 修改成功\n"

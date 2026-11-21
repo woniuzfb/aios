@@ -1,8 +1,9 @@
 HlsStreamCreatorPlus()
 {
     trap '' HUP INT
-    force_exit=1
-    pid="$BASHPID"
+    pid=$(GetSubshellPid)
+    FFmpegResolveBin 2> /dev/null || true
+    FFmpegDetectCaps 2> /dev/null || true
 
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
@@ -21,8 +22,14 @@ HlsStreamCreatorPlus()
     fi
 
     case $from in
-        "AddChannel") 
-            if [ "$hls_end_list" = true ] 
+        "AddChannel")
+            if [ "${video_codec:-}" != "copy" ] && [ -n "${draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+            then
+                Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                return 1
+            fi
+
+            if [ "$hls_end_list" = true ]
             then
                 unset delete_on_term
             else
@@ -32,7 +39,10 @@ HlsStreamCreatorPlus()
             pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
 
             {
-                flock -x 201
+                if command -v flock > /dev/null 2>&1
+                then
+                    flock -x 201
+                fi
 
     stream_links_json="[]"
 
@@ -121,6 +131,9 @@ HlsStreamCreatorPlus()
     trap '
         if [ "$live" = false ]
         then
+            jq_path=[\"channels\"]
+            jq_path2=[\"status\"]
+            JQ update "$CHANNELS_FILE" pid "$pid" off
             MonitorLog "$channel_name HLS 切片完成"
             exit 1
         fi
@@ -169,23 +182,40 @@ HlsStreamCreatorPlus()
         hls_command+=( -hls_delete_threshold $seg_count )
     fi
 
-    if [ "$live" = true ] 
+    local hls_flags_val=""
+    if [ "$encrypt" = true ]
     then
-        # segment_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
+        hls_flags_val="periodic_rekey"
+    fi
 
-        if [ "$seg_count" -gt 0 ] 
+    if [ "$live" = true ] && [ "$seg_count" -gt 0 ]
+    then
+        if [ -n "$hls_flags_val" ]
         then
-            hls_command+=( -hls_flags periodic_rekey+delete_segments )
+            hls_flags_val="${hls_flags_val}+delete_segments"
         else
-            hls_command+=( -hls_flags periodic_rekey )
+            hls_flags_val="delete_segments"
         fi
-    else
-        hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    if [ -n "$hls_flags_val" ]
+    then
+        hls_command+=( -hls_flags "$hls_flags_val" )
     fi
 
     if [ -n "${stream_url_cdn:-}" ] 
     then
         stream_link="$stream_url_cdn"
+    fi
+
+    if [ -n "${input_flags_command:-}" ]
+    then
+        input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+    fi
+
+    if [ -n "${output_flags_command:-}" ]
+    then
+        output_flags_command=$(FFmpegNormalizeFlags "$output_flags_command" "${stream_link:-}")
     fi
 
     if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
@@ -318,7 +348,7 @@ HlsStreamCreatorPlus()
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$video_codec" == "libx265" ] 
                         then
-                            variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                            variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                         elif [ "$video_codec" == "libvpx-vp9" ] 
                         then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -464,6 +494,11 @@ HlsStreamCreatorPlus()
     then
         stream_urls_index=${stream_url_video_indices[0]}
         stream_link=${stream_urls[stream_urls_index]}
+
+        if [ -n "${input_flags_command:-}" ]
+        then
+            input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+        fi
     fi
 
     if [[ $stream_link =~ ^https?:// ]] 
@@ -477,7 +512,7 @@ HlsStreamCreatorPlus()
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
     fi
 
-    input_command+=( $input_flags_command -i $stream_link )
+    input_command+=( $input_flags_command -i "$stream_link" )
 
     video_shift_index=0
     audio_shift_index=0
@@ -496,7 +531,7 @@ HlsStreamCreatorPlus()
             then
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
             fi
-            input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+            input_command+=( $input_flags_command -itsoffset $video_shift -i "$stream_link" )
         elif [ -n "${audio_shift:-}" ] 
         then
             if [ "$audio_codec" == "copy" ] 
@@ -512,9 +547,10 @@ HlsStreamCreatorPlus()
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 fi
-                input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+                input_command+=( $input_flags_command -itsoffset $audio_shift -i "$stream_link" )
             else
-                input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+                [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                filter_complex="${filter_complex}[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]"
             fi
         fi
     fi
@@ -560,7 +596,7 @@ HlsStreamCreatorPlus()
     do
         if [ -n "${qualities[i]:-}" ] 
         then
-            variants_output_command+=( -crf:v:$i $variant_quality )
+            variants_output_command+=( -crf:v:$i "${qualities[i]}" )
 
             # VBV
             if [ "$const" = true ] && [ -n "${bitrates[i]:-}" ]
@@ -572,7 +608,7 @@ HlsStreamCreatorPlus()
                     variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
                 elif [ "$video_codec" == "libx265" ] 
                 then
-                    variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant_bitrate}k --vbv-bufsize:v:$i ${variant_bitrate}k )
+                    variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                 elif [ "$video_codec" == "libvpx-vp9" ] 
                 then
                     variants_output_command+=( -b:v:$i ${variant_bitrate}k )
@@ -627,7 +663,7 @@ HlsStreamCreatorPlus()
                         variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                     elif [ "$video_codec" == "libx265" ] 
                     then
-                        variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                        variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                     elif [ "$video_codec" == "libvpx-vp9" ] 
                     then
                         variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -716,7 +752,7 @@ HlsStreamCreatorPlus()
                 fi
             elif [ -n "${bitrates[i]:-}" ] 
             then
-                var_stream_map="$var_stream_map v:$i,name:${bitrates[i]}"
+                var_stream_map="$var_stream_map v:$i,a:$i,name:${bitrates[i]}"
 
                 if [ -n "${resolutions[i]:-}" ] 
                 then
@@ -735,6 +771,7 @@ HlsStreamCreatorPlus()
 
         if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
         then
+            [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
             filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
         fi
 
@@ -821,8 +858,14 @@ HlsStreamCreatorPlus()
     # WaitTerm
             } 201>"$pid_file"
         ;;
-        "StartChannel") 
-            if [ "$chnl_hls_end_list" = true ] 
+        "StartChannel")
+            if [ "${chnl_video_codec:-}" != "copy" ] && [ -n "${chnl_draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+            then
+                Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                return 1
+            fi
+
+            if [ "$chnl_hls_end_list" = true ]
             then
                 unset delete_on_term
             else
@@ -833,7 +876,10 @@ HlsStreamCreatorPlus()
             pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
 
             {
-                flock -x 201
+                if command -v flock > /dev/null 2>&1
+                then
+                    flock -x 201
+                fi
 
     jq_file=true
     jq_path='["channels"]'
@@ -872,6 +918,9 @@ HlsStreamCreatorPlus()
     trap '
         if [ "$chnl_live" = false ]
         then
+            jq_path=[\"channels\"]
+            jq_path2=[\"status\"]
+            JQ update "$CHANNELS_FILE" pid "$new_pid" off
             MonitorLog "$chnl_channel_name HLS 切片完成"
             exit 1
         fi
@@ -920,23 +969,40 @@ HlsStreamCreatorPlus()
         chnl_hls_command+=( -hls_delete_threshold $chnl_seg_count )
     fi
 
-    if [ "$chnl_live" = true ] 
+    local chnl_hls_flags_val=""
+    if [ "$chnl_encrypt" = true ]
     then
-        # chnl_segment_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
+        chnl_hls_flags_val="periodic_rekey"
+    fi
 
-        if [ "$chnl_seg_count" -gt 0 ] 
+    if [ "$chnl_live" = true ] && [ "$chnl_seg_count" -gt 0 ]
+    then
+        if [ -n "$chnl_hls_flags_val" ]
         then
-            chnl_hls_command+=( -hls_flags periodic_rekey+delete_segments )
+            chnl_hls_flags_val="${chnl_hls_flags_val}+delete_segments"
         else
-            chnl_hls_command+=( -hls_flags periodic_rekey )
+            chnl_hls_flags_val="delete_segments"
         fi
-    else
-        chnl_hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    if [ -n "$chnl_hls_flags_val" ]
+    then
+        chnl_hls_command+=( -hls_flags "$chnl_hls_flags_val" )
     fi
 
     if [ -n "${chnl_stream_url_cdn:-}" ] 
     then
         chnl_stream_link="$chnl_stream_url_cdn"
+    fi
+
+    if [ -n "${chnl_input_flags_command:-}" ]
+    then
+        chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+    fi
+
+    if [ -n "${chnl_output_flags_command:-}" ]
+    then
+        chnl_output_flags_command=$(FFmpegNormalizeFlags "$chnl_output_flags_command" "${chnl_stream_link:-}")
     fi
 
     if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
@@ -1075,7 +1141,7 @@ HlsStreamCreatorPlus()
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$chnl_video_codec" == "libx265" ] 
                         then
-                            chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                            chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                         elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                         then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -1117,13 +1183,13 @@ HlsStreamCreatorPlus()
 
                     if [ "$chnl_use_primary_playlist" = false ] 
                     then
-                        if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                        if [[ ${chnl_stream_audio_url[chnl_stream_url_audio_index]} =~ ^https?:// ]] 
                         then
                             [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                             [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
                             [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
-                        elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                        elif [[ ${chnl_stream_audio_url[chnl_stream_url_audio_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                         fi
@@ -1163,13 +1229,13 @@ HlsStreamCreatorPlus()
 
                 if [ "$chnl_use_primary_playlist" = false ] 
                 then
-                    if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                    if [[ ${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]} =~ ^https?:// ]] 
                     then
                         [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                         [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                         [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
                         [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
-                    elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                    elif [[ ${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]} =~ ^icecast?:// ]] 
                     then
                         [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                     fi
@@ -1221,6 +1287,11 @@ HlsStreamCreatorPlus()
     then
         chnl_stream_urls_index=${chnl_stream_url_video_indices[0]}
         chnl_stream_link=${chnl_stream_urls[chnl_stream_urls_index]}
+
+        if [ -n "${chnl_input_flags_command:-}" ]
+        then
+            chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+        fi
     fi
 
     if [[ $chnl_stream_link =~ ^https?:// ]] 
@@ -1234,7 +1305,7 @@ HlsStreamCreatorPlus()
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
     fi
 
-    chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+    chnl_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
 
     chnl_video_shift_index=0
     chnl_audio_shift_index=0
@@ -1253,7 +1324,7 @@ HlsStreamCreatorPlus()
             then
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
             fi
-            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
         elif [ -n "${chnl_audio_shift:-}" ] 
         then
             if [ "$chnl_audio_codec" == "copy" ] 
@@ -1269,9 +1340,10 @@ HlsStreamCreatorPlus()
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 fi
-                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
             else
-                chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+                [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                chnl_filter_complex="${chnl_filter_complex}[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]"
             fi
         fi
     fi
@@ -1317,7 +1389,7 @@ HlsStreamCreatorPlus()
     do
         if [ -n "${chnl_qualities[i]:-}" ] 
         then
-            chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+            chnl_variants_output_command+=( -crf:v:$i "${chnl_qualities[i]}" )
 
             # VBV
             if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[i]:-}" ]
@@ -1329,7 +1401,7 @@ HlsStreamCreatorPlus()
                     chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
                 elif [ "$chnl_video_codec" == "libx265" ] 
                 then
-                    chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant_bitrate}k --vbv-bufsize:v:$i ${chnl_variant_bitrate}k )
+                    chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                 elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                 then
                     chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
@@ -1384,7 +1456,7 @@ HlsStreamCreatorPlus()
                         chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                     elif [ "$chnl_video_codec" == "libx265" ] 
                     then
-                        chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                        chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                     elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                     then
                         chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -1473,7 +1545,7 @@ HlsStreamCreatorPlus()
                 fi
             elif [ -n "${chnl_bitrates[i]:-}" ] 
             then
-                chnl_var_stream_map="$chnl_var_stream_map v:$i,name:${chnl_bitrates[i]}"
+                chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:${chnl_bitrates[i]}"
 
                 if [ -n "${chnl_resolutions[i]:-}" ] 
                 then
@@ -1492,6 +1564,7 @@ HlsStreamCreatorPlus()
 
         if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
         then
+            [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
             chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
         fi
 

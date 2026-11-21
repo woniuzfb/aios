@@ -72,7 +72,7 @@ ListChannelsSchedule()
             else
                 chnl_schedule_channel_name_list=""
             fi
-            chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+            chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
         done
     done
 
@@ -139,7 +139,7 @@ ListChannelSchedules()
             else
                 chnl_schedule_channel_name_list=""
             fi
-            chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+            chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
         done
     fi
 

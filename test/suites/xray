@@ -442,7 +442,7 @@ MOCKX
     AssertContains "$stats_out" "[inbound]" "XrayListStats groups by inbound"
     AssertContains "$stats_out" "2 MB" "XrayListStats formats bytes to MB"
     local reset_out
-    reset_out=$(XrayResetStats)
+    reset_out=$(XrayResetStats -y)
     AssertContains "$reset_out" "已重置" "XrayResetStats succeeds via mocked xray api"
 
     # 6i. XrayConfigDomain (direct TLS cert add + edit path)

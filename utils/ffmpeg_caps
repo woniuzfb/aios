@@ -1,0 +1,229 @@
+FFmpegResolveBin()
+{
+    local cfg_bin=""
+    if [ -n "${IPTV_CONFIG:-}" ] && [ -s "$IPTV_CONFIG" ] && [ -n "${JQ_FILE:-}" ] && [ -x "$JQ_FILE" ]
+    then
+        cfg_bin=$("$JQ_FILE" -r 'if type == "object" and (.ffmpeg_bin | type) == "string" then .ffmpeg_bin else "" end' "$IPTV_CONFIG" 2> /dev/null || true)
+    fi
+
+    if [ -n "$cfg_bin" ] && [ -x "$cfg_bin" ]
+    then
+        FFMPEG_FILE="$cfg_bin"
+        local cfg_probe="${cfg_bin%/*}/ffprobe"
+        if [ -x "$cfg_probe" ]
+        then
+            FFPROBE_FILE="$cfg_probe"
+        fi
+        return 0
+    fi
+
+    if [ -n "${FFMPEG_FILE:-}" ] && [ -x "$FFMPEG_FILE" ]
+    then
+        if [ -z "${FFPROBE_FILE:-}" ] || [ ! -x "$FFPROBE_FILE" ]
+        then
+            local sibling_probe="${FFMPEG_FILE%/*}/ffprobe"
+            if [ -x "$sibling_probe" ]
+            then
+                FFPROBE_FILE="$sibling_probe"
+            fi
+        fi
+        return 0
+    fi
+
+    local cand
+    for cand in \
+        "${AIOS_PREFIX:-/usr/local}/bin/ffmpeg" \
+        "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg" \
+        "/opt/homebrew/bin/ffmpeg" \
+        "/usr/local/opt/ffmpeg-full/bin/ffmpeg" \
+        "/usr/local/bin/ffmpeg" \
+        "/usr/bin/ffmpeg"
+    do
+        if [ -x "$cand" ]
+        then
+            FFMPEG_FILE="$cand"
+
+            if [ -x "${cand%/*}/ffprobe" ]
+            then
+                FFPROBE_FILE="${cand%/*}/ffprobe"
+            fi
+            return 0
+        fi
+    done
+
+    local path_bin
+    if path_bin=$(command -v ffmpeg 2> /dev/null) && [ -n "$path_bin" ] && [ -x "$path_bin" ]
+    then
+        FFMPEG_FILE="$path_bin"
+
+        if [ -x "${path_bin%/*}/ffprobe" ]
+        then
+            FFPROBE_FILE="${path_bin%/*}/ffprobe"
+        elif path_bin=$(command -v ffprobe 2> /dev/null) && [ -n "$path_bin" ]
+        then
+            FFPROBE_FILE="$path_bin"
+        fi
+        return 0
+    fi
+
+    return 1
+}
+
+FFmpegDetectCaps()
+{
+    local target_bin="${1:-${FFMPEG_FILE:-}}"
+    if [ -z "$target_bin" ] || [ ! -x "$target_bin" ]
+    then
+        FFmpegResolveBin || return 1
+        target_bin="$FFMPEG_FILE"
+    fi
+
+    if [ "${FFMPEG_CAPS_BIN:-}" == "$target_bin" ] && [ -n "${FFMPEG_MAJOR:-}" ]
+    then
+        return 0
+    fi
+
+    local ver_line
+    ver_line=$("$target_bin" -version 2> /dev/null | head -n 1 || true)
+    if [[ $ver_line =~ version[[:space:]]+n?([0-9]+)\.([0-9]+) ]]
+    then
+        FFMPEG_MAJOR="${BASH_REMATCH[1]}"
+        FFMPEG_MINOR="${BASH_REMATCH[2]}"
+        FFMPEG_IS_GIT=false
+    else
+        FFMPEG_MAJOR=99
+        FFMPEG_MINOR=0
+        FFMPEG_IS_GIT=true
+    fi
+
+    FFMPEG_HAS_FPS_MODE=false
+
+    if [ "$FFMPEG_MAJOR" -gt 5 ] || { [ "$FFMPEG_MAJOR" -eq 5 ] && [ "$FFMPEG_MINOR" -ge 1 ]; }
+    then
+        FFMPEG_HAS_FPS_MODE=true
+    fi
+
+    FFMPEG_HAS_ENHANCED_FLV_HEVC=false
+
+    if [ "$FFMPEG_MAJOR" -gt 6 ] || { [ "$FFMPEG_MAJOR" -eq 6 ] && [ "$FFMPEG_MINOR" -ge 1 ]; }
+    then
+        FFMPEG_HAS_ENHANCED_FLV_HEVC=true
+    fi
+
+    FFMPEG_HAS_FILTER_SLASH_SYNTAX=false
+
+    if [ "$FFMPEG_MAJOR" -ge 9 ]
+    then
+        FFMPEG_HAS_FILTER_SLASH_SYNTAX=true
+    fi
+
+    FFMPEG_HAS_DRAWTEXT=false
+
+    if "$target_bin" -hide_banner -filters 2> /dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'
+    then
+        FFMPEG_HAS_DRAWTEXT=true
+    fi
+
+    FFMPEG_CAPS_BIN="$target_bin"
+    return 0
+}
+
+FFmpegSyncFlag()
+{
+    local mode="${1:-0}"
+    FFmpegDetectCaps 2> /dev/null || true
+
+    if [ "${FFMPEG_HAS_FPS_MODE:-true}" = true ]
+    then
+        case "$mode" in
+            0|passthrough) printf '%s\n' "-fps_mode passthrough" ;;
+            1|cfr) printf '%s\n' "-fps_mode cfr" ;;
+            2|vfr) printf '%s\n' "-fps_mode vfr" ;;
+            drop) printf '%s\n' "-fps_mode drop" ;;
+            *) printf '%s\n' "-fps_mode $mode" ;;
+        esac
+    else
+        printf '%s\n' "-vsync $mode"
+    fi
+}
+
+FFmpegNormalizeFlags()
+{
+    local flags_str="${1:-}"
+    local stream_url="${2:-}"
+    FFmpegDetectCaps 2> /dev/null || true
+
+    local tokens=()
+    local out_tokens=()
+    local tok i=0 n=0
+    local is_http=true
+
+    if [ -n "$stream_url" ] && [[ ! $stream_url =~ ^https?:// ]]
+    then
+        is_http=false
+    fi
+
+    # shellcheck disable=SC2206
+    tokens=( $flags_str )
+    n=${#tokens[@]}
+
+    while [ "$i" -lt "$n" ]
+    do
+        tok="${tokens[$i]}"
+        case "$tok" in
+            -vsync)
+                local val="${tokens[$((i + 1))]:-0}"
+                if [ "${FFMPEG_HAS_FPS_MODE:-true}" = true ]
+                then
+                    out_tokens+=( "-fps_mode" )
+                    case "$val" in
+                        0) out_tokens+=( "passthrough" ) ;;
+                        1) out_tokens+=( "cfr" ) ;;
+                        2) out_tokens+=( "vfr" ) ;;
+                        *) out_tokens+=( "$val" ) ;;
+                    esac
+                else
+                    out_tokens+=( "-vsync" "$val" )
+                fi
+                i=$((i + 2))
+                continue
+            ;;
+            -qphist)
+                if [ "${FFMPEG_MAJOR:-8}" -ge 8 ]
+                then
+                    i=$((i + 1))
+                    continue
+                fi
+                out_tokens+=( "$tok" )
+            ;;
+            -filter_complex_script)
+                if [ "${FFMPEG_HAS_FILTER_SLASH_SYNTAX:-false}" = true ]
+                then
+                    out_tokens+=( "-/filter_complex" )
+                else
+                    out_tokens+=( "$tok" )
+                fi
+            ;;
+            -reconnect|-reconnect_at_eof|-reconnect_streamed|-reconnect_delay_max|-reconnect_on_network_error|-reconnect_on_http_error|-seekable)
+                if [ "$is_http" = false ]
+                then
+                    i=$((i + 2))
+                    continue
+                fi
+                out_tokens+=( "$tok" )
+                if [ $((i + 1)) -lt "$n" ]
+                then
+                    out_tokens+=( "${tokens[$((i + 1))]}" )
+                    i=$((i + 2))
+                    continue
+                fi
+            ;;
+            *)
+                out_tokens+=( "$tok" )
+            ;;
+        esac
+        i=$((i + 1))
+    done
+
+    printf '%s\n' "${out_tokens[*]}"
+}

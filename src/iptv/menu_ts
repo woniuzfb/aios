@@ -2,7 +2,7 @@
 
 TsGetToken()
 {
-    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
     then
         Println "$error 无法连接服务器, 请重试"
         return 1
@@ -21,7 +21,7 @@ TsGetToken()
 
     sleep $refresh_time
 
-    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
     then
         Println "$error 无法连接服务器, 请重试"
         return 3
@@ -36,7 +36,7 @@ TsGetToken()
         return 4
     fi
 
-    printf -v now '%(%s)T' -1
+    now=$(DateEpoch)
 
     refresh=$((now+refresh_time))
 }
@@ -113,6 +113,7 @@ SetDelimiters
 
 EXIT_STATUS=0
 
+ts_source=$($JQ_FILE '{data: ((if type == "array" then .[0].data else .data end) // [] | map(select(.reg_url != null)))}' <<< "$ts_source")
 jq_payload=$(JQs flat "$ts_source")
 
 jq_path='[
@@ -151,7 +152,7 @@ while IFS=": " read -r path_name value; do
     read -r ${var_name?} <<< "$value"
 done < <(JQs gets jq_payload)
 
-if [ -z "$m_name" ]
+if [ -z "${jq_data_name:-}" ]
 then
     Println "$error 没有找到频道\n"
     exit 1
@@ -186,8 +187,8 @@ IFS="${delimiters[3]}" read -ra ts_system_version <<< "$jq_data_extend_info_syst
 IFS="${delimiters[3]}" read -ra ts_model <<< "$jq_data_extend_info_model"
 IFS="${delimiters[3]}" read -ra ts_app_version <<< "$jq_data_extend_info_appversion"
 
-rm -rf /tmp/cookie_jar
-mkdir -p /tmp/cookie_jar
+cookie_jar_dir=$(mktemp -d "${TMPDIR:-/tmp}/aios-cookie.XXXXXX")
+trap 'rm -rf "$cookie_jar_dir"' EXIT
 
 while true 
 do
@@ -202,7 +203,7 @@ do
         Println "$tip 部分地区不选择线路可能无法连接"
         inquirer list_input_index "选择线路" lan_options lan_options_index
 
-        sed -i '/.*.jxtvnet.tv/d' /etc/hosts
+        FilterFileLines ".jxtvnet.tv" /etc/hosts
 
         if [ "$lan_options_index" -eq 1 ] 
         then
@@ -277,8 +278,8 @@ do
         echo
         ExitOnText "输入密码" password
 
-        device_no=$(< /proc/sys/kernel/random/uuid)
-        str=$(printf '%s' "$device_no" | md5sum)
+        device_no=$(GenUuid)
+        str=$(printf '%s' "$device_no" | Md5Hex)
         str=${str%% *}
         str=${str:7:1}
         device_no="$device_no$str"
@@ -288,9 +289,9 @@ do
             continue
         fi
 
-        if [ -s "/tmp/cookie_jar/$id" ] 
+        if [ -s "$cookie_jar_dir/$id" ] 
         then
-            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+            cookie_jar=( -b "$cookie_jar_dir/$id" )
         else
             cookie_jar=()
         fi
@@ -318,11 +319,11 @@ do
 
                 if [ -z "$third_token_url" ] 
                 then
-                    if [ -s "/tmp/cookie_jar/$id" ] 
+                    if [ -s "$cookie_jar_dir/$id" ] 
                     then
-                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                        cookie_jar=( -b "$cookie_jar_dir/$id" )
                     else
-                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                        cookie_jar=( -c "$cookie_jar_dir/$id" )
                     fi
                 else
                     cookie_jar=()
@@ -369,8 +370,8 @@ do
         echo
         ExitOnText "输入密码" password
 
-        device_no=$(< /proc/sys/kernel/random/uuid)
-        str=$(printf '%s' "$device_no" | md5sum)
+        device_no=$(GenUuid)
+        str=$(printf '%s' "$device_no" | Md5Hex)
         str=${str%% *}
         str=${str:7:1}
         device_no="$device_no$str"
@@ -382,7 +383,7 @@ do
 
         if [ -z "$img_url" ] 
         then
-            md5_password=$(printf '%s' "$password" | md5sum)
+            md5_password=$(printf '%s' "$password" | Md5Hex)
             md5_password=${md5_password%% *}
 
             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$reg_url?username=$user_name&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=$reg_type&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
@@ -395,7 +396,7 @@ do
             Println "$info 注册成功, 请稍等..."
             sleep 3
         else
-            if [ ! -e "/usr/local/bin/imgcat" ] 
+            if [ ! -e "$IMGCAT_FILE" ] 
             then
                 ImgcatInstall
             fi
@@ -404,14 +405,14 @@ do
             do
                 if [ -n "$third_token_url" ] 
                 then
-                    if [ -s "/tmp/cookie_jar/$id" ] 
+                    if [ -s "$cookie_jar_dir/$id" ] 
                     then
-                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                        cookie_jar=( -b "$cookie_jar_dir/$id" )
                     else
-                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                        cookie_jar=( -c "$cookie_jar_dir/$id" )
                     fi
 
-                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
                     then
                         Println "$error 无法获取 token, 请重试"
                         continue 2
@@ -419,10 +420,10 @@ do
 
                     IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.access_token]|join(" ")' <<< "$res")
                 else
-                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
                     then
                         Println "$error 无法获取 token, 请重试"
-                        return 1
+                        continue 2
                     fi
 
                     IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.accessToken]|join(" ")' <<< "$res")
@@ -435,7 +436,7 @@ do
                     continue 2
                 fi
 
-                if [ ! -s "/tmp/cookie_jar/$id" ] 
+                if [ ! -s "$cookie_jar_dir/$id" ] 
                 then
                     cookie_jar=()
                 fi
@@ -459,20 +460,21 @@ do
                 then
                     chmod +r "$TMP_FILE"
                 else
-                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                    TMP_FILE=$(date '+%m-%d-%H:%M:%S')
                 fi
 
                 trap '
                     rm -f "$TMP_FILE"
+                    rm -rf "$cookie_jar_dir"
                 ' EXIT
 
                 base64 -d <<< "${image#*,}" > "$TMP_FILE"
 
-                /usr/local/bin/imgcat --half-height "$TMP_FILE"
+                "$IMGCAT_FILE" --half-height "$TMP_FILE"
 
                 rm -f "$TMP_FILE"
 
-                trap - EXIT
+                trap 'rm -rf "$cookie_jar_dir"' EXIT
 
                 echo
                 inquirer text_input "输入图片验证码" pincode "刷新"
@@ -488,7 +490,7 @@ do
                             continue 2
                         fi
 
-                        printf -v now '%(%s)T' -1
+                        now=$(DateEpoch)
                         next=$((now+120))
 
                         echo
@@ -496,7 +498,7 @@ do
 
                         if [ "$smscode" == "再次发送" ] 
                         then
-                            printf -v now '%(%s)T' -1
+                            now=$(DateEpoch)
                             if [ "$now" -lt "$next" ] 
                             then
                                 for((secs=next-now;secs>0;secs--));
@@ -523,15 +525,15 @@ do
                             continue 2
                         fi
 
-                        md5_password=$(printf '%s' "$password" | md5sum)
+                        md5_password=$(printf '%s' "$password" | Md5Hex)
                         md5_password=${md5_password%% *}
-                        printf -v timestamp '%(%s)T' -1
+                        timestamp=$(DateEpoch)
                         timestamp=$((timestamp * 1000))
                         signature="$login|$md5_password|$device_no|yuj|$timestamp"
-                        signature=$(printf '%s' "$signature" | md5sum)
+                        signature=$(printf '%s' "$signature" | Md5Hex)
                         signature=${signature%% *}
 
-                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                         then
                             echo "$res"
                             Println "$error 注册失败, 请重试"
@@ -568,7 +570,7 @@ do
 
         if [ -n "$refresh" ] 
         then
-            printf -v now '%(%s)T' -1
+            now=$(DateEpoch)
 
             if [ "$now" -lt "$refresh" ] 
             then
@@ -578,8 +580,8 @@ do
 
         if [ -z "$device_no" ] 
         then
-            device_no=$(< /proc/sys/kernel/random/uuid)
-            str=$(printf '%s' "$device_no" | md5sum)
+            device_no=$(GenUuid)
+            str=$(printf '%s' "$device_no" | Md5Hex)
             str=${str%% *}
             str=${str:7:1}
             device_no="$device_no$str"
@@ -590,15 +592,15 @@ do
             continue
         fi
 
-        if [ -s "/tmp/cookie_jar/$id" ] 
+        if [ -s "$cookie_jar_dir/$id" ] 
         then
-            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+            cookie_jar=( -b "$cookie_jar_dir/$id" )
         else
             cookie_jar=()
         fi
     fi
 
-    md5_password=$(printf '%s' "$password" | md5sum)
+    md5_password=$(printf '%s' "$password" | Md5Hex)
     md5_password=${md5_password%% *}
 
     if [ -z "$img_url" ] 
@@ -610,7 +612,7 @@ do
             continue
         fi
     else
-        printf -v timestamp '%(%s)T' -1
+        timestamp=$(DateEpoch)
         timestamp=$((timestamp * 1000))
 
         if [[ $user_name =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
@@ -623,10 +625,10 @@ do
         fi
 
         signature="$device_no|yuj|$login_acc_type|$login|$timestamp"
-        signature=$(printf '%s' "$signature" | md5sum)
+        signature=$(printf '%s' "$signature" | Md5Hex)
         signature=${signature%% *}
 
-        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
+        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
         then
             Println "$error 无法登陆直播源, 请重试"
             continue
@@ -823,12 +825,14 @@ do
     echo
     inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
 
-    if [ -z "$play_url" ] 
+    chnl_play_url="$play_url"
+
+    if [ -z "$chnl_play_url" ] 
     then
         IFS="${delimiters[3]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
 
         echo
-        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls play_url
+        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls chnl_play_url
     fi
 
     echo
@@ -837,7 +841,7 @@ do
 
     if [ -z "$auth_info_url" ] 
     then
-        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
+        stream_link="$chnl_play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
     else
         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_info_url?accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&verifycode=$device_id") 
         then
@@ -855,7 +859,7 @@ do
         fi
 
         authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel$auth_random_sn"
-        authtoken=$(printf '%s' "$authtoken" | md5sum)
+        authtoken=$(printf '%s' "$authtoken" | Md5Hex)
         authtoken=${authtoken%% *}
 
         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_verify_url?programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&accesstoken=$access_token&verifycode=$device_id&authtoken=$authtoken") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
@@ -864,13 +868,11 @@ do
             continue
         fi
 
-        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
+        stream_link="$chnl_play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
     fi
 
     stream_link_parsed=true
     stream_links=("$stream_link")
-
-    ParseStream
 
     if ! ParseStream
     then
@@ -926,6 +928,8 @@ do
             if [ "$ny_index" -eq 1 ] 
             then
                 kind="flv"
+            else
+                kind=""
             fi
 
             AddChannel

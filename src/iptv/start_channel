@@ -108,16 +108,15 @@ StartChannel()
             fi
         done < <(curl -s -Lm 10 \
             -H "User-Agent: $chnl_user_agent" \
-            -H "${chnl_headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+            -H "$(StripSuffix "$chnl_headers" 4)" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
             | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
 
         chnl_stream_link="${chnl_stream_link%\?*}"
         relative_path="${chnl_stream_link#*//}"
         relative_path="/${relative_path#*/}"
-        ts=$(date +%s%3N)
+        ts=$(DateMs)
         tx_time=$(printf '%X' $((ts/1000+1800)))
-        tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
-        tx_secret=${tx_secret%% *}
+        tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | Md5Hex)
 
         chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
     elif [[ $chnl_stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
@@ -180,8 +179,8 @@ StartChannel()
 
                 stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                -H "${chnl_headers:0:-4}" \
-                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+                -H "$(StripSuffix "$chnl_headers" 4)" \
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
 
                 if [ -z "$stream_link_data" ] 
                 then
@@ -256,7 +255,7 @@ StartChannel()
         do
             stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-            -H "${chnl_headers:0:-4}" \
+            -H "$(StripSuffix "$chnl_headers" 4)" \
             --data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
 
@@ -326,9 +325,10 @@ StartChannel()
                 then
                     chnl_output_flags="$chnl_output_flags -filter:v fps=fps=25"
                 fi
-                if [[ ! $chnl_output_flags =~ -vsync ]] 
+
+                if [[ ! $chnl_output_flags =~ -vsync ]] && [[ ! $chnl_output_flags =~ -fps_mode ]]
                 then
-                    chnl_output_flags="$chnl_output_flags -vsync 0"
+                    chnl_output_flags="$chnl_output_flags $(FFmpegSyncFlag 0)"
                 fi
             fi
 
@@ -355,14 +355,14 @@ StartChannel()
                 chnl_cookies="$chnl_cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link" 2> /dev/null)
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "$(StripSuffix "$chnl_headers" 4)" -c - "$chnl_stream_link" 2> /dev/null)
 
         chnl="${chnl_stream_link%\?*}"
         chnl="${chnl##*/}"
 
         token_url=$(curl -s -Lm 10 \
             -H "User-Agent: $chnl_user_agent" \
-            -H "${chnl_headers:0:-4}" \
+            -H "$(StripSuffix "$chnl_headers" 4)" \
             "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
             | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
 
@@ -376,7 +376,7 @@ StartChannel()
         query_string=$(UrlencodeUpper "$query_string")
         chnl_stream_link=$(curl -s -Lm 10 \
             -H "User-Agent: $chnl_user_agent" \
-            -H "${chnl_headers:0:-4}" \
+            -H "$(StripSuffix "$chnl_headers" 4)" \
             --cookie "$chnl_cookies" \
             "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
             | $JQ_FILE -r '.url')
@@ -395,7 +395,7 @@ StartChannel()
                 chnl_cookies="$chnl_cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "$(StripSuffix "$chnl_headers" 4)" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
     fi
 
     if [ -n "$code" ] 
@@ -415,13 +415,14 @@ StartChannel()
                     chnl_stream_link_url_path="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
                 fi
                 #chnl_headers="range: \r\n"
-                if [[ ! $chnl_output_flags =~ -seekable ]] 
+                if [[ ! $chnl_input_flags =~ -seekable ]]
                 then
-                    chnl_output_flags="$chnl_output_flags -seekable 0"
+                    chnl_input_flags="$chnl_input_flags -seekable 0"
                 fi
-                if [[ ! $chnl_output_flags =~ -vsync ]] 
+
+                if [[ ! $chnl_output_flags =~ -vsync ]] && [[ ! $chnl_output_flags =~ -fps_mode ]]
                 then
-                    chnl_output_flags="$chnl_output_flags -vsync 0"
+                    chnl_output_flags="$chnl_output_flags $(FFmpegSyncFlag 0)"
                 fi
             fi
 
@@ -1194,9 +1195,9 @@ StartChannel()
         chnl_output_flags=${chnl_output_flags#\'}
     fi
 
-    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+    mkdir -p "$FFMPEG_LOG_ROOT"
 
-    printf -v start_time '%(%s)T' -1
+    start_time=$(DateEpoch)
     chnl_channel_time=$start_time
 
     chnl_extra_filters=""
@@ -1241,9 +1242,12 @@ StartChannel()
             Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
         fi
 
-        if [ "$chnl_flv_h265" = true ] 
+        if [ "$chnl_flv_h265" = true ]
         then
-            if [[ ! -x $(command -v ffmpeg_c) ]]  
+            FFmpegResolveBin 2> /dev/null || true
+            FFmpegDetectCaps 2> /dev/null || true
+
+            if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = false ] && [[ ! -x $(command -v ffmpeg_c) ]]
             then
                 if [ "$monitor" = false ] 
                 then

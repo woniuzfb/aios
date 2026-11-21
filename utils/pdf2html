@@ -27,7 +27,7 @@ Pdf2htmlInstall()
     then
         yum install cmake gcc gnu-getopt java-1.8.0-openjdk libpng-devel fontforge-devel cairo-devel poppler-devel libspiro-devel freetype-devel libtiff-devel openjpeg libxml2-devel giflibgiflib-devel libjpeg-turbo-devel libuninameslist-devel pango-devel make gcc-c++ >/dev/null 2>&1
     else
-        apt-get -y install libpoppler-private-dev libpoppler-dev libfontforge-dev pkg-config libopenjp2-7-dev libjpeg-dev libtiff5-dev libpng-dev libfreetype6-dev libgif-dev libgtk-3-dev libxml2-dev libpango1.0-dev libcairo2-dev libspiro-dev libuninameslist-dev python3-dev ninja-build cmake build-essential >/dev/null 2>&1
+        AptInstall libpoppler-private-dev libpoppler-dev libfontforge-dev pkg-config libopenjp2-7-dev libjpeg-dev libtiff5-dev libpng-dev libfreetype6-dev libgif-dev libgtk-3-dev libxml2-dev libpango1.0-dev libcairo2-dev libspiro-dev libuninameslist-dev python3-dev ninja-build cmake build-essential
     fi
 
     echo -n "...40%..."
@@ -58,46 +58,46 @@ Pdf2htmlInstall()
 
     echo -n "...50%..."
 
-    poppler_name="poppler-0.81.0"
+    poppler_name="poppler-${POPPLER_VER}"
 
     cd ~
     if [ ! -e "./$poppler_name" ] 
     then
         wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/$poppler_name.tar.xz" -qO "$poppler_name.tar.xz"
-        tar xJf "$poppler_name.tar.xz" >/dev/null
+        tar xJf "$poppler_name.tar.xz" > /dev/null
     fi
 
     cd "$poppler_name/"
     mkdir -p build
     cd build
-    cmake -DENABLE_UNSTABLE_API_ABI_HEADERS=ON .. >/dev/null 2>&1
-    make >/dev/null 2>&1
-    make install >/dev/null 2>&1
+    cmake -DENABLE_UNSTABLE_API_ABI_HEADERS=ON .. > /dev/null 2>&1
+    make > /dev/null 2>&1
+    make install > /dev/null 2>&1
 
     echo -n "...70%..."
 
     cd ~
-    if [ ! -e "./fontforge-20190413" ] 
+    if [ ! -e "./fontforge-${FONTFORGE_VER}" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/fontforge-20190413.tar.gz" -qO "fontforge-20190413.tar.gz"
-        tar xzf "fontforge-20190413.tar.gz"
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/fontforge-${FONTFORGE_VER}.tar.gz" -qO "fontforge-${FONTFORGE_VER}.tar.gz"
+        tar xzf "fontforge-${FONTFORGE_VER}.tar.gz"
     fi
 
-    cd "fontforge-20190413/"
-    ./bootstrap >/dev/null 2>&1
-    ./configure >/dev/null 2>&1
-    make >/dev/null 2>&1
-    make install >/dev/null 2>&1
+    cd "fontforge-${FONTFORGE_VER}/"
+    ./bootstrap > /dev/null 2>&1
+    ./configure > /dev/null 2>&1
+    make > /dev/null 2>&1
+    make install > /dev/null 2>&1
     echo -n "...90%..."
 
     cd ~
-    if [ ! -e "./pdf2htmlEX-0.18.7-poppler-0.81.0" ] 
+    if [ ! -e "./pdf2htmlEX-${PDF2HTMLEX_VER}" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" -qO "pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
-        unzip "pdf2htmlEX-0.18.7-poppler-0.81.0.zip" >/dev/null 2>&1
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/pdf2htmlEX-${PDF2HTMLEX_VER}.zip" -qO "pdf2htmlEX-${PDF2HTMLEX_VER}.zip"
+        unzip "pdf2htmlEX-${PDF2HTMLEX_VER}.zip" > /dev/null 2>&1
     fi
 
-    cd "pdf2htmlEX-0.18.7-poppler-0.81.0/"
+    cd "pdf2htmlEX-${PDF2HTMLEX_VER}/"
     ./dobuild >/dev/null 2>&1
     cd build
     make install >/dev/null 2>&1

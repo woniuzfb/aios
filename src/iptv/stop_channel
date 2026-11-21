@@ -1,8 +1,38 @@
+WaitChannelPid()
+{
+    local target_pid="$1"
+    local timeout_sec="$2"
+    local pid_file="$3"
+
+    if command -v flock > /dev/null 2>&1
+    then
+        flock -E 1 -w "$timeout_sec" -x "$pid_file" rm -f "$pid_file"
+        return $?
+    fi
+
+    local elapsed=0
+    while kill -0 "$target_pid" 2> /dev/null && [ "$elapsed" -lt "$timeout_sec" ]
+    do
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if kill -0 "$target_pid" 2> /dev/null
+    then
+        kill -9 "$target_pid" 2> /dev/null || true
+        rm -f "$pid_file"
+        return 1
+    fi
+
+    rm -f "$pid_file"
+    return 0
+}
+
 StopChannel()
 {
     if [ -n "${kind:-}" ]
     then
-        if [ "$kind" != "flv" ] 
+        if [ "$kind" != "flv" ]
         then
             Println "$error 暂不支持 $kind ...\n" && exit 1
         elif [ "$chnl_status" == "on" ]
@@ -16,9 +46,9 @@ StopChannel()
 
     Println "$info 关闭频道 [ $chnl_channel_name ] 请稍等..."
 
-    if [ "${kind:-}" == "flv" ] 
+    if [ "${kind:-}" == "flv" ]
     then
-        if ! kill -0 "$chnl_pid" 2> /dev/null 
+        if ! kill -0 "$chnl_pid" 2> /dev/null
         then
             MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
             jq_path='["channels"]'
@@ -30,7 +60,8 @@ StopChannel()
             rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+            if ! WaitChannelPid "$chnl_pid" 30 "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
                 MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 jq_path='["channels"]'
@@ -55,9 +86,10 @@ StopChannel()
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+            if ! WaitChannelPid "$chnl_pid" $((30+chnl_seg_length)) "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
-                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1 
+                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
                 then
                     for play_list in "$chnl_output_dir_root/"*.m3u8
                     do
@@ -83,12 +115,59 @@ StopChannel()
 
 StopChannelsForce()
 {
-    pkill -9 -f ffmpeg 2> /dev/null || true
     pkill -f 'tv m' 2> /dev/null || true
     rm -rf "$CHANNELS_FILE.lockdir"
 
     GetChannels
     GetDefault
+
+    local pid_list=()
+    local i pid
+    for((i=0;i<chnls_count;i++));
+    do
+        pid="${chnls_pid[i]:-}"
+
+        if [[ $pid =~ ^[0-9]+$ ]] && [ "$pid" -gt 0 ] && kill -0 "$pid" 2> /dev/null
+        then
+            pid_list+=("$pid")
+            kill -TERM "$pid" 2> /dev/null || true
+            pkill -TERM -P "$pid" 2> /dev/null || true
+        fi
+    done
+
+    if [ "${#pid_list[@]}" -gt 0 ]
+    then
+        local wait_tick=0
+        local alive
+        while [ "$wait_tick" -lt 10 ]
+        do
+            alive=0
+            for pid in "${pid_list[@]}"
+            do
+                if kill -0 "$pid" 2> /dev/null
+                then
+                    alive=1
+                    break
+                fi
+            done
+
+            if [ "$alive" -eq 0 ]
+            then
+                break
+            fi
+            sleep 0.5
+            wait_tick=$((wait_tick + 1))
+        done
+
+        for pid in "${pid_list[@]}"
+        do
+            if kill -0 "$pid" 2> /dev/null
+            then
+                pkill -KILL -P "$pid" 2> /dev/null || true
+                kill -KILL "$pid" 2> /dev/null || true
+            fi
+        done
+    fi
 
     for((i=0;i<chnls_count;i++));
     do
@@ -109,10 +188,15 @@ StopChannelsForce()
             rm -rf "$sync_file.lockdir"
         done
 
-        action="stop"
-        SyncFile > /dev/null
+        chnl_pid="${chnls_pid[i]}"
 
-        if [ "${chnls_live[i]}" = true ] 
+        if GetChannel > /dev/null 2>&1
+        then
+            action="stop"
+            SyncFile > /dev/null
+        fi
+
+        if [ "${chnls_live[i]:-}" = true ]
         then
             rm -rf "$LIVE_ROOT/${chnls_output_dir_name[i]}"
         fi

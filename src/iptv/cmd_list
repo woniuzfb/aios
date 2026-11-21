@@ -23,9 +23,9 @@ then
 
     for i in "${indices[@]}"
     do
-        if [ "${chnls_flv_status[i]:-}" == "on" ] 
+        if [ "${chnls_flv_status[i]:-}" == "on" ]
         then
-            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"
 
             chnl_stream_links_list=""
 
@@ -35,9 +35,9 @@ then
             done
 
             flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
-        elif [ "${chnls_status[i]:-}" == "on" ] 
+        elif [ "${chnls_status[i]:-}" == "on" ]
         then
-            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"
 
             chnl_stream_links_list=""
 
@@ -64,9 +64,9 @@ then
         echo -e "  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[hls_index]}\n\n${hls_stream_links_list[i]}"
         if [ -d "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}" ] 
         then
-            if ls -A "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* > /dev/null 2>&1 
+            if ls -A "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* > /dev/null 2>&1
             then
-                ls "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* -lght && echo
+                ls -lght "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* && echo
             else
                 Println "$error 无\n"
             fi
@@ -105,9 +105,9 @@ then
 
         Println "$error 未知目录 $output_dir_name\n"
 
-        if ls -A "$output_dir_root"/* > /dev/null 2>&1 
+        if ls -A "$output_dir_root"/* > /dev/null 2>&1
         then
-            ls "$output_dir_root"/* -lght
+            ls -lght "$output_dir_root"/*
         fi
     done
 fi

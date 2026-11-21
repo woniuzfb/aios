@@ -219,7 +219,7 @@ else
     sync_pairs="${sync_pairs:-}"
     hls_end_list="${d_hls_end_list:-false}"
 
-    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+    mkdir -p "$FFMPEG_LOG_ROOT"
 
     flv_h265="${flv_h265:-false}"
     flv_push_link="${flv_push_link:-}"

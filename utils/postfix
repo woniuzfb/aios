@@ -4,6 +4,6 @@ PostfixInstall()
     then
         yum -y install postfix > /dev/null
     else
-        DEBIAN_FRONTEND=noninteractive apt-get -y install postfix > /dev/null
+        AptInstall postfix
     fi
 }

@@ -1,5 +1,6 @@
 Include utils/python "$@"
 Include utils/ffmpeg "$@"
+Include utils/ffmpeg_caps "$@"
 Include utils/youtube "$@"
 Include utils/openssl "$@"
 Include utils/pdf2html "$@"
@@ -47,6 +48,7 @@ Include src/iptv/start_monitor "$@"
 Include src/iptv/menu_monitor "$@"
 Include src/iptv/menu_edit_default "$@"
 Include src/service/get "$@"
+Include src/cloudflare/disable_workers_monitor "$@"
 Include src/_4gtv/set_acc "$@"
 Include src/_4gtv/reg_acc "$@"
 Include src/_4gtv/list_accs "$@"
@@ -131,119 +133,144 @@ Install()
         JQInstall
         CurlImpersonateInstall
 
-        default=$(
-        $JQ_FILE -n \
-            --arg proxy '' \
-            --arg xc_proxy '' \
-            --arg user_agent "$USER_AGENT_TV" \
-            --arg headers '' \
-            --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
-            --arg playlist_name '' \
-            --arg seg_dir_name '' \
-            --arg seg_name '' \
-            --arg seg_length 6 \
-            --arg seg_count 5 \
-            --arg video_codec "libx264" \
-            --arg audio_codec "aac" \
-            --arg video_audio_shift '' \
-            --arg draw_text '' \
-            --arg quality '' \
-            --arg bitrate "900" \
-            --arg resolution "1280x720" \
-            --arg const "false" \
-            --arg const_cbr "false" \
-            --arg encrypt "false" \
-            --arg encrypt_session "false" \
-            --arg keyinfo_name '' \
-            --arg key_name '' \
-            --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
-            --arg output_flags "-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
-            --arg sync "true" \
-            --arg sync_file '' \
-            --arg sync_index "data:0:channels" \
-            --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
-            --arg schedule_file '' \
-            --arg flv_delay_seconds 20 \
-            --arg flv_restart_nums 20 \
-            --arg hls_delay_seconds 120 \
-            --arg hls_min_bitrate 500 \
-            --arg hls_max_seg_size 5 \
-            --arg hls_restart_nums 20 \
-            --arg hls_key_period 30 \
-            --arg hls_end_list "false" \
-            --arg anti_ddos_port 80 \
-            --arg anti_ddos_syn_flood "false" \
-            --arg anti_ddos_syn_flood_delay_seconds 3 \
-            --arg anti_ddos_syn_flood_seconds 3600 \
-            --arg anti_ddos "false" \
-            --arg anti_ddos_seconds 120 \
-            --arg anti_ddos_level 6 \
-            --arg anti_leech "false" \
-            --arg anti_leech_restart_nums 3 \
-            --arg anti_leech_restart_flv_changes "true" \
-            --arg anti_leech_restart_hls_changes "true" \
-            --arg recheck_period 0 \
-            --arg version "$sh_ver" \
-            '{
-                proxy: $proxy,
-                xc_proxy: $xc_proxy,
-                user_agent: $user_agent,
-                headers: $headers,
-                cookies: $cookies,
-                playlist_name: $playlist_name,
-                seg_dir_name: $seg_dir_name,
-                seg_name: $seg_name,
-                seg_length: $seg_length | tonumber,
-                seg_count: $seg_count | tonumber,
-                video_codec: $video_codec,
-                audio_codec: $audio_codec,
-                video_audio_shift: $video_audio_shift,
-                draw_text: $draw_text,
-                quality: $quality,
-                bitrate: $bitrate,
-                resolution: $resolution,
-                const: $const | test("true"),
-                const_cbr: $const_cbr | test("true"),
-                encrypt: $encrypt | test("true"),
-                encrypt_session: $encrypt_session | test("true"),
-                keyinfo_name: $keyinfo_name,
-                key_name: $key_name,
-                input_flags: $input_flags,
-                output_flags: $output_flags,
-                sync: $sync | test("true"),
-                sync_file: $sync_file,
-                sync_index: $sync_index,
-                sync_pairs: $sync_pairs,
-                schedule_file: $schedule_file,
-                flv_delay_seconds: $flv_delay_seconds | tonumber,
-                flv_restart_nums: $flv_restart_nums | tonumber,
-                hls_delay_seconds: $hls_delay_seconds | tonumber,
-                hls_min_bitrate: $hls_min_bitrate | tonumber,
-                hls_max_seg_size: $hls_max_seg_size | tonumber,
-                hls_restart_nums: $hls_restart_nums | tonumber,
-                hls_key_period: $hls_key_period | tonumber,
-                hls_end_list: $hls_end_list | test("true"),
-                anti_ddos_port: $anti_ddos_port,
-                anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
-                anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
-                anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                anti_ddos: $anti_ddos | test("true"),
-                anti_ddos_seconds: $anti_ddos_seconds | tonumber,
-                anti_ddos_level: $anti_ddos_level | tonumber,
-                anti_leech: $anti_leech | test("true"),
-                anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
-                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
-                recheck_period: $recheck_period | tonumber,
-                version: $version
-            }'
-        )
+        if [ -s "$CHANNELS_FILE" ] && [ ! -s "$IPTV_CONFIG" ] && $JQ_FILE -e '(.default | type) == "object"' "$CHANNELS_FILE" > /dev/null 2>&1
+        then
+            local tmp_cfg
+            tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+            if $JQ_FILE --arg version "$sh_ver" '.default | .ffmpeg_bin = (.ffmpeg_bin // "") | .version = (.version // $version) | .schema_version = (.schema_version // 3)' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+            then
+                chmod +r "$tmp_cfg"
+                mv "$tmp_cfg" "$IPTV_CONFIG"
+                JQ mutate "$CHANNELS_FILE" 'del(.default)'
+            else
+                rm -f "$tmp_cfg"
+            fi
+        fi
 
-        $JQ_FILE -n --argjson default "$default" \
-        '{
-            default: $default,
-            channels: []
-        }' > "$CHANNELS_FILE"
+        if [ ! -s "$IPTV_CONFIG" ]
+        then
+            local tmp_cfg
+            tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+            $JQ_FILE -n \
+                --arg proxy '' \
+                --arg xc_proxy '' \
+                --arg user_agent "$USER_AGENT_TV" \
+                --arg headers '' \
+                --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
+                --arg playlist_name '' \
+                --arg seg_dir_name '' \
+                --arg seg_name '' \
+                --arg seg_length 6 \
+                --arg seg_count 5 \
+                --arg video_codec "libx264" \
+                --arg audio_codec "aac" \
+                --arg video_audio_shift '' \
+                --arg draw_text '' \
+                --arg quality '' \
+                --arg bitrate "900" \
+                --arg resolution "1280x720" \
+                --arg const "false" \
+                --arg const_cbr "false" \
+                --arg encrypt "false" \
+                --arg encrypt_session "false" \
+                --arg keyinfo_name '' \
+                --arg key_name '' \
+                --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
+                --arg output_flags "-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
+                --arg sync "true" \
+                --arg sync_file '' \
+                --arg sync_index "data:0:channels" \
+                --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
+                --arg schedule_file '' \
+                --arg flv_delay_seconds 20 \
+                --arg flv_restart_nums 20 \
+                --arg hls_delay_seconds 120 \
+                --arg hls_min_bitrate 500 \
+                --arg hls_max_seg_size 5 \
+                --arg hls_restart_nums 20 \
+                --arg hls_key_period 30 \
+                --arg hls_end_list "false" \
+                --arg anti_ddos_port 80 \
+                --arg anti_ddos_syn_flood "false" \
+                --arg anti_ddos_syn_flood_delay_seconds 3 \
+                --arg anti_ddos_syn_flood_seconds 3600 \
+                --arg anti_ddos "false" \
+                --arg anti_ddos_seconds 120 \
+                --arg anti_ddos_level 6 \
+                --arg anti_leech "false" \
+                --arg anti_leech_restart_nums 3 \
+                --arg anti_leech_restart_flv_changes "true" \
+                --arg anti_leech_restart_hls_changes "true" \
+                --arg recheck_period 0 \
+                --arg ffmpeg_bin '' \
+                --arg version "$sh_ver" \
+                '{
+                    proxy: $proxy,
+                    xc_proxy: $xc_proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
+                    playlist_name: $playlist_name,
+                    seg_dir_name: $seg_dir_name,
+                    seg_name: $seg_name,
+                    seg_length: $seg_length | tonumber,
+                    seg_count: $seg_count | tonumber,
+                    video_codec: $video_codec,
+                    audio_codec: $audio_codec,
+                    video_audio_shift: $video_audio_shift,
+                    draw_text: $draw_text,
+                    quality: $quality,
+                    bitrate: $bitrate,
+                    resolution: $resolution,
+                    const: $const | test("true"),
+                    const_cbr: $const_cbr | test("true"),
+                    encrypt: $encrypt | test("true"),
+                    encrypt_session: $encrypt_session | test("true"),
+                    keyinfo_name: $keyinfo_name,
+                    key_name: $key_name,
+                    input_flags: $input_flags,
+                    output_flags: $output_flags,
+                    sync: $sync | test("true"),
+                    sync_file: $sync_file,
+                    sync_index: $sync_index,
+                    sync_pairs: $sync_pairs,
+                    schedule_file: $schedule_file,
+                    flv_delay_seconds: $flv_delay_seconds | tonumber,
+                    flv_restart_nums: $flv_restart_nums | tonumber,
+                    hls_delay_seconds: $hls_delay_seconds | tonumber,
+                    hls_min_bitrate: $hls_min_bitrate | tonumber,
+                    hls_max_seg_size: $hls_max_seg_size | tonumber,
+                    hls_restart_nums: $hls_restart_nums | tonumber,
+                    hls_key_period: $hls_key_period | tonumber,
+                    hls_end_list: $hls_end_list | test("true"),
+                    anti_ddos_port: $anti_ddos_port,
+                    anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
+                    anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                    anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                    anti_ddos: $anti_ddos | test("true"),
+                    anti_ddos_seconds: $anti_ddos_seconds | tonumber,
+                    anti_ddos_level: $anti_ddos_level | tonumber,
+                    anti_leech: $anti_leech | test("true"),
+                    anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
+                    anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                    anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
+                    recheck_period: $recheck_period | tonumber,
+                    ffmpeg_bin: $ffmpeg_bin,
+                    version: $version,
+                    schema_version: 3
+                }' > "$tmp_cfg"
+            chmod +r "$tmp_cfg"
+            mv "$tmp_cfg" "$IPTV_CONFIG"
+        fi
+
+        if [ ! -s "$CHANNELS_FILE" ]
+        then
+            local tmp_chnls
+            tmp_chnls=$(mktemp "${TMPDIR:-/tmp}/aios-chnls.XXXXXX")
+            $JQ_FILE -n '{ channels: [] }' > "$tmp_chnls"
+            chmod +r "$tmp_chnls"
+            mv "$tmp_chnls" "$CHANNELS_FILE"
+        fi
 
         Println "`eval_gettext \"\\\$info 安装完成\"`\n"
     fi
@@ -260,7 +287,7 @@ Uninstall()
     VipDisable
     CloudflareDisableWorkersMonitor
 
-    if [ -e "$NODE_ROOT/index.js" ] 
+    if [ -e "$NODE_ROOT/index.js" ]
     then
         pm2 stop 0 2> /dev/null || true
     fi
@@ -268,7 +295,7 @@ Uninstall()
     if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
     then
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-        sed -i "/${LOGROTATE_CONFIG//\//\\/}/d" "$IPTV_ROOT/cron_tmp"
+        FilterFileLines "$LOGROTATE_CONFIG" "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
         Println "$info 已停止 logrotate\n"

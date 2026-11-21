@@ -458,6 +458,182 @@ WaitTerm()
     fi
 }
 
+VersionLt()
+{
+    local v1="${1:-0.0.0}"
+    local v2="${2:-0.0.0}"
+    local a1=() a2=()
+    local IFS='.'
+    read -r -a a1 <<< "$v1"
+    read -r -a a2 <<< "$v2"
+    local i n1 n2
+    for i in 0 1 2
+    do
+        n1="${a1[$i]:-0}"
+        n2="${a2[$i]:-0}"
+        n1="${n1%%[^0-9]*}"
+        n2="${n2%%[^0-9]*}"
+        n1="${n1:-0}"
+        n2="${n2:-0}"
+
+        if [ "$n1" -lt "$n2" ]
+        then
+            return 0
+        elif [ "$n1" -gt "$n2" ]
+        then
+            return 1
+        fi
+    done
+    return 1
+}
+
+GetSubshellPid()
+{
+    if [ -n "${BASHPID:-}" ]
+    then
+        printf '%s\n' "$BASHPID"
+    else
+        sh -c 'echo $PPID'
+    fi
+}
+
+DateEpoch()
+{
+    date +%s
+}
+
+DateMs()
+{
+    if command -v gdate > /dev/null 2>&1
+    then
+        gdate +%s%3N
+    else
+        local out
+        out=$(date +%s%3N 2> /dev/null || true)
+        if [[ $out =~ ^[0-9]+$ ]]
+        then
+            printf '%s\n' "$out"
+        else
+            printf '%s000\n' "$(date +%s)"
+        fi
+    fi
+}
+
+FormatEpoch()
+{
+    local ts="$1"
+    local fmt="${2:-+%c}"
+    if date -r "$ts" "$fmt" 2> /dev/null
+    then
+        return 0
+    fi
+    date --date="@$ts" "$fmt" 2> /dev/null
+}
+
+FilterFileLines()
+{
+    local needle="$1"
+    local file="$2"
+    local tmp_f
+    tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-flt.XXXXXX")
+    if [ -f "$file" ]
+    then
+        grep -Fv -- "$needle" "$file" > "$tmp_f" || true
+        mv "$tmp_f" "$file"
+    else
+        rm -f "$tmp_f"
+    fi
+}
+
+GenUuid()
+{
+    if [ -r /proc/sys/kernel/random/uuid ]
+    then
+        cat /proc/sys/kernel/random/uuid
+    elif command -v uuidgen > /dev/null 2>&1
+    then
+        uuidgen | tr '[:upper:]' '[:lower:]'
+    else
+        openssl rand -hex 16 | sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/'
+    fi
+}
+
+Md5Hex()
+{
+    if command -v md5sum > /dev/null 2>&1
+    then
+        md5sum | awk '{print $1}'
+    else
+        md5 -q
+    fi
+}
+
+StripSuffix()
+{
+    local str="$1"
+    local n="${2:-0}"
+    local len=${#str}
+    if [ "$n" -le 0 ]
+    then
+        printf '%s' "$str"
+    elif [ "$n" -ge "$len" ]
+    then
+        printf ''
+    else
+        printf '%s' "${str:0:$((len - n))}"
+    fi
+}
+
+RunEditor()
+{
+    local target="$1"
+    if [ -n "${EDITOR:-}" ] && command -v "$EDITOR" > /dev/null 2>&1
+    then
+        "$EDITOR" "$target"
+    elif command -v vim > /dev/null 2>&1
+    then
+        vim "$target"
+    elif command -v nano > /dev/null 2>&1
+    then
+        nano "$target"
+    elif command -v editor > /dev/null 2>&1
+    then
+        editor "$target"
+    else
+        vi "$target"
+    fi
+}
+
+WithFileLock()
+{
+    local lock_file="$1"
+    shift
+
+    if command -v flock > /dev/null 2>&1
+    then
+        (
+            flock -x 200 || exit 1
+            "$@"
+        ) 200>"$lock_file"
+    else
+        local lock_dir="${lock_file}.d"
+        local tries=0
+        while ! mkdir "$lock_dir" 2> /dev/null
+        do
+            tries=$((tries + 1))
+            if [ "$tries" -ge 300 ]
+            then
+                return 1
+            fi
+            sleep 0.1
+        done
+        local rc=0
+        "$@" || rc=$?
+        rmdir "$lock_dir" 2> /dev/null || true
+        return $rc
+    fi
+}
+
 Include utils/system "$@"
 Include utils/i18n "$@"
 Include utils/build "$@"

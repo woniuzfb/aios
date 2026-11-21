@@ -72,11 +72,11 @@ XrayAddInbound()
             then
                 if [ -n "$xray_bin" ]
                 then
-                    uuid=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+                    uuid=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
                 fi
                 if [ -z "$uuid" ] && command -v uuidgen > /dev/null 2>&1
                 then
-                    uuid=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+                    uuid=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
                 fi
                 if [ -z "$uuid" ] && [ -r /proc/sys/kernel/random/uuid ]
                 then
@@ -104,11 +104,11 @@ XrayAddInbound()
             then
                 if [ -n "$xray_bin" ]
                 then
-                    uuid=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+                    uuid=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
                 fi
                 if [ -z "$uuid" ] && command -v uuidgen > /dev/null 2>&1
                 then
-                    uuid=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+                    uuid=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
                 fi
                 if [ -z "$uuid" ] && [ -r /proc/sys/kernel/random/uuid ]
                 then
@@ -145,7 +145,7 @@ XrayAddInbound()
                 then
                     ss_bytes=16
                 fi
-                password=$(openssl rand -base64 "$ss_bytes" 2>/dev/null | tr -d '\r\n')
+                password=$(openssl rand -base64 "$ss_bytes" 2> /dev/null | tr -d '\r\n')
                 if [ -z "$password" ]
                 then
                     Println "$error 自动生成 SS2022 密钥失败, 请手动输入\n"
@@ -231,7 +231,7 @@ XrayAddInbound()
                 if [ -n "$xray_bin" ]
                 then
                     local wg_out wg_pub=""
-                    wg_out=$("$xray_bin" wg 2>/dev/null)
+                    wg_out=$("$xray_bin" wg 2> /dev/null)
                     secret_key=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                     wg_pub=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Public[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                     if [ -n "$secret_key" ]
@@ -383,7 +383,7 @@ XrayAddInbound()
             if [ -n "$xray_bin" ]
             then
                 local x25519_out r_pub=""
-                x25519_out=$("$xray_bin" x25519 2>/dev/null)
+                x25519_out=$("$xray_bin" x25519 2> /dev/null)
                 r_pk=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                 r_pub=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^(Password|Public[ ]?[Kk]ey):/ {print $2; exit}' | tr -d '\r\n ')
                 if [ -n "$r_pk" ]

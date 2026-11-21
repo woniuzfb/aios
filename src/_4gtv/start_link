@@ -1,13 +1,9 @@
 Start4gtvLink()
 {
-    if [[ $chnl_stream_link_url =~ \.m3u8$ ]] 
+    if [[ $chnl_stream_link_url =~ \.m3u8$ ]]
     then
         Println "$error 你的 IP 可能已被禁\n"
-        if [ "$monitor" = true ] 
-        then
-            return 0
-        fi
-        exit 1
+        return 1
     fi
 
     chnl_stream_urls=()
@@ -16,13 +12,19 @@ Start4gtvLink()
     chnl_stream_urls_list=""
     chnl_stream_urls_count=0
 
-    while IFS= read -r line 
+    local chnl_header_clean=${chnl_headers%\\r\\n}
+    chnl_header_clean=${chnl_header_clean%$'\r\n'}
+    chnl_header_clean=${chnl_header_clean%$'\n'}
+    chnl_header_clean=${chnl_header_clean%$'\r'}
+
+    local line
+    while IFS= read -r line
     do
-        if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+        if [[ $line =~ RESOLUTION=([^ ]+) ]]
         then
             chnl_stream_url_resolution=${BASH_REMATCH[1]%%,*}
             chnl_stream_urls_resolution+=("$chnl_stream_url_resolution")
-            if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+            if [[ $line =~ BANDWIDTH=([^ ]+) ]]
             then
                 chnl_stream_url_bitrate=${BASH_REMATCH[1]%%,*}
                 chnl_stream_url_bitrate=$((chnl_stream_url_bitrate/1000))
@@ -30,7 +32,7 @@ Start4gtvLink()
                 chnl_stream_url_bitrate=""
             fi
             chnl_stream_urls_bitrate+=("$chnl_stream_url_bitrate")
-            if [ -n "$chnl_stream_url_bitrate" ] 
+            if [ -n "$chnl_stream_url_bitrate" ]
             then
                 chnl_stream_url_bitrate_text=" [ $chnl_stream_url_bitrate k ]"
             else
@@ -38,18 +40,19 @@ Start4gtvLink()
             fi
             chnl_stream_urls_count=$((chnl_stream_urls_count+1))
             chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_count.${normal}${indent_6}$chnl_stream_url_resolution$chnl_stream_url_bitrate_text\n\n"
-        elif [[ $line =~ m3u8 ]] 
+        elif [[ $line =~ m3u8 ]]
         then
             chnl_stream_urls+=("$chnl_stream_link_url_path/$line")
         fi
-    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_link_url")
+    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "$chnl_header_clean" "$chnl_stream_link_url")
 
-    if [ -n "$chnl_stream_urls_list" ] 
+    if [ -n "$chnl_stream_urls_list" ]
     then
         chnl_stream_url_root=${chnl_stream_link%%|*}
         chnl_stream_url_qualities_count=0
 
-        if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
+        local i j chnl_stream_url_num start end
+        if [[ $chnl_stream_link =~ \|([^|]+)$ ]]
         then
             choose=0
             chnl_stream_url_quality=${BASH_REMATCH[1]}
@@ -59,7 +62,7 @@ Start4gtvLink()
 
             chnl_stream_url_video_indices=()
 
-            if [ "$monitor" = true ] 
+            if [ "$monitor" = true ]
             then
                 auto_select=true
             else
@@ -67,7 +70,7 @@ Start4gtvLink()
             fi
 
             choose_asked=false
-            quality_unset=false
+            local matched_qualities=()
 
             for((i=0;i<chnl_stream_url_qualities_count;i++));
             do
@@ -75,7 +78,7 @@ Start4gtvLink()
                 do
                     if { [ "$auto_select" = true ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                     then
-                        chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
+                        matched_qualities+=("${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}")
                         chnl_stream_url_video_indices+=("$j")
                         continue 2
                     fi
@@ -83,20 +86,18 @@ Start4gtvLink()
 
                 Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
 
-                if [ "$monitor" = true ] 
+                if [ "$monitor" = true ]
                 then
-                    quality_unset=true
-                    unset 'chnl_stream_url_qualities[i]'
-                    chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
                     continue
-                elif [ "$choose_asked" = false ] 
+                elif [ "$choose_asked" = false ]
                 then
                     choose_asked=true
                     echo
                     inquirer list_input_index "是否按分辨率自动选择" yn_options yn_index
 
-                    if [ "$yn_index" -eq 0 ] 
+                    if [ "$yn_index" -eq 0 ]
                     then
+                        auto_select=true
                         i=$((i-1))
                         continue
                     fi
@@ -107,17 +108,18 @@ Start4gtvLink()
                 break
             done
 
-            if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+            if [ "$choose" -eq 0 ]
             then
-                Println "$error 请重新选择 $chnl_channel_name 分辨率"
-                return 1
-            fi
+                chnl_stream_url_qualities=(${matched_qualities[@]+"${matched_qualities[@]}"})
+                chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
 
-            if [ "$quality_unset" = true ] 
-            then
-                chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
+                if [ "$chnl_stream_url_qualities_count" -eq 0 ]
+                then
+                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                    return 1
+                fi
             fi
-        elif [ "$monitor" = true ] 
+        elif [ "$monitor" = true ]
         then
             Println "$error 请重新选择 $chnl_channel_name 分辨率"
             return 1
@@ -125,9 +127,9 @@ Start4gtvLink()
             choose=1
         fi
 
-        if [ "$choose" -eq 1 ] 
+        if [ "$choose" -eq 1 ]
         then
-            if [ -z "${kind:-}" ] 
+            if [ -z "${kind:-}" ]
             then
                 chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
                 chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
@@ -139,11 +141,11 @@ Start4gtvLink()
                 echo "选择分辨率"
             fi
 
-            while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+            while read -r -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num
             do
                 chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
 
-                if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
+                if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ]
                 then
                     chnl_stream_url_qualities=()
                     chnl_stream_url_video_indices=()
@@ -165,9 +167,15 @@ Start4gtvLink()
                 do
                     case "$chnl_stream_url_num" in
                         *"-"*)
+                            if [[ ! $chnl_stream_url_num =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+                            then
+                                error_no=3
+                                break
+                            fi
                             chnl_stream_url_num_start=${chnl_stream_url_num%-*}
                             chnl_stream_url_num_end=${chnl_stream_url_num#*-}
-                            if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
+
+                            if [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
                             then
                                 error_no=3
                                 break
@@ -178,7 +186,7 @@ Start4gtvLink()
                             break
                         ;;
                         *)
-                            if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
+                            if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ]
                             then
                                 error_no=2
                                 break
@@ -197,7 +205,7 @@ Start4gtvLink()
 
                         for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
                         do
-                            if [[ $chnl_stream_url_num =~ - ]] 
+                            if [[ $chnl_stream_url_num =~ - ]]
                             then
                                 start=${chnl_stream_url_num%-*}
                                 end=${chnl_stream_url_num#*-}
@@ -225,9 +233,9 @@ Start4gtvLink()
 
         chnl_stream_links[0]="$chnl_stream_url_root|$chnl_stream_url_quality"
 
-        if [ -n "${_4gtv_proxy_command:-}" ] 
+        if [ -n "${_4gtv_proxy_command[*]:-}" ] && [ "${#_4gtv_proxy_command[@]}" -gt 0 ] && [[ $chnl_stream_link == https://* ]]
         then
-            chnl_stream_link="http://${chnl_stream_link:8}"
+            chnl_stream_link="http://${chnl_stream_link#https://}"
         fi
     else
         Println "$error 频道 [ $chnl_channel_name ] 不可用\n"

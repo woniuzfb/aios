@@ -1290,42 +1290,4 @@ CloudflareEnableWorkersMonitor()
     Println "$info workers 监控开启成功\n"
 }
 
-CloudflareDisableWorkersMonitor()
-{
-    # deprecated
-    if [ -s "/tmp/cf_workers.pid" ] 
-    then
-        cf_workers_pid=$(< /tmp/cf_workers.pid)
-        if kill -0 "$cf_workers_pid" 2> /dev/null
-        then
-            kill "$cf_workers_pid" 2> /dev/null
-            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
-            MonitorLog "关闭 workers 监控 PID $cf_workers_pid !"
-            Println "$info workers 监控 关闭成功\n"
-        else
-            Println "$error workers 监控 未开启\n"
-        fi
-    elif [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ]
-    then
-        PID=$(< "$CF_WORKERS_ROOT/cf_workers.pid")
-        if kill -0 "$PID" 2> /dev/null 
-        then
-            Println "$info 关闭 workers 监控, 稍等..."
-            kill "$PID" 2> /dev/null
-            if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.pid" rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-            then
-                MonitorLog "关闭 workers 监控 PID $PID !"
-                Println "$info workers 监控 关闭成功 !\n"
-            else
-                Println "$error workers 监控 关闭超时, 请重试\n"
-                exit 1
-            fi
-        else
-            rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-            Println "$error workers 监控 未开启\n"
-        fi
-    else
-        [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-        Println "$error workers 监控 未开启\n"
-    fi
-}
+Include src/cloudflare/disable_workers_monitor "$@"

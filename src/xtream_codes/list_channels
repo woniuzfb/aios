@@ -546,12 +546,12 @@ XtreamCodesListChnls()
                             $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                            if [ ! -e "/usr/local/bin/imgcat" ] 
+                            if [ ! -x "$IMGCAT_FILE" ] 
                             then
                                 ImgcatInstall
                             fi
 
-                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+                            "$IMGCAT_FILE" --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                             rm -f "$TMP_FILE"
                             rm -f "${TMP_FILE}.jpeg"
@@ -572,7 +572,7 @@ XtreamCodesListChnls()
                                 "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                             if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                             then
-                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '${headers:0:-4}' --cookie '$cookies'"
+                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '$(StripSuffix "$headers" 4)' --cookie '$cookies'"
                                 Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
                                 continue
                             fi
@@ -590,7 +590,7 @@ XtreamCodesListChnls()
                                 then
                                     chmod +r "$TMP_FILE"
                                 else
-                                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                    TMP_FILE=$(date '+%m-%d-%H:%M:%S')
                                 fi
 
                                 trap '
@@ -601,7 +601,7 @@ XtreamCodesListChnls()
                                 $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                     -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+                                "$IMGCAT_FILE" --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                                 rm -f "$TMP_FILE"
                                 rm -f "${TMP_FILE}.jpeg"

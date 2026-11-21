@@ -1,10 +1,15 @@
-if [[ ${2:-1} == "1" ]] 
+if [[ ${2:-1} == "1" ]]
 then
     flag=true
 else
     flag=false
 fi
 
-sed -i "0,/sh_debug=.*/s//sh_debug=$flag/" "$SH_FILE"
+debug_tmp=$(mktemp "${TMPDIR:-/tmp}/aios-dbg.XXXXXX")
+if awk -v f="$flag" '!done && sub(/sh_debug=.*/, "sh_debug=" f) { done=1 } 1' "$SH_FILE" > "$debug_tmp" && [ -s "$debug_tmp" ]
+then
+    cat "$debug_tmp" > "$SH_FILE"
+fi
+rm -f "$debug_tmp"
 
 exit 0

@@ -239,7 +239,7 @@ ReplaceInclude()
             then
                 line_chk="${line_chk#"${line_chk%%[!$'\t']*}"}"
             fi
-            if [ "$line_chk" = "$here_tag" ]
+            if [ "$line_chk" == "$here_tag" ]
             then
                 here=false
                 here_strip=false
@@ -249,7 +249,7 @@ ReplaceInclude()
         then
             here=true
             here_strip=false
-            [ "${BASH_REMATCH[4]}" = "-" ] && here_strip=true
+            [ "${BASH_REMATCH[4]}" == "-" ] && here_strip=true
             here_tag="${BASH_REMATCH[5]}"
         fi
         if [ -z "$line" ]
@@ -272,6 +272,12 @@ ReplaceInclude()
 
 BuildShFile()
 {
+    if ! declare -F EleInArray > /dev/null 2>&1
+    then
+        echo "BuildShFile ERROR: EleInArray is not defined (core must be loaded first)" >&2
+        return 1
+    fi
+
     local out_file="${1:-$DEV_PATH/aios.sh}"
     replace_files=()
     hoisted_files=()
@@ -281,6 +287,14 @@ BuildShFile()
     in_dispatch=0
 
     ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$out_file"
+
+    local built_ver
+    built_ver=$(sed -nE 's/^[[:space:]]*sh_ver="?([^"[:space:]]+)"?/\1/p' "$out_file" | head -n 1)
+    if [ -z "$built_ver" ]
+    then
+        echo "BuildShFile ERROR: failed to parse sh_ver from $out_file" >&2
+        return 1
+    fi
 
     if [ "$INSTALL_SH" = true ]
     then

@@ -13,15 +13,16 @@ ParseSchedule()
         ["end_time"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name=${path_name}
         read -r ${var_name?} <<< "$value"
-    done
+    done < <(JQs gets jq_payload)
 
-    IFS="${delimiters[0]}" read -ra ${chnl_id}_title <<< "$jq_title"
-    IFS="${delimiters[0]}" read -ra ${chnl_id}_time <<< "$jq_time"
-    IFS="${delimiters[0]}" read -ra ${chnl_id}_start_time <<< "$jq_start_time"
-    IFS="${delimiters[0]}" read -ra ${chnl_id}_end_time <<< "$jq_end_time"
+    IFS="${delimiters[1]}" read -ra ${chnl_id}_title <<< "${jq_title:-}"
+    IFS="${delimiters[1]}" read -ra ${chnl_id}_time <<< "${jq_time:-}"
+    IFS="${delimiters[1]}" read -ra ${chnl_id}_start_time <<< "${jq_start_time:-}"
+    IFS="${delimiters[1]}" read -ra ${chnl_id}_end_time <<< "${jq_end_time:-}"
 
     schedule_title=("${chnl_id}_title"[@])
     schedule_title=("${!schedule_title}")

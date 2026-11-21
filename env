@@ -51,6 +51,7 @@ FFMPEG_MIRROR_ROOT="$AIOS_ROOT"/mirror
 IPTV_ROOT="$AIOS_ROOT"/iptv
 LOCK_FILE="$IPTV_ROOT"/lock
 CHANNELS_FILE="$IPTV_ROOT"/channels.json
+IPTV_CONFIG="$IPTV_ROOT"/config.json
 MONITOR_LOG="$IPTV_ROOT"/monitor.log
 LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate
 CRON_FILE="$IPTV_ROOT"/cron
@@ -157,3 +158,39 @@ PROXY_DEFAULT_HOST="YOUR_SERVER_IP"
 XRAY_DEFAULT_API="127.0.0.1:10085"
 DEFAULT_TERM_COLS=140
 DEFAULT_TERM_LINES=40
+
+# Default package / dependency versions
+POSTGRESQL_MAC_PKG="postgresql@18"
+POSTGRESQL_VER="18"
+POSTGRESQL_SLES12_VER="15"
+MONGODB_VER="8.0"
+NODEJS_VER="24"
+PYTHON_FALLBACK_VER="3.14.10"
+GO_FALLBACK_VER="go1.27.4"
+QUICTLS_TAG="OpenSSL_1_1_1w-quic1"
+PCRE_LEGACY_VER="8.45"
+OPENRESTY_OPENSSL_MAC_PKG="openresty/brew/openresty-openssl3"
+OPENRESTY_OPENSSL_PATCH="openssl-1.1.1f-sess_set_get_cb_yield.patch"
+POPPLER_VER="0.81.0"
+FONTFORGE_VER="20190413"
+PDF2HTMLEX_VER="0.18.7-poppler-${POPPLER_VER}"
+
+# Upstream source / repository links
+USTC_MIRROR_HOST="mirrors.ustc.edu.cn"
+OPENSSL_SOURCE_LINK="https://openssl-library.org/source"
+QUICTLS_REPO_LINK="https://github.com/quictls/openssl/archive/refs/tags"
+PGDG_APT_LINK="https://apt.postgresql.org/pub/repos/apt"
+PGDG_ARCHIVE_APT_LINK="https://apt-archive.postgresql.org/pub/repos/apt"
+DOCKER_REPO_LINK="https://download.docker.com/linux"
+NGINX_REPO_LINK="https://nginx.org/packages/mainline"
+OPENRESTY_LINK="https://openresty.org"
+MONGODB_REPO_LINK="https://repo.mongodb.org"
+NODESOURCE_DEB_LINK="https://deb.nodesource.com"
+NODESOURCE_RPM_LINK="https://rpm.nodesource.com"
+JQ_REPO_LINK="https://github.com/jqlang/jq"
+JQ_API_LINK="https://api.github.com/repos/jqlang/jq/releases/latest"
+GO_DL_LINK="https://go.dev/dl"
+GO_DL_MIRROR_LINK="https://gomirrors.org/dl"
+PYTHON_FTP_LINK="https://www.python.org/ftp/python"
+BTBN_FFMPEG_LINK="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+JVS_FFMPEG_LINK="https://johnvansickle.com/ffmpeg"

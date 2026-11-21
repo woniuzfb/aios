@@ -43,7 +43,7 @@ case $pve_num in
         apt_options=( '切换 非订阅源/订阅 源' '切换 debian 国内/国外 源' )
         inquirer list_input_index "选择操作" apt_options apt_options_index
 
-        . /etc/os-release
+        VERSION_CODENAME=$(AptGetCodename)
 
         if [ "$apt_options_index" -eq 0 ] 
         then
@@ -247,7 +247,7 @@ case $pve_num in
             apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
             apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
             echo "deb https://download.mono-project.com/repo/debian stable main" | tee /etc/apt/sources.list.d/mono-official-stable.list
-            apt-get update
+            AptUpdate force
             apt-get -y install mono-complete git
         fi
 

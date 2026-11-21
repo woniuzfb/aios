@@ -128,20 +128,21 @@ ShFileUpdate()
         mv "${SH_FILE}_tmp" "$SH_FILE"
         chmod +x "$SH_FILE"
         Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
-        sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-        if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+        sh_new_ver=$(sed -nE 's/^[[:space:]]*sh_ver="?([^"[:space:]]+)"?/\1/p' "$SH_FILE" | head -n 1)
+        if [ -n "$sh_new_ver" ] && [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ]
         then
             rm -f "$LOCK_FILE"
         fi
     else
         Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
+
+        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp"
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
             Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
-            sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-            if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+            sh_new_ver=$(sed -nE 's/^[[:space:]]*sh_ver="?([^"[:space:]]+)"?/\1/p' "$SH_FILE" | head -n 1)
+            if [ -n "$sh_new_ver" ] && [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ]
             then
                 rm -f "$LOCK_FILE"
             fi

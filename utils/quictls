@@ -15,9 +15,9 @@ QuictlsInstall()
         quictls_path+=-static
     fi
 
-    if [ -d "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" ] 
+    if [ -d "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" ] 
     then
-        ln -sfn "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
+        ln -sfn "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" "$quictls_path"
         return 0
     fi
 
@@ -27,8 +27,8 @@ QuictlsInstall()
     unset OPENSSL_LOCAL_CONFIG_DIR
 
     args=(
-        --prefix="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir"
-        --openssldir="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir/etc"
+        --prefix="$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir"
+        --openssldir="$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir/etc"
         --libdir=lib
     )
 
@@ -68,18 +68,18 @@ QuictlsInstall()
     mkdir -p "$DEPENDS_ROOT"
     cd "$DEPENDS_ROOT"
 
-    if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+    if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${QUICTLS_TAG}.tar.gz" -o "${QUICTLS_TAG}.tar.gz"
     then
-        curl -L "$FFMPEG_MIRROR_LINK"/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+        curl -L "$FFMPEG_MIRROR_LINK/${QUICTLS_TAG}.tar.gz" -o "${QUICTLS_TAG}.tar.gz"
     fi
 
-    Println "$info 解压 OpenSSL_1_1_1w-quic1 ..."
-    tar xzf OpenSSL_1_1_1w-quic1.tar.gz
-    cd openssl-OpenSSL_1_1_1w-quic1
+    Println "$info 解压 ${QUICTLS_TAG} ..."
+    tar xzf "${QUICTLS_TAG}.tar.gz"
+    cd "openssl-${QUICTLS_TAG}"
 
     perl ./Configure "${args[@]}"
     make
     make install
 
-    ln -s "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
+    ln -s "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" "$quictls_path"
 }

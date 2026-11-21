@@ -26,55 +26,48 @@ DockerInstall()
     DepInstall gpg
 
     case $dist in
-        ubu)
+        ubu|deb)
+            local docker_dist="ubuntu" docker_codename docker_repo_base docker_key_url
+            if [ "$dist" == "deb" ]
+            then
+                docker_dist="debian"
+            fi
+
+            docker_codename=$(AptGetCodename)
+
             if grep -q "docker-ce" < /etc/apt/sources.list
             then
                 sed -i '/docker-ce/d' /etc/apt/sources.list
             fi
+
             if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                docker_repo_base="${DOCKER_REPO_LINK}/${docker_dist}"
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-                    $(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list
+                    docker_key_url="http://${USTC_MIRROR_HOST}/docker-ce/linux/${docker_dist}/gpg"
                 else
-                    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-                    $(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list
+                    docker_key_url="${DOCKER_REPO_LINK}/${docker_dist}/gpg"
                 fi
-                sudo apt-get update
+
+                if ! AptRepoCheck "$docker_repo_base" "$docker_codename"
+                then
+                    Println "$error Docker 官方源暂不支持当前系统 (${docker_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                curl -fsSL "$docker_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ${docker_repo_base} \
+                ${docker_codename} stable" | tee /etc/apt/sources.list.d/docker.list
+                AptUpdate force
             fi
+
             for pkg in docker.io docker-doc docker-compose podman-docker containerd runc
             do
                 sudo apt-get -y remove $pkg || true
             done
-            sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-        ;;
-        deb)
-            if grep -q "docker-ce" < /etc/apt/sources.list
-            then
-                sed -i '/docker-ce/d' /etc/apt/sources.list
-            fi
-            if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
-            then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
-                then
-                    curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list
-                else
-                    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list
-                fi
-                sudo apt-get update
-            fi
-            for pkg in docker.io docker-doc docker-compose podman-docker containerd runc
-            do
-                sudo apt-get -y remove $pkg || true
-            done
-            sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+            AptInstall docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         ;;
         rpm)
             echo

@@ -43,7 +43,7 @@ MongodbInstall()
                 then
                     curl -Lm 20 "$FFMPEG_MIRROR_LINK"/mongosh.rb -o "$DEPENDS_ROOT"/mongosh.rb
                 fi
-                sed -i 's/"node"/"node@20"/g' "$DEPENDS_ROOT"/mongosh.rb
+                sed -i "s/\"node\"/\"node@${NODEJS_VER}\"/g" "$DEPENDS_ROOT"/mongosh.rb
                 brew install "$DEPENDS_ROOT"/mongosh.rb
                 brew install mongodb-community --without-mongosh
             else
@@ -55,68 +55,78 @@ MongodbInstall()
         ;;
         rpm) 
             DepInstall yum-utils
-            if [ ! -f /etc/yum.repos.d/mongodb-org-7.0.repo ] 
+            if [ ! -f "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" ] 
             then
                 if grep -qi Amazon <<< "$ID" || grep -qi Amazon <<< "$NAME" 
                 then
-cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
-[mongodb-org-7.0]
+cat > "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" <<EOF
+[mongodb-org-${MONGODB_VER}]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/amazon/$VERSION/mongodb-org/7.0/$arch_path/
+baseurl=${MONGODB_REPO_LINK}/yum/amazon/$VERSION/mongodb-org/${MONGODB_VER}/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://pgp.mongodb.com/server-7.0.asc
+gpgkey=https://pgp.mongodb.com/server-${MONGODB_VER}.asc
 EOF
                 else
-cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
-[mongodb-org-7.0]
+cat > "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" <<EOF
+[mongodb-org-${MONGODB_VER}]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/
+baseurl=${MONGODB_REPO_LINK}/yum/redhat/${VERSION_ID%%.*}/mongodb-org/${MONGODB_VER}/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://pgp.mongodb.com/server-7.0.asc
+gpgkey=https://pgp.mongodb.com/server-${MONGODB_VER}.asc
 EOF
                 fi
             fi
-            sudo yum-config-manager --enable mongodb-org-7.0
+            sudo yum-config-manager --enable "mongodb-org-${MONGODB_VER}"
             sudo yum install -y mongodb-org
         ;;
         ubu) 
-            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy ]] 
+            local mongo_codename
+            mongo_codename=$(AptGetCodename)
+
+            if [ ! -f "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list" ] 
             then
-                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
+                if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/ubuntu" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
+                then
+                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall ubuntu-keyring
+                DepInstall gpg
+                curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGODB_VER}.asc" | gpg --batch --yes --dearmor -o "/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg"
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg] ${MONGODB_REPO_LINK}/apt/ubuntu \
+                ${mongo_codename}/mongodb-org/${MONGODB_VER} multiverse" | tee "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list"
+                AptUpdate force
             fi
-            DepInstall lsb-release
-            DepInstall ubuntu-keyring
-            DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
-            then
-                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu \
-                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-                sudo apt-get update
-            fi
-            sudo apt-get -y install mongodb-org
+
+            AptInstall mongodb-org
         ;;
         deb)
-            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            local mongo_codename
+            mongo_codename=$(AptGetCodename)
+
+            if [ ! -f "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list" ] 
             then
-                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+                if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/debian" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
+                then
+                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall debian-archive-keyring
+                DepInstall gpg
+                curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGODB_VER}.asc" | gpg --batch --yes --dearmor -o "/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg"
+                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg ] ${MONGODB_REPO_LINK}/apt/debian \
+                ${mongo_codename}/mongodb-org/${MONGODB_VER} main" | tee "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list"
+                AptUpdate force
             fi
-            DepInstall lsb-release
-            DepInstall debian-archive-keyring
-            DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
-            then
-                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian \
-                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-                sudo apt-get update
-            fi
-            sudo apt-get -y install mongodb-org
+
+            AptInstall mongodb-org
         ;;
         sles)
-            sudo zypper addrepo --gpgcheck "https://repo.mongodb.org/zypper/suse/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/" mongodb
+            sudo zypper addrepo --gpgcheck "${MONGODB_REPO_LINK}/zypper/suse/${VERSION_ID%%.*}/mongodb-org/${MONGODB_VER}/$arch_path/" mongodb
             sudo zypper -n install mongodb-org
         ;;
     esac

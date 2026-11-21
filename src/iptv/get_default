@@ -5,9 +5,23 @@ GetDefault()
         return 0
     fi
 
+    if [ ! -s "$IPTV_CONFIG" ] && [ -s "$CHANNELS_FILE" ] && $JQ_FILE -e '(.default | type) == "object"' "$CHANNELS_FILE" > /dev/null 2>&1
+    then
+        local tmp_cfg
+        tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+        if $JQ_FILE '.default' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+        then
+            chmod +r "$tmp_cfg"
+            mv "$tmp_cfg" "$IPTV_CONFIG"
+            JQ mutate "$CHANNELS_FILE" 'del(.default)'
+        else
+            rm -f "$tmp_cfg"
+        fi
+    fi
+
     SetDelimiters
 
-    jq_payload=$(JQs flat "$CHANNELS_FILE" '.default')
+    jq_payload=$(JQs flat "$IPTV_CONFIG")
 
     jq_path='[
         ["proxy"],
@@ -60,15 +74,21 @@ GetDefault()
         ["anti_leech_restart_flv_changes"],
         ["anti_leech_restart_hls_changes"],
         ["recheck_period"],
+        ["ffmpeg_bin"],
+        ["schema_version"],
         ["version"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name="d_${path_name#*_}"
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
 
-    if [ -z "$d_version" ]
+    d_ffmpeg_bin="${d_ffmpeg_bin:-}"
+    d_schema_version="${d_schema_version:-}"
+
+    if [ -z "${d_version:-}" ]
     then
         return 0
     fi

@@ -1,18 +1,28 @@
 Reg4gtvAcc()
 {
+    JQInstall
     Set4gtvAccEmail
     Set4gtvAccPass
     IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/signup.html' \
-        -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
+        --data-urlencode "fnREGISTER_TYPE=1" \
+        --data-urlencode "fsLOGIN_TYPE=" \
+        --data-urlencode "fsLINK_ID=" \
+        --data-urlencode "fsUSER=$_4gtv_acc_email" \
+        --data-urlencode "fsPASSWORD=$_4gtv_acc_pass" \
+        --data-urlencode "fsPASSWORD1=$_4gtv_acc_pass" \
+        --data-urlencode "fnBIRTH_YEAR=$((RANDOM%20+1980))" \
+        --data-urlencode "fsSEX=male" \
         https://api2.4gtv.tv/Account/Register \
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
     if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
     then
-        if [ ! -s "$SERVICES_CONFIG" ] 
+        mkdir -p "$SERVICES_ROOT"
+
+        if [ ! -s "$SERVICES_CONFIG" ]
         then
             printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
         fi
@@ -24,8 +34,14 @@ Reg4gtvAcc()
             }'
         )
         jq_path='["4gtv","accounts"]'
-        JQ add "$SERVICES_CONFIG" "[$new_acc]"
-        Println "$info 账号注册成功\n"
+
+        if JQ add "$SERVICES_CONFIG" "[$new_acc]"
+        then
+            Println "$info 账号注册成功\n"
+        else
+            Println "$error 账号保存失败\n"
+            return 1
+        fi
     else
         Println "$error 账号注册失败, 请重试\n\n$msg\n"
     fi

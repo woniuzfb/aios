@@ -93,7 +93,7 @@ AddChannel()
         SetSegName
         SetSegLength
 
-        if [ -n "$live" ] 
+        if [ "$live" = true ]
         then
             SetSegCount
         else
@@ -163,7 +163,7 @@ AddChannel()
         output_flags=${output_flags#\'}
     fi
 
-    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+    [ ! -e "$FFMPEG_LOG_ROOT" ] && mkdir -p "$FFMPEG_LOG_ROOT"
 
     extra_filters=""
     if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 

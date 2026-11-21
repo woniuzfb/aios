@@ -2,8 +2,9 @@ FlvStreamCreator()
 {
     trap '' HUP INT
     unset delete_on_term
-    force_exit=1
-    pid="$BASHPID"
+    pid=$(GetSubshellPid)
+    FFmpegResolveBin 2> /dev/null || true
+    FFmpegDetectCaps 2> /dev/null || true
 
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
@@ -22,10 +23,19 @@ FlvStreamCreator()
     fi
 
     case $from in
-        "AddChannel") 
+        "AddChannel")
+            if [ "${video_codec:-}" != "copy" ] && [ -n "${draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+            then
+                Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                return 1
+            fi
+
             pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
             {
-                flock -x 201
+                if command -v flock > /dev/null 2>&1
+                then
+                    flock -x 201
+                fi
 
     stream_links_json="[]"
 
@@ -137,9 +147,27 @@ FlvStreamCreator()
         printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
     fi
 
-    if [ "$flv_h265" = true ] 
+    flv_ffmpeg_bin="$FFMPEG_FILE"
+
+    if [ "$flv_h265" = true ]
     then
-        FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
+        if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = true ]
+        then
+            flv_ffmpeg_bin="$FFMPEG_FILE"
+        elif [ -x "$AIOS_PREFIX/bin/ffmpeg_c" ]
+        then
+            flv_ffmpeg_bin="$AIOS_PREFIX/bin/ffmpeg_c"
+        fi
+    fi
+
+    if [ -n "${input_flags_command:-}" ]
+    then
+        input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+    fi
+
+    if [ -n "${output_flags_command:-}" ]
+    then
+        output_flags_command=$(FFmpegNormalizeFlags "$output_flags_command" "${stream_link:-}")
     fi
 
     if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
@@ -235,7 +263,7 @@ FlvStreamCreator()
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$video_codec" == "libx265" ] 
                         then
-                            variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                            variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                         elif [ "$video_codec" == "libvpx-vp9" ] 
                         then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -303,7 +331,7 @@ FlvStreamCreator()
         fi
 
         PrepTerm
-        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+        "$flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
         ${variants_input_command[@]+"${variants_input_command[@]}"} \
         ${variants_output_command[@]+"${variants_output_command[@]}"} \
         ${map_command[@]+"${map_command[@]}"} \
@@ -320,6 +348,11 @@ FlvStreamCreator()
     then
         stream_urls_index=${stream_url_video_indices[0]}
         stream_link=${stream_urls[stream_urls_index]}
+
+        if [ -n "${input_flags_command:-}" ]
+        then
+            input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+        fi
     fi
 
     if [[ $stream_link =~ ^https?:// ]] 
@@ -333,7 +366,7 @@ FlvStreamCreator()
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
     fi
 
-    input_command+=( $input_flags_command -i $stream_link )
+    input_command+=( $input_flags_command -i "$stream_link" )
 
     video_shift_index=0
     audio_shift_index=0
@@ -352,7 +385,7 @@ FlvStreamCreator()
             then
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
             fi
-            input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+            input_command+=( $input_flags_command -itsoffset $video_shift -i "$stream_link" )
         elif [ -n "${audio_shift:-}" ] 
         then
             if [ "$audio_codec" == "copy" ] 
@@ -368,9 +401,10 @@ FlvStreamCreator()
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 fi
-                input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+                input_command+=( $input_flags_command -itsoffset $audio_shift -i "$stream_link" )
             else
-                input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+                [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                filter_complex="${filter_complex}[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]"
             fi
         fi
     fi
@@ -416,7 +450,7 @@ FlvStreamCreator()
     do
         if [ -n "${qualities[i]:-}" ] 
         then
-            variants_output_command+=( -crf:v:$i $variant_quality )
+            variants_output_command+=( -crf:v:$i "${qualities[i]}" )
 
             # VBV
             if [ "$const" = true ] && [ -n "${bitrates[i]:-}" ]
@@ -428,7 +462,7 @@ FlvStreamCreator()
                     variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
                 elif [ "$video_codec" == "libx265" ] 
                 then
-                    variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant_bitrate}k --vbv-bufsize:v:$i ${variant_bitrate}k )
+                    variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                 elif [ "$video_codec" == "libvpx-vp9" ] 
                 then
                     variants_output_command+=( -b:v:$i ${variant_bitrate}k )
@@ -449,7 +483,7 @@ FlvStreamCreator()
                         variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                     elif [ "$video_codec" == "libx265" ] 
                     then
-                        variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                        variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                     elif [ "$video_codec" == "libvpx-vp9" ] 
                     then
                         variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -507,6 +541,7 @@ FlvStreamCreator()
     then
         if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
         then
+            [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
             filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
         fi
 
@@ -536,7 +571,7 @@ FlvStreamCreator()
     fi
 
     PrepTerm
-    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+    "$flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
     ${input_command[@]+"${input_command[@]}"} \
     ${variants_output_command[@]+"${variants_output_command[@]}"} \
     ${map_command[@]+"${map_command[@]}"} \
@@ -545,11 +580,20 @@ FlvStreamCreator()
     WaitTerm
             } 201>"$pid_file"
         ;;
-        "StartChannel") 
+        "StartChannel")
+            if [ "${chnl_video_codec:-}" != "copy" ] && [ -n "${chnl_draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+            then
+                Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                return 1
+            fi
+
             new_pid=$pid
             pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
             {
-                flock -x 201
+                if command -v flock > /dev/null 2>&1
+                then
+                    flock -x 201
+                fi
 
     jq_file=true
     jq_path='["channels"]'
@@ -608,9 +652,27 @@ FlvStreamCreator()
         printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
     fi
 
-    if [ "$chnl_flv_h265" = true ] 
+    chnl_flv_ffmpeg_bin="$FFMPEG_FILE"
+
+    if [ "$chnl_flv_h265" = true ]
     then
-        FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
+        if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = true ]
+        then
+            chnl_flv_ffmpeg_bin="$FFMPEG_FILE"
+        elif [ -x "$AIOS_PREFIX/bin/ffmpeg_c" ]
+        then
+            chnl_flv_ffmpeg_bin="$AIOS_PREFIX/bin/ffmpeg_c"
+        fi
+    fi
+
+    if [ -n "${chnl_input_flags_command:-}" ]
+    then
+        chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+    fi
+
+    if [ -n "${chnl_output_flags_command:-}" ]
+    then
+        chnl_output_flags_command=$(FFmpegNormalizeFlags "$chnl_output_flags_command" "${chnl_stream_link:-}")
     fi
 
     if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ -n "${chnl_stream_url_audio_indices:-}" ]
@@ -705,7 +767,7 @@ FlvStreamCreator()
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$chnl_video_codec" == "libx265" ] 
                         then
-                            chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                            chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                         elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                         then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -773,7 +835,7 @@ FlvStreamCreator()
         fi
 
         PrepTerm
-        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+        "$chnl_flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
         ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
         ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
         ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -790,6 +852,11 @@ FlvStreamCreator()
     then
         chnl_stream_urls_index=${chnl_stream_url_video_indices[0]}
         chnl_stream_link=${chnl_stream_urls[chnl_stream_urls_index]}
+
+        if [ -n "${chnl_input_flags_command:-}" ]
+        then
+            chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+        fi
     fi
 
     if [[ $chnl_stream_link =~ ^https?:// ]] 
@@ -803,7 +870,7 @@ FlvStreamCreator()
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
     fi
 
-    chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+    chnl_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
 
     chnl_video_shift_index=0
     chnl_audio_shift_index=0
@@ -822,7 +889,7 @@ FlvStreamCreator()
             then
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
             fi
-            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
         elif [ -n "${chnl_audio_shift:-}" ] 
         then
             if [ "$chnl_audio_codec" == "copy" ] 
@@ -838,9 +905,10 @@ FlvStreamCreator()
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 fi
-                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
             else
-                chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+                [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                chnl_filter_complex="${chnl_filter_complex}[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]"
             fi
         fi
     fi
@@ -886,7 +954,7 @@ FlvStreamCreator()
     do
         if [ -n "${chnl_qualities[i]:-}" ] 
         then
-            chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+            chnl_variants_output_command+=( -crf:v:$i "${chnl_qualities[i]}" )
 
             # VBV
             if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[i]:-}" ]
@@ -898,7 +966,7 @@ FlvStreamCreator()
                     chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
                 elif [ "$chnl_video_codec" == "libx265" ] 
                 then
-                    chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant_bitrate}k --vbv-bufsize:v:$i ${chnl_variant_bitrate}k )
+                    chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                 elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                 then
                     chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
@@ -919,7 +987,7 @@ FlvStreamCreator()
                         chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                     elif [ "$chnl_video_codec" == "libx265" ] 
                     then
-                        chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                        chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                     elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                     then
                         chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -977,6 +1045,7 @@ FlvStreamCreator()
     then
         if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
         then
+            [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
             chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
         fi
 
@@ -1006,7 +1075,7 @@ FlvStreamCreator()
     fi
 
     PrepTerm
-    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+    "$chnl_flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
     ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
     ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
     ${chnl_map_command[@]+"${chnl_map_command[@]}"} \

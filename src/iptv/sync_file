@@ -1,6 +1,6 @@
 SyncFile()
 {
-    if [ "$action" == "add" ] 
+    if [ "$action" == "add" ]
     then
         chnl_pid=$pid
         i18nGetMsg get_channel
@@ -13,7 +13,7 @@ SyncFile()
     chnl_sync_index=${chnl_sync_index:-$d_sync_index}
     chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
 
-    if [ "$chnl_sync" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+    if [ "${chnl_sync:-false}" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
     then
         IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
         IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
@@ -25,14 +25,15 @@ SyncFile()
 
         for((sync_i=0;sync_i<sync_count;sync_i++));
         do
-            if [ ! -s "${chnl_sync_files[sync_i]}" ] 
+            if [ ! -s "${chnl_sync_files[sync_i]}" ]
             then
                 $JQ_FILE -n --arg name "$(RandStr)" \
                 '{
                     "ret": 0,
                     "data": [
                         {
-                            "name": $name
+                            "name": $name,
+                            "channels": []
                         }
                     ]
                 }' > "${chnl_sync_files[sync_i]}"
@@ -47,14 +48,14 @@ SyncFile()
                 do
                     [ "$jq_path" != "[" ] && jq_path="$jq_path,"
                     case $a in
-                        '') 
+                        '')
                             Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                         ;;
                         *[!0-9]*)
                             jq_index="$jq_index.$a"
                             jq_path="$jq_path\"$a\""
                         ;;
-                        *) 
+                        *)
                             jq_index="${jq_index}[$a]"
                             jq_path="${jq_path}$a"
                         ;;
@@ -66,33 +67,34 @@ SyncFile()
 
             if [ "$action" == "stop" ]
             then
-                if [[ -n $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]] 
+                if [[ -n $($JQ_FILE --arg k "$chnl_pid_key" --arg p "$chnl_pid" "(${jq_index} // [])[] | select(.[\$k] == (\$p | tonumber))" "${chnl_sync_files[sync_i]}" 2> /dev/null) ]]
                 then
                     JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
                 fi
             else
-                jq_channel_new=""
+                jq_channel_new=$($JQ_FILE -n -c '{}')
 
                 while IFS=',' read -ra index_arr
                 do
                     for b in "${index_arr[@]}"
                     do
                         case $b in
-                            '') 
+                            '')
                                 Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                             ;;
-                            *) 
-                                if [[ $b == *"="* ]] 
+                            *)
+                                if [[ $b == *"="* ]]
                                 then
                                     key=${b%=*}
                                     value=${b#*=}
-                                    if [[ $value =~ ^http ]]  
+
+                                    if [[ $value =~ ^http ]]
                                     then
-                                        if [ -n "${kind:-}" ] 
+                                        if [ -n "${kind:-}" ]
                                         then
-                                            if [ "$kind" == "flv" ] 
+                                            if [ "$kind" == "flv" ]
                                             then
-                                                value="$chnl_flv_pull_link"
+                                                value="${chnl_flv_pull_link:-}"
                                             else
                                                 value=""
                                             fi
@@ -107,41 +109,37 @@ SyncFile()
                                     key=${b%:*}
                                     value=${b#*:}
                                     value="chnl_$value"
-                                    if [ "$value" == "chnl_pid" ] 
+
+                                    if [ "$value" == "chnl_pid" ]
                                     then
-                                        if [ -n "${new_pid:-}" ] 
+                                        if [ -n "${new_pid:-}" ]
                                         then
                                             value=$new_pid
                                         else
-                                            value=${!value}
+                                            value=${!value:-}
                                         fi
-                                    else 
-                                        value=${!value}
+                                    else
+                                        value=${!value:-}
                                     fi
                                 fi
 
-                                if [ -n "$jq_channel_new" ] 
+                                if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]
                                 then
-                                    jq_channel_new="$jq_channel_new,"
-                                fi
-
-                                if [[ $value == *[!0-9]* ]] 
-                                then
-                                    jq_channel_new="$jq_channel_new\"$key\":\"$value\""
+                                    jq_channel_new=$($JQ_FILE -c --arg k "$key" --arg v "$value" '.[$k] = ($v | tonumber)' <<< "$jq_channel_new")
                                 else
-                                    jq_channel_new="$jq_channel_new\"$key\":$value"
+                                    jq_channel_new=$($JQ_FILE -c --arg k "$key" --arg v "$value" '.[$k] = $v' <<< "$jq_channel_new")
                                 fi
                             ;;
                         esac
                     done
                 done <<< "$chnl_sync_pairs"
 
-                if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
+                if [ "$action" == "add" ] || [[ -z $($JQ_FILE --arg k "$chnl_pid_key" --arg p "$chnl_pid" "(${jq_index} // [])[] | select(.[\$k] == (\$p | tonumber))" "${chnl_sync_files[sync_i]}" 2> /dev/null) ]]
                 then
-                    JQ add "${chnl_sync_files[sync_i]}" "[{$jq_channel_new}]"
+                    JQ add "${chnl_sync_files[sync_i]}" "[$jq_channel_new]"
                 else
                     jq_merge=true
-                    JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "{$jq_channel_new}"
+                    JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "$jq_channel_new"
                 fi
             fi
 

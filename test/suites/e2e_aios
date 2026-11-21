@@ -3,8 +3,9 @@ RunSuiteE2eAios()
     printf '\n=== Suite: e2e (real generated aios.sh via PTY) ===\n'
 
     # Build aios.sh into a temporary file so running tests never mutates the repo working tree
-    local e2e_built_aios
+    local e2e_built_aios e2e_build_err e2e_build_rc=0
     e2e_built_aios=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build.XXXXXX")
+    e2e_build_err=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build-err.XXXXXX")
     (
         set -euo pipefail
         DEV_PATH="$REPO_ROOT"
@@ -33,7 +34,16 @@ RunSuiteE2eAios()
         # shellcheck disable=SC1091
         . "$REPO_ROOT/build"
         BuildShFile "$e2e_built_aios" > /dev/null
-    )
+    ) 2> "$e2e_build_err" || e2e_build_rc=$?
+
+    if [ "$e2e_build_rc" -ne 0 ] || [ -s "$e2e_build_err" ]
+    then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] e2e: BuildShFile exited %d with stderr:\n%s\n' "$e2e_build_rc" "$(head -n 20 "$e2e_build_err")" >&2
+        rm -f "$e2e_built_aios" "$e2e_build_err"
+        return 1
+    fi
+    rm -f "$e2e_build_err"
     if bash -n "$e2e_built_aios"
     then
         PASS_COUNT=$((PASS_COUNT + 1))

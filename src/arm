@@ -77,18 +77,26 @@ case $armbian_num in
         apt-get -y install ca-certificates gpg
         if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
         then
-            if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+            local arm_codename
+            arm_codename=$(AptGetCodename)
+
+            if ! AptRepoCheck "${DOCKER_REPO_LINK}/debian" "$arm_codename"
             then
-                curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-            else
-                curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+                Println "$error Docker 官方源暂不支持当前系统 (${arm_codename:-unknown}), 未写入失效源\n"
+                exit 1
             fi
+
+            if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
+            then
+                curl -fsSL "http://${USTC_MIRROR_HOST}/docker-ce/linux/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            else
+                curl -fsSL "${DOCKER_REPO_LINK}/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            fi
+
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ${DOCKER_REPO_LINK}/debian \
+            ${arm_codename} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         fi
-        apt-get update
+        AptUpdate force
         apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         Println "$info docker 安装成功\n"
     ;;

@@ -38,51 +38,40 @@ PostgresqlInstall()
     . /etc/os-release
 
     case $dist in
-        ubu)
-            if ! [[ "$VERSION_CODENAME" =~ mantic|lunar|jammy|focal ]]
-            then
-                sudo apt-get -y install postgresql-12
-                return 0
-            fi
-            DepInstall gpg
+        ubu|deb)
+            local pg_codename
+            pg_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                local pg_repo_base="$PGDG_APT_LINK"
+                local pg_key_url="https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://mirrors.ustc.edu.cn/postgresql/repos/apt \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
-                else
-                    curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+                    pg_repo_base="https://${USTC_MIRROR_HOST}/postgresql/repos/apt"
+                    pg_key_url="https://${USTC_MIRROR_HOST}/postgresql/repos/apt/ACCC4CF8.asc"
                 fi
-                sudo apt-get update
-            fi
-            sudo apt-get -y install postgresql
-        ;;
-        deb)
-            if ! [[ "$VERSION_CODENAME" =~ bookworm|bullseye|buster|sid ]]
-            then
-                sudo apt-get -y install postgresql-12
-                return 0
-            fi
-            DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
-            then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+
+                if ! AptRepoCheck "$pg_repo_base" "${pg_codename}-pgdg"
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://mirrors.ustc.edu.cn/postgresql/repos/apt \
-                    ${VERSION_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
-                else
-                    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt \
-                    ${VERSION_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
+                    if AptRepoCheck "$PGDG_ARCHIVE_APT_LINK" "${pg_codename}-pgdg"
+                    then
+                        pg_repo_base="$PGDG_ARCHIVE_APT_LINK"
+                    else
+                        Println "$tip PostgreSQL 官方源暂不支持当前系统 (${pg_codename:-unknown}), 改用系统默认源安装"
+                        AptInstall postgresql
+                        return $?
+                    fi
                 fi
-                sudo apt-get update
+
+                DepInstall gpg
+                curl -fsSL "$pg_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] ${pg_repo_base} ${pg_codename}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+                AptUpdate force
             fi
-            sudo apt-get -y install postgresql
+
+            AptInstall postgresql
         ;;
         rpm)
             ArchCheck
@@ -104,27 +93,27 @@ PostgresqlInstall()
             then
                 sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}
                 sudo dnf -qy module disable postgresql || true
-                sudo dnf install -y postgresql16-server
-                sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
-                sudo systemctl enable postgresql-16
-                sudo systemctl start postgresql-16
+                sudo dnf install -y "postgresql${POSTGRESQL_VER}-server"
+                sudo "/usr/pgsql-${POSTGRESQL_VER}/bin/postgresql-${POSTGRESQL_VER}-setup" initdb
+                sudo systemctl enable "postgresql-${POSTGRESQL_VER}"
+                sudo systemctl start "postgresql-${POSTGRESQL_VER}"
             else
                 sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}/pgdg-redhat-repo-latest.noarch.rpm
-                sudo yum install -y postgresql16-server
+                sudo yum install -y "postgresql${POSTGRESQL_VER}-server"
                 if [ "${VERSION_ID%%.*}" -eq 7 ]
                 then
-                    sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
-                    sudo systemctl enable postgresql-16
-                    sudo systemctl start postgresql-16
+                    sudo "/usr/pgsql-${POSTGRESQL_VER}/bin/postgresql-${POSTGRESQL_VER}-setup" initdb
+                    sudo systemctl enable "postgresql-${POSTGRESQL_VER}"
+                    sudo systemctl start "postgresql-${POSTGRESQL_VER}"
                 else
-                    sudo service postgresql-16 initdb
-                    sudo chkconfig postgresql-16 on
-                    sudo service postgresql-16 start
+                    sudo service "postgresql-${POSTGRESQL_VER}" initdb
+                    sudo chkconfig "postgresql-${POSTGRESQL_VER}" on
+                    sudo service "postgresql-${POSTGRESQL_VER}" start
                 fi
             fi
         ;;
         opensuse)
-            zypper install -l -y postgresql16-server
+            zypper install -l -y "postgresql${POSTGRESQL_VER}-server"
             systemctl enable postgresql.service
             systemctl start postgresql.service
         ;;
@@ -133,9 +122,9 @@ PostgresqlInstall()
             then
                 SUSEConnect -p PackageHub/12/x86_64
                 SUSEConnect -p sle-sdk/12/x86_64
-                zypper addrepo https://download.postgresql.org/pub/repos/zypp/repo/pgdg-sles-12-pg15.repo
+                zypper addrepo "https://download.postgresql.org/pub/repos/zypp/repo/pgdg-sles-12-pg${POSTGRESQL_SLES12_VER}.repo"
                 zypper refresh
-                zypper install postgresql15-server
+                zypper install "postgresql${POSTGRESQL_SLES12_VER}-server"
             else
                 zypper addrepo https://download.opensuse.org/repositories/devel:/libraries:/c_c++/${VERSION_ID}/devel:libraries:c_c++.repo
                 zypper addrepo https://download.opensuse.org/repositories/science/${VERSION_ID}/science.repo
@@ -144,7 +133,7 @@ PostgresqlInstall()
                 SUSEConnect -p PackageHub/${VERSION_ID}/x86_64
                 zypper --gpg-auto-import-keys install -y zypper install https://download.postgresql.org/pub/repos/zypp/reporpms/SLES-15-x86_64/pgdg-suse-repo-latest.noarch.rpm
                 zypper refresh
-                zypper install postgresql16-server
+                zypper install "postgresql${POSTGRESQL_VER}-server"
             fi
 
             systemctl enable postgresql.service

@@ -22,9 +22,9 @@ JQInstall()
         then
             Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
             cd ~
-            git clone https://github.com/stedolan/jq.git > /dev/null
+            git clone "${JQ_REPO_LINK}.git" > /dev/null
             cd jq
-            apt-get -y install flex bison libtool make automake autoconf > /dev/null
+            AptInstall flex bison libtool make automake autoconf
             git submodule update --init > /dev/null
             autoreconf -fi > /dev/null
             ./configure --with-oniguruma=builtin > /dev/null
@@ -346,7 +346,7 @@ JQ()
         {
             flock -x 200 || { LogErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
 
-            if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+            if ! $JQ_FILE ${jq_args[@]+"${jq_args[@]}"} "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
             then
                 rm -f "$TMP_FILE"
                 LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
@@ -358,7 +358,7 @@ JQ()
             rm -f "${TMP_FILE}_slurp"
         } 200>"$FILE.lock"
     else
-        if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+        if ! $JQ_FILE ${jq_args[@]+"${jq_args[@]}"} "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
         then
             rm -f "$TMP_FILE"
             LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
@@ -533,12 +533,12 @@ JQs()
                     with_entries(.value |= structural_merge)
                 elif $type == "array" then
                     if length == 0 then []
-                    elif ([ .[] | select(. != null) | type == "object" ] | unique | length == 2) then
+                    elif ([ .[] | select(. != null and . != []) | type == "object" ] | unique | length == 2) then
                         .
                     elif (map(type == "object") | any) then
                         ( [ .[] | select(type == "object") | keys[] ] | unique ) as $all_keys
                         | map(. as $obj
-                        | if $obj == null or type != "object" then
+                        | if $obj == null or $obj == [] or type != "object" then
                             $all_keys | map({key: ., value: null}) | from_entries
                         else
                             $all_keys | map({key: ., value: $obj[.]}) | from_entries
@@ -552,7 +552,7 @@ JQs()
                         | from_entries
                     else
                         map(structural_merge)
-                        | if ([ .[] | select(. != null) | type == "object" ] | any) then structural_merge else . end
+                        | if ([ .[] | select(. != null and . != []) | type == "object" ] | any) then structural_merge else . end
                     end
                 else
                     .

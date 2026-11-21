@@ -16,13 +16,14 @@ ParseHlsPlaylist()
             stream_link_url_path_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
         fi
         #headers="range: \r\n"
-        if [[ ! $output_flags =~ -seekable ]] 
+        if [[ ! $input_flags =~ -seekable ]]
         then
-            output_flags="$output_flags -seekable 0"
+            input_flags="$input_flags -seekable 0"
         fi
-        if [[ ! $output_flags =~ -vsync ]] 
+
+        if [[ ! $output_flags =~ -vsync ]] && [[ ! $output_flags =~ -fps_mode ]]
         then
-            output_flags="$output_flags -vsync 0"
+            output_flags="$output_flags $(FFmpegSyncFlag 0)"
         fi
     fi
 

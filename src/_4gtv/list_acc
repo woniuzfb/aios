@@ -2,13 +2,13 @@ List4gtvAcc()
 {
     List4gtvAccs
 
-    if [ "$_4gtv_accs_count" -eq 0 ] 
+    if [ "$_4gtv_accs_count" -eq 0 ]
     then
         exit 1
     fi
 
     echo -e "选择账号"
-    while read -p "$i18n_default_cancel" _4gtv_accs_num
+    while read -r -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
@@ -22,7 +22,8 @@ List4gtvAcc()
                 then
                     _4gtv_accs_index=$((_4gtv_accs_num-1))
                     fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
-                    if [ -z "$fsVALUE" ] 
+
+                    if [ -z "$fsVALUE" ]
                     then
                         Println "$error 请先登录此账号\n"
                         exit 1
@@ -31,17 +32,21 @@ List4gtvAcc()
                         IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(CurlFake -s -Lm 20 \
                             -H 'Origin: https://www.4gtv.tv' \
                             -H 'Referer: https://www.4gtv.tv/channel.html' \
-                            -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
-                            https://api2.4gtv.tv//Account/GetAccountInfo \
+                            -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper "$fsVALUE")" \
+                            https://api2.4gtv.tv/Account/GetAccountInfo \
                             | $JQ_FILE -r '[.Success,.ErrMessage,.Data.fnLEFT_PROMO_DAYS]|join("^")'
                         ) || true
-                        if [ "$result" = true ] 
+
+                        if [ "$result" = true ]
                         then
-                            if [ "$fnLEFT_PROMO_DAYS" -eq -1 ] 
+                            if [[ $fnLEFT_PROMO_DAYS =~ ^-?[0-9]+$ ]] && [ "$fnLEFT_PROMO_DAYS" -eq -1 ]
                             then
                                 days_left="${red}未开通${normal}"
-                            else
+                            elif [[ $fnLEFT_PROMO_DAYS =~ ^-?[0-9]+$ ]]
+                            then
                                 days_left="还剩 ${green}$fnLEFT_PROMO_DAYS${normal} 天"
+                            else
+                                days_left="${red}未知${normal}"
                             fi
                             Println "$info 豪华套餐: $days_left\n"
                         else

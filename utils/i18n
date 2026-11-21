@@ -217,7 +217,7 @@ LocaleFix()
         if [[ ! -x $(command -v locale-gen) ]] 
         then
             AptUpdate
-            if ! apt-get -y install locales >/dev/null 2>&1
+            if ! AptInstall locales
             then
                 Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
             fi

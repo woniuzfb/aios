@@ -99,7 +99,7 @@ SourceInstallReady()
             # systemctl restart cron
             if ! dpkg -s debconf-utils &> /dev/null 
             then
-                apt-get -y install debconf-utils
+                AptInstall debconf-utils
             fi
             echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
             if [ -n "${1:-}" ] 
@@ -108,7 +108,7 @@ SourceInstallReady()
                 do
                     if ! dpkg -s "$package" &> /dev/null 
                     then
-                        apt-get -y install "$package"
+                        AptInstall "$package"
                     fi
                 done
             fi

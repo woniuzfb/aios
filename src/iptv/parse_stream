@@ -97,10 +97,10 @@ ParseStream()
                 fi
             done < <(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
-                -H "${headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+                -H "$(StripSuffix "$headers" 4)" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
                 | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
 
-            ts=$(date +%s%3N)
+            ts=$(DateMs)
             tx_time=$(printf '%X' $((ts/1000+1800)))
 
             stream_link=${stream_link%\?*}
@@ -108,8 +108,7 @@ ParseStream()
             relative_path=${stream_link#*//}
             relative_path="/${relative_path#*/}"
 
-            tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
-            tx_secret=${tx_secret%% *}
+            tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | Md5Hex)
 
             stream_link="$stream_link?txSecret=$tx_secret&txTime=$tx_time"
             stream_links[0]="$stream_link"
@@ -239,7 +238,7 @@ ParseStream()
                     cookies="${cookies:-}"
                     stream_link_data=$(CurlFake -s -Lm 10 \
                     -H "${headers:0:-4}" \
-                    "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+                    "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
 
                     if [ -n "$stream_link_data" ] 
                     then
@@ -545,6 +544,9 @@ ParseStream()
                 video_options=()
                 audio_options=()
                 subtitle_options=()
+                video_stream_indices=()
+                audio_stream_indices=()
+                subtitle_stream_indices=()
 
                 for((streams_i=0;streams_i<streams_count;streams_i++));
                 do
@@ -562,7 +564,7 @@ ParseStream()
                     if [ "${streams_codec_type[streams_i]}" == "video" ] 
                     then
                         video_stream_indices+=("$streams_i")
-                        if [ "${streams_closed_captions[streams_i]}" -eq 1 ] 
+                        if [ "${streams_closed_captions[streams_i]:-0}" == "1" ]
                         then
                             closed_captions=" 硬字幕"
                         else
@@ -640,7 +642,7 @@ ParseStream()
                     subtitle_options_count="${#subtitle_options[@]}"
                     subtitle_options+=("不选择")
                     echo
-                    inquirer checkbox_input_indices "选择音频流" subtitle_options subtitle_options_indices
+                    inquirer checkbox_input_indices "选择字幕流" subtitle_options subtitle_options_indices
 
                     for subtitle_options_index in "${subtitle_options_indices[@]}"
                     do

@@ -67,7 +67,7 @@ then
     node_source="$NODE_ROOT"
 fi
 
-nginx_source=/usr/local/nginx
+nginx_source="${NGINX_PREFIX_DEFAULT}"
 
 nginx_excludes_before=(
     /logs/'*'.gz
@@ -84,7 +84,7 @@ nginx_excludes_after=(
     /'***'
 )
 
-openresty_source=/usr/local/openresty
+openresty_source="${OPENRESTY_PREFIX_DEFAULT}"
 
 openresty_excludes_before=(
     /nginx/logs/'*'.gz

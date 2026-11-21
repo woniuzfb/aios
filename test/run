@@ -1,4 +1,17 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -lt 4 ]; }
+then
+    for _aios_bash in /opt/homebrew/bin/bash /usr/local/bin/bash
+    do
+        if [ -x "$_aios_bash" ] && [ "$_aios_bash" != "$BASH" ]
+        then
+            exec "$_aios_bash" "$0" "$@"
+        fi
+    done
+    printf 'AIOS requires Bash 4.4+ (current: %s). On macOS, run: brew install bash\n' "${BASH_VERSION:-unknown}" >&2
+    exit 1
+fi
 
 set -euo pipefail
 
@@ -15,12 +28,12 @@ do
             SHOW_OUTPUT=1
             shift
         ;;
-        core|nginx|xray|v2ray|matrix|types|e2e|all)
+        core|nginx|xray|v2ray|matrix|types|iptv|e2e|all)
             TARGET_SUITE="$1"
             shift
         ;;
         *)
-            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|e2e]\n' "$0" >&2
+            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e]\n' "$0" >&2
             exit 2
         ;;
     esac
@@ -190,6 +203,8 @@ trap 'MockInquirerCleanup; E2eSandboxCleanup' EXIT
 . "$DEV_PATH/test/suites/type_safety"
 # shellcheck disable=SC1091
 . "$DEV_PATH/test/suites/e2e_aios"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/iptv"
 
 case "$TARGET_SUITE" in
     core) RunSuiteCoreJq ;;
@@ -199,6 +214,7 @@ case "$TARGET_SUITE" in
     matrix) RunSuiteMatrix ;;
     types) RunSuiteTypeSafety ;;
     e2e) RunSuiteE2eAios ;;
+    iptv) RunSuiteIptv ;;
     all)
         RunSuiteCoreJq
         RunSuiteNginx
@@ -206,6 +222,7 @@ case "$TARGET_SUITE" in
         RunSuiteV2ray
         RunSuiteMatrix
         RunSuiteTypeSafety
+        RunSuiteIptv
         RunSuiteE2eAios
     ;;
 esac

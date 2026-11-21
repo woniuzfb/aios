@@ -4,5 +4,5 @@ GetDefault
 echo
 edit_options=($d_sync_file)
 inquirer list_input "选择修改的文件" edit_options edit_option
-editor "$edit_option"
+RunEditor "$edit_option"
 exit 0

@@ -1,17 +1,42 @@
 MonitorStart()
 {
-    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
+    local monitor_running=0
+    local pid=""
+
+    if [ -s "$IPTV_ROOT/monitor.pid" ]
+    then
+        pid=$(< "$IPTV_ROOT/monitor.pid")
+        if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+        then
+            monitor_running=1
+        else
+            rm -f "$IPTV_ROOT/monitor.pid"
+        fi
+    fi
+
+    if [ -s "$IPTV_ROOT/antiddos.pid" ]
+    then
+        pid=$(< "$IPTV_ROOT/antiddos.pid")
+        if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+        then
+            monitor_running=1
+        else
+            rm -f "$IPTV_ROOT/antiddos.pid"
+        fi
+    fi
+
+    if [ "$monitor_running" -eq 1 ]
     then
         Println "$error 监控已经在运行 !\n" && exit 1
     else
-        if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        if { [ -d "${OPENRESTY_PREFIX_DEFAULT}" ] && [ ! -d "${NGINX_PREFIX_DEFAULT}" ]; } || { [ -s "${OPENRESTY_PREFIX_DEFAULT}/nginx/logs/nginx.pid" ] && kill -0 "$(< "${OPENRESTY_PREFIX_DEFAULT}/nginx/logs/nginx.pid")" 2> /dev/null ; }
         then
-            nginx_prefix="/usr/local/openresty/nginx"
+            nginx_prefix="${OPENRESTY_PREFIX_DEFAULT}/nginx"
             nginx_name="openresty"
             nginx_ctl="or"
-        elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        elif { [ -d "${NGINX_PREFIX_DEFAULT}" ] && [ ! -d "${OPENRESTY_PREFIX_DEFAULT}" ]; } || { [ -s "${NGINX_PREFIX_DEFAULT}/logs/nginx.pid" ] && kill -0 "$(< "${NGINX_PREFIX_DEFAULT}/logs/nginx.pid")" 2> /dev/null ; }
         then
-            nginx_prefix="/usr/local/nginx"
+            nginx_prefix="${NGINX_PREFIX_DEFAULT}"
             nginx_name="nginx"
             nginx_ctl="nx"
         else
@@ -20,11 +45,11 @@ MonitorStart()
 
             if [ "$yn_index" -eq 0 ] 
             then
-                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_prefix="${OPENRESTY_PREFIX_DEFAULT}/nginx"
                 nginx_name="openresty"
                 nginx_ctl="or"
             else
-                nginx_prefix="/usr/local/nginx"
+                nginx_prefix="${NGINX_PREFIX_DEFAULT}"
                 nginx_name="nginx"
                 nginx_ctl="nx"
             fi

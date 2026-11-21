@@ -269,5 +269,118 @@ RunSuiteCoreJq()
     AssertEq "0" "$sc_rc" "ServiceControl restart xray succeeds without prior DistCheck or \$2"
     AssertContains "$sc_out" "mock_launchctl:load" "ServiceControl restart xray invokes launchctl load"
 
+    # AptUpdate + AptFixBrokenRepos (consent guard, pgdg archive, dead repo disable, network fail) + AptInstall stale-index retry
+    local apt_rc=0
+    (
+        eval "$(sed -n '1,/^BrewInstall()/{/^BrewInstall()/!p;}' "$DEV_PATH/utils/system")"
+        local apt_dir="$tmpdir/apt_test"
+        mkdir -p "$apt_dir/sources.list.d"
+        APT_SOURCES_DIR="$apt_dir/sources.list.d"
+        APT_SOURCES_FILE="$apt_dir/sources.list"
+        printf 'deb http://ftp.us.debian.org/debian bullseye main\n' > "$APT_SOURCES_FILE"
+
+        # Case 0: without user consent (non-interactive & APT_AUTO_FIX unset) -> MUST NOT touch pgdg.list
+        printf 'deb https://apt.postgresql.org/pub/repos/apt bullseye-pgdg main\n' > "$APT_SOURCES_DIR/pgdg.list"
+        apt-get()
+        {
+            printf "Err:8 https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release\n  404  Not Found\nE: The repository 'https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release' no longer has a Release file.\n"
+            return 100
+        }
+        apt_updated=false
+        APT_AUTO_FIX=false
+        if AptUpdate force > /dev/null 2>&1
+        then
+            exit 10
+        fi
+        grep -Fq "apt.postgresql.org/pub/repos/apt" "$APT_SOURCES_DIR/pgdg.list" || exit 11
+
+        # Case 1: with user consent (APT_AUTO_FIX=true) + localized zh_CN output -> migrates apt.postgresql.org to apt-archive
+        apt-get()
+        {
+            if grep -Fq "apt-archive.postgresql.org" "$APT_SOURCES_DIR/pgdg.list"
+            then
+                return 0
+            fi
+            printf "错误:4 https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release\n  404  Not Found\nE: 仓库 “https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release” 不再含有 Release 文件。\n"
+            return 100
+        }
+        APT_AUTO_FIX=true
+        AptUpdate force > /dev/null
+        grep -Fq "apt-archive.postgresql.org/pub/repos/apt" "$APT_SOURCES_DIR/pgdg.list" || exit 12
+
+        # Case 2: unknown dead third-party repo with consent -> disabled to .disabled
+        printf 'deb https://dead.example.test/apt bullseye main\n' > "$APT_SOURCES_DIR/dead.list"
+        apt-get()
+        {
+            if [ ! -f "$APT_SOURCES_DIR/dead.list" ]
+            then
+                return 0
+            fi
+            printf "E: The repository 'https://dead.example.test/apt bullseye Release' does not have a Release file.\n"
+            return 100
+        }
+        AptUpdate force > /dev/null
+        [ ! -f "$APT_SOURCES_DIR/dead.list" ] && [ -f "$APT_SOURCES_DIR/dead.list.disabled" ] || exit 13
+
+        # Case 3: AptInstall stale index 404 -> refreshes via AptUpdate force and retries --fix-missing
+        local install_calls=0
+        apt-get()
+        {
+            if [ "$1" == "update" ]
+            then
+                return 0
+            fi
+            install_calls=$((install_calls + 1))
+            if [ "$install_calls" -eq 1 ]
+            then
+                printf "Err:1 http://security.debian.org/debian-security bullseye-security/main amd64 libpng-dev\n  404  Not Found\nE: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?\n"
+                return 100
+            fi
+            return 0
+        }
+        apt_updated=true
+        AptInstall libpng-dev > /dev/null || exit 14
+        [ "$install_calls" -eq 2 ] || exit 15
+
+        # Case 4: AptGetCodename derivative priority & sources.list fallback
+        OS_RELEASE_FILE="$apt_dir/os-release"
+        printf 'ID=linuxmint\nID_LIKE=ubuntu\nVERSION_CODENAME=wilma\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE_FILE"
+        [ "$(AptGetCodename)" == "noble" ] || exit 16
+
+        printf 'ID=kali\nID_LIKE=debian\nVERSION_CODENAME=kali-rolling\nDEBIAN_CODENAME=bookworm\n' > "$OS_RELEASE_FILE"
+        [ "$(AptGetCodename)" == "bookworm" ] || exit 17
+
+        printf 'ID=debian\nVERSION_ID="11"\n' > "$OS_RELEASE_FILE"
+        printf 'deb [arch=amd64] http://ftp.us.debian.org/debian bullseye-updates main\n' > "$APT_SOURCES_FILE"
+        lsb_release() { return 1; }
+        [ "$(AptGetCodename)" == "bullseye" ] || exit 18
+
+        # Case 5: AptRepoCheck probes InRelease then falls back to Release
+        curl()
+        {
+            case "$*" in
+                *"/dists/noble/InRelease"*) return 0 ;;
+                *"/dists/bullseye-pgdg/Release"*) return 0 ;;
+                *) return 22 ;;
+            esac
+        }
+        AptRepoCheck "https://download.docker.com/linux/ubuntu" "noble" || exit 19
+        AptRepoCheck "https://apt-archive.postgresql.org/pub/repos/apt" "bullseye-pgdg" || exit 20
+        if AptRepoCheck "https://repo.mongodb.org/apt/ubuntu" "plucky/mongodb-org/7.0"
+        then
+            exit 21
+        fi
+
+        # Case 6: OpensslFetchPackUrl filters major version (avoids grabbing 4.x when requesting 3.x) and resolves relative/absolute href
+        source "$DEV_PATH/utils/openssl"
+        curl()
+        {
+            printf '<table><tr><td><a href="https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz">openssl-4.1.0.tar.gz</a></td></tr><tr><td><a href="openssl-3.5.9.tar.gz">openssl-3.5.9.tar.gz</a></td></tr></table>\n'
+        }
+        [ "$(OpensslFetchPackUrl "https://openssl-library.org/source" "3")" == "https://openssl-library.org/source/openssl-3.5.9.tar.gz" ] || exit 22
+        [ "$(OpensslFetchPackUrl "https://openssl-library.org/source" "4")" == "https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz" ] || exit 23
+    ) || apt_rc=$?
+    AssertEq "0" "$apt_rc" "AptUpdate, AptInstall, AptGetCodename, AptRepoCheck, and OpensslFetchPackUrl work correctly"
+
     rm -rf "$tmpdir"
 }

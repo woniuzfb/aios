@@ -15,11 +15,11 @@ XrayGenUuid()
     local gen=""
     if [ -n "$xray_bin" ]
     then
-        gen=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+        gen=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
     fi
     if [ -z "$gen" ] && command -v uuidgen > /dev/null 2>&1
     then
-        gen=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+        gen=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
     fi
     if [ -z "$gen" ] && [ -r /proc/sys/kernel/random/uuid ]
     then
@@ -36,7 +36,7 @@ XrayGenSs2022Key()
     then
         bytes=16
     fi
-    openssl rand -base64 "$bytes" 2>/dev/null | tr -d '\r\n'
+    openssl rand -base64 "$bytes" 2> /dev/null | tr -d '\r\n'
 }
 
 XrayAddInboundAccount()

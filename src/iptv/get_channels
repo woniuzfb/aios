@@ -65,78 +65,141 @@ GetChannels()
         ["channels","schedule","status"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name=${path_name}
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)
 
-    if [ -z "$jq_channels_pid" ] 
+    chnls_pid=()
+    chnls_status=()
+    chnls_hide=()
+    chnls_stream_links=()
+    chnls_stream_link=()
+    chnls_live=()
+    chnls_proxy=()
+    chnls_xc_proxy=()
+    chnls_user_agent=()
+    chnls_headers=()
+    chnls_cookies=()
+    chnls_output_dir_name=()
+    chnls_playlist_name=()
+    chnls_seg_dir_name=()
+    chnls_seg_name=()
+    chnls_seg_length=()
+    chnls_seg_count=()
+    chnls_video_codec=()
+    chnls_audio_codec=()
+    chnls_video_audio_shift=()
+    chnls_draw_text=()
+    chnls_quality=()
+    chnls_bitrate=()
+    chnls_resolution=()
+    chnls_const=()
+    chnls_const_cbr=()
+    chnls_encrypt=()
+    chnls_encrypt_session=()
+    chnls_keyinfo_name=()
+    chnls_key_name=()
+    chnls_key_time=()
+    chnls_input_flags=()
+    chnls_output_flags=()
+    chnls_channel_name=()
+    chnls_channel_time=()
+    chnls_sync=()
+    chnls_sync_file=()
+    chnls_sync_index=()
+    chnls_sync_pairs=()
+    chnls_hls_end_list=()
+    chnls_flv_status=()
+    chnls_flv_h265=()
+    chnls_flv_push_link=()
+    chnls_flv_pull_link=()
+    chnls_subtitle_name=()
+    chnls_subtitle_language=()
+    chnls_subtitle_default=()
+    chnls_subtitle_auto_select=()
+    chnls_subtitle_map=()
+    chnls_schedule_start_time=()
+    chnls_schedule_end_time=()
+    chnls_schedule_loop=()
+    chnls_schedule_auto_remove=()
+    chnls_schedule_hls_change=()
+    chnls_schedule_hls_change_once=()
+    chnls_schedule_channel_name=()
+    chnls_schedule_status=()
+
+    if [ -z "${jq_channels_pid:-}" ]
     then
         chnls_count=0
         return 0
     fi
 
-    IFS="${delimiters[2]}" read -ra chnls_pid <<< "$jq_channels_pid"
-    IFS="${delimiters[2]}" read -ra chnls_status <<< "$jq_channels_status"
+    IFS="${delimiters[2]}" read -ra chnls_pid <<< "${jq_channels_pid:-}"
+    IFS="${delimiters[2]}" read -ra chnls_status <<< "${jq_channels_status:-}"
 
     chnls_count=${#chnls_pid[@]}
 
-    IFS="${delimiters[2]}" read -ra chnls_hide <<< "$jq_channels_hide"
-    IFS="${delimiters[2]}" read -ra chnls_stream_links <<< "$jq_channels_stream_link"
+    IFS="${delimiters[2]}" read -ra chnls_hide <<< "${jq_channels_hide:-}"
+    IFS="${delimiters[2]}" read -ra chnls_stream_links <<< "${jq_channels_stream_link:-}"
 
-    chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[3]}*}")
+    if [ "${#chnls_stream_links[@]}" -gt 0 ]
+    then
+        chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[3]}*}")
+    fi
 
-    IFS="${delimiters[2]}" read -ra chnls_live <<< "$jq_channels_live"
-    IFS="${delimiters[2]}" read -ra chnls_proxy <<< "$jq_channels_proxy"
-    IFS="${delimiters[2]}" read -ra chnls_xc_proxy <<< "$jq_channels_xc_proxy"
-    IFS="${delimiters[2]}" read -ra chnls_user_agent <<< "$jq_channels_user_agent"
-    IFS="${delimiters[2]}" read -ra chnls_headers <<< "$jq_channels_headers"
-    IFS="${delimiters[2]}" read -ra chnls_cookies <<< "$jq_channels_cookies"
-    IFS="${delimiters[2]}" read -ra chnls_output_dir_name <<< "$jq_channels_output_dir_name"
-    IFS="${delimiters[2]}" read -ra chnls_playlist_name <<< "$jq_channels_playlist_name"
-    IFS="${delimiters[2]}" read -ra chnls_seg_dir_name <<< "$jq_channels_seg_dir_name"
-    IFS="${delimiters[2]}" read -ra chnls_seg_name <<< "$jq_channels_seg_name"
-    IFS="${delimiters[2]}" read -ra chnls_seg_length <<< "$jq_channels_seg_length"
-    IFS="${delimiters[2]}" read -ra chnls_seg_count <<< "$jq_channels_seg_count"
-    IFS="${delimiters[2]}" read -ra chnls_video_codec <<< "$jq_channels_video_codec"
-    IFS="${delimiters[2]}" read -ra chnls_audio_codec <<< "$jq_channels_audio_codec"
-    IFS="${delimiters[2]}" read -ra chnls_video_audio_shift <<< "$jq_channels_video_audio_shift"
-    IFS="${delimiters[2]}" read -ra chnls_draw_text <<< "$jq_channels_draw_text"
-    IFS="${delimiters[2]}" read -ra chnls_quality <<< "$jq_channels_quality"
-    IFS="${delimiters[2]}" read -ra chnls_bitrate <<< "$jq_channels_bitrate"
-    IFS="${delimiters[2]}" read -ra chnls_resolution <<< "$jq_channels_resolution"
-    IFS="${delimiters[2]}" read -ra chnls_const <<< "$jq_channels_const"
-    IFS="${delimiters[2]}" read -ra chnls_const_cbr <<< "$jq_channels_const_cbr"
+    IFS="${delimiters[2]}" read -ra chnls_live <<< "${jq_channels_live:-}"
+    IFS="${delimiters[2]}" read -ra chnls_proxy <<< "${jq_channels_proxy:-}"
+    IFS="${delimiters[2]}" read -ra chnls_xc_proxy <<< "${jq_channels_xc_proxy:-}"
+    IFS="${delimiters[2]}" read -ra chnls_user_agent <<< "${jq_channels_user_agent:-}"
+    IFS="${delimiters[2]}" read -ra chnls_headers <<< "${jq_channels_headers:-}"
+    IFS="${delimiters[2]}" read -ra chnls_cookies <<< "${jq_channels_cookies:-}"
+    IFS="${delimiters[2]}" read -ra chnls_output_dir_name <<< "${jq_channels_output_dir_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_playlist_name <<< "${jq_channels_playlist_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_seg_dir_name <<< "${jq_channels_seg_dir_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_seg_name <<< "${jq_channels_seg_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_seg_length <<< "${jq_channels_seg_length:-}"
+    IFS="${delimiters[2]}" read -ra chnls_seg_count <<< "${jq_channels_seg_count:-}"
+    IFS="${delimiters[2]}" read -ra chnls_video_codec <<< "${jq_channels_video_codec:-}"
+    IFS="${delimiters[2]}" read -ra chnls_audio_codec <<< "${jq_channels_audio_codec:-}"
+    IFS="${delimiters[2]}" read -ra chnls_video_audio_shift <<< "${jq_channels_video_audio_shift:-}"
+    IFS="${delimiters[2]}" read -ra chnls_draw_text <<< "${jq_channels_draw_text:-}"
+    IFS="${delimiters[2]}" read -ra chnls_quality <<< "${jq_channels_quality:-}"
+    IFS="${delimiters[2]}" read -ra chnls_bitrate <<< "${jq_channels_bitrate:-}"
+    IFS="${delimiters[2]}" read -ra chnls_resolution <<< "${jq_channels_resolution:-}"
+    IFS="${delimiters[2]}" read -ra chnls_const <<< "${jq_channels_const:-}"
+    IFS="${delimiters[2]}" read -ra chnls_const_cbr <<< "${jq_channels_const_cbr:-}"
+    jq_channels_encrypt=${jq_channels_encrypt:-}
     jq_channels_encrypt=${jq_channels_encrypt//-e/false}
-    IFS="${delimiters[2]}" read -ra chnls_encrypt <<< "$jq_channels_encrypt"
-    IFS="${delimiters[2]}" read -ra chnls_encrypt_session <<< "$jq_channels_encrypt_session"
-    IFS="${delimiters[2]}" read -ra chnls_keyinfo_name <<< "$jq_channels_keyinfo_name"
-    IFS="${delimiters[2]}" read -ra chnls_key_name <<< "$jq_channels_key_name"
-    IFS="${delimiters[2]}" read -ra chnls_key_time <<< "$jq_channels_key_time"
-    IFS="${delimiters[2]}" read -ra chnls_input_flags <<< "$jq_channels_input_flags"
-    IFS="${delimiters[2]}" read -ra chnls_output_flags <<< "$jq_channels_output_flags"
-    IFS="${delimiters[2]}" read -ra chnls_channel_name <<< "$jq_channels_channel_name"
-    IFS="${delimiters[2]}" read -ra chnls_channel_time <<< "$jq_channels_channel_time"
-    IFS="${delimiters[2]}" read -ra chnls_sync <<< "$jq_channels_sync"
-    IFS="${delimiters[2]}" read -ra chnls_sync_file <<< "$jq_channels_sync_file"
-    IFS="${delimiters[2]}" read -ra chnls_sync_index <<< "$jq_channels_sync_index"
-    IFS="${delimiters[2]}" read -ra chnls_sync_pairs <<< "$jq_channels_sync_pairs"
-    IFS="${delimiters[2]}" read -ra chnls_hls_end_list <<< "$jq_channels_hls_end_list"
-    IFS="${delimiters[2]}" read -ra chnls_flv_status <<< "$jq_channels_flv_status"
-    IFS="${delimiters[2]}" read -ra chnls_flv_h265 <<< "$jq_channels_flv_h265"
-    IFS="${delimiters[2]}" read -ra chnls_flv_push_link <<< "$jq_channels_flv_push_link"
-    IFS="${delimiters[2]}" read -ra chnls_flv_pull_link <<< "$jq_channels_flv_pull_link"
-    IFS="${delimiters[3]}" read -ra chnls_subtitle_name <<< "$jq_channels_subtitle_name"
-    IFS="${delimiters[3]}" read -ra chnls_subtitle_language <<< "$jq_channels_subtitle_language"
-    IFS="${delimiters[3]}" read -ra chnls_subtitle_default <<< "$jq_channels_subtitle_default"
-    IFS="${delimiters[3]}" read -ra chnls_subtitle_auto_select <<< "$jq_channels_subtitle_auto_select"
-    IFS="${delimiters[3]}" read -ra chnls_subtitle_map <<< "$jq_channels_subtitle_map"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_start_time <<< "$jq_channels_schedule_start_time"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_end_time <<< "$jq_channels_schedule_end_time"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_loop <<< "$jq_channels_schedule_loop"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_auto_remove <<< "$jq_channels_schedule_auto_remove"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change <<< "$jq_channels_schedule_hls_change"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change_once <<< "$jq_channels_schedule_hls_change_once"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_channel_name <<< "$jq_channels_schedule_channel_name"
-    IFS="${delimiters[3]}" read -ra chnls_schedule_status <<< "$jq_channels_schedule_status"
+    IFS="${delimiters[2]}" read -ra chnls_encrypt <<< "${jq_channels_encrypt:-}"
+    IFS="${delimiters[2]}" read -ra chnls_encrypt_session <<< "${jq_channels_encrypt_session:-}"
+    IFS="${delimiters[2]}" read -ra chnls_keyinfo_name <<< "${jq_channels_keyinfo_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_key_name <<< "${jq_channels_key_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_key_time <<< "${jq_channels_key_time:-}"
+    IFS="${delimiters[2]}" read -ra chnls_input_flags <<< "${jq_channels_input_flags:-}"
+    IFS="${delimiters[2]}" read -ra chnls_output_flags <<< "${jq_channels_output_flags:-}"
+    IFS="${delimiters[2]}" read -ra chnls_channel_name <<< "${jq_channels_channel_name:-}"
+    IFS="${delimiters[2]}" read -ra chnls_channel_time <<< "${jq_channels_channel_time:-}"
+    IFS="${delimiters[2]}" read -ra chnls_sync <<< "${jq_channels_sync:-}"
+    IFS="${delimiters[2]}" read -ra chnls_sync_file <<< "${jq_channels_sync_file:-}"
+    IFS="${delimiters[2]}" read -ra chnls_sync_index <<< "${jq_channels_sync_index:-}"
+    IFS="${delimiters[2]}" read -ra chnls_sync_pairs <<< "${jq_channels_sync_pairs:-}"
+    IFS="${delimiters[2]}" read -ra chnls_hls_end_list <<< "${jq_channels_hls_end_list:-}"
+    IFS="${delimiters[2]}" read -ra chnls_flv_status <<< "${jq_channels_flv_status:-}"
+    IFS="${delimiters[2]}" read -ra chnls_flv_h265 <<< "${jq_channels_flv_h265:-}"
+    IFS="${delimiters[2]}" read -ra chnls_flv_push_link <<< "${jq_channels_flv_push_link:-}"
+    IFS="${delimiters[2]}" read -ra chnls_flv_pull_link <<< "${jq_channels_flv_pull_link:-}"
+    IFS="${delimiters[3]}" read -ra chnls_subtitle_name <<< "${jq_channels_subtitle_name:-}"
+    IFS="${delimiters[3]}" read -ra chnls_subtitle_language <<< "${jq_channels_subtitle_language:-}"
+    IFS="${delimiters[3]}" read -ra chnls_subtitle_default <<< "${jq_channels_subtitle_default:-}"
+    IFS="${delimiters[3]}" read -ra chnls_subtitle_auto_select <<< "${jq_channels_subtitle_auto_select:-}"
+    IFS="${delimiters[3]}" read -ra chnls_subtitle_map <<< "${jq_channels_subtitle_map:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_start_time <<< "${jq_channels_schedule_start_time:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_end_time <<< "${jq_channels_schedule_end_time:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_loop <<< "${jq_channels_schedule_loop:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_auto_remove <<< "${jq_channels_schedule_auto_remove:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change <<< "${jq_channels_schedule_hls_change:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change_once <<< "${jq_channels_schedule_hls_change_once:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_channel_name <<< "${jq_channels_schedule_channel_name:-}"
+    IFS="${delimiters[3]}" read -ra chnls_schedule_status <<< "${jq_channels_schedule_status:-}"
 }

@@ -193,7 +193,7 @@ EditChannelMenu()
         for chnls_index in "${chnls_indices[@]}"
         do
             jq_path='["channels",'"$chnls_index"']'
-            new_array+=("$($JQ_FILE --argjson path $jq_path 'getpath($path)' $CHANNELS_FILE)")
+            new_array+=("$($JQ_FILE --argjson path "$jq_path" 'getpath($path)' "$CHANNELS_FILE")")
         done
 
         jq_file=true

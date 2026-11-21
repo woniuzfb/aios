@@ -52,7 +52,7 @@ ParseYoutube()
                     format_proto=${format_size_tbr_proto[2]}
                 fi
 
-                formats_bitrate+=("${format_bitrate:0:-1}")
+                formats_bitrate+=("$(StripSuffix "$format_bitrate" 1)")
 
                 if [[ $format_resolution_fps =~ ^[1-9] ]] 
                 then
@@ -127,7 +127,7 @@ ParseYoutube()
 
                     if [[ $format_bitrate =~ k ]] 
                     then
-                        formats_bitrate+=("${format_bitrate:0:-1}")
+                        formats_bitrate+=("$(StripSuffix "$format_bitrate" 1)")
                     elif [[ $format_info =~ \@[[:space:]]*([0-9]+)k ]] 
                     then
                         format_bitrate="${BASH_REMATCH[1]}k"

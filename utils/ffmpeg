@@ -1,85 +1,287 @@
+Include utils/ffmpeg_caps "$@"
+
+FFmpegSaveConfig()
+{
+    FFMPEG_CAPS_BIN=""
+    FFmpegDetectCaps "$FFMPEG_FILE" 2> /dev/null || true
+
+    if [ -n "${IPTV_CONFIG:-}" ] && [ -s "$IPTV_CONFIG" ]
+    then
+        jq_path='["ffmpeg_bin"]'
+        JQ update "$IPTV_CONFIG" "$FFMPEG_FILE"
+    fi
+}
+
 FFmpegInstall()
 {
-    if FFMPEG_FILE_ROOT=$(find "$FFMPEG_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1)
+    local mode="${1:-}"
+
+    if [ "$mode" != "select" ] && [ "$mode" != "switch" ] && [ "$mode" != "force" ]
     then
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-    elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
-    then
-        FFMPEG_ROOT="$IPTV_ROOT"
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+        if FFmpegResolveBin && [ -x "${FFMPEG_FILE:-}" ] && [ -x "${FFPROBE_FILE:-}" ]
+        then
+            return 0
+        fi
+
+        if FFMPEG_FILE_ROOT=$(find "$FFMPEG_ROOT"/ffmpeg-* -maxdepth 0 -type d 2> /dev/null | head -1) && [ -n "$FFMPEG_FILE_ROOT" ]
+        then
+            if [ -x "$FFMPEG_FILE_ROOT/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/bin/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/bin/ffprobe"
+            else
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+            fi
+        elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-* -maxdepth 0 -type d 2> /dev/null | head -1) && [ -n "$FFMPEG_FILE_ROOT" ]
+        then
+            FFMPEG_ROOT="$IPTV_ROOT"
+
+            if [ -x "$FFMPEG_FILE_ROOT/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/bin/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/bin/ffprobe"
+            else
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+            fi
+        fi
+
+        if [ -x "${FFMPEG_FILE:-}" ] && [ -x "${FFPROBE_FILE:-}" ]
+        then
+            return 0
+        fi
     fi
 
-    if [[ -x "$FFMPEG_FILE" ]] && [[ -x "$FFPROBE_FILE" ]]
+    if [ "$dist" == "mac" ]
     then
+        local menu_options=()
+        local menu_actions=()
+        local bin ver formula drawtext_tag
+
+        for bin in /opt/homebrew/Cellar/ffmpeg*/*/bin/ffmpeg /usr/local/Cellar/ffmpeg*/*/bin/ffmpeg
+        do
+            if [ -x "$bin" ]
+            then
+                ver=$("$bin" -version 2> /dev/null | head -n 1 | awk '{print $3}')
+                formula="${bin#*/Cellar/}"
+                formula="${formula%%/*}"
+
+                if "$bin" -hide_banner -filters 2> /dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'
+                then
+                    drawtext_tag="含 drawtext"
+                else
+                    drawtext_tag="无 drawtext"
+                fi
+                menu_options+=("切换至已安装: ${formula} (${ver:-unknown}, ${drawtext_tag}) [${bin}]")
+                menu_actions+=("use:${bin}")
+            fi
+        done
+
+        menu_options+=(
+            "安装 ffmpeg-full (含 drawtext 水印滤镜，推荐)"
+            "安装 ffmpeg (9.x 最新主线)"
+            "安装 ffmpeg@8"
+            "安装 ffmpeg@7"
+            "安装 ffmpeg@6"
+        )
+        menu_actions+=(
+            "install:ffmpeg-full"
+            "install:ffmpeg"
+            "install:ffmpeg@8"
+            "install:ffmpeg@7"
+            "install:ffmpeg@6"
+        )
+
+        echo
+        inquirer list_input_index "选择或切换 macOS FFmpeg 版本" menu_options ffmpeg_mac_index
+
+        local selected_action="${menu_actions[$ffmpeg_mac_index]}"
+        if [[ $selected_action == use:* ]]
+        then
+            FFMPEG_FILE="${selected_action#use:}"
+            FFPROBE_FILE="${FFMPEG_FILE%/*}/ffprobe"
+        else
+            local brew_formula="${selected_action#install:}"
+            Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+            if ! brew install "$brew_formula"
+            then
+                Println "`eval_gettext \"\\\$error FFmpeg 安装失败 !\"`\n"
+                exit 1
+            fi
+
+            local brew_prefix
+            brew_prefix=$(brew --prefix "$brew_formula" 2> /dev/null || true)
+            if [ -n "$brew_prefix" ] && [ -x "$brew_prefix/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$brew_prefix/bin/ffmpeg"
+                FFPROBE_FILE="$brew_prefix/bin/ffprobe"
+            else
+                for bin in "/opt/homebrew/Cellar/$brew_formula"/*/bin/ffmpeg "/usr/local/Cellar/$brew_formula"/*/bin/ffmpeg
+                do
+                    if [ -x "$bin" ]
+                    then
+                        FFMPEG_FILE="$bin"
+                        FFPROBE_FILE="${bin%/*}/ffprobe"
+                    fi
+                done
+            fi
+        fi
+
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            FFmpegResolveBin || true
+        fi
+
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 安装或切换失败 !\"`\n"
+            exit 1
+        fi
+
+        FFmpegSaveConfig
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
+        return 0
+    fi
+
+    local linux_ver_options=(
+        "6.1 LTS"
+        "7.1 LTS"
+        "8.x"
+        "9.x / latest"
+        "git-master"
+        "系统包管理器"
+    )
+    echo
+    inquirer list_input_index "选择 Linux FFmpeg 版本" linux_ver_options ffmpeg_linux_index
+
+    if [ "$ffmpeg_linux_index" -eq 5 ]
+    then
+        Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+        if [ "$dist" == "rpm" ]
+        then
+            yum -y install ffmpeg || dnf -y install ffmpeg
+        elif [ "$dist" == "alpine" ]
+        then
+            apk add --no-cache ffmpeg
+        else
+            AptUpdate force && AptInstall ffmpeg
+        fi
+
+        FFMPEG_FILE=$(command -v ffmpeg 2> /dev/null || true)
+        FFPROBE_FILE=$(command -v ffprobe 2> /dev/null || true)
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 安装失败 !\"`"
+            exit 1
+        fi
+
+        FFmpegSaveConfig
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
         return 0
     fi
 
     Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+    mkdir -p "$FFMPEG_ROOT"
+    rm -rf "$FFMPEG_ROOT"/ffmpeg-*
 
-    if [ "$dist" == "mac" ] 
+    ArchCheck
+
+    local btbn_arch="" jvs_arch=""
+    if [ "$arch" == "x86_64" ] || [ "$arch" == "amd64" ]
     then
-        echo
-        inquirer list_input_index "FFmpeg 开启 openvino, 开启时可能会安装失败" ny_options ny_index
-
-        if [ "$ny_index" -eq 0 ] 
-        then
-            if ! curl -s -L https://github.com/Homebrew/homebrew-core/raw/HEAD/Formula/f/ffmpeg.rb -- | grep -v openvino > "$HOME"/ffmpeg.rb
-            then
-                Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`\n"
-                exit 1
-            fi
-
-            brew install "$HOME"/ffmpeg.rb
-        else
-            brew install ffmpeg
-        fi
+        btbn_arch="linux64"
+        jvs_arch="amd64"
+    elif [ "$arch" == "aarch64" ] || [ "$arch" == "arm64" ]
+    then
+        btbn_arch="linuxarm64"
+        jvs_arch="arm64"
+    elif [ "$arch" == "i386" ] || [ "$arch" == "i686" ]
+    then
+        jvs_arch="i686"
+    elif [ "$arch" == "armv6l" ]
+    then
+        jvs_arch="armel"
+    elif grep -q "arm" <<< "$arch"
+    then
+        jvs_arch="$arch"
     else
-        rm -rf "$FFMPEG_ROOT/"ffmpeg-git-*
-
-        ArchCheck
-
-        local ffmpeg_package FFMPEG_PACKAGE_FILE
-
-        if [ "$arch" == "x86_64" ]
-        then
-            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
-        elif [ "$arch" == "i386" ] 
-        then
-            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
-        elif [ "$arch" == "armv6l" ] 
-        then
-            ffmpeg_package="ffmpeg-git-armel-static.tar.xz"
-        elif grep -q "arm" <<< "$arch" 
-        then
-            ffmpeg_package="ffmpeg-git-$arch-static.tar.xz"
-        else
-            Println "$error FFmpeg 不支持当前系统\n"
-            exit 1
-        fi
-
-        FFMPEG_PACKAGE_FILE="$FFMPEG_ROOT/$ffmpeg_package"
-
-        if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
-        then
-            Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
-            exit 1
-        fi
-
-        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$FFMPEG_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
-
-        FFMPEG_FILE_ROOT=$(dirname "$FFMPEG_ROOT"/ffmpeg-git-*/ffmpeg 2> /dev/null) || true
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-
-        if [ ! -e "$FFMPEG_FILE" ] || [ ! -e "$FFPROBE_FILE" ]
-        then
-            Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
-            exit 1
-        fi
+        Println "$error FFmpeg 不支持当前系统\n"
+        exit 1
     fi
 
+    local download_urls=()
+    local btbn_base="$BTBN_FFMPEG_LINK"
+    if [ -n "$btbn_arch" ]
+    then
+        case "$ffmpeg_linux_index" in
+            0)
+                download_urls+=( "${btbn_base}/ffmpeg-n6.1-latest-${btbn_arch}-gpl-6.1.tar.xz" )
+            ;;
+            1)
+                download_urls+=( "${btbn_base}/ffmpeg-n7.1-latest-${btbn_arch}-gpl-7.1.tar.xz" )
+            ;;
+            2)
+                download_urls+=(
+                    "${btbn_base}/ffmpeg-n8.1-latest-${btbn_arch}-gpl-8.1.tar.xz"
+                    "${btbn_base}/ffmpeg-n8.0-latest-${btbn_arch}-gpl-8.0.tar.xz"
+                )
+            ;;
+            3)
+                download_urls+=(
+                    "${btbn_base}/ffmpeg-n9.0-latest-${btbn_arch}-gpl-9.0.tar.xz"
+                    "${btbn_base}/ffmpeg-master-latest-${btbn_arch}-gpl.tar.xz"
+                )
+            ;;
+            4)
+                download_urls+=( "${btbn_base}/ffmpeg-master-latest-${btbn_arch}-gpl.tar.xz" )
+            ;;
+        esac
+    fi
+
+    if [ "$ffmpeg_linux_index" -eq 4 ]
+    then
+        download_urls+=( "${JVS_FFMPEG_LINK}/builds/ffmpeg-git-${jvs_arch}-static.tar.xz" )
+    else
+        download_urls+=(
+            "${JVS_FFMPEG_LINK}/releases/ffmpeg-release-${jvs_arch}-static.tar.xz"
+            "${JVS_FFMPEG_LINK}/builds/ffmpeg-git-${jvs_arch}-static.tar.xz"
+        )
+    fi
+    download_urls+=( "$FFMPEG_MIRROR_LINK/builds/ffmpeg-git-${jvs_arch}-static.tar.xz" )
+
+    local FFMPEG_PACKAGE_FILE="$FFMPEG_ROOT/ffmpeg-static.tar.xz"
+    local dl_url="" dl_ok=false
+    for dl_url in "${download_urls[@]}"
+    do
+        if curl -fL "$dl_url" -o "$FFMPEG_PACKAGE_FILE"
+        then
+            dl_ok=true
+            break
+        fi
+    done
+
+    if [ "$dl_ok" = false ]
+    then
+        rm -f "$FFMPEG_PACKAGE_FILE"
+        Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
+        exit 1
+    fi
+
+    tar xJf "$FFMPEG_PACKAGE_FILE" -C "$FFMPEG_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
+
+    FFMPEG_FILE=$(find "$FFMPEG_ROOT"/ffmpeg-* -type f -name ffmpeg 2> /dev/null | head -1) || true
+    FFPROBE_FILE=$(find "$FFMPEG_ROOT"/ffmpeg-* -type f -name ffprobe 2> /dev/null | head -1) || true
+
+    if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+    then
+        Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
+        exit 1
+    fi
+
+    FFmpegSaveConfig
     Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
 }
 
@@ -149,7 +351,7 @@ FFmpegCompile()
     if [[ -x $(command -v cmake) ]] 
     then
         cmake_ver=$(cmake --version | awk '{print $3}' | head -1)
-        if [[ $cmake_ver =~ ([^.]+).([^.]+).([^.]+) ]] && [[ ${BASH_REMATCH[1]} -lt 14 ]]
+        if [[ $cmake_ver =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]] && { [ "${BASH_REMATCH[1]}" -lt 3 ] || { [ "${BASH_REMATCH[1]}" -eq 3 ] && [ "${BASH_REMATCH[2]}" -lt 14 ]; }; }
         then
             apt-get -y remove cmake
             hash -r
@@ -838,8 +1040,6 @@ EOF
     tar xjf ffmpeg-snapshot.tar.bz2
 
     cd ffmpeg
-    curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
-    patch -p1 < Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
     ./configure \
     --prefix="$HOME/ffmpeg_build" \
     --pkg-config-flags="--static" \

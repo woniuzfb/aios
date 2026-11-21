@@ -1,13 +1,26 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg / 
 # Nginx / Openresty / V2ray / Xray / Armbian / PVE / 
 # Samba / LianHuanHua / ...
 # Copyright (C) 2019-2026
 # Released under GPL Version 3 License
 
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -lt 4 ]; }
+then
+    for _aios_bash in /opt/homebrew/bin/bash /usr/local/bin/bash
+    do
+        if [ -x "$_aios_bash" ] && [ "$_aios_bash" != "$BASH" ]
+        then
+            exec "$_aios_bash" "$0" "$@"
+        fi
+    done
+    printf 'AIOS requires Bash 4.4+ (current: %s). On macOS, run: brew install bash\n' "${BASH_VERSION:-unknown}" >&2
+    exit 1
+fi
+
 set -euo pipefail
 
-sh_ver=2.0.0
+sh_ver="2.1.0"
 
 sh_debug=false
 monitor=false
@@ -62,6 +75,7 @@ FFMPEG_MIRROR_ROOT="$AIOS_ROOT"/mirror
 IPTV_ROOT="$AIOS_ROOT"/iptv
 LOCK_FILE="$IPTV_ROOT"/lock
 CHANNELS_FILE="$IPTV_ROOT"/channels.json
+IPTV_CONFIG="$IPTV_ROOT"/config.json
 MONITOR_LOG="$IPTV_ROOT"/monitor.log
 LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate
 CRON_FILE="$IPTV_ROOT"/cron
@@ -168,6 +182,42 @@ PROXY_DEFAULT_HOST="YOUR_SERVER_IP"
 XRAY_DEFAULT_API="127.0.0.1:10085"
 DEFAULT_TERM_COLS=140
 DEFAULT_TERM_LINES=40
+
+# Default package / dependency versions
+POSTGRESQL_MAC_PKG="postgresql@18"
+POSTGRESQL_VER="18"
+POSTGRESQL_SLES12_VER="15"
+MONGODB_VER="8.0"
+NODEJS_VER="24"
+PYTHON_FALLBACK_VER="3.14.10"
+GO_FALLBACK_VER="go1.27.4"
+QUICTLS_TAG="OpenSSL_1_1_1w-quic1"
+PCRE_LEGACY_VER="8.45"
+OPENRESTY_OPENSSL_MAC_PKG="openresty/brew/openresty-openssl3"
+OPENRESTY_OPENSSL_PATCH="openssl-1.1.1f-sess_set_get_cb_yield.patch"
+POPPLER_VER="0.81.0"
+FONTFORGE_VER="20190413"
+PDF2HTMLEX_VER="0.18.7-poppler-${POPPLER_VER}"
+
+# Upstream source / repository links
+USTC_MIRROR_HOST="mirrors.ustc.edu.cn"
+OPENSSL_SOURCE_LINK="https://openssl-library.org/source"
+QUICTLS_REPO_LINK="https://github.com/quictls/openssl/archive/refs/tags"
+PGDG_APT_LINK="https://apt.postgresql.org/pub/repos/apt"
+PGDG_ARCHIVE_APT_LINK="https://apt-archive.postgresql.org/pub/repos/apt"
+DOCKER_REPO_LINK="https://download.docker.com/linux"
+NGINX_REPO_LINK="https://nginx.org/packages/mainline"
+OPENRESTY_LINK="https://openresty.org"
+MONGODB_REPO_LINK="https://repo.mongodb.org"
+NODESOURCE_DEB_LINK="https://deb.nodesource.com"
+NODESOURCE_RPM_LINK="https://rpm.nodesource.com"
+JQ_REPO_LINK="https://github.com/jqlang/jq"
+JQ_API_LINK="https://api.github.com/repos/jqlang/jq/releases/latest"
+GO_DL_LINK="https://go.dev/dl"
+GO_DL_MIRROR_LINK="https://gomirrors.org/dl"
+PYTHON_FTP_LINK="https://www.python.org/ftp/python"
+BTBN_FFMPEG_LINK="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+JVS_FFMPEG_LINK="https://johnvansickle.com/ffmpeg"
 
 Println()
 {
@@ -629,6 +679,182 @@ WaitTerm()
     fi
 }
 
+VersionLt()
+{
+    local v1="${1:-0.0.0}"
+    local v2="${2:-0.0.0}"
+    local a1=() a2=()
+    local IFS='.'
+    read -r -a a1 <<< "$v1"
+    read -r -a a2 <<< "$v2"
+    local i n1 n2
+    for i in 0 1 2
+    do
+        n1="${a1[$i]:-0}"
+        n2="${a2[$i]:-0}"
+        n1="${n1%%[^0-9]*}"
+        n2="${n2%%[^0-9]*}"
+        n1="${n1:-0}"
+        n2="${n2:-0}"
+
+        if [ "$n1" -lt "$n2" ]
+        then
+            return 0
+        elif [ "$n1" -gt "$n2" ]
+        then
+            return 1
+        fi
+    done
+    return 1
+}
+
+GetSubshellPid()
+{
+    if [ -n "${BASHPID:-}" ]
+    then
+        printf '%s\n' "$BASHPID"
+    else
+        sh -c 'echo $PPID'
+    fi
+}
+
+DateEpoch()
+{
+    date +%s
+}
+
+DateMs()
+{
+    if command -v gdate > /dev/null 2>&1
+    then
+        gdate +%s%3N
+    else
+        local out
+        out=$(date +%s%3N 2> /dev/null || true)
+        if [[ $out =~ ^[0-9]+$ ]]
+        then
+            printf '%s\n' "$out"
+        else
+            printf '%s000\n' "$(date +%s)"
+        fi
+    fi
+}
+
+FormatEpoch()
+{
+    local ts="$1"
+    local fmt="${2:-+%c}"
+    if date -r "$ts" "$fmt" 2> /dev/null
+    then
+        return 0
+    fi
+    date --date="@$ts" "$fmt" 2> /dev/null
+}
+
+FilterFileLines()
+{
+    local needle="$1"
+    local file="$2"
+    local tmp_f
+    tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-flt.XXXXXX")
+    if [ -f "$file" ]
+    then
+        grep -Fv -- "$needle" "$file" > "$tmp_f" || true
+        mv "$tmp_f" "$file"
+    else
+        rm -f "$tmp_f"
+    fi
+}
+
+GenUuid()
+{
+    if [ -r /proc/sys/kernel/random/uuid ]
+    then
+        cat /proc/sys/kernel/random/uuid
+    elif command -v uuidgen > /dev/null 2>&1
+    then
+        uuidgen | tr '[:upper:]' '[:lower:]'
+    else
+        openssl rand -hex 16 | sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/'
+    fi
+}
+
+Md5Hex()
+{
+    if command -v md5sum > /dev/null 2>&1
+    then
+        md5sum | awk '{print $1}'
+    else
+        md5 -q
+    fi
+}
+
+StripSuffix()
+{
+    local str="$1"
+    local n="${2:-0}"
+    local len=${#str}
+    if [ "$n" -le 0 ]
+    then
+        printf '%s' "$str"
+    elif [ "$n" -ge "$len" ]
+    then
+        printf ''
+    else
+        printf '%s' "${str:0:$((len - n))}"
+    fi
+}
+
+RunEditor()
+{
+    local target="$1"
+    if [ -n "${EDITOR:-}" ] && command -v "$EDITOR" > /dev/null 2>&1
+    then
+        "$EDITOR" "$target"
+    elif command -v vim > /dev/null 2>&1
+    then
+        vim "$target"
+    elif command -v nano > /dev/null 2>&1
+    then
+        nano "$target"
+    elif command -v editor > /dev/null 2>&1
+    then
+        editor "$target"
+    else
+        vi "$target"
+    fi
+}
+
+WithFileLock()
+{
+    local lock_file="$1"
+    shift
+
+    if command -v flock > /dev/null 2>&1
+    then
+        (
+            flock -x 200 || exit 1
+            "$@"
+        ) 200>"$lock_file"
+    else
+        local lock_dir="${lock_file}.d"
+        local tries=0
+        while ! mkdir "$lock_dir" 2> /dev/null
+        do
+            tries=$((tries + 1))
+            if [ "$tries" -ge 300 ]
+            then
+                return 1
+            fi
+            sleep 0.1
+        done
+        local rc=0
+        "$@" || rc=$?
+        rmdir "$lock_dir" 2> /dev/null || true
+        return $rc
+    fi
+}
+
 DistCheck()
 {
     [ -n "${dist:-}" ] && return 0
@@ -744,14 +970,377 @@ EOF
     fi
 }
 
+AptFixBrokenRepos()
+{
+    local err_file="$1"
+    local sources_dir="${APT_SOURCES_DIR:-/etc/apt/sources.list.d}"
+    local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+    local broken_urls=()
+    local line url
+
+    while IFS= read -r line
+    do
+        if [[ $line =~ The\ repository\ \'([^[:space:]\']+)[[:space:]]+[^\']*\'\ (no\ longer\ has|does\ not\ have)\ a\ Release\ file ]]
+        then
+            url="${BASH_REMATCH[1]}"
+
+            if ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        elif [[ $line =~ 仓库[[:space:]]*[“\"\'‘]([^[:space:]”\"\'’]+)[[:space:]]+[^”\"\'’]*[”\"\'’].*Release ]]
+        then
+            url="${BASH_REMATCH[1]}"
+
+            if ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        elif [[ $line =~ ^(Err|错误):[0-9]+[[:space:]]+(https?://[^[:space:]]+) ]]
+        then
+            url="${BASH_REMATCH[2]}"
+
+            if grep -q "404" "$err_file" && ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        fi
+    done < "$err_file"
+
+    if [ "${#broken_urls[@]}" -eq 0 ]
+    then
+        return 1
+    fi
+
+    local action_types=()
+    local action_files=()
+    local action_urls=()
+    local action_descs=()
+    local list_file
+
+    for url in "${broken_urls[@]}"
+    do
+        if [ -d "$sources_dir" ]
+        then
+            for list_file in "$sources_dir"/*.list "$sources_dir"/*.sources
+            do
+                if [ ! -f "$list_file" ]
+                then
+                    continue
+                fi
+
+                if grep -Fq -- "$url" "$list_file"
+                then
+                    if [[ $url == *apt.postgresql.org/pub/repos/apt* ]] && ! grep -Fq "apt-archive.postgresql.org" "$list_file"
+                    then
+                        action_types+=("pg_archive")
+                        action_files+=("$list_file")
+                        action_urls+=("$url")
+                        action_descs+=("切换 PostgreSQL 归档源: $list_file (apt.postgresql.org -> apt-archive.postgresql.org)")
+                    else
+                        action_types+=("disable_file")
+                        action_files+=("$list_file")
+                        action_urls+=("$url")
+                        action_descs+=("禁用失效源: $list_file -> ${list_file}.disabled ($url)")
+                    fi
+                fi
+            done
+        fi
+
+        if [ -f "$sources_file" ] && grep -Fq -- "$url" "$sources_file"
+        then
+            action_types+=("comment_line")
+            action_files+=("$sources_file")
+            action_urls+=("$url")
+            action_descs+=("在 $sources_file 中注释失效源: $url")
+        fi
+    done
+
+    if [ "${#action_types[@]}" -eq 0 ]
+    then
+        return 1
+    fi
+
+    Println "\n$tip 检测到以下失效 APT 软件源导致 apt-get update 失败:"
+
+    local idx
+    for((idx=0;idx<${#action_descs[@]};idx++));
+    do
+        Println "  $((idx + 1)). ${yellow}${action_descs[idx]}${normal}"
+    done
+
+    if [ "${APT_AUTO_FIX:-false}" != true ]
+    then
+        if [ -t 0 ]
+        then
+            local fix_opts=( '否' '是' )
+            local fix_idx=0
+            echo
+            inquirer list_input_index "是否允许按上述方案修改 APT 软件源并重试?" fix_opts fix_idx
+
+            if [ "$fix_idx" -ne 1 ]
+            then
+                Println "$info 已取消修改 APT 软件源, 请手动处理后重试\n"
+                return 1
+            fi
+        else
+            Println "$info 非交互模式不会自动修改 APT 软件源, 请手动处理上述失效源后重试\n"
+            return 1
+        fi
+    fi
+
+    local act_type act_file act_url tmp_f
+    for((idx=0;idx<${#action_types[@]};idx++));
+    do
+        act_type="${action_types[idx]}"
+        act_file="${action_files[idx]}"
+        act_url="${action_urls[idx]}"
+
+        case "$act_type" in
+            pg_archive)
+                tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                sed 's|apt\.postgresql\.org/pub/repos/apt|apt-archive.postgresql.org/pub/repos/apt|g' "$act_file" > "$tmp_f"
+                mv "$tmp_f" "$act_file"
+                Println "$info 已切换至 apt-archive.postgresql.org: ${green}$act_file${normal}"
+            ;;
+            disable_file)
+                mv "$act_file" "${act_file}.disabled"
+                Println "$info 已禁用失效源: ${yellow}${act_file} -> ${act_file}.disabled${normal}"
+            ;;
+            comment_line)
+                tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                awk -v u="$act_url" '
+                    index($0, u) > 0 && $0 !~ /^[[:space:]]*#/ { print "# [AIOS disabled broken repo] " $0; next }
+                    { print }
+                ' "$act_file" > "$tmp_f"
+                mv "$tmp_f" "$act_file"
+                Println "$info 已在 $act_file 中注释失效源: ${yellow}$act_url${normal}"
+            ;;
+        esac
+    done
+
+    return 0
+}
+
+AptGetCodename()
+{
+    local os_release="${OS_RELEASE_FILE:-/etc/os-release}"
+    local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+    local codename="" id="" id_like="" ubu_code="" deb_code="" ver_code=""
+
+    if [ -r "$os_release" ]
+    then
+        id=$(sed -nE 's/^ID="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        id_like=$(sed -nE 's/^ID_LIKE="?([^"]+)"?/\1/p' "$os_release" | head -n 1)
+        ubu_code=$(sed -nE 's/^UBUNTU_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        deb_code=$(sed -nE 's/^DEBIAN_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        ver_code=$(sed -nE 's/^VERSION_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+
+        if [ "$id" == "ubuntu" ] || [[ " $id_like " == *" ubuntu "* ]] || [ -n "$ubu_code" ]
+        then
+            codename="${ubu_code:-$ver_code}"
+        elif [ "$id" == "debian" ] || [[ " $id_like " == *" debian "* ]] || [ -n "$deb_code" ]
+        then
+            codename="${deb_code:-$ver_code}"
+        else
+            codename="${ver_code:-${ubu_code:-$deb_code}}"
+        fi
+    fi
+
+    if [ -z "$codename" ] && [[ -x $(command -v lsb_release) ]]
+    then
+        codename=$(lsb_release -cs 2> /dev/null || true)
+    fi
+
+    if [ -z "$codename" ] && [ -r "$sources_file" ]
+    then
+        codename=$(awk '
+            /^[[:space:]]*deb[[:space:]]/ {
+                for (i = 2; i <= NF; i++) {
+                    if ($i ~ /^\[/) {
+                        while (i <= NF && $i !~ /\]$/) i++
+                        continue
+                    }
+                    if ($i ~ /^https?:\/\//) {
+                        if (i + 1 <= NF) {
+                            suite = $(i + 1)
+                            sub(/-(updates|backports|security)$/, "", suite)
+                            if (suite !~ /\//) {
+                                print suite
+                                exit
+                            }
+                        }
+                    }
+                }
+            }
+        ' "$sources_file")
+    fi
+
+    printf '%s\n' "$codename"
+}
+
+AptRepoCheck()
+{
+    local repo_url="${1%/}"
+    local suite="${2:-}"
+
+    if [ -z "$repo_url" ] || [ -z "$suite" ]
+    then
+        return 1
+    fi
+
+    if curl -fsI -m 10 "${repo_url}/dists/${suite}/InRelease" > /dev/null 2>&1
+    then
+        return 0
+    fi
+
+    if curl -fsI -m 10 "${repo_url}/dists/${suite}/Release" > /dev/null 2>&1
+    then
+        return 0
+    fi
+
+    return 1
+}
+
 AptUpdate()
 {
-    if [ "${apt_updated:-false}" = false ]
+    local force="${1:-}"
+
+    if [ "$force" != "force" ] && [ "${apt_updated:-false}" = true ]
     then
-        Println "$info 更新软件包列表..."
-        apt-get update --allow-releaseinfo-change >/dev/null
-        apt_updated=true
+        return 0
     fi
+
+    Println "$info 更新软件包列表..."
+
+    local apt_err_file attempt=0 max_attempts=3 rc=0
+    apt_err_file=$(mktemp "${TMPDIR:-/tmp}/aios-apt-update.XXXXXX")
+
+    while [ "$attempt" -lt "$max_attempts" ]
+    do
+        attempt=$((attempt + 1))
+        rc=0
+
+        if [ "$force" == "force" ]
+        then
+            LC_ALL=C apt-get update --allow-releaseinfo-change -o Acquire::http::No-Cache=true -o Acquire::BrokenProxy=true > "$apt_err_file" 2>&1 || rc=$?
+        else
+            LC_ALL=C apt-get update --allow-releaseinfo-change > "$apt_err_file" 2>&1 || rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]
+        then
+            rm -f "$apt_err_file"
+            apt_updated=true
+            return 0
+        fi
+
+        if [ "$attempt" -lt "$max_attempts" ] && AptFixBrokenRepos "$apt_err_file"
+        then
+            continue
+        fi
+
+        break
+    done
+
+    Println "$error apt-get update 失败:\n$(cat "$apt_err_file")\n"
+    rm -f "$apt_err_file"
+    return "$rc"
+}
+
+AptInstall()
+{
+    if [ $# -eq 0 ]
+    then
+        return 0
+    fi
+
+    AptUpdate || return 1
+
+    local inst_err rc=0
+    inst_err=$(mktemp "${TMPDIR:-/tmp}/aios-apt-install.XXXXXX")
+    LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install "$@" > "$inst_err" 2>&1 || rc=$?
+
+    if [ "$rc" -eq 0 ]
+    then
+        rm -f "$inst_err"
+        return 0
+    fi
+
+    if grep -Eq 'Unable to fetch some archives|404[[:space:]]+Not Found|Failed to fetch' "$inst_err"
+    then
+        Println "$tip 软件包索引可能已过期, 正在强制刷新软件源 (No-Cache) 并重试安装..."
+
+        if AptUpdate force
+        then
+            rc=0
+            LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --fix-missing "$@" > "$inst_err" 2>&1 || rc=$?
+
+            if [ "$rc" -eq 0 ]
+            then
+                rm -f "$inst_err"
+                return 0
+            fi
+        fi
+
+        if grep -Eq '404[[:space:]]+Not Found|Failed to fetch' "$inst_err" && [ -t 0 ]
+        then
+            local codename
+            codename=$(AptGetCodename)
+
+            Println "\n$tip 刷新软件源后仍有软件包返回 404 (可能是老版本 Debian/Ubuntu 安全源已归档或镜像同步异常):"
+            grep -E '^(Err:|E: Failed to fetch)' "$inst_err" | head -n 6
+
+            local retry_opts=(
+                "不修改源，尝试从发行版主源 (-t ${codename:-stable}) 安装"
+                "将 /etc/apt/sources.list 中的 security.debian.org 切换至 archive.debian.org 并重试"
+                "放弃安装，自行手动处理"
+            )
+            local retry_idx=2
+            echo
+            inquirer list_input_index "请选择处理方式" retry_opts retry_idx
+
+            if [ "$retry_idx" -eq 0 ] && [ -n "$codename" ]
+            then
+                rc=0
+                LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --allow-downgrades -t "$codename" "$@" > "$inst_err" 2>&1 || rc=$?
+
+                if [ "$rc" -eq 0 ]
+                then
+                    rm -f "$inst_err"
+                    return 0
+                fi
+            elif [ "$retry_idx" -eq 1 ]
+            then
+                local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+
+                if [ -f "$sources_file" ] && grep -Fq "security.debian.org" "$sources_file"
+                then
+                    local tmp_arc
+                    tmp_arc=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                    sed 's|security\.debian\.org|archive.debian.org|g' "$sources_file" > "$tmp_arc"
+                    mv "$tmp_arc" "$sources_file"
+                    Println "$info 已将 $sources_file 中的 security.debian.org 切换至 archive.debian.org\n"
+
+                    if AptUpdate force
+                    then
+                        rc=0
+                        LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --fix-missing "$@" > "$inst_err" 2>&1 || rc=$?
+
+                        if [ "$rc" -eq 0 ]
+                        then
+                            rm -f "$inst_err"
+                            return 0
+                        fi
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    Println "$error 软件包安装失败 ($*):\n$(cat "$inst_err")\n"
+    rm -f "$inst_err"
+    return "$rc"
 }
 
 BrewInstall()
@@ -842,7 +1431,7 @@ DepInstall()
             if ! dpkg -s $dependency &>/dev/null
             then
                 AptUpdate
-                if apt-get -y install $dependency &>/dev/null
+                if AptInstall $dependency
                 then
                     Println "${green}[INFO]${normal} $dependency installation succeed..."
                 else
@@ -929,7 +1518,7 @@ DepInstall()
         then
             AptUpdate
             Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
-            if apt-get -y install $1 >/dev/null 2>&1
+            if AptInstall "$1"
             then
                 Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
             else
@@ -1020,7 +1609,7 @@ DepsInstall()
             [[ -x $(command -v $depend) ]] && continue
             if ! dpkg -s "$depend" &> /dev/null
             then
-                if apt-get -y install "$depend" &> /dev/null
+                if AptInstall "$depend"
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
@@ -1211,6 +1800,7 @@ then
         IPTV_ROOT="$AIOS_ROOT"/iptv
         LOCK_FILE="$IPTV_ROOT"/lock
         CHANNELS_FILE="$IPTV_ROOT"/channels.json
+        IPTV_CONFIG="$IPTV_ROOT"/config.json
         MONITOR_LOG="$IPTV_ROOT"/monitor.log
         LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate
         CRON_FILE="$IPTV_ROOT"/cron
@@ -1317,6 +1907,42 @@ then
         XRAY_DEFAULT_API="127.0.0.1:10085"
         DEFAULT_TERM_COLS=140
         DEFAULT_TERM_LINES=40
+
+        # Default package / dependency versions
+        POSTGRESQL_MAC_PKG="postgresql@18"
+        POSTGRESQL_VER="18"
+        POSTGRESQL_SLES12_VER="15"
+        MONGODB_VER="8.0"
+        NODEJS_VER="24"
+        PYTHON_FALLBACK_VER="3.14.10"
+        GO_FALLBACK_VER="go1.27.4"
+        QUICTLS_TAG="OpenSSL_1_1_1w-quic1"
+        PCRE_LEGACY_VER="8.45"
+        OPENRESTY_OPENSSL_MAC_PKG="openresty/brew/openresty-openssl3"
+        OPENRESTY_OPENSSL_PATCH="openssl-1.1.1f-sess_set_get_cb_yield.patch"
+        POPPLER_VER="0.81.0"
+        FONTFORGE_VER="20190413"
+        PDF2HTMLEX_VER="0.18.7-poppler-${POPPLER_VER}"
+
+        # Upstream source / repository links
+        USTC_MIRROR_HOST="mirrors.ustc.edu.cn"
+        OPENSSL_SOURCE_LINK="https://openssl-library.org/source"
+        QUICTLS_REPO_LINK="https://github.com/quictls/openssl/archive/refs/tags"
+        PGDG_APT_LINK="https://apt.postgresql.org/pub/repos/apt"
+        PGDG_ARCHIVE_APT_LINK="https://apt-archive.postgresql.org/pub/repos/apt"
+        DOCKER_REPO_LINK="https://download.docker.com/linux"
+        NGINX_REPO_LINK="https://nginx.org/packages/mainline"
+        OPENRESTY_LINK="https://openresty.org"
+        MONGODB_REPO_LINK="https://repo.mongodb.org"
+        NODESOURCE_DEB_LINK="https://deb.nodesource.com"
+        NODESOURCE_RPM_LINK="https://rpm.nodesource.com"
+        JQ_REPO_LINK="https://github.com/jqlang/jq"
+        JQ_API_LINK="https://api.github.com/repos/jqlang/jq/releases/latest"
+        GO_DL_LINK="https://go.dev/dl"
+        GO_DL_MIRROR_LINK="https://gomirrors.org/dl"
+        PYTHON_FTP_LINK="https://www.python.org/ftp/python"
+        BTBN_FFMPEG_LINK="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest"
+        JVS_FFMPEG_LINK="https://johnvansickle.com/ffmpeg"
     fi
 
     TEXTDOMAINDIR="$HOMEBREW_PREFIX"/share/locale
@@ -1571,7 +2197,7 @@ LocaleFix()
         if [[ ! -x $(command -v locale-gen) ]] 
         then
             AptUpdate
-            if ! apt-get -y install locales >/dev/null 2>&1
+            if ! AptInstall locales
             then
                 Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
             fi
@@ -1743,7 +2369,7 @@ SourceInstallReady()
             # systemctl restart cron
             if ! dpkg -s debconf-utils &> /dev/null 
             then
-                apt-get -y install debconf-utils
+                AptInstall debconf-utils
             fi
             echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
             if [ -n "${1:-}" ] 
@@ -1752,7 +2378,7 @@ SourceInstallReady()
                 do
                     if ! dpkg -s "$package" &> /dev/null 
                     then
-                        apt-get -y install "$package"
+                        AptInstall "$package"
                     fi
                 done
             fi
@@ -4243,20 +4869,21 @@ ShFileUpdate()
         mv "${SH_FILE}_tmp" "$SH_FILE"
         chmod +x "$SH_FILE"
         Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
-        sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-        if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+        sh_new_ver=$(sed -nE 's/^[[:space:]]*sh_ver="?([^"[:space:]]+)"?/\1/p' "$SH_FILE" | head -n 1)
+        if [ -n "$sh_new_ver" ] && [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ]
         then
             rm -f "$LOCK_FILE"
         fi
     else
         Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
+
+        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp"
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
             Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
-            sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-            if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+            sh_new_ver=$(sed -nE 's/^[[:space:]]*sh_ver="?([^"[:space:]]+)"?/\1/p' "$SH_FILE" | head -n 1)
+            if [ -n "$sh_new_ver" ] && [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ]
             then
                 rm -f "$LOCK_FILE"
             fi
@@ -4293,9 +4920,9 @@ JQInstall()
         then
             Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
             cd ~
-            git clone https://github.com/stedolan/jq.git > /dev/null
+            git clone "${JQ_REPO_LINK}.git" > /dev/null
             cd jq
-            apt-get -y install flex bison libtool make automake autoconf > /dev/null
+            AptInstall flex bison libtool make automake autoconf
             git submodule update --init > /dev/null
             autoreconf -fi > /dev/null
             ./configure --with-oniguruma=builtin > /dev/null
@@ -4617,7 +5244,7 @@ JQ()
         {
             flock -x 200 || { LogErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
 
-            if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+            if ! $JQ_FILE ${jq_args[@]+"${jq_args[@]}"} "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
             then
                 rm -f "$TMP_FILE"
                 LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
@@ -4629,7 +5256,7 @@ JQ()
             rm -f "${TMP_FILE}_slurp"
         } 200>"$FILE.lock"
     else
-        if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+        if ! $JQ_FILE ${jq_args[@]+"${jq_args[@]}"} "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
         then
             rm -f "$TMP_FILE"
             LogInfo "JQ ERROR!! action: $jq_action, file: $FILE, tmp_file: $TMP_FILE, \$3: $jq_a3, \$4: $jq_a4, \$5: $jq_a5"
@@ -4804,12 +5431,12 @@ JQs()
                     with_entries(.value |= structural_merge)
                 elif $type == "array" then
                     if length == 0 then []
-                    elif ([ .[] | select(. != null) | type == "object" ] | unique | length == 2) then
+                    elif ([ .[] | select(. != null and . != []) | type == "object" ] | unique | length == 2) then
                         .
                     elif (map(type == "object") | any) then
                         ( [ .[] | select(type == "object") | keys[] ] | unique ) as $all_keys
                         | map(. as $obj
-                        | if $obj == null or type != "object" then
+                        | if $obj == null or $obj == [] or type != "object" then
                             $all_keys | map({key: ., value: null}) | from_entries
                         else
                             $all_keys | map({key: ., value: $obj[.]}) | from_entries
@@ -4823,7 +5450,7 @@ JQs()
                         | from_entries
                     else
                         map(structural_merge)
-                        | if ([ .[] | select(. != null) | type == "object" ] | any) then structural_merge else . end
+                        | if ([ .[] | select(. != null and . != []) | type == "object" ] | any) then structural_merge else . end
                     end
                 else
                     .
@@ -4878,12 +5505,12 @@ GitInstall()
         ;;
         rpm) yum -y install git
         ;;
-        deb) apt-get -y install git
+        deb) AptInstall git
         ;;
         ubu) 
             add-apt-repository ppa:git-core/ppa -y
             apt-get -y update
-            apt-get -y install git
+            AptInstall git
         ;;
     esac
 
@@ -5113,7 +5740,7 @@ CurlImpersonateCompile()
             yum install -y cmake3 python3 python3-pip
             yum install -y ninja-build || pip3 install ninja
         else
-            apt-get -y install build-essential pkg-config cmake ninja-build curl autoconf automake libtool unzip
+            AptInstall build-essential pkg-config cmake ninja-build curl autoconf automake libtool unzip
         fi
 
         mkdir build && cd build
@@ -5240,43 +5867,42 @@ ImgcatInstall()
     echo
     ExitOnList y "`gettext \"缺少 imgcat, 是否现在安装\"`"
 
+    if [ "$dist" == "rpm" ]
+    then
+        yum -y install gcc gcc-c++ make ncurses-devel autoconf libjpeg-turbo-devel libpng-devel > /dev/null 2>&1
+    else
+        AptInstall debconf-utils libncurses5-dev autotools-dev autoconf libjpeg-dev libpng-dev || return 1
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        AptInstall software-properties-common pkg-config build-essential || return 1
+    fi
+
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
+        kill $progress_pid 2> /dev/null || true
+        wait $progress_pid 2> /dev/null || true
     ' EXIT
-    if [ "$dist" == "rpm" ] 
-    then
-        yum -y install gcc gcc-c++ make ncurses-devel autoconf libjpeg-turbo-devel libpng-devel >/dev/null 2>&1
-        echo -n "...50%..."
-    else
-        apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf libjpeg-dev libpng-dev >/dev/null 2>&1
-        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-        apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
-        echo -n "...50%..."
-    fi
 
     cd ~
 
-    if [ ! -d imgcat-master ] 
+    if [ ! -d imgcat-master ]
     then
         wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO imgcat.zip
-        unzip imgcat.zip >/dev/null 2>&1
+        unzip imgcat.zip > /dev/null 2>&1
     fi
 
     cd ./imgcat-master
     rm -rf CImg
     wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/CImg.zip" -qO CImg.zip
-    unzip CImg.zip >/dev/null 2>&1
+    unzip CImg.zip > /dev/null 2>&1
     mv CImg-master CImg
-    ./configure >/dev/null 2>&1
-    make >/dev/null 2>&1
-    make install >/dev/null 2>&1
-    kill $progress_pid
+    ./configure > /dev/null 2>&1
+    make > /dev/null 2>&1
+    make install > /dev/null 2>&1
+    kill $progress_pid 2> /dev/null || true
     wait $progress_pid 2> /dev/null || true
     trap - EXIT
-    echo -n "...100%" && Println "$info imgcat 安装完成"
+    echo -n "...100%" && Println "\n$info imgcat 安装完成"
 }
 ProxyDetectNginx()
 {
@@ -6574,7 +7200,7 @@ ProxySelectBound()
             Println "$error 请先添加入站\n"
             return 1
         fi
-        for ((i=0; i<inbounds_count; i++))
+        for((i=0;i<inbounds_count;i++));
         do
             ridx="${inbounds_json_index[i]}"
             options+=("$((i+1)). [${inbounds_protocol[ridx]}] ${inbounds_tag[ridx]} (${inbounds_listen[ridx]}:${inbounds_port[ridx]})")
@@ -6589,7 +7215,7 @@ ProxySelectBound()
             Println "$error 没有出站\n"
             return 1
         fi
-        for ((i=0; i<outbounds_count; i++))
+        for((i=0;i<outbounds_count;i++));
         do
             ridx="${outbounds_json_index[i]}"
             options+=("$((i+1)). [${outbounds_protocol[ridx]}] ${outbounds_tag[ridx]} (${outbounds_sendThrough[ridx]})")
@@ -6956,16 +7582,16 @@ PythonInstall()
             yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
             echo -n "...50%..."
             cd ~
-            wget --timeout=10 --tries=3 --no-check-certificate https://www.python.org/ftp/python/3.12.3/Python-3.12.3.tgz -qO Python-3.12.3.tgz
-            tar xzf Python-3.12.3.tgz
-            cd Python-3.12.3
+            wget --timeout=10 --tries=3 --no-check-certificate "${PYTHON_FTP_LINK}/${PYTHON_FALLBACK_VER}/Python-${PYTHON_FALLBACK_VER}.tgz" -qO "Python-${PYTHON_FALLBACK_VER}.tgz"
+            tar xzf "Python-${PYTHON_FALLBACK_VER}.tgz"
+            cd "Python-${PYTHON_FALLBACK_VER}"
             ./configure >/dev/null 2>&1
             make >/dev/null 2>&1
             make install >/dev/null 2>&1
             pip3 install requests > /dev/null
         fi
     else
-        apt-get -y install python3 python3-pip >/dev/null 2>&1
+        AptInstall python3 python3-pip
     fi
 
     kill $progress_pid
@@ -6973,6 +7599,38 @@ PythonInstall()
     trap - EXIT
     echo "...100%"
 }
+OpensslFetchPackUrl()
+{
+    local list_url="${1%/}"
+    local major_filter="${2:-}"
+    local href=""
+
+    href=$(curl -s -L "${list_url}/" \
+        | grep -oE "href=\"[^\"]*openssl-[0-9]+\.[0-9]+\.[0-9]+[a-z]?\.tar\.gz\"" \
+        | sed -E 's/^href="//; s/"$//' \
+        | while IFS= read -r u
+          do
+              local fname="${u##*/}"
+              if [ -z "$major_filter" ] || [[ "$fname" == openssl-${major_filter}.* ]]
+              then
+                  printf '%s\n' "$u"
+                  break
+              fi
+          done)
+
+    if [ -z "$href" ]
+    then
+        return 1
+    fi
+
+    if [[ "$href" == http://* ]] || [[ "$href" == https://* ]]
+    then
+        printf '%s\n' "$href"
+    else
+        printf '%s/%s\n' "$list_url" "${href#./}"
+    fi
+}
+
 OpensslSourceInstall()
 {
     local build_dir=build args=() openssl_path="$DEPENDS_ROOT"/openssl
@@ -6987,27 +7645,30 @@ OpensslSourceInstall()
         openssl_install_options=("$@")
     fi
 
-    if ! EleInArray openssl@3 openssl_install_options
+    local openssl_pack_url=""
+    if EleInArray openssl@4 openssl_install_options
     then
-        openssl_url="https://www.openssl.org/source/old"
-        openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
-
-        for openssl_ver in "${openssl_vers[@]}"
-        do
-            if [ "${openssl_ver%%.*}" -eq 1 ] 
-            then
-                break
-            fi
-        done
-        openssl_url="$openssl_url/$openssl_ver"
-    else
-        openssl_url="https://www.openssl.org/source"
+        openssl_url="$OPENSSL_SOURCE_LINK"
+        openssl_path+=4
+        openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "4")
+    elif EleInArray openssl@3 openssl_install_options
+    then
+        openssl_url="$OPENSSL_SOURCE_LINK"
         openssl_path+=3
+        openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "3")
+    else
+        openssl_url="$OPENSSL_SOURCE_LINK/old/1.1.1"
+        openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "1")
     fi
 
-    openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
-    openssl_pack="${openssl_packs[0]}"
-    openssl_name=${openssl_pack%.tar*}
+    if [ -z "$openssl_pack_url" ]
+    then
+        Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+        return 1
+    fi
+
+    openssl_pack="${openssl_pack_url##*/}"
+    openssl_name="${openssl_pack%.tar*}"
 
     if EleInArray static openssl_install_options
     then
@@ -7065,7 +7726,7 @@ OpensslSourceInstall()
     mkdir -p "$DEPENDS_ROOT"
     cd "$DEPENDS_ROOT"
 
-    curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+    curl -L "$openssl_pack_url" -o "$openssl_pack"
     Println "$info 解压 $openssl_name ..."
     tar xzf "$openssl_pack"
     cd "$openssl_name"
@@ -7129,10 +7790,10 @@ GoInstall()
 
     JQInstall
 
-    if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
+    if ! go_version=$(curl -s -Lm 20 "${GO_DL_LINK}/?mode=json" | $JQ_FILE -r '.[0].version')
     then
         Println "$error 无法连接 go.dev ?"
-        go_version=1.22.2
+        go_version="$GO_FALLBACK_VER"
     fi
 
     if [ "$arch" == "i386" ] 
@@ -7149,7 +7810,7 @@ GoInstall()
         return 0
     fi
 
-    if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
+    if ! curl -L "${GO_DL_LINK}/$go_package" -o ~/$go_package && ! curl -L "${GO_DL_MIRROR_LINK}/$go_package" -o ~/$go_package
     then
         Println "$error 下载 golang 失败, 请稍后再试\n"
         return 1
@@ -7189,14 +7850,14 @@ NodejsInstall()
         yum -y install gcc-c++ make >/dev/null 2>&1
         # yum groupinstall 'Development Tools'
 
-        if curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - >/dev/null
+        if curl -fsSL "${NODESOURCE_RPM_LINK}/setup_${NODEJS_VER}.x" | sudo bash - > /dev/null
         then
-            sudo yum install -y nsolid >/dev/null 2>&1
+            sudo yum install -y nsolid > /dev/null 2>&1
         fi
     else
-        if curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - >/dev/null
+        if curl -fsSL "${NODESOURCE_DEB_LINK}/setup_${NODEJS_VER}.x" | sudo bash - > /dev/null
         then
-            sudo apt-get install -y nodejs >/dev/null 2>&1
+            AptInstall nodejs
         fi
     fi
 
@@ -7252,7 +7913,7 @@ MongodbInstall()
                 then
                     curl -Lm 20 "$FFMPEG_MIRROR_LINK"/mongosh.rb -o "$DEPENDS_ROOT"/mongosh.rb
                 fi
-                sed -i 's/"node"/"node@20"/g' "$DEPENDS_ROOT"/mongosh.rb
+                sed -i "s/\"node\"/\"node@${NODEJS_VER}\"/g" "$DEPENDS_ROOT"/mongosh.rb
                 brew install "$DEPENDS_ROOT"/mongosh.rb
                 brew install mongodb-community --without-mongosh
             else
@@ -7264,68 +7925,78 @@ MongodbInstall()
         ;;
         rpm) 
             DepInstall yum-utils
-            if [ ! -f /etc/yum.repos.d/mongodb-org-7.0.repo ] 
+            if [ ! -f "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" ] 
             then
                 if grep -qi Amazon <<< "$ID" || grep -qi Amazon <<< "$NAME" 
                 then
-cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
-[mongodb-org-7.0]
+cat > "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" <<EOF
+[mongodb-org-${MONGODB_VER}]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/amazon/$VERSION/mongodb-org/7.0/$arch_path/
+baseurl=${MONGODB_REPO_LINK}/yum/amazon/$VERSION/mongodb-org/${MONGODB_VER}/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://pgp.mongodb.com/server-7.0.asc
+gpgkey=https://pgp.mongodb.com/server-${MONGODB_VER}.asc
 EOF
                 else
-cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
-[mongodb-org-7.0]
+cat > "/etc/yum.repos.d/mongodb-org-${MONGODB_VER}.repo" <<EOF
+[mongodb-org-${MONGODB_VER}]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/
+baseurl=${MONGODB_REPO_LINK}/yum/redhat/${VERSION_ID%%.*}/mongodb-org/${MONGODB_VER}/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://pgp.mongodb.com/server-7.0.asc
+gpgkey=https://pgp.mongodb.com/server-${MONGODB_VER}.asc
 EOF
                 fi
             fi
-            sudo yum-config-manager --enable mongodb-org-7.0
+            sudo yum-config-manager --enable "mongodb-org-${MONGODB_VER}"
             sudo yum install -y mongodb-org
         ;;
         ubu) 
-            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy ]] 
+            local mongo_codename
+            mongo_codename=$(AptGetCodename)
+
+            if [ ! -f "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list" ] 
             then
-                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
+                if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/ubuntu" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
+                then
+                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall ubuntu-keyring
+                DepInstall gpg
+                curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGODB_VER}.asc" | gpg --batch --yes --dearmor -o "/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg"
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg] ${MONGODB_REPO_LINK}/apt/ubuntu \
+                ${mongo_codename}/mongodb-org/${MONGODB_VER} multiverse" | tee "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list"
+                AptUpdate force
             fi
-            DepInstall lsb-release
-            DepInstall ubuntu-keyring
-            DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
-            then
-                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu \
-                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-                sudo apt-get update
-            fi
-            sudo apt-get -y install mongodb-org
+
+            AptInstall mongodb-org
         ;;
         deb)
-            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            local mongo_codename
+            mongo_codename=$(AptGetCodename)
+
+            if [ ! -f "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list" ] 
             then
-                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+                if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/debian" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
+                then
+                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall debian-archive-keyring
+                DepInstall gpg
+                curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGODB_VER}.asc" | gpg --batch --yes --dearmor -o "/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg"
+                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-${MONGODB_VER}.gpg ] ${MONGODB_REPO_LINK}/apt/debian \
+                ${mongo_codename}/mongodb-org/${MONGODB_VER} main" | tee "/etc/apt/sources.list.d/mongodb-org-${MONGODB_VER}.list"
+                AptUpdate force
             fi
-            DepInstall lsb-release
-            DepInstall debian-archive-keyring
-            DepInstall gpg
-            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
-            then
-                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian \
-                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-                sudo apt-get update
-            fi
-            sudo apt-get -y install mongodb-org
+
+            AptInstall mongodb-org
         ;;
         sles)
-            sudo zypper addrepo --gpgcheck "https://repo.mongodb.org/zypper/suse/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/" mongodb
+            sudo zypper addrepo --gpgcheck "${MONGODB_REPO_LINK}/zypper/suse/${VERSION_ID%%.*}/mongodb-org/${MONGODB_VER}/$arch_path/" mongodb
             sudo zypper -n install mongodb-org
         ;;
     esac
@@ -7882,52 +8553,62 @@ NginxPackageInstall()
 
     case $dist in
         ubu)
-            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy|mantic ]]
-            then
-                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
-            fi
-            DepInstall lsb-release
-            DepInstall ubuntu-keyring
-            DepInstall gpg
+            local nginx_codename nginx_repo_base
+            nginx_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/nginx.list ]
             then
-                curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                    nginx_repo_base="https://${USTC_MIRROR_HOST}/nginx/mainline/ubuntu"
                 else
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                    nginx_repo_base="${NGINX_REPO_LINK}/ubuntu"
                 fi
-                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
-                sudo apt-get update
+
+                if AptRepoCheck "$nginx_repo_base" "$nginx_codename"
+                then
+                    DepInstall ubuntu-keyring
+                    DepInstall gpg
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] ${nginx_repo_base} \
+                    ${nginx_codename} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                    echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                    AptUpdate force
+                else
+                    Println "$tip Nginx 官方源暂不支持当前系统 (${nginx_codename:-unknown}), 改用系统默认源安装"
+                fi
             fi
-            sudo apt-get -y install nginx
+
+            AptInstall nginx
         ;;
         deb)
-            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]]
-            then
-                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
-            fi
-            DepInstall lsb-release
-            DepInstall debian-archive-keyring
-            DepInstall gpg
+            local nginx_codename nginx_repo_base
+            nginx_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/nginx.list ]
             then
-                curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/debian \
-                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                    nginx_repo_base="https://${USTC_MIRROR_HOST}/nginx/mainline/debian"
                 else
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian \
-                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                    nginx_repo_base="${NGINX_REPO_LINK}/debian"
                 fi
-                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
-                sudo apt-get update
+
+                if AptRepoCheck "$nginx_repo_base" "$nginx_codename"
+                then
+                    DepInstall debian-archive-keyring
+                    DepInstall gpg
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] ${nginx_repo_base} \
+                    ${nginx_codename} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                    echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                    AptUpdate force
+                else
+                    Println "$tip Nginx 官方源暂不支持当前系统 (${nginx_codename:-unknown}), 改用系统默认源安装"
+                fi
             fi
-            sudo apt-get -y install nginx
+
+            AptInstall nginx
         ;;
         rpm)
             if [ "${VERSION_ID%%.*}" -eq 7 ]
@@ -8230,7 +8911,7 @@ NginxSourceInstall()
 
         if [ "$pcre_options_index" -eq 0 ]
         then
-            pcre_name=pcre-8.45
+            pcre_name="pcre-${PCRE_LEGACY_VER}"
             if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
@@ -8249,39 +8930,37 @@ NginxSourceInstall()
 
         if [ "$openssl_options_index" -eq 2 ]
         then
-            openssl_name=openssl-OpenSSL_1_1_1w-quic1
+            openssl_name="openssl-${QUICTLS_TAG}"
             Println "$info 下载 ${openssl_name#*-} ..."
-            if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+            if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${openssl_name#*-}.tar.gz" -o "$openssl_name".tar.gz
             then
                 curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
             fi
             Println "$info 解压 ${openssl_name#*-} ..."
             tar xzf "$openssl_name".tar.gz
         else
+            local openssl_pack_url=""
             if [ "$openssl_options_index" -eq 0 ]
             then
-                openssl_url="https://www.openssl.org/source/old"
-                openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
-
-                for openssl_ver in "${openssl_vers[@]}"
-                do
-                    if [ "${openssl_ver%%.*}" -eq 1 ]
-                    then
-                        break
-                    fi
-                done
-                openssl_url="$openssl_url/$openssl_ver"
+                openssl_url="${OPENSSL_SOURCE_LINK}/old/1.1.1"
+                openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "1")
             else
-                openssl_url="https://www.openssl.org/source"
+                openssl_url="$OPENSSL_SOURCE_LINK"
+                openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "3")
             fi
 
-            openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
-            openssl_pack="${openssl_packs[0]}"
-            openssl_name=${openssl_pack%.tar*}
+            if [ -z "$openssl_pack_url" ]
+            then
+                Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+                return 1
+            fi
+
+            openssl_pack="${openssl_pack_url##*/}"
+            openssl_name="${openssl_pack%.tar*}"
 
             if [ ! -d "./$openssl_name" ]
             then
-                curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+                curl -L "$openssl_pack_url" -o "$openssl_pack"
                 Println "$info 解压 $openssl_name ..."
                 tar xzf "$openssl_pack"
             fi
@@ -8464,7 +9143,7 @@ PostfixInstall()
     then
         yum -y install postfix > /dev/null
     else
-        DEBIAN_FRONTEND=noninteractive apt-get -y install postfix > /dev/null
+        AptInstall postfix
     fi
 }
 TesseractInstall()
@@ -8481,7 +9160,7 @@ TesseractInstall()
     then
         add-apt-repository ppa:alex-p/tesseract-ocr -y
         apt-get -y update
-        apt-get -y install tesseract
+        AptInstall tesseract
     elif [ "$dist" == "deb" ] 
     then
         Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
@@ -8880,9 +9559,9 @@ QuictlsInstall()
         quictls_path+=-static
     fi
 
-    if [ -d "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" ] 
+    if [ -d "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" ] 
     then
-        ln -sfn "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
+        ln -sfn "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" "$quictls_path"
         return 0
     fi
 
@@ -8892,8 +9571,8 @@ QuictlsInstall()
     unset OPENSSL_LOCAL_CONFIG_DIR
 
     args=(
-        --prefix="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir"
-        --openssldir="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir/etc"
+        --prefix="$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir"
+        --openssldir="$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir/etc"
         --libdir=lib
     )
 
@@ -8933,20 +9612,20 @@ QuictlsInstall()
     mkdir -p "$DEPENDS_ROOT"
     cd "$DEPENDS_ROOT"
 
-    if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+    if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${QUICTLS_TAG}.tar.gz" -o "${QUICTLS_TAG}.tar.gz"
     then
-        curl -L "$FFMPEG_MIRROR_LINK"/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+        curl -L "$FFMPEG_MIRROR_LINK/${QUICTLS_TAG}.tar.gz" -o "${QUICTLS_TAG}.tar.gz"
     fi
 
-    Println "$info 解压 OpenSSL_1_1_1w-quic1 ..."
-    tar xzf OpenSSL_1_1_1w-quic1.tar.gz
-    cd openssl-OpenSSL_1_1_1w-quic1
+    Println "$info 解压 ${QUICTLS_TAG} ..."
+    tar xzf "${QUICTLS_TAG}.tar.gz"
+    cd "openssl-${QUICTLS_TAG}"
 
     perl ./Configure "${args[@]}"
     make
     make install
 
-    ln -s "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
+    ln -s "$DEPENDS_ROOT/openssl-${QUICTLS_TAG}/$build_dir" "$quictls_path"
 }
 NginxViewStatus()
 {
@@ -12578,44 +13257,66 @@ OpenrestyPackageInstall()
 
     case $dist in
         ubu)
-            DepInstall lsb-release
-            DepInstall ubuntu-keyring
-            DepInstall gpg
+            local or_codename or_repo_base or_key_url
+            or_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="https://${USTC_MIRROR_HOST}/openresty${arch_path}/ubuntu"
+                    or_key_url="https://${USTC_MIRROR_HOST}/openresty/pubkey.gpg"
                 else
-                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="${OPENRESTY_LINK}/package${arch_path}/ubuntu"
+                    or_key_url="${OPENRESTY_LINK}/package/pubkey.gpg"
                 fi
-                sudo apt-get update
+
+                if ! AptRepoCheck "$or_repo_base" "$or_codename"
+                then
+                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall ubuntu-keyring
+                DepInstall gpg
+                curl -fsSL "$or_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] ${or_repo_base} \
+                ${or_codename} main" | tee /etc/apt/sources.list.d/openresty.list
+                AptUpdate force
             fi
-            sudo apt-get -y install openresty --no-install-recommends
+
+            AptInstall openresty --no-install-recommends
         ;;
         deb)
-            DepInstall lsb-release
-            DepInstall debian-archive-keyring
-            DepInstall gpg
+            local or_codename or_repo_base or_key_url
+            or_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/debian \
-                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="https://${USTC_MIRROR_HOST}/openresty${arch_path}/debian"
+                    or_key_url="https://${USTC_MIRROR_HOST}/openresty/pubkey.gpg"
                 else
-                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/debian \
-                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="${OPENRESTY_LINK}/package${arch_path}/debian"
+                    or_key_url="${OPENRESTY_LINK}/package/pubkey.gpg"
                 fi
-                sudo apt-get update
+
+                if ! AptRepoCheck "$or_repo_base" "$or_codename"
+                then
+                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall debian-archive-keyring
+                DepInstall gpg
+                curl -fsSL "$or_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] ${or_repo_base} \
+                ${or_codename} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                AptUpdate force
             fi
-            sudo apt-get -y install openresty --no-install-recommends
+
+            AptInstall openresty --no-install-recommends
         ;;
         rpm)
             DepInstall yum-utils
@@ -12788,9 +13489,9 @@ OpenrestySourceInstall()
         do
             if [ "$install_option" == "--with-http_postgres_module" ]
             then
-                DepInstall postgresql@14
-                cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/postgresql@14/include"
-                ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/postgresql@14/lib"
+                DepInstall "$POSTGRESQL_MAC_PKG"
+                cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/$POSTGRESQL_MAC_PKG/include"
+                ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/$POSTGRESQL_MAC_PKG/lib"
                 break
             fi
         done
@@ -12801,9 +13502,9 @@ OpenrestySourceInstall()
             cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
             ld_opt="$ld_opt -L$DEPENDS_ROOT/quictls/build/lib"
         else
-            DepInstall openresty/brew/openresty-openssl111
-            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/openresty-openssl111/include"
-            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/openresty-openssl111/lib"
+            DepInstall "$OPENRESTY_OPENSSL_MAC_PKG"
+            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/${OPENRESTY_OPENSSL_MAC_PKG##*/}/include"
+            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/${OPENRESTY_OPENSSL_MAC_PKG##*/}/lib"
         fi
 
         cd "$openresty_package_name/bundle/ngx_lua-"*
@@ -12875,12 +13576,12 @@ OpenrestySourceInstall()
 
         if [ "$pcre_options_index" -eq 0 ]
         then
-            pcre_name=pcre-8.45
+            pcre_name="pcre-${PCRE_LEGACY_VER}"
             if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
-                unzip $pcre_name.zip >/dev/null 2>&1
+                unzip $pcre_name.zip > /dev/null 2>&1
             fi
         else
             pcre_name=$(curl -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
@@ -12888,26 +13589,22 @@ OpenrestySourceInstall()
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
-                unzip $pcre_name.zip >/dev/null 2>&1
+                unzip $pcre_name.zip > /dev/null 2>&1
             fi
         fi
 
-        openssl_url="https://www.openssl.org/source/old"
-        openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
+        local openssl_pack_url=""
+        openssl_url="${OPENSSL_SOURCE_LINK}/old/1.1.1"
+        openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "1")
 
-        for openssl_ver in "${openssl_vers[@]}"
-        do
-            if [ "${openssl_ver%%.*}" -eq 1 ]
-            then
-                break
-            fi
-        done
+        if [ -z "$openssl_pack_url" ]
+        then
+            Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+            return 1
+        fi
 
-        openssl_url="$openssl_url/$openssl_ver"
-
-        openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
-        openssl_pack="${openssl_packs[0]}"
-        openssl_name=${openssl_pack%.tar*}
+        openssl_pack="${openssl_pack_url##*/}"
+        openssl_name="${openssl_pack%.tar*}"
 
         if [ "$openssl_options_index" -eq 1 ]
         then
@@ -12915,30 +13612,30 @@ OpenrestySourceInstall()
             openssl_name=openssl-OpenSSL_${openssl_ver//./_}-quic1
         fi
 
-        if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
+        if [ ! -d "${openssl_name}-patched" ] || [ ! -s "${openssl_name}-patched/${OPENRESTY_OPENSSL_PATCH}" ]
         then
-            rm -rf ${openssl_name}-patched
+            rm -rf "${openssl_name}-patched"
 
             if [ "$openssl_options_index" -eq 1 ]
             then
                 Println "$info 下载 ${openssl_name#*-} ..."
-                if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+                if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${openssl_name#*-}.tar.gz" -o "$openssl_name".tar.gz
                 then
                     curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
                 fi
                 Println "$info 解压 ${openssl_name#*-} ..."
                 tar xzf ${openssl_name}.tar.gz
             else
-                curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+                curl -L "$openssl_pack_url" -o "$openssl_pack"
                 Println "$info 解压 $openssl_name ..."
                 tar xzf "$openssl_pack"
             fi
 
-            cp -r ${openssl_name} ${openssl_name}-patched
-            cd ${openssl_name}-patched
+            cp -r ${openssl_name} "${openssl_name}-patched"
+            cd "${openssl_name}-patched"
 
-            curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
-            patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
+            curl -L "$FFMPEG_MIRROR_LINK/${OPENRESTY_OPENSSL_PATCH}" -o "$OPENRESTY_OPENSSL_PATCH"
+            patch -p1 < "$OPENRESTY_OPENSSL_PATCH" || true
             cd "$DEPENDS_ROOT"
         fi
 
@@ -13151,39 +13848,81 @@ AptSetSources()
     inquirer list_input_index "选择源" apt_sources_options apt_sources_options_index
     if [ "$apt_sources_options_index" -eq 0 ]
     then
-        sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
-        sed -i 's/ftp.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
-        sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list
+        sed -i "s/deb.debian.org/${USTC_MIRROR_HOST}/g" /etc/apt/sources.list
+        sed -i "s/ftp.debian.org/${USTC_MIRROR_HOST}/g" /etc/apt/sources.list
+        sed -i "s|security.debian.org|${USTC_MIRROR_HOST}/debian-security|g" /etc/apt/sources.list
         if [ -f "/etc/apt/sources.list.d/armbian.list" ]
         then
-            sed -i 's|http[s]*://apt.armbian.com|http://mirrors.ustc.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
-            sed -i 's|http://mirrors.nju.edu.cn/armbian|http://mirrors.ustc.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
+            sed -i "s|http[s]*://apt.armbian.com|http://${USTC_MIRROR_HOST}/armbian|g" /etc/apt/sources.list.d/armbian.list
+            sed -i "s|http://mirrors.nju.edu.cn/armbian|http://${USTC_MIRROR_HOST}/armbian|g" /etc/apt/sources.list.d/armbian.list
         fi
         if [ -f "/etc/apt/sources.list.d/docker.list" ] 
         then
             DepInstall gpg
-            curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] http://mirrors.ustc.edu.cn/docker-ce/linux/debian \
-            $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            curl -fsSL "http://${USTC_MIRROR_HOST}/docker-ce/linux/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] http://${USTC_MIRROR_HOST}/docker-ce/linux/debian \
+            $(AptGetCodename) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         fi
     else
-        sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
-        sed -i 's|mirrors.ustc.edu.cn/debian-security|security.debian.org|g' /etc/apt/sources.list
+        sed -i "s/${USTC_MIRROR_HOST}/deb.debian.org/g" /etc/apt/sources.list
+        sed -i "s|${USTC_MIRROR_HOST}/debian-security|security.debian.org|g" /etc/apt/sources.list
         if [ -f "/etc/apt/sources.list.d/armbian.list" ]
         then
             sed -i 's|http://mirrors.nju.edu.cn/armbian|http://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
-            sed -i 's|http://mirrors.ustc.edu.cn/armbian|http://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
+            sed -i "s|http://${USTC_MIRROR_HOST}/armbian|http://apt.armbian.com|g" /etc/apt/sources.list.d/armbian.list
             sed -i 's/https:/http:/g' /etc/apt/sources.list.d/armbian.list
         fi
         if [ -f "/etc/apt/sources.list.d/docker.list" ] 
         then
             DepInstall gpg
-            curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-            $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            curl -fsSL "${DOCKER_REPO_LINK}/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ${DOCKER_REPO_LINK}/debian \
+            $(AptGetCodename) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         fi
     fi
     Println "$info 源更改成功\n"
+}
+CloudflareDisableWorkersMonitor()
+{
+    # deprecated
+    if [ -s "/tmp/cf_workers.pid" ]
+    then
+        cf_workers_pid=$(< /tmp/cf_workers.pid)
+
+        if kill -0 "$cf_workers_pid" 2> /dev/null
+        then
+            kill "$cf_workers_pid" 2> /dev/null
+            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+            MonitorLog "关闭 workers 监控 PID $cf_workers_pid !"
+            Println "$info workers 监控 关闭成功\n"
+        else
+            Println "$error workers 监控 未开启\n"
+        fi
+    elif [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ]
+    then
+        PID=$(< "$CF_WORKERS_ROOT/cf_workers.pid")
+
+        if kill -0 "$PID" 2> /dev/null
+        then
+            Println "$info 关闭 workers 监控, 稍等..."
+            kill "$PID" 2> /dev/null
+
+            if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.pid" rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+            then
+                MonitorLog "关闭 workers 监控 PID $PID !"
+                Println "$info workers 监控 关闭成功 !\n"
+            else
+                Println "$error workers 监控 关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+            Println "$error workers 监控 未开启\n"
+        fi
+    else
+        [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+        Println "$error workers 监控 未开启\n"
+    fi
 }
 XtreamCodesGetDomains()
 {
@@ -13838,10 +14577,10 @@ XtreamCodesTestAcc()
             done
 
             # curl --output /dev/null -m 3 -s --fail -r 0-0
-            if $FFPROBE_FILE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
+            if $FFPROBE_FILE $proxy_command -rw_timeout 5000000 -i "http://$domain/$username/$password/$channel_id" -show_streams -select_streams a -loglevel quiet > /dev/null
             then
                 printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
-            elif $FFPROBE_FILE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
+            elif $FFPROBE_FILE $proxy_command -rw_timeout 5000000 -i "http://$domain/live/$username/$password/$channel_id.ts" -show_streams -select_streams a -loglevel quiet > /dev/null
             then
                 printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
             else
@@ -14545,12 +15284,12 @@ XtreamCodesListChnls()
                             $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                            if [ ! -e "/usr/local/bin/imgcat" ] 
+                            if [ ! -x "$IMGCAT_FILE" ] 
                             then
                                 ImgcatInstall
                             fi
 
-                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+                            "$IMGCAT_FILE" --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                             rm -f "$TMP_FILE"
                             rm -f "${TMP_FILE}.jpeg"
@@ -14571,7 +15310,7 @@ XtreamCodesListChnls()
                                 "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                             if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                             then
-                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '${headers:0:-4}' --cookie '$cookies'"
+                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '$(StripSuffix "$headers" 4)' --cookie '$cookies'"
                                 Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
                                 continue
                             fi
@@ -14589,7 +15328,7 @@ XtreamCodesListChnls()
                                 then
                                     chmod +r "$TMP_FILE"
                                 else
-                                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                    TMP_FILE=$(date '+%m-%d-%H:%M:%S')
                                 fi
 
                                 trap '
@@ -14600,7 +15339,7 @@ XtreamCodesListChnls()
                                 $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                     -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+                                "$IMGCAT_FILE" --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                                 rm -f "$TMP_FILE"
                                 rm -f "${TMP_FILE}.jpeg"
@@ -14807,88 +15546,518 @@ XtreamCodesAddMac()
         printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES_EXAM"
     done
 }
-FFmpegInstall()
+FFmpegResolveBin()
 {
-    if FFMPEG_FILE_ROOT=$(find "$FFMPEG_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1)
+    local cfg_bin=""
+    if [ -n "${IPTV_CONFIG:-}" ] && [ -s "$IPTV_CONFIG" ] && [ -n "${JQ_FILE:-}" ] && [ -x "$JQ_FILE" ]
     then
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-    elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
-    then
-        FFMPEG_ROOT="$IPTV_ROOT"
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+        cfg_bin=$("$JQ_FILE" -r 'if type == "object" and (.ffmpeg_bin | type) == "string" then .ffmpeg_bin else "" end' "$IPTV_CONFIG" 2> /dev/null || true)
     fi
 
-    if [[ -x "$FFMPEG_FILE" ]] && [[ -x "$FFPROBE_FILE" ]]
+    if [ -n "$cfg_bin" ] && [ -x "$cfg_bin" ]
+    then
+        FFMPEG_FILE="$cfg_bin"
+        local cfg_probe="${cfg_bin%/*}/ffprobe"
+        if [ -x "$cfg_probe" ]
+        then
+            FFPROBE_FILE="$cfg_probe"
+        fi
+        return 0
+    fi
+
+    if [ -n "${FFMPEG_FILE:-}" ] && [ -x "$FFMPEG_FILE" ]
+    then
+        if [ -z "${FFPROBE_FILE:-}" ] || [ ! -x "$FFPROBE_FILE" ]
+        then
+            local sibling_probe="${FFMPEG_FILE%/*}/ffprobe"
+            if [ -x "$sibling_probe" ]
+            then
+                FFPROBE_FILE="$sibling_probe"
+            fi
+        fi
+        return 0
+    fi
+
+    local cand
+    for cand in \
+        "${AIOS_PREFIX:-/usr/local}/bin/ffmpeg" \
+        "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg" \
+        "/opt/homebrew/bin/ffmpeg" \
+        "/usr/local/opt/ffmpeg-full/bin/ffmpeg" \
+        "/usr/local/bin/ffmpeg" \
+        "/usr/bin/ffmpeg"
+    do
+        if [ -x "$cand" ]
+        then
+            FFMPEG_FILE="$cand"
+
+            if [ -x "${cand%/*}/ffprobe" ]
+            then
+                FFPROBE_FILE="${cand%/*}/ffprobe"
+            fi
+            return 0
+        fi
+    done
+
+    local path_bin
+    if path_bin=$(command -v ffmpeg 2> /dev/null) && [ -n "$path_bin" ] && [ -x "$path_bin" ]
+    then
+        FFMPEG_FILE="$path_bin"
+
+        if [ -x "${path_bin%/*}/ffprobe" ]
+        then
+            FFPROBE_FILE="${path_bin%/*}/ffprobe"
+        elif path_bin=$(command -v ffprobe 2> /dev/null) && [ -n "$path_bin" ]
+        then
+            FFPROBE_FILE="$path_bin"
+        fi
+        return 0
+    fi
+
+    return 1
+}
+
+FFmpegDetectCaps()
+{
+    local target_bin="${1:-${FFMPEG_FILE:-}}"
+    if [ -z "$target_bin" ] || [ ! -x "$target_bin" ]
+    then
+        FFmpegResolveBin || return 1
+        target_bin="$FFMPEG_FILE"
+    fi
+
+    if [ "${FFMPEG_CAPS_BIN:-}" == "$target_bin" ] && [ -n "${FFMPEG_MAJOR:-}" ]
     then
         return 0
     fi
 
-    Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
-
-    if [ "$dist" == "mac" ] 
+    local ver_line
+    ver_line=$("$target_bin" -version 2> /dev/null | head -n 1 || true)
+    if [[ $ver_line =~ version[[:space:]]+n?([0-9]+)\.([0-9]+) ]]
     then
-        echo
-        inquirer list_input_index "FFmpeg 开启 openvino, 开启时可能会安装失败" ny_options ny_index
-
-        if [ "$ny_index" -eq 0 ] 
-        then
-            if ! curl -s -L https://github.com/Homebrew/homebrew-core/raw/HEAD/Formula/f/ffmpeg.rb -- | grep -v openvino > "$HOME"/ffmpeg.rb
-            then
-                Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`\n"
-                exit 1
-            fi
-
-            brew install "$HOME"/ffmpeg.rb
-        else
-            brew install ffmpeg
-        fi
+        FFMPEG_MAJOR="${BASH_REMATCH[1]}"
+        FFMPEG_MINOR="${BASH_REMATCH[2]}"
+        FFMPEG_IS_GIT=false
     else
-        rm -rf "$FFMPEG_ROOT/"ffmpeg-git-*
+        FFMPEG_MAJOR=99
+        FFMPEG_MINOR=0
+        FFMPEG_IS_GIT=true
+    fi
 
-        ArchCheck
+    FFMPEG_HAS_FPS_MODE=false
 
-        local ffmpeg_package FFMPEG_PACKAGE_FILE
+    if [ "$FFMPEG_MAJOR" -gt 5 ] || { [ "$FFMPEG_MAJOR" -eq 5 ] && [ "$FFMPEG_MINOR" -ge 1 ]; }
+    then
+        FFMPEG_HAS_FPS_MODE=true
+    fi
 
-        if [ "$arch" == "x86_64" ]
+    FFMPEG_HAS_ENHANCED_FLV_HEVC=false
+
+    if [ "$FFMPEG_MAJOR" -gt 6 ] || { [ "$FFMPEG_MAJOR" -eq 6 ] && [ "$FFMPEG_MINOR" -ge 1 ]; }
+    then
+        FFMPEG_HAS_ENHANCED_FLV_HEVC=true
+    fi
+
+    FFMPEG_HAS_FILTER_SLASH_SYNTAX=false
+
+    if [ "$FFMPEG_MAJOR" -ge 9 ]
+    then
+        FFMPEG_HAS_FILTER_SLASH_SYNTAX=true
+    fi
+
+    FFMPEG_HAS_DRAWTEXT=false
+
+    if "$target_bin" -hide_banner -filters 2> /dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'
+    then
+        FFMPEG_HAS_DRAWTEXT=true
+    fi
+
+    FFMPEG_CAPS_BIN="$target_bin"
+    return 0
+}
+
+FFmpegSyncFlag()
+{
+    local mode="${1:-0}"
+    FFmpegDetectCaps 2> /dev/null || true
+
+    if [ "${FFMPEG_HAS_FPS_MODE:-true}" = true ]
+    then
+        case "$mode" in
+            0|passthrough) printf '%s\n' "-fps_mode passthrough" ;;
+            1|cfr) printf '%s\n' "-fps_mode cfr" ;;
+            2|vfr) printf '%s\n' "-fps_mode vfr" ;;
+            drop) printf '%s\n' "-fps_mode drop" ;;
+            *) printf '%s\n' "-fps_mode $mode" ;;
+        esac
+    else
+        printf '%s\n' "-vsync $mode"
+    fi
+}
+
+FFmpegNormalizeFlags()
+{
+    local flags_str="${1:-}"
+    local stream_url="${2:-}"
+    FFmpegDetectCaps 2> /dev/null || true
+
+    local tokens=()
+    local out_tokens=()
+    local tok i=0 n=0
+    local is_http=true
+
+    if [ -n "$stream_url" ] && [[ ! $stream_url =~ ^https?:// ]]
+    then
+        is_http=false
+    fi
+
+    # shellcheck disable=SC2206
+    tokens=( $flags_str )
+    n=${#tokens[@]}
+
+    while [ "$i" -lt "$n" ]
+    do
+        tok="${tokens[$i]}"
+        case "$tok" in
+            -vsync)
+                local val="${tokens[$((i + 1))]:-0}"
+                if [ "${FFMPEG_HAS_FPS_MODE:-true}" = true ]
+                then
+                    out_tokens+=( "-fps_mode" )
+                    case "$val" in
+                        0) out_tokens+=( "passthrough" ) ;;
+                        1) out_tokens+=( "cfr" ) ;;
+                        2) out_tokens+=( "vfr" ) ;;
+                        *) out_tokens+=( "$val" ) ;;
+                    esac
+                else
+                    out_tokens+=( "-vsync" "$val" )
+                fi
+                i=$((i + 2))
+                continue
+            ;;
+            -qphist)
+                if [ "${FFMPEG_MAJOR:-8}" -ge 8 ]
+                then
+                    i=$((i + 1))
+                    continue
+                fi
+                out_tokens+=( "$tok" )
+            ;;
+            -filter_complex_script)
+                if [ "${FFMPEG_HAS_FILTER_SLASH_SYNTAX:-false}" = true ]
+                then
+                    out_tokens+=( "-/filter_complex" )
+                else
+                    out_tokens+=( "$tok" )
+                fi
+            ;;
+            -reconnect|-reconnect_at_eof|-reconnect_streamed|-reconnect_delay_max|-reconnect_on_network_error|-reconnect_on_http_error|-seekable)
+                if [ "$is_http" = false ]
+                then
+                    i=$((i + 2))
+                    continue
+                fi
+                out_tokens+=( "$tok" )
+                if [ $((i + 1)) -lt "$n" ]
+                then
+                    out_tokens+=( "${tokens[$((i + 1))]}" )
+                    i=$((i + 2))
+                    continue
+                fi
+            ;;
+            *)
+                out_tokens+=( "$tok" )
+            ;;
+        esac
+        i=$((i + 1))
+    done
+
+    printf '%s\n' "${out_tokens[*]}"
+}
+
+FFmpegSaveConfig()
+{
+    FFMPEG_CAPS_BIN=""
+    FFmpegDetectCaps "$FFMPEG_FILE" 2> /dev/null || true
+
+    if [ -n "${IPTV_CONFIG:-}" ] && [ -s "$IPTV_CONFIG" ]
+    then
+        jq_path='["ffmpeg_bin"]'
+        JQ update "$IPTV_CONFIG" "$FFMPEG_FILE"
+    fi
+}
+
+FFmpegInstall()
+{
+    local mode="${1:-}"
+
+    if [ "$mode" != "select" ] && [ "$mode" != "switch" ] && [ "$mode" != "force" ]
+    then
+        if FFmpegResolveBin && [ -x "${FFMPEG_FILE:-}" ] && [ -x "${FFPROBE_FILE:-}" ]
         then
-            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
-        elif [ "$arch" == "i386" ] 
-        then
-            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
-        elif [ "$arch" == "armv6l" ] 
-        then
-            ffmpeg_package="ffmpeg-git-armel-static.tar.xz"
-        elif grep -q "arm" <<< "$arch" 
-        then
-            ffmpeg_package="ffmpeg-git-$arch-static.tar.xz"
-        else
-            Println "$error FFmpeg 不支持当前系统\n"
-            exit 1
+            return 0
         fi
 
-        FFMPEG_PACKAGE_FILE="$FFMPEG_ROOT/$ffmpeg_package"
-
-        if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
+        if FFMPEG_FILE_ROOT=$(find "$FFMPEG_ROOT"/ffmpeg-* -maxdepth 0 -type d 2> /dev/null | head -1) && [ -n "$FFMPEG_FILE_ROOT" ]
         then
-            Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
-            exit 1
+            if [ -x "$FFMPEG_FILE_ROOT/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/bin/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/bin/ffprobe"
+            else
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+            fi
+        elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-* -maxdepth 0 -type d 2> /dev/null | head -1) && [ -n "$FFMPEG_FILE_ROOT" ]
+        then
+            FFMPEG_ROOT="$IPTV_ROOT"
+
+            if [ -x "$FFMPEG_FILE_ROOT/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/bin/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/bin/ffprobe"
+            else
+                FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+                FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+            fi
         fi
 
-        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$FFMPEG_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
-
-        FFMPEG_FILE_ROOT=$(dirname "$FFMPEG_ROOT"/ffmpeg-git-*/ffmpeg 2> /dev/null) || true
-        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
-        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-
-        if [ ! -e "$FFMPEG_FILE" ] || [ ! -e "$FFPROBE_FILE" ]
+        if [ -x "${FFMPEG_FILE:-}" ] && [ -x "${FFPROBE_FILE:-}" ]
         then
-            Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
-            exit 1
+            return 0
         fi
     fi
 
+    if [ "$dist" == "mac" ]
+    then
+        local menu_options=()
+        local menu_actions=()
+        local bin ver formula drawtext_tag
+
+        for bin in /opt/homebrew/Cellar/ffmpeg*/*/bin/ffmpeg /usr/local/Cellar/ffmpeg*/*/bin/ffmpeg
+        do
+            if [ -x "$bin" ]
+            then
+                ver=$("$bin" -version 2> /dev/null | head -n 1 | awk '{print $3}')
+                formula="${bin#*/Cellar/}"
+                formula="${formula%%/*}"
+
+                if "$bin" -hide_banner -filters 2> /dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'
+                then
+                    drawtext_tag="含 drawtext"
+                else
+                    drawtext_tag="无 drawtext"
+                fi
+                menu_options+=("切换至已安装: ${formula} (${ver:-unknown}, ${drawtext_tag}) [${bin}]")
+                menu_actions+=("use:${bin}")
+            fi
+        done
+
+        menu_options+=(
+            "安装 ffmpeg-full (含 drawtext 水印滤镜，推荐)"
+            "安装 ffmpeg (9.x 最新主线)"
+            "安装 ffmpeg@8"
+            "安装 ffmpeg@7"
+            "安装 ffmpeg@6"
+        )
+        menu_actions+=(
+            "install:ffmpeg-full"
+            "install:ffmpeg"
+            "install:ffmpeg@8"
+            "install:ffmpeg@7"
+            "install:ffmpeg@6"
+        )
+
+        echo
+        inquirer list_input_index "选择或切换 macOS FFmpeg 版本" menu_options ffmpeg_mac_index
+
+        local selected_action="${menu_actions[$ffmpeg_mac_index]}"
+        if [[ $selected_action == use:* ]]
+        then
+            FFMPEG_FILE="${selected_action#use:}"
+            FFPROBE_FILE="${FFMPEG_FILE%/*}/ffprobe"
+        else
+            local brew_formula="${selected_action#install:}"
+            Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+            if ! brew install "$brew_formula"
+            then
+                Println "`eval_gettext \"\\\$error FFmpeg 安装失败 !\"`\n"
+                exit 1
+            fi
+
+            local brew_prefix
+            brew_prefix=$(brew --prefix "$brew_formula" 2> /dev/null || true)
+            if [ -n "$brew_prefix" ] && [ -x "$brew_prefix/bin/ffmpeg" ]
+            then
+                FFMPEG_FILE="$brew_prefix/bin/ffmpeg"
+                FFPROBE_FILE="$brew_prefix/bin/ffprobe"
+            else
+                for bin in "/opt/homebrew/Cellar/$brew_formula"/*/bin/ffmpeg "/usr/local/Cellar/$brew_formula"/*/bin/ffmpeg
+                do
+                    if [ -x "$bin" ]
+                    then
+                        FFMPEG_FILE="$bin"
+                        FFPROBE_FILE="${bin%/*}/ffprobe"
+                    fi
+                done
+            fi
+        fi
+
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            FFmpegResolveBin || true
+        fi
+
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 安装或切换失败 !\"`\n"
+            exit 1
+        fi
+
+        FFmpegSaveConfig
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
+        return 0
+    fi
+
+    local linux_ver_options=(
+        "6.1 LTS"
+        "7.1 LTS"
+        "8.x"
+        "9.x / latest"
+        "git-master"
+        "系统包管理器"
+    )
+    echo
+    inquirer list_input_index "选择 Linux FFmpeg 版本" linux_ver_options ffmpeg_linux_index
+
+    if [ "$ffmpeg_linux_index" -eq 5 ]
+    then
+        Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+        if [ "$dist" == "rpm" ]
+        then
+            yum -y install ffmpeg || dnf -y install ffmpeg
+        elif [ "$dist" == "alpine" ]
+        then
+            apk add --no-cache ffmpeg
+        else
+            AptUpdate force && AptInstall ffmpeg
+        fi
+
+        FFMPEG_FILE=$(command -v ffmpeg 2> /dev/null || true)
+        FFPROBE_FILE=$(command -v ffprobe 2> /dev/null || true)
+        if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 安装失败 !\"`"
+            exit 1
+        fi
+
+        FFmpegSaveConfig
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
+        return 0
+    fi
+
+    Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+    mkdir -p "$FFMPEG_ROOT"
+    rm -rf "$FFMPEG_ROOT"/ffmpeg-*
+
+    ArchCheck
+
+    local btbn_arch="" jvs_arch=""
+    if [ "$arch" == "x86_64" ] || [ "$arch" == "amd64" ]
+    then
+        btbn_arch="linux64"
+        jvs_arch="amd64"
+    elif [ "$arch" == "aarch64" ] || [ "$arch" == "arm64" ]
+    then
+        btbn_arch="linuxarm64"
+        jvs_arch="arm64"
+    elif [ "$arch" == "i386" ] || [ "$arch" == "i686" ]
+    then
+        jvs_arch="i686"
+    elif [ "$arch" == "armv6l" ]
+    then
+        jvs_arch="armel"
+    elif grep -q "arm" <<< "$arch"
+    then
+        jvs_arch="$arch"
+    else
+        Println "$error FFmpeg 不支持当前系统\n"
+        exit 1
+    fi
+
+    local download_urls=()
+    local btbn_base="$BTBN_FFMPEG_LINK"
+    if [ -n "$btbn_arch" ]
+    then
+        case "$ffmpeg_linux_index" in
+            0)
+                download_urls+=( "${btbn_base}/ffmpeg-n6.1-latest-${btbn_arch}-gpl-6.1.tar.xz" )
+            ;;
+            1)
+                download_urls+=( "${btbn_base}/ffmpeg-n7.1-latest-${btbn_arch}-gpl-7.1.tar.xz" )
+            ;;
+            2)
+                download_urls+=(
+                    "${btbn_base}/ffmpeg-n8.1-latest-${btbn_arch}-gpl-8.1.tar.xz"
+                    "${btbn_base}/ffmpeg-n8.0-latest-${btbn_arch}-gpl-8.0.tar.xz"
+                )
+            ;;
+            3)
+                download_urls+=(
+                    "${btbn_base}/ffmpeg-n9.0-latest-${btbn_arch}-gpl-9.0.tar.xz"
+                    "${btbn_base}/ffmpeg-master-latest-${btbn_arch}-gpl.tar.xz"
+                )
+            ;;
+            4)
+                download_urls+=( "${btbn_base}/ffmpeg-master-latest-${btbn_arch}-gpl.tar.xz" )
+            ;;
+        esac
+    fi
+
+    if [ "$ffmpeg_linux_index" -eq 4 ]
+    then
+        download_urls+=( "${JVS_FFMPEG_LINK}/builds/ffmpeg-git-${jvs_arch}-static.tar.xz" )
+    else
+        download_urls+=(
+            "${JVS_FFMPEG_LINK}/releases/ffmpeg-release-${jvs_arch}-static.tar.xz"
+            "${JVS_FFMPEG_LINK}/builds/ffmpeg-git-${jvs_arch}-static.tar.xz"
+        )
+    fi
+    download_urls+=( "$FFMPEG_MIRROR_LINK/builds/ffmpeg-git-${jvs_arch}-static.tar.xz" )
+
+    local FFMPEG_PACKAGE_FILE="$FFMPEG_ROOT/ffmpeg-static.tar.xz"
+    local dl_url="" dl_ok=false
+    for dl_url in "${download_urls[@]}"
+    do
+        if curl -fL "$dl_url" -o "$FFMPEG_PACKAGE_FILE"
+        then
+            dl_ok=true
+            break
+        fi
+    done
+
+    if [ "$dl_ok" = false ]
+    then
+        rm -f "$FFMPEG_PACKAGE_FILE"
+        Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
+        exit 1
+    fi
+
+    tar xJf "$FFMPEG_PACKAGE_FILE" -C "$FFMPEG_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
+
+    FFMPEG_FILE=$(find "$FFMPEG_ROOT"/ffmpeg-* -type f -name ffmpeg 2> /dev/null | head -1) || true
+    FFPROBE_FILE=$(find "$FFMPEG_ROOT"/ffmpeg-* -type f -name ffprobe 2> /dev/null | head -1) || true
+
+    if [ ! -x "${FFMPEG_FILE:-}" ] || [ ! -x "${FFPROBE_FILE:-}" ]
+    then
+        Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
+        exit 1
+    fi
+
+    FFmpegSaveConfig
     Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
 }
 
@@ -14958,7 +16127,7 @@ FFmpegCompile()
     if [[ -x $(command -v cmake) ]] 
     then
         cmake_ver=$(cmake --version | awk '{print $3}' | head -1)
-        if [[ $cmake_ver =~ ([^.]+).([^.]+).([^.]+) ]] && [[ ${BASH_REMATCH[1]} -lt 14 ]]
+        if [[ $cmake_ver =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]] && { [ "${BASH_REMATCH[1]}" -lt 3 ] || { [ "${BASH_REMATCH[1]}" -eq 3 ] && [ "${BASH_REMATCH[2]}" -lt 14 ]; }; }
         then
             apt-get -y remove cmake
             hash -r
@@ -15647,8 +16816,6 @@ EOF
     tar xjf ffmpeg-snapshot.tar.bz2
 
     cd ffmpeg
-    curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
-    patch -p1 < Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
     ./configure \
     --prefix="$HOME/ffmpeg_build" \
     --pkg-config-flags="--static" \
@@ -15986,7 +17153,7 @@ then
         then
             yum install cmake gcc gnu-getopt java-1.8.0-openjdk libpng-devel fontforge-devel cairo-devel poppler-devel libspiro-devel freetype-devel libtiff-devel openjpeg libxml2-devel giflibgiflib-devel libjpeg-turbo-devel libuninameslist-devel pango-devel make gcc-c++ >/dev/null 2>&1
         else
-            apt-get -y install libpoppler-private-dev libpoppler-dev libfontforge-dev pkg-config libopenjp2-7-dev libjpeg-dev libtiff5-dev libpng-dev libfreetype6-dev libgif-dev libgtk-3-dev libxml2-dev libpango1.0-dev libcairo2-dev libspiro-dev libuninameslist-dev python3-dev ninja-build cmake build-essential >/dev/null 2>&1
+            AptInstall libpoppler-private-dev libpoppler-dev libfontforge-dev pkg-config libopenjp2-7-dev libjpeg-dev libtiff5-dev libpng-dev libfreetype6-dev libgif-dev libgtk-3-dev libxml2-dev libpango1.0-dev libcairo2-dev libspiro-dev libuninameslist-dev python3-dev ninja-build cmake build-essential
         fi
 
         echo -n "...40%..."
@@ -16017,46 +17184,46 @@ then
 
         echo -n "...50%..."
 
-        poppler_name="poppler-0.81.0"
+        poppler_name="poppler-${POPPLER_VER}"
 
         cd ~
         if [ ! -e "./$poppler_name" ] 
         then
             wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/$poppler_name.tar.xz" -qO "$poppler_name.tar.xz"
-            tar xJf "$poppler_name.tar.xz" >/dev/null
+            tar xJf "$poppler_name.tar.xz" > /dev/null
         fi
 
         cd "$poppler_name/"
         mkdir -p build
         cd build
-        cmake -DENABLE_UNSTABLE_API_ABI_HEADERS=ON .. >/dev/null 2>&1
-        make >/dev/null 2>&1
-        make install >/dev/null 2>&1
+        cmake -DENABLE_UNSTABLE_API_ABI_HEADERS=ON .. > /dev/null 2>&1
+        make > /dev/null 2>&1
+        make install > /dev/null 2>&1
 
         echo -n "...70%..."
 
         cd ~
-        if [ ! -e "./fontforge-20190413" ] 
+        if [ ! -e "./fontforge-${FONTFORGE_VER}" ] 
         then
-            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/fontforge-20190413.tar.gz" -qO "fontforge-20190413.tar.gz"
-            tar xzf "fontforge-20190413.tar.gz"
+            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/fontforge-${FONTFORGE_VER}.tar.gz" -qO "fontforge-${FONTFORGE_VER}.tar.gz"
+            tar xzf "fontforge-${FONTFORGE_VER}.tar.gz"
         fi
 
-        cd "fontforge-20190413/"
-        ./bootstrap >/dev/null 2>&1
-        ./configure >/dev/null 2>&1
-        make >/dev/null 2>&1
-        make install >/dev/null 2>&1
+        cd "fontforge-${FONTFORGE_VER}/"
+        ./bootstrap > /dev/null 2>&1
+        ./configure > /dev/null 2>&1
+        make > /dev/null 2>&1
+        make install > /dev/null 2>&1
         echo -n "...90%..."
 
         cd ~
-        if [ ! -e "./pdf2htmlEX-0.18.7-poppler-0.81.0" ] 
+        if [ ! -e "./pdf2htmlEX-${PDF2HTMLEX_VER}" ] 
         then
-            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" -qO "pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
-            unzip "pdf2htmlEX-0.18.7-poppler-0.81.0.zip" >/dev/null 2>&1
+            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/pdf2htmlEX-${PDF2HTMLEX_VER}.zip" -qO "pdf2htmlEX-${PDF2HTMLEX_VER}.zip"
+            unzip "pdf2htmlEX-${PDF2HTMLEX_VER}.zip" > /dev/null 2>&1
         fi
 
-        cd "pdf2htmlEX-0.18.7-poppler-0.81.0/"
+        cd "pdf2htmlEX-${PDF2HTMLEX_VER}/"
         ./dobuild >/dev/null 2>&1
         cd build
         make install >/dev/null 2>&1
@@ -16081,9 +17248,9 @@ then
     {
         global_options=()
         global_flags=( 
-            cpuflags y n filter_threads stats stats_period progress debug_ts qphist benchmark 
+            cpuflags y n filter_threads stats stats_period progress debug_ts benchmark 
             benchmark_all timelimit dump hex filter_complex filter_complex_threads lavfi
-            filter_complex_script sdp_file abort_on max_error_rate xerror auto_conversion_filters
+            filter_complex_script /filter_complex fps_mode sdp_file abort_on max_error_rate xerror auto_conversion_filters
             nostats nostdin hide_banner loglevel
         )
 
@@ -16152,7 +17319,7 @@ then
     }
     SyncFile()
     {
-        if [ "$action" == "add" ] 
+        if [ "$action" == "add" ]
         then
             chnl_pid=$pid
             i18nGetMsg get_channel
@@ -16165,7 +17332,7 @@ then
         chnl_sync_index=${chnl_sync_index:-$d_sync_index}
         chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
 
-        if [ "$chnl_sync" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+        if [ "${chnl_sync:-false}" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
         then
             IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
             IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
@@ -16177,14 +17344,15 @@ then
 
             for((sync_i=0;sync_i<sync_count;sync_i++));
             do
-                if [ ! -s "${chnl_sync_files[sync_i]}" ] 
+                if [ ! -s "${chnl_sync_files[sync_i]}" ]
                 then
                     $JQ_FILE -n --arg name "$(RandStr)" \
                     '{
                         "ret": 0,
                         "data": [
                             {
-                                "name": $name
+                                "name": $name,
+                                "channels": []
                             }
                         ]
                     }' > "${chnl_sync_files[sync_i]}"
@@ -16199,14 +17367,14 @@ then
                     do
                         [ "$jq_path" != "[" ] && jq_path="$jq_path,"
                         case $a in
-                            '') 
+                            '')
                                 Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                             ;;
                             *[!0-9]*)
                                 jq_index="$jq_index.$a"
                                 jq_path="$jq_path\"$a\""
                             ;;
-                            *) 
+                            *)
                                 jq_index="${jq_index}[$a]"
                                 jq_path="${jq_path}$a"
                             ;;
@@ -16218,33 +17386,34 @@ then
 
                 if [ "$action" == "stop" ]
                 then
-                    if [[ -n $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]] 
+                    if [[ -n $($JQ_FILE --arg k "$chnl_pid_key" --arg p "$chnl_pid" "(${jq_index} // [])[] | select(.[\$k] == (\$p | tonumber))" "${chnl_sync_files[sync_i]}" 2> /dev/null) ]]
                     then
                         JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
                     fi
                 else
-                    jq_channel_new=""
+                    jq_channel_new=$($JQ_FILE -n -c '{}')
 
                     while IFS=',' read -ra index_arr
                     do
                         for b in "${index_arr[@]}"
                         do
                             case $b in
-                                '') 
+                                '')
                                     Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                                 ;;
-                                *) 
-                                    if [[ $b == *"="* ]] 
+                                *)
+                                    if [[ $b == *"="* ]]
                                     then
                                         key=${b%=*}
                                         value=${b#*=}
-                                        if [[ $value =~ ^http ]]  
+
+                                        if [[ $value =~ ^http ]]
                                         then
-                                            if [ -n "${kind:-}" ] 
+                                            if [ -n "${kind:-}" ]
                                             then
-                                                if [ "$kind" == "flv" ] 
+                                                if [ "$kind" == "flv" ]
                                                 then
-                                                    value="$chnl_flv_pull_link"
+                                                    value="${chnl_flv_pull_link:-}"
                                                 else
                                                     value=""
                                                 fi
@@ -16259,41 +17428,37 @@ then
                                         key=${b%:*}
                                         value=${b#*:}
                                         value="chnl_$value"
-                                        if [ "$value" == "chnl_pid" ] 
+
+                                        if [ "$value" == "chnl_pid" ]
                                         then
-                                            if [ -n "${new_pid:-}" ] 
+                                            if [ -n "${new_pid:-}" ]
                                             then
                                                 value=$new_pid
                                             else
-                                                value=${!value}
+                                                value=${!value:-}
                                             fi
-                                        else 
-                                            value=${!value}
+                                        else
+                                            value=${!value:-}
                                         fi
                                     fi
 
-                                    if [ -n "$jq_channel_new" ] 
+                                    if [[ -n "$value" ]] && [[ "$value" =~ ^[0-9]+$ ]]
                                     then
-                                        jq_channel_new="$jq_channel_new,"
-                                    fi
-
-                                    if [[ $value == *[!0-9]* ]] 
-                                    then
-                                        jq_channel_new="$jq_channel_new\"$key\":\"$value\""
+                                        jq_channel_new=$($JQ_FILE -c --arg k "$key" --arg v "$value" '.[$k] = ($v | tonumber)' <<< "$jq_channel_new")
                                     else
-                                        jq_channel_new="$jq_channel_new\"$key\":$value"
+                                        jq_channel_new=$($JQ_FILE -c --arg k "$key" --arg v "$value" '.[$k] = $v' <<< "$jq_channel_new")
                                     fi
                                 ;;
                             esac
                         done
                     done <<< "$chnl_sync_pairs"
 
-                    if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
+                    if [ "$action" == "add" ] || [[ -z $($JQ_FILE --arg k "$chnl_pid_key" --arg p "$chnl_pid" "(${jq_index} // [])[] | select(.[\$k] == (\$p | tonumber))" "${chnl_sync_files[sync_i]}" 2> /dev/null) ]]
                     then
-                        JQ add "${chnl_sync_files[sync_i]}" "[{$jq_channel_new}]"
+                        JQ add "${chnl_sync_files[sync_i]}" "[$jq_channel_new]"
                     else
                         jq_merge=true
-                        JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "{$jq_channel_new}"
+                        JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "$jq_channel_new"
                     fi
                 fi
 
@@ -16308,8 +17473,9 @@ then
     {
         trap '' HUP INT
         unset delete_on_term
-        force_exit=1
-        pid="$BASHPID"
+        pid=$(GetSubshellPid)
+        FFmpegResolveBin 2> /dev/null || true
+        FFmpegDetectCaps 2> /dev/null || true
 
         if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
         then
@@ -16328,10 +17494,19 @@ then
         fi
 
         case $from in
-            "AddChannel") 
+            "AddChannel")
+                if [ "${video_codec:-}" != "copy" ] && [ -n "${draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+                then
+                    Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                    return 1
+                fi
+
                 pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
                 {
-                    flock -x 201
+                    if command -v flock > /dev/null 2>&1
+                    then
+                        flock -x 201
+                    fi
 
         stream_links_json="[]"
 
@@ -16443,9 +17618,27 @@ then
             printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
         fi
 
-        if [ "$flv_h265" = true ] 
+        flv_ffmpeg_bin="$FFMPEG_FILE"
+
+        if [ "$flv_h265" = true ]
         then
-            FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
+            if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = true ]
+            then
+                flv_ffmpeg_bin="$FFMPEG_FILE"
+            elif [ -x "$AIOS_PREFIX/bin/ffmpeg_c" ]
+            then
+                flv_ffmpeg_bin="$AIOS_PREFIX/bin/ffmpeg_c"
+            fi
+        fi
+
+        if [ -n "${input_flags_command:-}" ]
+        then
+            input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+        fi
+
+        if [ -n "${output_flags_command:-}" ]
+        then
+            output_flags_command=$(FFmpegNormalizeFlags "$output_flags_command" "${stream_link:-}")
         fi
 
         if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
@@ -16541,7 +17734,7 @@ then
                                 variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                             elif [ "$video_codec" == "libx265" ] 
                             then
-                                variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                                variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                             elif [ "$video_codec" == "libvpx-vp9" ] 
                             then
                                 variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -16609,7 +17802,7 @@ then
             fi
 
             PrepTerm
-            $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+            "$flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
         ${variants_input_command[@]+"${variants_input_command[@]}"} \
         ${variants_output_command[@]+"${variants_output_command[@]}"} \
         ${map_command[@]+"${map_command[@]}"} \
@@ -16626,6 +17819,11 @@ then
         then
             stream_urls_index=${stream_url_video_indices[0]}
             stream_link=${stream_urls[stream_urls_index]}
+
+            if [ -n "${input_flags_command:-}" ]
+            then
+                input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+            fi
         fi
 
         if [[ $stream_link =~ ^https?:// ]] 
@@ -16639,7 +17837,7 @@ then
             [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
         fi
 
-        input_command+=( $input_flags_command -i $stream_link )
+        input_command+=( $input_flags_command -i "$stream_link" )
 
         video_shift_index=0
         audio_shift_index=0
@@ -16658,7 +17856,7 @@ then
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 fi
-                input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+                input_command+=( $input_flags_command -itsoffset $video_shift -i "$stream_link" )
             elif [ -n "${audio_shift:-}" ] 
             then
                 if [ "$audio_codec" == "copy" ] 
@@ -16674,9 +17872,10 @@ then
                     then
                         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                     fi
-                    input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+                    input_command+=( $input_flags_command -itsoffset $audio_shift -i "$stream_link" )
                 else
-                    input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]"
                 fi
             fi
         fi
@@ -16722,7 +17921,7 @@ then
         do
             if [ -n "${qualities[i]:-}" ] 
             then
-                variants_output_command+=( -crf:v:$i $variant_quality )
+                variants_output_command+=( -crf:v:$i "${qualities[i]}" )
 
                 # VBV
                 if [ "$const" = true ] && [ -n "${bitrates[i]:-}" ]
@@ -16734,7 +17933,7 @@ then
                         variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
                     elif [ "$video_codec" == "libx265" ] 
                     then
-                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant_bitrate}k --vbv-bufsize:v:$i ${variant_bitrate}k )
+                        variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                     elif [ "$video_codec" == "libvpx-vp9" ] 
                     then
                         variants_output_command+=( -b:v:$i ${variant_bitrate}k )
@@ -16755,7 +17954,7 @@ then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$video_codec" == "libx265" ] 
                         then
-                            variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                            variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                         elif [ "$video_codec" == "libvpx-vp9" ] 
                         then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -16813,6 +18012,7 @@ then
         then
             if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
             then
+                [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
                 filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
             fi
 
@@ -16842,7 +18042,7 @@ then
         fi
 
         PrepTerm
-        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+        "$flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
     ${input_command[@]+"${input_command[@]}"} \
     ${variants_output_command[@]+"${variants_output_command[@]}"} \
     ${map_command[@]+"${map_command[@]}"} \
@@ -16851,11 +18051,20 @@ then
         WaitTerm
                 } 201>"$pid_file"
             ;;
-            "StartChannel") 
+            "StartChannel")
+                if [ "${chnl_video_codec:-}" != "copy" ] && [ -n "${chnl_draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+                then
+                    Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                    return 1
+                fi
+
                 new_pid=$pid
                 pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
                 {
-                    flock -x 201
+                    if command -v flock > /dev/null 2>&1
+                    then
+                        flock -x 201
+                    fi
 
         jq_file=true
         jq_path='["channels"]'
@@ -16914,9 +18123,27 @@ then
             printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
         fi
 
-        if [ "$chnl_flv_h265" = true ] 
+        chnl_flv_ffmpeg_bin="$FFMPEG_FILE"
+
+        if [ "$chnl_flv_h265" = true ]
         then
-            FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
+            if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = true ]
+            then
+                chnl_flv_ffmpeg_bin="$FFMPEG_FILE"
+            elif [ -x "$AIOS_PREFIX/bin/ffmpeg_c" ]
+            then
+                chnl_flv_ffmpeg_bin="$AIOS_PREFIX/bin/ffmpeg_c"
+            fi
+        fi
+
+        if [ -n "${chnl_input_flags_command:-}" ]
+        then
+            chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+        fi
+
+        if [ -n "${chnl_output_flags_command:-}" ]
+        then
+            chnl_output_flags_command=$(FFmpegNormalizeFlags "$chnl_output_flags_command" "${chnl_stream_link:-}")
         fi
 
         if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ -n "${chnl_stream_url_audio_indices:-}" ]
@@ -17011,7 +18238,7 @@ then
                                 chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                             elif [ "$chnl_video_codec" == "libx265" ] 
                             then
-                                chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                                chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                             elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                             then
                                 chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -17079,7 +18306,7 @@ then
             fi
 
             PrepTerm
-            $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+            "$chnl_flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
         ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
         ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
         ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -17096,6 +18323,11 @@ then
         then
             chnl_stream_urls_index=${chnl_stream_url_video_indices[0]}
             chnl_stream_link=${chnl_stream_urls[chnl_stream_urls_index]}
+
+            if [ -n "${chnl_input_flags_command:-}" ]
+            then
+                chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+            fi
         fi
 
         if [[ $chnl_stream_link =~ ^https?:// ]] 
@@ -17109,7 +18341,7 @@ then
             [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
         fi
 
-        chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+        chnl_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
 
         chnl_video_shift_index=0
         chnl_audio_shift_index=0
@@ -17128,7 +18360,7 @@ then
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 fi
-                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
             elif [ -n "${chnl_audio_shift:-}" ] 
             then
                 if [ "$chnl_audio_codec" == "copy" ] 
@@ -17144,9 +18376,10 @@ then
                     then
                         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                     fi
-                    chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+                    chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
                 else
-                    chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]"
                 fi
             fi
         fi
@@ -17192,7 +18425,7 @@ then
         do
             if [ -n "${chnl_qualities[i]:-}" ] 
             then
-                chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+                chnl_variants_output_command+=( -crf:v:$i "${chnl_qualities[i]}" )
 
                 # VBV
                 if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[i]:-}" ]
@@ -17204,7 +18437,7 @@ then
                         chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
                     elif [ "$chnl_video_codec" == "libx265" ] 
                     then
-                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant_bitrate}k --vbv-bufsize:v:$i ${chnl_variant_bitrate}k )
+                        chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                     elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
@@ -17225,7 +18458,7 @@ then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$chnl_video_codec" == "libx265" ] 
                         then
-                            chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                            chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                         elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                         then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -17283,6 +18516,7 @@ then
         then
             if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
             then
+                [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
                 chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
             fi
 
@@ -17312,7 +18546,7 @@ then
         fi
 
         PrepTerm
-        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
+        "$chnl_flv_ffmpeg_bin" ${global_options[@]+"${global_options[@]}"} \
     ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
     ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
     ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -17326,8 +18560,9 @@ then
     HlsStreamCreatorPlus()
     {
         trap '' HUP INT
-        force_exit=1
-        pid="$BASHPID"
+        pid=$(GetSubshellPid)
+        FFmpegResolveBin 2> /dev/null || true
+        FFmpegDetectCaps 2> /dev/null || true
 
         if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
         then
@@ -17346,8 +18581,14 @@ then
         fi
 
         case $from in
-            "AddChannel") 
-                if [ "$hls_end_list" = true ] 
+            "AddChannel")
+                if [ "${video_codec:-}" != "copy" ] && [ -n "${draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+                then
+                    Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                    return 1
+                fi
+
+                if [ "$hls_end_list" = true ]
                 then
                     unset delete_on_term
                 else
@@ -17357,7 +18598,10 @@ then
                 pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
 
                 {
-                    flock -x 201
+                    if command -v flock > /dev/null 2>&1
+                    then
+                        flock -x 201
+                    fi
 
         stream_links_json="[]"
 
@@ -17446,6 +18690,9 @@ then
         trap '
             if [ "$live" = false ]
             then
+                jq_path=[\"channels\"]
+                jq_path2=[\"status\"]
+                JQ update "$CHANNELS_FILE" pid "$pid" off
                 MonitorLog "$channel_name HLS 切片完成"
                 exit 1
             fi
@@ -17494,23 +18741,40 @@ then
             hls_command+=( -hls_delete_threshold $seg_count )
         fi
 
-        if [ "$live" = true ] 
+        local hls_flags_val=""
+        if [ "$encrypt" = true ]
         then
-            # segment_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
+            hls_flags_val="periodic_rekey"
+        fi
 
-            if [ "$seg_count" -gt 0 ] 
+        if [ "$live" = true ] && [ "$seg_count" -gt 0 ]
+        then
+            if [ -n "$hls_flags_val" ]
             then
-                hls_command+=( -hls_flags periodic_rekey+delete_segments )
+                hls_flags_val="${hls_flags_val}+delete_segments"
             else
-                hls_command+=( -hls_flags periodic_rekey )
+                hls_flags_val="delete_segments"
             fi
-        else
-            hls_command+=( -hls_flags periodic_rekey )
+        fi
+
+        if [ -n "$hls_flags_val" ]
+        then
+            hls_command+=( -hls_flags "$hls_flags_val" )
         fi
 
         if [ -n "${stream_url_cdn:-}" ] 
         then
             stream_link="$stream_url_cdn"
+        fi
+
+        if [ -n "${input_flags_command:-}" ]
+        then
+            input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+        fi
+
+        if [ -n "${output_flags_command:-}" ]
+        then
+            output_flags_command=$(FFmpegNormalizeFlags "$output_flags_command" "${stream_link:-}")
         fi
 
         if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
@@ -17643,7 +18907,7 @@ then
                                 variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                             elif [ "$video_codec" == "libx265" ] 
                             then
-                                variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                                variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                             elif [ "$video_codec" == "libvpx-vp9" ] 
                             then
                                 variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -17789,6 +19053,11 @@ then
         then
             stream_urls_index=${stream_url_video_indices[0]}
             stream_link=${stream_urls[stream_urls_index]}
+
+            if [ -n "${input_flags_command:-}" ]
+            then
+                input_flags_command=$(FFmpegNormalizeFlags "$input_flags_command" "${stream_link:-}")
+            fi
         fi
 
         if [[ $stream_link =~ ^https?:// ]] 
@@ -17802,7 +19071,7 @@ then
             [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
         fi
 
-        input_command+=( $input_flags_command -i $stream_link )
+        input_command+=( $input_flags_command -i "$stream_link" )
 
         video_shift_index=0
         audio_shift_index=0
@@ -17821,7 +19090,7 @@ then
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 fi
-                input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+                input_command+=( $input_flags_command -itsoffset $video_shift -i "$stream_link" )
             elif [ -n "${audio_shift:-}" ] 
             then
                 if [ "$audio_codec" == "copy" ] 
@@ -17837,9 +19106,10 @@ then
                     then
                         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                     fi
-                    input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+                    input_command+=( $input_flags_command -itsoffset $audio_shift -i "$stream_link" )
                 else
-                    input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]"
                 fi
             fi
         fi
@@ -17885,7 +19155,7 @@ then
         do
             if [ -n "${qualities[i]:-}" ] 
             then
-                variants_output_command+=( -crf:v:$i $variant_quality )
+                variants_output_command+=( -crf:v:$i "${qualities[i]}" )
 
                 # VBV
                 if [ "$const" = true ] && [ -n "${bitrates[i]:-}" ]
@@ -17897,7 +19167,7 @@ then
                         variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
                     elif [ "$video_codec" == "libx265" ] 
                     then
-                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant_bitrate}k --vbv-bufsize:v:$i ${variant_bitrate}k )
+                        variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                     elif [ "$video_codec" == "libvpx-vp9" ] 
                     then
                         variants_output_command+=( -b:v:$i ${variant_bitrate}k )
@@ -17952,7 +19222,7 @@ then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$video_codec" == "libx265" ] 
                         then
-                            variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                            variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
                         elif [ "$video_codec" == "libvpx-vp9" ] 
                         then
                             variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
@@ -18041,7 +19311,7 @@ then
                     fi
                 elif [ -n "${bitrates[i]:-}" ] 
                 then
-                    var_stream_map="$var_stream_map v:$i,name:${bitrates[i]}"
+                    var_stream_map="$var_stream_map v:$i,a:$i,name:${bitrates[i]}"
 
                     if [ -n "${resolutions[i]:-}" ] 
                     then
@@ -18060,6 +19330,7 @@ then
 
             if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
             then
+                [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
                 filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
             fi
 
@@ -18146,8 +19417,14 @@ then
         # WaitTerm
                 } 201>"$pid_file"
             ;;
-            "StartChannel") 
-                if [ "$chnl_hls_end_list" = true ] 
+            "StartChannel")
+                if [ "${chnl_video_codec:-}" != "copy" ] && [ -n "${chnl_draw_text:-}" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+                then
+                    Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+                    return 1
+                fi
+
+                if [ "$chnl_hls_end_list" = true ]
                 then
                     unset delete_on_term
                 else
@@ -18158,7 +19435,10 @@ then
                 pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
 
                 {
-                    flock -x 201
+                    if command -v flock > /dev/null 2>&1
+                    then
+                        flock -x 201
+                    fi
 
         jq_file=true
         jq_path='["channels"]'
@@ -18197,6 +19477,9 @@ then
         trap '
             if [ "$chnl_live" = false ]
             then
+                jq_path=[\"channels\"]
+                jq_path2=[\"status\"]
+                JQ update "$CHANNELS_FILE" pid "$new_pid" off
                 MonitorLog "$chnl_channel_name HLS 切片完成"
                 exit 1
             fi
@@ -18245,23 +19528,40 @@ then
             chnl_hls_command+=( -hls_delete_threshold $chnl_seg_count )
         fi
 
-        if [ "$chnl_live" = true ] 
+        local chnl_hls_flags_val=""
+        if [ "$chnl_encrypt" = true ]
         then
-            # chnl_segment_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
+            chnl_hls_flags_val="periodic_rekey"
+        fi
 
-            if [ "$chnl_seg_count" -gt 0 ] 
+        if [ "$chnl_live" = true ] && [ "$chnl_seg_count" -gt 0 ]
+        then
+            if [ -n "$chnl_hls_flags_val" ]
             then
-                chnl_hls_command+=( -hls_flags periodic_rekey+delete_segments )
+                chnl_hls_flags_val="${chnl_hls_flags_val}+delete_segments"
             else
-                chnl_hls_command+=( -hls_flags periodic_rekey )
+                chnl_hls_flags_val="delete_segments"
             fi
-        else
-            chnl_hls_command+=( -hls_flags periodic_rekey )
+        fi
+
+        if [ -n "$chnl_hls_flags_val" ]
+        then
+            chnl_hls_command+=( -hls_flags "$chnl_hls_flags_val" )
         fi
 
         if [ -n "${chnl_stream_url_cdn:-}" ] 
         then
             chnl_stream_link="$chnl_stream_url_cdn"
+        fi
+
+        if [ -n "${chnl_input_flags_command:-}" ]
+        then
+            chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+        fi
+
+        if [ -n "${chnl_output_flags_command:-}" ]
+        then
+            chnl_output_flags_command=$(FFmpegNormalizeFlags "$chnl_output_flags_command" "${chnl_stream_link:-}")
         fi
 
         if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
@@ -18400,7 +19700,7 @@ then
                                 chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                             elif [ "$chnl_video_codec" == "libx265" ] 
                             then
-                                chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                                chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                             elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                             then
                                 chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -18442,13 +19742,13 @@ then
 
                         if [ "$chnl_use_primary_playlist" = false ] 
                         then
-                            if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                            if [[ ${chnl_stream_audio_url[chnl_stream_url_audio_index]} =~ ^https?:// ]] 
                             then
                                 [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                                 [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
                                 [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
-                            elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                            elif [[ ${chnl_stream_audio_url[chnl_stream_url_audio_index]} =~ ^icecast?:// ]] 
                             then
                                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                             fi
@@ -18488,13 +19788,13 @@ then
 
                     if [ "$chnl_use_primary_playlist" = false ] 
                     then
-                        if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                        if [[ ${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]} =~ ^https?:// ]] 
                         then
                             [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                             [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
                             [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
-                        elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                        elif [[ ${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                         fi
@@ -18546,6 +19846,11 @@ then
         then
             chnl_stream_urls_index=${chnl_stream_url_video_indices[0]}
             chnl_stream_link=${chnl_stream_urls[chnl_stream_urls_index]}
+
+            if [ -n "${chnl_input_flags_command:-}" ]
+            then
+                chnl_input_flags_command=$(FFmpegNormalizeFlags "$chnl_input_flags_command" "${chnl_stream_link:-}")
+            fi
         fi
 
         if [[ $chnl_stream_link =~ ^https?:// ]] 
@@ -18559,7 +19864,7 @@ then
             [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
         fi
 
-        chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+        chnl_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
 
         chnl_video_shift_index=0
         chnl_audio_shift_index=0
@@ -18578,7 +19883,7 @@ then
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 fi
-                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
             elif [ -n "${chnl_audio_shift:-}" ] 
             then
                 if [ "$chnl_audio_codec" == "copy" ] 
@@ -18594,9 +19899,10 @@ then
                     then
                         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                     fi
-                    chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+                    chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
                 else
-                    chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]"
                 fi
             fi
         fi
@@ -18642,7 +19948,7 @@ then
         do
             if [ -n "${chnl_qualities[i]:-}" ] 
             then
-                chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+                chnl_variants_output_command+=( -crf:v:$i "${chnl_qualities[i]}" )
 
                 # VBV
                 if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[i]:-}" ]
@@ -18654,7 +19960,7 @@ then
                         chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
                     elif [ "$chnl_video_codec" == "libx265" ] 
                     then
-                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant_bitrate}k --vbv-bufsize:v:$i ${chnl_variant_bitrate}k )
+                        chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                     elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
@@ -18709,7 +20015,7 @@ then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
                         elif [ "$chnl_video_codec" == "libx265" ] 
                         then
-                            chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                            chnl_variants_output_command+=( -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
                         elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
                         then
                             chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
@@ -18798,7 +20104,7 @@ then
                     fi
                 elif [ -n "${chnl_bitrates[i]:-}" ] 
                 then
-                    chnl_var_stream_map="$chnl_var_stream_map v:$i,name:${chnl_bitrates[i]}"
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:${chnl_bitrates[i]}"
 
                     if [ -n "${chnl_resolutions[i]:-}" ] 
                     then
@@ -18817,6 +20123,7 @@ then
 
             if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
             then
+                [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
                 chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
             fi
 
@@ -18913,9 +20220,23 @@ then
             return 0
         fi
 
+        if [ ! -s "$IPTV_CONFIG" ] && [ -s "$CHANNELS_FILE" ] && $JQ_FILE -e '(.default | type) == "object"' "$CHANNELS_FILE" > /dev/null 2>&1
+        then
+            local tmp_cfg
+            tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+            if $JQ_FILE '.default' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+            then
+                chmod +r "$tmp_cfg"
+                mv "$tmp_cfg" "$IPTV_CONFIG"
+                JQ mutate "$CHANNELS_FILE" 'del(.default)'
+            else
+                rm -f "$tmp_cfg"
+            fi
+        fi
+
         SetDelimiters
 
-        jq_payload=$(JQs flat "$CHANNELS_FILE" '.default')
+        jq_payload=$(JQs flat "$IPTV_CONFIG")
 
         jq_path='[
             ["proxy"],
@@ -18968,15 +20289,21 @@ then
             ["anti_leech_restart_flv_changes"],
             ["anti_leech_restart_hls_changes"],
             ["recheck_period"],
+            ["ffmpeg_bin"],
+            ["schema_version"],
             ["version"]
         ]'
 
-        while IFS=": " read -r path_name value; do
+        while IFS=": " read -r path_name value
+        do
             var_name="d_${path_name#*_}"
             read -r ${var_name?} <<< "$value"
         done < <(JQs gets jq_payload)
 
-        if [ -z "$d_version" ]
+        d_ffmpeg_bin="${d_ffmpeg_bin:-}"
+        d_schema_version="${d_schema_version:-}"
+
+        if [ -z "${d_version:-}" ]
         then
             return 0
         fi
@@ -19099,80 +20426,143 @@ then
             ["channels","schedule","status"]
         ]'
 
-        while IFS=": " read -r path_name value; do
+        while IFS=": " read -r path_name value
+        do
             var_name=${path_name}
             read -r ${var_name?} <<< "$value"
         done < <(JQs gets jq_payload)
 
-        if [ -z "$jq_channels_pid" ] 
+        chnls_pid=()
+        chnls_status=()
+        chnls_hide=()
+        chnls_stream_links=()
+        chnls_stream_link=()
+        chnls_live=()
+        chnls_proxy=()
+        chnls_xc_proxy=()
+        chnls_user_agent=()
+        chnls_headers=()
+        chnls_cookies=()
+        chnls_output_dir_name=()
+        chnls_playlist_name=()
+        chnls_seg_dir_name=()
+        chnls_seg_name=()
+        chnls_seg_length=()
+        chnls_seg_count=()
+        chnls_video_codec=()
+        chnls_audio_codec=()
+        chnls_video_audio_shift=()
+        chnls_draw_text=()
+        chnls_quality=()
+        chnls_bitrate=()
+        chnls_resolution=()
+        chnls_const=()
+        chnls_const_cbr=()
+        chnls_encrypt=()
+        chnls_encrypt_session=()
+        chnls_keyinfo_name=()
+        chnls_key_name=()
+        chnls_key_time=()
+        chnls_input_flags=()
+        chnls_output_flags=()
+        chnls_channel_name=()
+        chnls_channel_time=()
+        chnls_sync=()
+        chnls_sync_file=()
+        chnls_sync_index=()
+        chnls_sync_pairs=()
+        chnls_hls_end_list=()
+        chnls_flv_status=()
+        chnls_flv_h265=()
+        chnls_flv_push_link=()
+        chnls_flv_pull_link=()
+        chnls_subtitle_name=()
+        chnls_subtitle_language=()
+        chnls_subtitle_default=()
+        chnls_subtitle_auto_select=()
+        chnls_subtitle_map=()
+        chnls_schedule_start_time=()
+        chnls_schedule_end_time=()
+        chnls_schedule_loop=()
+        chnls_schedule_auto_remove=()
+        chnls_schedule_hls_change=()
+        chnls_schedule_hls_change_once=()
+        chnls_schedule_channel_name=()
+        chnls_schedule_status=()
+
+        if [ -z "${jq_channels_pid:-}" ]
         then
             chnls_count=0
             return 0
         fi
 
-        IFS="${delimiters[2]}" read -ra chnls_pid <<< "$jq_channels_pid"
-        IFS="${delimiters[2]}" read -ra chnls_status <<< "$jq_channels_status"
+        IFS="${delimiters[2]}" read -ra chnls_pid <<< "${jq_channels_pid:-}"
+        IFS="${delimiters[2]}" read -ra chnls_status <<< "${jq_channels_status:-}"
 
         chnls_count=${#chnls_pid[@]}
 
-        IFS="${delimiters[2]}" read -ra chnls_hide <<< "$jq_channels_hide"
-        IFS="${delimiters[2]}" read -ra chnls_stream_links <<< "$jq_channels_stream_link"
+        IFS="${delimiters[2]}" read -ra chnls_hide <<< "${jq_channels_hide:-}"
+        IFS="${delimiters[2]}" read -ra chnls_stream_links <<< "${jq_channels_stream_link:-}"
 
-        chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[3]}*}")
+        if [ "${#chnls_stream_links[@]}" -gt 0 ]
+        then
+            chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[3]}*}")
+        fi
 
-        IFS="${delimiters[2]}" read -ra chnls_live <<< "$jq_channels_live"
-        IFS="${delimiters[2]}" read -ra chnls_proxy <<< "$jq_channels_proxy"
-        IFS="${delimiters[2]}" read -ra chnls_xc_proxy <<< "$jq_channels_xc_proxy"
-        IFS="${delimiters[2]}" read -ra chnls_user_agent <<< "$jq_channels_user_agent"
-        IFS="${delimiters[2]}" read -ra chnls_headers <<< "$jq_channels_headers"
-        IFS="${delimiters[2]}" read -ra chnls_cookies <<< "$jq_channels_cookies"
-        IFS="${delimiters[2]}" read -ra chnls_output_dir_name <<< "$jq_channels_output_dir_name"
-        IFS="${delimiters[2]}" read -ra chnls_playlist_name <<< "$jq_channels_playlist_name"
-        IFS="${delimiters[2]}" read -ra chnls_seg_dir_name <<< "$jq_channels_seg_dir_name"
-        IFS="${delimiters[2]}" read -ra chnls_seg_name <<< "$jq_channels_seg_name"
-        IFS="${delimiters[2]}" read -ra chnls_seg_length <<< "$jq_channels_seg_length"
-        IFS="${delimiters[2]}" read -ra chnls_seg_count <<< "$jq_channels_seg_count"
-        IFS="${delimiters[2]}" read -ra chnls_video_codec <<< "$jq_channels_video_codec"
-        IFS="${delimiters[2]}" read -ra chnls_audio_codec <<< "$jq_channels_audio_codec"
-        IFS="${delimiters[2]}" read -ra chnls_video_audio_shift <<< "$jq_channels_video_audio_shift"
-        IFS="${delimiters[2]}" read -ra chnls_draw_text <<< "$jq_channels_draw_text"
-        IFS="${delimiters[2]}" read -ra chnls_quality <<< "$jq_channels_quality"
-        IFS="${delimiters[2]}" read -ra chnls_bitrate <<< "$jq_channels_bitrate"
-        IFS="${delimiters[2]}" read -ra chnls_resolution <<< "$jq_channels_resolution"
-        IFS="${delimiters[2]}" read -ra chnls_const <<< "$jq_channels_const"
-        IFS="${delimiters[2]}" read -ra chnls_const_cbr <<< "$jq_channels_const_cbr"
+        IFS="${delimiters[2]}" read -ra chnls_live <<< "${jq_channels_live:-}"
+        IFS="${delimiters[2]}" read -ra chnls_proxy <<< "${jq_channels_proxy:-}"
+        IFS="${delimiters[2]}" read -ra chnls_xc_proxy <<< "${jq_channels_xc_proxy:-}"
+        IFS="${delimiters[2]}" read -ra chnls_user_agent <<< "${jq_channels_user_agent:-}"
+        IFS="${delimiters[2]}" read -ra chnls_headers <<< "${jq_channels_headers:-}"
+        IFS="${delimiters[2]}" read -ra chnls_cookies <<< "${jq_channels_cookies:-}"
+        IFS="${delimiters[2]}" read -ra chnls_output_dir_name <<< "${jq_channels_output_dir_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_playlist_name <<< "${jq_channels_playlist_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_seg_dir_name <<< "${jq_channels_seg_dir_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_seg_name <<< "${jq_channels_seg_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_seg_length <<< "${jq_channels_seg_length:-}"
+        IFS="${delimiters[2]}" read -ra chnls_seg_count <<< "${jq_channels_seg_count:-}"
+        IFS="${delimiters[2]}" read -ra chnls_video_codec <<< "${jq_channels_video_codec:-}"
+        IFS="${delimiters[2]}" read -ra chnls_audio_codec <<< "${jq_channels_audio_codec:-}"
+        IFS="${delimiters[2]}" read -ra chnls_video_audio_shift <<< "${jq_channels_video_audio_shift:-}"
+        IFS="${delimiters[2]}" read -ra chnls_draw_text <<< "${jq_channels_draw_text:-}"
+        IFS="${delimiters[2]}" read -ra chnls_quality <<< "${jq_channels_quality:-}"
+        IFS="${delimiters[2]}" read -ra chnls_bitrate <<< "${jq_channels_bitrate:-}"
+        IFS="${delimiters[2]}" read -ra chnls_resolution <<< "${jq_channels_resolution:-}"
+        IFS="${delimiters[2]}" read -ra chnls_const <<< "${jq_channels_const:-}"
+        IFS="${delimiters[2]}" read -ra chnls_const_cbr <<< "${jq_channels_const_cbr:-}"
+        jq_channels_encrypt=${jq_channels_encrypt:-}
         jq_channels_encrypt=${jq_channels_encrypt//-e/false}
-        IFS="${delimiters[2]}" read -ra chnls_encrypt <<< "$jq_channels_encrypt"
-        IFS="${delimiters[2]}" read -ra chnls_encrypt_session <<< "$jq_channels_encrypt_session"
-        IFS="${delimiters[2]}" read -ra chnls_keyinfo_name <<< "$jq_channels_keyinfo_name"
-        IFS="${delimiters[2]}" read -ra chnls_key_name <<< "$jq_channels_key_name"
-        IFS="${delimiters[2]}" read -ra chnls_key_time <<< "$jq_channels_key_time"
-        IFS="${delimiters[2]}" read -ra chnls_input_flags <<< "$jq_channels_input_flags"
-        IFS="${delimiters[2]}" read -ra chnls_output_flags <<< "$jq_channels_output_flags"
-        IFS="${delimiters[2]}" read -ra chnls_channel_name <<< "$jq_channels_channel_name"
-        IFS="${delimiters[2]}" read -ra chnls_channel_time <<< "$jq_channels_channel_time"
-        IFS="${delimiters[2]}" read -ra chnls_sync <<< "$jq_channels_sync"
-        IFS="${delimiters[2]}" read -ra chnls_sync_file <<< "$jq_channels_sync_file"
-        IFS="${delimiters[2]}" read -ra chnls_sync_index <<< "$jq_channels_sync_index"
-        IFS="${delimiters[2]}" read -ra chnls_sync_pairs <<< "$jq_channels_sync_pairs"
-        IFS="${delimiters[2]}" read -ra chnls_hls_end_list <<< "$jq_channels_hls_end_list"
-        IFS="${delimiters[2]}" read -ra chnls_flv_status <<< "$jq_channels_flv_status"
-        IFS="${delimiters[2]}" read -ra chnls_flv_h265 <<< "$jq_channels_flv_h265"
-        IFS="${delimiters[2]}" read -ra chnls_flv_push_link <<< "$jq_channels_flv_push_link"
-        IFS="${delimiters[2]}" read -ra chnls_flv_pull_link <<< "$jq_channels_flv_pull_link"
-        IFS="${delimiters[3]}" read -ra chnls_subtitle_name <<< "$jq_channels_subtitle_name"
-        IFS="${delimiters[3]}" read -ra chnls_subtitle_language <<< "$jq_channels_subtitle_language"
-        IFS="${delimiters[3]}" read -ra chnls_subtitle_default <<< "$jq_channels_subtitle_default"
-        IFS="${delimiters[3]}" read -ra chnls_subtitle_auto_select <<< "$jq_channels_subtitle_auto_select"
-        IFS="${delimiters[3]}" read -ra chnls_subtitle_map <<< "$jq_channels_subtitle_map"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_start_time <<< "$jq_channels_schedule_start_time"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_end_time <<< "$jq_channels_schedule_end_time"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_loop <<< "$jq_channels_schedule_loop"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_auto_remove <<< "$jq_channels_schedule_auto_remove"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change <<< "$jq_channels_schedule_hls_change"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change_once <<< "$jq_channels_schedule_hls_change_once"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_channel_name <<< "$jq_channels_schedule_channel_name"
-        IFS="${delimiters[3]}" read -ra chnls_schedule_status <<< "$jq_channels_schedule_status"
+        IFS="${delimiters[2]}" read -ra chnls_encrypt <<< "${jq_channels_encrypt:-}"
+        IFS="${delimiters[2]}" read -ra chnls_encrypt_session <<< "${jq_channels_encrypt_session:-}"
+        IFS="${delimiters[2]}" read -ra chnls_keyinfo_name <<< "${jq_channels_keyinfo_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_key_name <<< "${jq_channels_key_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_key_time <<< "${jq_channels_key_time:-}"
+        IFS="${delimiters[2]}" read -ra chnls_input_flags <<< "${jq_channels_input_flags:-}"
+        IFS="${delimiters[2]}" read -ra chnls_output_flags <<< "${jq_channels_output_flags:-}"
+        IFS="${delimiters[2]}" read -ra chnls_channel_name <<< "${jq_channels_channel_name:-}"
+        IFS="${delimiters[2]}" read -ra chnls_channel_time <<< "${jq_channels_channel_time:-}"
+        IFS="${delimiters[2]}" read -ra chnls_sync <<< "${jq_channels_sync:-}"
+        IFS="${delimiters[2]}" read -ra chnls_sync_file <<< "${jq_channels_sync_file:-}"
+        IFS="${delimiters[2]}" read -ra chnls_sync_index <<< "${jq_channels_sync_index:-}"
+        IFS="${delimiters[2]}" read -ra chnls_sync_pairs <<< "${jq_channels_sync_pairs:-}"
+        IFS="${delimiters[2]}" read -ra chnls_hls_end_list <<< "${jq_channels_hls_end_list:-}"
+        IFS="${delimiters[2]}" read -ra chnls_flv_status <<< "${jq_channels_flv_status:-}"
+        IFS="${delimiters[2]}" read -ra chnls_flv_h265 <<< "${jq_channels_flv_h265:-}"
+        IFS="${delimiters[2]}" read -ra chnls_flv_push_link <<< "${jq_channels_flv_push_link:-}"
+        IFS="${delimiters[2]}" read -ra chnls_flv_pull_link <<< "${jq_channels_flv_pull_link:-}"
+        IFS="${delimiters[3]}" read -ra chnls_subtitle_name <<< "${jq_channels_subtitle_name:-}"
+        IFS="${delimiters[3]}" read -ra chnls_subtitle_language <<< "${jq_channels_subtitle_language:-}"
+        IFS="${delimiters[3]}" read -ra chnls_subtitle_default <<< "${jq_channels_subtitle_default:-}"
+        IFS="${delimiters[3]}" read -ra chnls_subtitle_auto_select <<< "${jq_channels_subtitle_auto_select:-}"
+        IFS="${delimiters[3]}" read -ra chnls_subtitle_map <<< "${jq_channels_subtitle_map:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_start_time <<< "${jq_channels_schedule_start_time:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_end_time <<< "${jq_channels_schedule_end_time:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_loop <<< "${jq_channels_schedule_loop:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_auto_remove <<< "${jq_channels_schedule_auto_remove:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change <<< "${jq_channels_schedule_hls_change:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_hls_change_once <<< "${jq_channels_schedule_hls_change_once:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_channel_name <<< "${jq_channels_schedule_channel_name:-}"
+        IFS="${delimiters[3]}" read -ra chnls_schedule_status <<< "${jq_channels_schedule_status:-}"
     }
     ListChannels()
     {
@@ -19384,6 +20774,7 @@ then
         jq_path='[
             ["pid"],
             ["status"],
+            ["hide"],
             ["stream_link"],
             ["live"],
             ["proxy"],
@@ -19405,6 +20796,7 @@ then
             ["bitrate"],
             ["resolution"],
             ["const"],
+            ["const_cbr"],
             ["encrypt"],
             ["encrypt_session"],
             ["keyinfo_name"],
@@ -19438,10 +20830,14 @@ then
             ["schedule","status"]
         ]'
 
-        while IFS=": " read -r path_name value; do
+        while IFS=": " read -r path_name value
+        do
             var_name="chnl_${path_name#*_}"
             read -r ${var_name?} <<< "$value"
         done < <(JQs gets jq_payload)
+
+        chnl_hide=${chnl_hide:-false}
+        chnl_const_cbr=${chnl_const_cbr:-false}
 
         IFS="${delimiters[1]}" read -ra chnl_stream_links <<< "$chnl_stream_link"
 
@@ -19882,13 +21278,14 @@ then
                 stream_link_url_path_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
             fi
             #headers="range: \r\n"
-            if [[ ! $output_flags =~ -seekable ]] 
+            if [[ ! $input_flags =~ -seekable ]]
             then
-                output_flags="$output_flags -seekable 0"
+                input_flags="$input_flags -seekable 0"
             fi
-            if [[ ! $output_flags =~ -vsync ]] 
+
+            if [[ ! $output_flags =~ -vsync ]] && [[ ! $output_flags =~ -fps_mode ]]
             then
-                output_flags="$output_flags -vsync 0"
+                output_flags="$output_flags $(FFmpegSyncFlag 0)"
             fi
         fi
 
@@ -20622,7 +22019,7 @@ then
                         format_proto=${format_size_tbr_proto[2]}
                     fi
 
-                    formats_bitrate+=("${format_bitrate:0:-1}")
+                    formats_bitrate+=("$(StripSuffix "$format_bitrate" 1)")
 
                     if [[ $format_resolution_fps =~ ^[1-9] ]] 
                     then
@@ -20697,7 +22094,7 @@ then
 
                         if [[ $format_bitrate =~ k ]] 
                         then
-                            formats_bitrate+=("${format_bitrate:0:-1}")
+                            formats_bitrate+=("$(StripSuffix "$format_bitrate" 1)")
                         elif [[ $format_info =~ \@[[:space:]]*([0-9]+)k ]] 
                         then
                             format_bitrate="${BASH_REMATCH[1]}k"
@@ -20923,10 +22320,10 @@ then
                     fi
                 done < <(curl -s -Lm 10 \
                     -H "User-Agent: $user_agent" \
-                    -H "${headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+                    -H "$(StripSuffix "$headers" 4)" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
                     | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
 
-                ts=$(date +%s%3N)
+                ts=$(DateMs)
                 tx_time=$(printf '%X' $((ts/1000+1800)))
 
                 stream_link=${stream_link%\?*}
@@ -20934,8 +22331,7 @@ then
                 relative_path=${stream_link#*//}
                 relative_path="/${relative_path#*/}"
 
-                tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
-                tx_secret=${tx_secret%% *}
+                tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | Md5Hex)
 
                 stream_link="$stream_link?txSecret=$tx_secret&txTime=$tx_time"
                 stream_links[0]="$stream_link"
@@ -21065,7 +22461,7 @@ then
                         cookies="${cookies:-}"
                         stream_link_data=$(CurlFake -s -Lm 10 \
                         -H "${headers:0:-4}" \
-                        "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+                        "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
 
                         if [ -n "$stream_link_data" ] 
                         then
@@ -21371,6 +22767,9 @@ then
                     video_options=()
                     audio_options=()
                     subtitle_options=()
+                    video_stream_indices=()
+                    audio_stream_indices=()
+                    subtitle_stream_indices=()
 
                     for((streams_i=0;streams_i<streams_count;streams_i++));
                     do
@@ -21388,7 +22787,7 @@ then
                         if [ "${streams_codec_type[streams_i]}" == "video" ] 
                         then
                             video_stream_indices+=("$streams_i")
-                            if [ "${streams_closed_captions[streams_i]}" -eq 1 ] 
+                            if [ "${streams_closed_captions[streams_i]:-0}" == "1" ]
                             then
                                 closed_captions=" 硬字幕"
                             else
@@ -21466,7 +22865,7 @@ then
                         subtitle_options_count="${#subtitle_options[@]}"
                         subtitle_options+=("不选择")
                         echo
-                        inquirer checkbox_input_indices "选择音频流" subtitle_options subtitle_options_indices
+                        inquirer checkbox_input_indices "选择字幕流" subtitle_options subtitle_options_indices
 
                         for subtitle_options_index in "${subtitle_options_indices[@]}"
                         do
@@ -22172,7 +23571,7 @@ then
                 then
                     encrypt_session=true
 
-                    if [ ! -d /usr/local/nginx ] && [ ! -d /usr/local/openresty ]
+                    if [ ! -d "$NGINX_PREFIX_DEFAULT" ] && [ ! -d "$OPENRESTY_PREFIX_DEFAULT" ]
                     then
                         echo
                         nginx_openresty_options=( 'nginx' 'openresty' '不安装' )
@@ -22180,14 +23579,14 @@ then
 
                         if [ "$nginx_openresty_options_index" -eq 0 ] 
                         then
-                            nginx_prefix="/usr/local/nginx"
+                            nginx_prefix="$NGINX_PREFIX_DEFAULT"
                             nginx_name="nginx"
                             nginx_ctl="nx"
                             NGINX_FILE="$nginx_prefix/sbin/nginx"
                             NginxInstall
                         elif [ "$nginx_openresty_options_index" -eq 1 ] 
                         then
-                            nginx_prefix="/usr/local/openresty/nginx"
+                            nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                             nginx_name="openresty"
                             nginx_ctl="or"
                             NGINX_FILE="$nginx_prefix/sbin/nginx"
@@ -22198,14 +23597,14 @@ then
                         fi
                     fi
 
-                    if [ -d /usr/local/nginx ] || [ -d /usr/local/openresty ] 
+                    if [ -d "$NGINX_PREFIX_DEFAULT" ] || [ -d "$OPENRESTY_PREFIX_DEFAULT" ] 
                     then
                         if [ -z "${nginx_name:-}" ] 
                         then
-                            if [ -d /usr/local/nginx ] && [ -d /usr/local/openresty ]
+                            if [ -d "$NGINX_PREFIX_DEFAULT" ] && [ -d "$OPENRESTY_PREFIX_DEFAULT" ]
                             then
                                 echo
-                                if [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null
+                                if [ -s "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid" ] && kill -0 "$(< "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid")" 2> /dev/null
                                 then
                                     nginx_openresty_options=( 'openresty' 'nginx' )
                                 else
@@ -22214,21 +23613,21 @@ then
                                 inquirer list_input "选择使用 nginx 或 openresty: " nginx_openresty_options nginx_openresty_selected
                                 if [ "$nginx_openresty_selected" == "nginx" ] 
                                 then
-                                    nginx_prefix="/usr/local/nginx"
+                                    nginx_prefix="$NGINX_PREFIX_DEFAULT"
                                     nginx_name="nginx"
                                     nginx_ctl="nx"
                                 else
-                                    nginx_prefix="/usr/local/openresty/nginx"
+                                    nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                                     nginx_name="openresty"
                                     nginx_ctl="or"
                                 fi
-                            elif [ -d /usr/local/nginx ] 
+                            elif [ -d "$NGINX_PREFIX_DEFAULT" ] 
                             then
-                                nginx_prefix="/usr/local/nginx"
+                                nginx_prefix="$NGINX_PREFIX_DEFAULT"
                                 nginx_name="nginx"
                                 nginx_ctl="nx"
                             else
-                                nginx_prefix="/usr/local/openresty/nginx"
+                                nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                                 nginx_name="openresty"
                                 nginx_ctl="or"
                             fi
@@ -22895,7 +24294,10 @@ then
             flv_h265=false
         else
             flv_h265=true
-            if [[ ! -x $(command -v ffmpeg_c) ]] 
+            FFmpegResolveBin 2> /dev/null || true
+            FFmpegDetectCaps 2> /dev/null || true
+
+            if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = false ] && [[ ! -x $(command -v ffmpeg_c) ]]
             then
                 echo
                 ffmpeg_c_options=( '快速安装' '编译 FFmpeg (耗时非常非常久)' )
@@ -23051,7 +24453,7 @@ then
             SetSegName
             SetSegLength
 
-            if [ -n "$live" ] 
+            if [ "$live" = true ]
             then
                 SetSegCount
             else
@@ -23121,7 +24523,7 @@ then
             output_flags=${output_flags#\'}
         fi
 
-        [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+        [ ! -e "$FFMPEG_LOG_ROOT" ] && mkdir -p "$FFMPEG_LOG_ROOT"
 
         extra_filters=""
         if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
@@ -23266,12 +24668,14 @@ then
                         if [[ ${new_domains[xc_i]} =~ $chnl_domain ]] 
                         then
                             xc_macs=(${new_accounts[xc_i]} "输入mac" "输入新的直播源")
+                            xc_macs_count=$((${#xc_macs[@]} - 2))
                             inquirer list_input_index "选择操作" xc_macs xc_macs_index
-                            if [ "$xc_macs_index" -eq $xc_count ] 
+
+                            if [ "$xc_macs_index" -eq "$xc_macs_count" ]
                             then
                                 ExitOnText "请输入mac: " new_mac
                                 xc_select=true
-                            elif [ "$xc_macs_index" -lt $xc_count ] 
+                            elif [ "$xc_macs_index" -lt "$xc_macs_count" ]
                             then
                                 new_mac="${xc_macs[xc_macs_index]}"
                                 xc_select=true
@@ -23666,7 +25070,8 @@ then
         SetLive
 
         xc_proxy=${xc_proxy:-}
-        if [[ $stream_link =~ ^http://([^/]+) ]] 
+
+        if [[ ${stream_link:-} =~ ^http://([^/]+) ]]
         then
             XtreamCodesGetDomains
 
@@ -24062,7 +25467,7 @@ then
             for chnls_index in "${chnls_indices[@]}"
             do
                 jq_path='["channels",'"$chnls_index"']'
-                new_array+=("$($JQ_FILE --argjson path $jq_path 'getpath($path)' $CHANNELS_FILE)")
+                new_array+=("$($JQ_FILE --argjson path "$jq_path" 'getpath($path)' "$CHANNELS_FILE")")
             done
 
             jq_file=true
@@ -24301,14 +25706,14 @@ then
 
                     printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                    profile=$(CurlFake xtream_codes -s -Lm 10\
-                        -H "$chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                    profile=$(CurlFake xtream_codes -s -Lm 10 \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
                     exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
                     if [ -z "$exp_date" ] 
@@ -24338,7 +25743,7 @@ then
                         server=${chnl_xc_proxy%\/}
                         IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL "$server/?cmd=$chnl_cmd&check=1" \
                             -H "User-Agent: $chnl_user_agent" \
-                            -H "${chnl_headers:0:-4}" \
+                            -H "$(StripSuffix "$chnl_headers" 4)" \
                             --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                         if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                         then
@@ -24359,7 +25764,7 @@ then
                         create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                         cmd=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
-                            -H "${chnl_headers:0:-4}" \
+                            -H "$(StripSuffix "$chnl_headers" 4)" \
                             --cookie "$chnl_cookies" "$create_link_url" \
                             | $JQ_FILE -r '.js.cmd') || true
 
@@ -24597,16 +26002,15 @@ then
                 fi
             done < <(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                -H "${chnl_headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+                -H "$(StripSuffix "$chnl_headers" 4)" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
                 | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
 
             chnl_stream_link="${chnl_stream_link%\?*}"
             relative_path="${chnl_stream_link#*//}"
             relative_path="/${relative_path#*/}"
-            ts=$(date +%s%3N)
+            ts=$(DateMs)
             tx_time=$(printf '%X' $((ts/1000+1800)))
-            tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
-            tx_secret=${tx_secret%% *}
+            tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | Md5Hex)
 
             chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
         elif [[ $chnl_stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
@@ -24669,8 +26073,8 @@ then
 
                     stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                    -H "${chnl_headers:0:-4}" \
-                    "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
+                    "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
 
                     if [ -z "$stream_link_data" ] 
                     then
@@ -24745,7 +26149,7 @@ then
             do
                 stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                -H "${chnl_headers:0:-4}" \
+                -H "$(StripSuffix "$chnl_headers" 4)" \
                 --data "value=$value" \
                 "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
 
@@ -24815,9 +26219,10 @@ then
                     then
                         chnl_output_flags="$chnl_output_flags -filter:v fps=fps=25"
                     fi
-                    if [[ ! $chnl_output_flags =~ -vsync ]] 
+
+                    if [[ ! $chnl_output_flags =~ -vsync ]] && [[ ! $chnl_output_flags =~ -fps_mode ]]
                     then
-                        chnl_output_flags="$chnl_output_flags -vsync 0"
+                        chnl_output_flags="$chnl_output_flags $(FFmpegSyncFlag 0)"
                     fi
                 fi
 
@@ -24844,14 +26249,14 @@ then
                     chnl_cookies="$chnl_cookies ${line%% *}"
                     break
                 fi
-            done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link" 2> /dev/null)
+            done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "$(StripSuffix "$chnl_headers" 4)" -c - "$chnl_stream_link" 2> /dev/null)
 
             chnl="${chnl_stream_link%\?*}"
             chnl="${chnl##*/}"
 
             token_url=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                -H "${chnl_headers:0:-4}" \
+                -H "$(StripSuffix "$chnl_headers" 4)" \
                 "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
                 | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
 
@@ -24865,7 +26270,7 @@ then
             query_string=$(UrlencodeUpper "$query_string")
             chnl_stream_link=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                -H "${chnl_headers:0:-4}" \
+                -H "$(StripSuffix "$chnl_headers" 4)" \
                 --cookie "$chnl_cookies" \
                 "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
                 | $JQ_FILE -r '.url')
@@ -24884,7 +26289,7 @@ then
                     chnl_cookies="$chnl_cookies ${line%% *}"
                     break
                 fi
-            done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
+            done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "$(StripSuffix "$chnl_headers" 4)" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
         fi
 
         if [ -n "$code" ] 
@@ -24904,13 +26309,14 @@ then
                         chnl_stream_link_url_path="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
                     fi
                     #chnl_headers="range: \r\n"
-                    if [[ ! $chnl_output_flags =~ -seekable ]] 
+                    if [[ ! $chnl_input_flags =~ -seekable ]]
                     then
-                        chnl_output_flags="$chnl_output_flags -seekable 0"
+                        chnl_input_flags="$chnl_input_flags -seekable 0"
                     fi
-                    if [[ ! $chnl_output_flags =~ -vsync ]] 
+
+                    if [[ ! $chnl_output_flags =~ -vsync ]] && [[ ! $chnl_output_flags =~ -fps_mode ]]
                     then
-                        chnl_output_flags="$chnl_output_flags -vsync 0"
+                        chnl_output_flags="$chnl_output_flags $(FFmpegSyncFlag 0)"
                     fi
                 fi
 
@@ -25683,9 +27089,9 @@ then
             chnl_output_flags=${chnl_output_flags#\'}
         fi
 
-        [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+        mkdir -p "$FFMPEG_LOG_ROOT"
 
-        printf -v start_time '%(%s)T' -1
+        start_time=$(DateEpoch)
         chnl_channel_time=$start_time
 
         chnl_extra_filters=""
@@ -25730,9 +27136,12 @@ then
                 Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
             fi
 
-            if [ "$chnl_flv_h265" = true ] 
+            if [ "$chnl_flv_h265" = true ]
             then
-                if [[ ! -x $(command -v ffmpeg_c) ]]  
+                FFmpegResolveBin 2> /dev/null || true
+                FFmpegDetectCaps 2> /dev/null || true
+
+                if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = false ] && [[ ! -x $(command -v ffmpeg_c) ]]
                 then
                     if [ "$monitor" = false ] 
                     then
@@ -25802,11 +27211,41 @@ then
 
         Println "$info 频道 [ $chnl_channel_name ] 已开启 !\n"
     }
+    WaitChannelPid()
+    {
+        local target_pid="$1"
+        local timeout_sec="$2"
+        local pid_file="$3"
+
+        if command -v flock > /dev/null 2>&1
+        then
+            flock -E 1 -w "$timeout_sec" -x "$pid_file" rm -f "$pid_file"
+            return $?
+        fi
+
+        local elapsed=0
+        while kill -0 "$target_pid" 2> /dev/null && [ "$elapsed" -lt "$timeout_sec" ]
+        do
+            sleep 1
+            elapsed=$((elapsed + 1))
+        done
+
+        if kill -0 "$target_pid" 2> /dev/null
+        then
+            kill -9 "$target_pid" 2> /dev/null || true
+            rm -f "$pid_file"
+            return 1
+        fi
+
+        rm -f "$pid_file"
+        return 0
+    }
+
     StopChannel()
     {
         if [ -n "${kind:-}" ]
         then
-            if [ "$kind" != "flv" ] 
+            if [ "$kind" != "flv" ]
             then
                 Println "$error 暂不支持 $kind ...\n" && exit 1
             elif [ "$chnl_status" == "on" ]
@@ -25820,9 +27259,9 @@ then
 
         Println "$info 关闭频道 [ $chnl_channel_name ] 请稍等..."
 
-        if [ "${kind:-}" == "flv" ] 
+        if [ "${kind:-}" == "flv" ]
         then
-            if ! kill -0 "$chnl_pid" 2> /dev/null 
+            if ! kill -0 "$chnl_pid" 2> /dev/null
             then
                 MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 jq_path='["channels"]'
@@ -25834,7 +27273,8 @@ then
                 rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             else
                 kill "$chnl_pid" 2> /dev/null || true
-                if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+                if ! WaitChannelPid "$chnl_pid" 30 "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
                 then
                     MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                     jq_path='["channels"]'
@@ -25859,9 +27299,10 @@ then
                 rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             else
                 kill "$chnl_pid" 2> /dev/null || true
-                if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+                if ! WaitChannelPid "$chnl_pid" $((30+chnl_seg_length)) "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
                 then
-                    if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1 
+                    if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
                     then
                         for play_list in "$chnl_output_dir_root/"*.m3u8
                         do
@@ -25887,12 +27328,59 @@ then
 
     StopChannelsForce()
     {
-        pkill -9 -f ffmpeg 2> /dev/null || true
         pkill -f 'tv m' 2> /dev/null || true
         rm -rf "$CHANNELS_FILE.lockdir"
 
         GetChannels
         GetDefault
+
+        local pid_list=()
+        local i pid
+        for((i=0;i<chnls_count;i++));
+        do
+            pid="${chnls_pid[i]:-}"
+
+            if [[ $pid =~ ^[0-9]+$ ]] && [ "$pid" -gt 0 ] && kill -0 "$pid" 2> /dev/null
+            then
+                pid_list+=("$pid")
+                kill -TERM "$pid" 2> /dev/null || true
+                pkill -TERM -P "$pid" 2> /dev/null || true
+            fi
+        done
+
+        if [ "${#pid_list[@]}" -gt 0 ]
+        then
+            local wait_tick=0
+            local alive
+            while [ "$wait_tick" -lt 10 ]
+            do
+                alive=0
+                for pid in "${pid_list[@]}"
+                do
+                    if kill -0 "$pid" 2> /dev/null
+                    then
+                        alive=1
+                        break
+                    fi
+                done
+
+                if [ "$alive" -eq 0 ]
+                then
+                    break
+                fi
+                sleep 0.5
+                wait_tick=$((wait_tick + 1))
+            done
+
+            for pid in "${pid_list[@]}"
+            do
+                if kill -0 "$pid" 2> /dev/null
+                then
+                    pkill -KILL -P "$pid" 2> /dev/null || true
+                    kill -KILL "$pid" 2> /dev/null || true
+                fi
+            done
+        fi
 
         for((i=0;i<chnls_count;i++));
         do
@@ -25913,10 +27401,15 @@ then
                 rm -rf "$sync_file.lockdir"
             done
 
-            action="stop"
-            SyncFile > /dev/null
+            chnl_pid="${chnls_pid[i]}"
 
-            if [ "${chnls_live[i]}" = true ] 
+            if GetChannel > /dev/null 2>&1
+            then
+                action="stop"
+                SyncFile > /dev/null
+            fi
+
+            if [ "${chnls_live[i]:-}" = true ]
             then
                 rm -rf "$LIVE_ROOT/${chnls_output_dir_name[i]}"
             fi
@@ -26007,13 +27500,21 @@ then
     }
     EditDefault()
     {
-        jq_path='["default","'"$1"'"]'
+        jq_path='["'"$1"'"]'
 
-        if [ -n "${2:-}" ] 
+        if [ -n "${2:-}" ]
         then
-            JQ update "$CHANNELS_FILE" "$2"
+            if ! JQ update "$IPTV_CONFIG" "$2"
+            then
+                Println "$error $1 修改失败\n"
+                return 1
+            fi
         else
-            JQ update "$CHANNELS_FILE" "${!1}"
+            if ! JQ update "$IPTV_CONFIG" "${!1}"
+            then
+                Println "$error $1 修改失败\n"
+                return 1
+            fi
         fi
 
         Println "$info $1 修改成功\n"
@@ -26092,7 +27593,7 @@ then
                 else
                     chnl_schedule_channel_name_list=""
                 fi
-                chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+                chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
             done
         done
 
@@ -26159,7 +27660,7 @@ then
                 else
                     chnl_schedule_channel_name_list=""
                 fi
-                chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+                chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
             done
         fi
 
@@ -26180,15 +27681,16 @@ then
             ["end_time"]
         ]'
 
-        while IFS=": " read -r path_name value; do
+        while IFS=": " read -r path_name value
+        do
             var_name=${path_name}
             read -r ${var_name?} <<< "$value"
-        done
+        done < <(JQs gets jq_payload)
 
-        IFS="${delimiters[0]}" read -ra ${chnl_id}_title <<< "$jq_title"
-        IFS="${delimiters[0]}" read -ra ${chnl_id}_time <<< "$jq_time"
-        IFS="${delimiters[0]}" read -ra ${chnl_id}_start_time <<< "$jq_start_time"
-        IFS="${delimiters[0]}" read -ra ${chnl_id}_end_time <<< "$jq_end_time"
+        IFS="${delimiters[1]}" read -ra ${chnl_id}_title <<< "${jq_title:-}"
+        IFS="${delimiters[1]}" read -ra ${chnl_id}_time <<< "${jq_time:-}"
+        IFS="${delimiters[1]}" read -ra ${chnl_id}_start_time <<< "${jq_start_time:-}"
+        IFS="${delimiters[1]}" read -ra ${chnl_id}_end_time <<< "${jq_end_time:-}"
 
         schedule_title=("${chnl_id}_title"[@])
         schedule_title=("${!schedule_title}")
@@ -27386,7 +28888,7 @@ then
                 chnl_schedule_channel_name_list=""
             fi
             chnl_schedules_options+=("计划$((chnl_schedules_index+1))")
-            chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+            chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
         done
 
         Println "$chnl_schedules_list"
@@ -27604,7 +29106,7 @@ then
                         fi
                     done
 
-                    new_array=($(printf '%s\n' "${new_array[@]}" | sort -nr))
+                    new_array=($(printf '%s\n' "${new_array[@]}" | sort -nru))
 
                     for chnl_schedules_index in "${new_array[@]}"
                     do
@@ -27798,18 +29300,43 @@ then
     }
     MonitorStart()
     {
-        if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
+        local monitor_running=0
+        local pid=""
+
+        if [ -s "$IPTV_ROOT/monitor.pid" ]
+        then
+            pid=$(< "$IPTV_ROOT/monitor.pid")
+            if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+            then
+                monitor_running=1
+            else
+                rm -f "$IPTV_ROOT/monitor.pid"
+            fi
+        fi
+
+        if [ -s "$IPTV_ROOT/antiddos.pid" ]
+        then
+            pid=$(< "$IPTV_ROOT/antiddos.pid")
+            if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+            then
+                monitor_running=1
+            else
+                rm -f "$IPTV_ROOT/antiddos.pid"
+            fi
+        fi
+
+        if [ "$monitor_running" -eq 1 ]
         then
             Println "$error 监控已经在运行 !\n" && exit 1
         else
-            if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
+            if { [ -d "${OPENRESTY_PREFIX_DEFAULT}" ] && [ ! -d "${NGINX_PREFIX_DEFAULT}" ]; } || { [ -s "${OPENRESTY_PREFIX_DEFAULT}/nginx/logs/nginx.pid" ] && kill -0 "$(< "${OPENRESTY_PREFIX_DEFAULT}/nginx/logs/nginx.pid")" 2> /dev/null ; }
             then
-                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_prefix="${OPENRESTY_PREFIX_DEFAULT}/nginx"
                 nginx_name="openresty"
                 nginx_ctl="or"
-            elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
+            elif { [ -d "${NGINX_PREFIX_DEFAULT}" ] && [ ! -d "${OPENRESTY_PREFIX_DEFAULT}" ]; } || { [ -s "${NGINX_PREFIX_DEFAULT}/logs/nginx.pid" ] && kill -0 "$(< "${NGINX_PREFIX_DEFAULT}/logs/nginx.pid")" 2> /dev/null ; }
             then
-                nginx_prefix="/usr/local/nginx"
+                nginx_prefix="${NGINX_PREFIX_DEFAULT}"
                 nginx_name="nginx"
                 nginx_ctl="nx"
             else
@@ -27818,11 +29345,11 @@ then
 
                 if [ "$yn_index" -eq 0 ] 
                 then
-                    nginx_prefix="/usr/local/openresty/nginx"
+                    nginx_prefix="${OPENRESTY_PREFIX_DEFAULT}/nginx"
                     nginx_name="openresty"
                     nginx_ctl="or"
                 else
-                    nginx_prefix="/usr/local/nginx"
+                    nginx_prefix="${NGINX_PREFIX_DEFAULT}"
                     nginx_name="nginx"
                     nginx_ctl="nx"
                 fi
@@ -27916,14 +29443,13 @@ then
                         "anti_ddos_syn_flood": false,
                         "anti_ddos": false
                     }'
-                    jq_merge=true
-                    jq_path='["default"]'
-                    JQ update "$CHANNELS_FILE" "$update"
+                    [ ! -s "$IPTV_CONFIG" ] && printf '{}\n' > "$IPTV_CONFIG"
+                    JQ mutate "$IPTV_CONFIG" '. * $u' --argjson u "$update"
                 fi
                 Println "不启动 AntiDDoS ...\n" && exit 0
             else
                 anti_ddos_ports=${anti_ddos_port:-$d_anti_ddos_port}
-                anti_ddos_ports=${anti_ddos_port%% *}
+                anti_ddos_ports=${anti_ddos_ports%% *}
 
                 update=$(
                     $JQ_FILE -n --arg anti_ddos_syn_flood "${anti_ddos_syn_flood:-$d_anti_ddos_syn_flood}" \
@@ -27932,7 +29458,7 @@ then
                         --arg anti_ddos "${anti_ddos:-$d_anti_ddos}" \
                         --arg anti_ddos_port "$anti_ddos_ports" \
                         --arg anti_ddos_seconds "${anti_ddos_seconds:-$d_anti_ddos_seconds}" \
-                        anti_ddos_level "${anti_ddos_level:-$d_anti_ddos_level}" \
+                        --arg anti_ddos_level "${anti_ddos_level:-$d_anti_ddos_level}" \
                     '{
                         anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                         anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
@@ -27944,9 +29470,8 @@ then
                     }'
                 )
 
-                jq_merge=true
-                jq_path='["default"]'
-                JQ update "$CHANNELS_FILE" "$update"
+                [ ! -s "$IPTV_CONFIG" ] && printf '{}\n' > "$IPTV_CONFIG"
+                JQ mutate "$IPTV_CONFIG" '. * $u' --argjson u "$update"
             fi
         else
             exit 0
@@ -27959,9 +29484,13 @@ then
         trap 'MonitorErr $LINENO' ERR
 
         pid_file="$IPTV_ROOT/antiddos.pid"
-        printf '%s' "$BASHPID" > "$pid_file"
         {
-            flock -x 202
+            if command -v flock > /dev/null 2>&1
+            then
+                flock -x 202
+            fi
+            self_pid=$(GetSubshellPid)
+            printf '%s' "$self_pid" > "$pid_file"
             {
                 ips=()
                 jail_time=()
@@ -27991,7 +29520,7 @@ then
                     then
                         new_ips=()
                         new_jail_time=()
-                        printf -v now '%(%s)T' -1
+                        now=$(DateEpoch)
 
                         update=0
                         for((i=0;i<${#ips[@]};i++));
@@ -28023,7 +29552,7 @@ then
                     fi
                 fi
 
-                MonitorLog "AntiDDoS 启动成功 PID $BASHPID !"
+                MonitorLog "AntiDDoS 启动成功 PID $self_pid !"
 
                 current_ip=${SSH_CLIENT%% *}
                 [ -n "${anti_ddos_level:-}" ] && anti_ddos_level=$((anti_ddos_level+1))
@@ -28043,7 +29572,7 @@ then
                         sleep "$anti_ddos_syn_flood_delay_seconds" &
                         WaitTerm
 
-                        printf -v now '%(%s)T' -1
+                        now=$(DateEpoch)
                         jail=$((now + anti_ddos_syn_flood_seconds))
 
                         while IFS= read -r anti_ddos_syn_flood_ip 
@@ -28068,7 +29597,7 @@ then
                                         jail_time+=("$jail")
                                         printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                         ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
-                                        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+                                        date_now=$(date '+%m-%d %H:%M:%S')
                                         printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                                         ips+=("$ip")
                                         break 1
@@ -28121,7 +29650,7 @@ then
                             done
                         done
 
-                        printf -v now '%(%s)T' -1
+                        now=$(DateEpoch)
                         jail=$((now + anti_ddos_seconds))
 
                         while IFS=' ' read -r counts ip access_file
@@ -28162,7 +29691,7 @@ then
                                             jail_time+=("$jail")
                                             printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                             ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
-                                            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+                                            date_now=$(date '+%m-%d %H:%M:%S')
                                             printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                                             ips+=("$ip")
                                             break 1
@@ -28170,7 +29699,7 @@ then
                                     done
                                 fi
                             fi
-                        done < <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' "$nginx_prefix"/logs/access.log | sort | uniq -c | sort -k1 -nr)
+                        done < <(awk -v d1="$(FormatEpoch "$((now-60))" '+%d/%b/%Y:%H:%M:%S')" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' "$nginx_prefix"/logs/access.log | sort | uniq -c | sort -k1 -nr)
                         # date --date '-1 min' '+%d/%b/%Y:%T'
                         # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' "$nginx_prefix"/logs/access.log | sort | uniq -c | sort -fr
                     fi
@@ -28183,7 +29712,7 @@ then
                     then
                         new_ips=()
                         new_jail_time=()
-                        printf -v now '%(%s)T' -1
+                        now=$(DateEpoch)
 
                         update=0
                         for((i=0;i<${#ips[@]};i++));
@@ -28213,7 +29742,7 @@ then
                     fi
                 done
             } 202>&-
-        } 202<"$pid_file"
+        } 202>>"$pid_file"
     }
 
     MonitorHlsRemoveFailed()
@@ -28263,7 +29792,7 @@ then
     MonitorHlsRestartFail()
     {
         StopChannel
-        printf -v now '%(%s)T' -1
+        now=$(DateEpoch)
         recheck_time=$((now+recheck_period))
 
         if [ -n "${failed_restart_nums:-}" ] 
@@ -28440,12 +29969,12 @@ then
                 printf -v chnl_headers_command '%b' "$chnl_headers"
                 profile=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
                 exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
                 if [ -z "$exp_date" ] 
@@ -28480,7 +30009,7 @@ then
                     server=${chnl_xc_proxy%\/}
                     IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" \
                         "$server/?cmd=$chnl_cmd&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                     if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
@@ -28524,7 +30053,7 @@ then
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" \
                         "$create_link_url" | $JQ_FILE -r '.js.cmd') || true
 
@@ -28785,7 +30314,7 @@ then
     MonitorFlvRestartFail()
     {
         StopChannel
-        printf -v now '%(%s)T' -1
+        now=$(DateEpoch)
         recheck_time=$((now+recheck_period))
 
         if [ -n "${failed_restart_nums:-}" ] 
@@ -28961,12 +30490,12 @@ then
 
                 profile=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
                 exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
+                    -H "$(StripSuffix "$chnl_headers" 4)" \
                     --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
                 if [ -z "$exp_date" ] 
@@ -29001,7 +30530,7 @@ then
                     server=${chnl_xc_proxy%\/}
                     IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" \
                         "$server/?cmd=$chnl_cmd&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                     if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
@@ -29045,7 +30574,7 @@ then
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
+                        -H "$(StripSuffix "$chnl_headers" 4)" \
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
@@ -29315,12 +30844,12 @@ then
 
                         profile=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
-                            -H "${chnl_headers:0:-4}" \
+                            -H "$(StripSuffix "$chnl_headers" 4)" \
                             --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
                         exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
-                            -H "${chnl_headers:0:-4}" \
+                            -H "$(StripSuffix "$chnl_headers" 4)" \
                             --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
                         if [ -z "$exp_date" ] 
@@ -29333,7 +30862,7 @@ then
                             server=${chnl_xc_proxy%\/}
                             IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                                 -H "User-Agent: $chnl_user_agent" \
-                                -H "${chnl_headers:0:-4}" \
+                                -H "$(StripSuffix "$chnl_headers" 4)" \
                                 --cookie "$chnl_cookies" \
                                 "$server/?cmd=$chnl_cmd&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                             if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
@@ -29355,7 +30884,7 @@ then
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                             cmd=$(CurlFake xtream_codes -s -Lm 10 \
                                 -H "User-Agent: $chnl_user_agent" \
-                                -H "${chnl_headers:0:-4}" \
+                                -H "$(StripSuffix "$chnl_headers" 4)" \
                                 --cookie "$chnl_cookies" "$create_link_url" \
                                 | $JQ_FILE -r '.js.cmd') || true
 
@@ -30024,9 +31553,24 @@ then
             }'
         )
 
-        jq_merge=true
-        jq_path='["default"]'
-        JQ update "$CHANNELS_FILE" "$update"
+        [ ! -s "$IPTV_CONFIG" ] && printf '{}\n' > "$IPTV_CONFIG"
+        JQ mutate "$IPTV_CONFIG" '. * $u' --argjson u "$update"
+    }
+
+    MonitorFlushRemovedSchedules()
+    {
+        local rm_i
+        if [ "${#schedules_to_remove[@]}" -gt 0 ]
+        then
+            for((rm_i=${#schedules_to_remove[@]}-1;rm_i>=0;rm_i--));
+            do
+                jq_map_string=true
+                jq_path='["channels"]'
+                jq_path2='["schedule",'"${schedules_to_remove[rm_i]}"']'
+                JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+            done
+            schedules_to_remove=()
+        fi
     }
 
     Monitor()
@@ -30035,12 +31579,16 @@ then
         trap 'MonitorErr $LINENO' ERR
 
         pid_file="$IPTV_ROOT/monitor.pid"
-        printf '%s' "$BASHPID" > "$pid_file"
         {
-            flock -x 203
+            if command -v flock > /dev/null 2>&1
+            then
+                flock -x 203
+            fi
+            self_pid=$(GetSubshellPid)
+            printf '%s' "$self_pid" > "$pid_file"
             {
                 mkdir -p "$LIVE_ROOT"
-                MonitorLog "监控启动成功 PID $BASHPID !"
+                MonitorLog "监控启动成功 PID $self_pid !"
 
                 FFmpegInstall
 
@@ -30061,7 +31609,7 @@ then
                 do
                     GetChannels
 
-                    printf -v now '%(%s)T' -1
+                    now=$(DateEpoch)
 
                     if [ "$chnls_count" -gt 0 ] 
                     then
@@ -30069,26 +31617,27 @@ then
 
                         for chnls_index in "${chnls_indices[@]}"
                         do
-                            if [ -z "${chnls_schedule_status[chnls_index]}" ] 
+                            if [ -z "${chnls_schedule_status[chnls_index]:-}" ] 
                             then
                                 continue
                             fi
 
                             output_dir_name="${chnls_output_dir_name[chnls_index]}"
 
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
-                            IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]:-}"
+                            IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-}"
 
                             chnl_schedules_indices=("${!chnl_schedules_status[@]}")
 
                             if [ "${chnls_status[chnls_index]}" == "on" ] 
                             then
+                                schedules_to_remove=()
                                 for chnl_schedules_index in "${chnl_schedules_indices[@]}"
                                 do
                                     if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
@@ -30124,10 +31673,7 @@ then
                                                 JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" "$update"
                                             elif [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
                                             then
-                                                jq_map_string=true
-                                                jq_path='["channels"]'
-                                                jq_path2='["schedule",'"$chnl_schedules_index"']'
-                                                JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+                                                schedules_to_remove+=("$chnl_schedules_index")
                                             else
                                                 jq_map_string=true
                                                 jq_number=true
@@ -30194,6 +31740,7 @@ then
                                                     then
                                                         channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                                     fi
+                                                    MonitorFlushRemovedSchedules
                                                     continue 3
                                                 fi
                                             done
@@ -30220,6 +31767,7 @@ then
                                                         then
                                                             channel_name[i]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                                         fi
+                                                        MonitorFlushRemovedSchedules
                                                         continue 3
                                                     fi
                                                 done
@@ -30245,9 +31793,10 @@ then
                                                 channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                             fi
                                         fi
-                                        continue 2
+                                        break
                                     fi
                                 done
+                                MonitorFlushRemovedSchedules
                             elif [ "${chnls_flv_status[chnls_index]}" == "off" ] 
                             then
                                 for flv_index in ${flv_indices[@]+"${flv_indices[@]}"}
@@ -30266,6 +31815,7 @@ then
                                     fi
                                 done
 
+                                schedules_to_remove=()
                                 for chnl_schedules_index in "${chnl_schedules_indices[@]}"
                                 do
                                     if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
@@ -30303,10 +31853,7 @@ then
                                                 JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" "$update"
                                             elif [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
                                             then
-                                                jq_map_string=true
-                                                jq_path='["channels"]'
-                                                jq_path2='["schedule",'"$chnl_schedules_index"']'
-                                                JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+                                                schedules_to_remove+=("$chnl_schedules_index")
                                             else
                                                 jq_map_string=true
                                                 jq_number=true
@@ -30371,6 +31918,7 @@ then
                                                     then
                                                         channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                                     fi
+                                                    MonitorFlushRemovedSchedules
                                                     continue 3
                                                 fi
                                             done
@@ -30394,6 +31942,7 @@ then
                                                     then
                                                         channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                                     fi
+                                                    MonitorFlushRemovedSchedules
                                                     continue 3
                                                 fi
                                             done
@@ -30420,6 +31969,7 @@ then
                                                         then
                                                             channel_name[i]="${chnl_schedules_channel_name[chnl_schedules_index]}"
                                                         fi
+                                                        MonitorFlushRemovedSchedules
                                                         continue 3
                                                     fi
                                                 done
@@ -30479,9 +32029,10 @@ then
 
                                             MonitorHlsRemoveFailed
                                         fi
-                                        continue 2
+                                        break
                                     fi
                                 done
+                                MonitorFlushRemovedSchedules
                             fi
                         done
                     fi
@@ -30531,7 +32082,7 @@ then
                     then
                         current_minute_old=${current_minute:-}
                         current_hour_old=${current_hour:-25}
-                        printf -v current_time '%(%H:%M)T' -1
+                        current_time=$(date '+%H:%M')
                         current_hour=${current_time%:*}
                         current_minute=${current_time#*:}
 
@@ -30588,8 +32139,12 @@ then
 
                             for((i=0;i<restart_nums;i++));
                             do
-                                while true 
+                                tries=0
+                                max_tries=200
+                                found_minute=0
+                                while [ "$tries" -lt "$max_tries" ]
                                 do
+                                    tries=$((tries+1))
                                     rand_minute=$((RANDOM % 60))
                                     if [ "$rand_minute" -gt "$current_minute" ] 
                                     then
@@ -30614,10 +32169,25 @@ then
 
                                         if [ "$valid" -eq 1 ] 
                                         then
+                                            found_minute=1
                                             break
                                         fi
                                     fi
                                 done
+
+                                if [ "$found_minute" -eq 0 ]
+                                then
+                                    minutes=()
+                                    slot_step=$((minutes_left / restart_nums))
+                                    [ "$slot_step" -lt 1 ] && slot_step=1
+                                    for((j=0;j<restart_nums;j++));
+                                    do
+                                        slot_minute=$((current_minute + 1 + j * slot_step))
+                                        [ "$slot_minute" -gt 59 ] && break
+                                        minutes+=("$slot_minute")
+                                    done
+                                    break
+                                fi
 
                                 minutes+=("$rand_minute")
                             done
@@ -30658,7 +32228,7 @@ then
 
                                 if [ -n "${flv_first_fail:-}" ] 
                                 then
-                                    printf -v flv_fail_time '%(%s)T' -1
+                                    flv_fail_time=$(DateEpoch)
                                     if [ $((flv_fail_time - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                                     then
                                         flv_first_fail=""
@@ -30671,7 +32241,7 @@ then
                                         MonitorLog "$chnl_channel_name FLV 恢复启动"
                                         MonitorFlvRestartChannel
                                     else
-                                        printf -v flv_first_fail '%(%s)T' -1
+                                        flv_first_fail=$(DateEpoch)
                                     fi
 
                                     new_array=("$flv_index")
@@ -30929,7 +32499,6 @@ then
 
                                         if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] || [[ $video_bitrate -lt $hls_min_bitrate ]]
                                         then
-                                            [ -n "$encrypt_command" ] && f="crypto:$f"
                                             fail_count=1
                                             f_count=1
 
@@ -30942,6 +32511,8 @@ then
                                                 fi
 
                                                 [ ! -e "$f" ] && continue
+
+                                                [ -n "$encrypt_command" ] && f="crypto:$f"
 
                                                 audio=0
                                                 video=0
@@ -31029,37 +32600,11 @@ then
                     WaitTerm
                 done
             } 203>&-
-        } 203<"$pid_file"
+        } 203>>"$pid_file"
     }
 
     MonitorStop()
     {
-        # deprecated
-        if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
-        then
-            for PID in "/tmp/monitor.lockdir/"*
-            do
-                PID=${PID##*/}
-                if kill -0 "$PID" 2> /dev/null
-                then
-                    kill "$PID" 2> /dev/null
-                    MonitorLog "关闭监控 PID $PID !"
-                else
-                    rm -f "/tmp/monitor.lockdir/$PID"
-                fi
-            done
-
-            Println "$info 关闭监控, 稍等..."
-
-            until ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
-            do
-                sleep 1
-            done
-
-            rm -rf "/tmp/monitor.lockdir/"
-            Println "$info 监控关闭成功 !\n"
-        fi
-
         if [ -s "$IPTV_ROOT/monitor.pid" ]
         then
             PID=$(< "$IPTV_ROOT/monitor.pid")
@@ -31069,8 +32614,13 @@ then
                 kill "$PID" 2> /dev/null
 
                 i=0
-                while ps -p $PID -o pid= >/dev/null
+                while true
                 do
+                    proc_stat=$(ps -p "$PID" -o stat= 2> /dev/null | tr -d '[:space:]')
+                    if [ -z "$proc_stat" ] || [[ $proc_stat == Z* ]]
+                    then
+                        break
+                    fi
                     sleep 0.05
                     i=$((i+1))
                     [ "$i" == 200 ] && Println "$error HLS/FLV 监控关闭超时, 请重试\n" && exit 1
@@ -31095,13 +32645,33 @@ then
             then
                 Println "$info 关闭 antiddos, 稍等..."
                 kill "$PID" 2> /dev/null
-                if flock -E 1 -w 20 -x "$IPTV_ROOT/antiddos.pid" rm -f "$IPTV_ROOT/antiddos.pid"
+
+                if command -v flock > /dev/null 2>&1
                 then
+                    if flock -E 1 -w 20 -x "$IPTV_ROOT/antiddos.pid" rm -f "$IPTV_ROOT/antiddos.pid"
+                    then
+                        Println "$info AntiDDos 监控 关闭成功 !\n"
+                        MonitorLog "关闭 antiddos PID $PID !"
+                    else
+                        Println "$error AntiDDos 监控关闭超时, 请重试\n"
+                        exit 1
+                    fi
+                else
+                    i=0
+                    while true
+                    do
+                        proc_stat=$(ps -p "$PID" -o stat= 2> /dev/null | tr -d '[:space:]')
+                        if [ -z "$proc_stat" ] || [[ $proc_stat == Z* ]]
+                        then
+                            break
+                        fi
+                        sleep 0.05
+                        i=$((i+1))
+                        [ "$i" == 200 ] && Println "$error AntiDDos 监控关闭超时, 请重试\n" && exit 1
+                    done
+                    rm -f "$IPTV_ROOT/antiddos.pid"
                     Println "$info AntiDDos 监控 关闭成功 !\n"
                     MonitorLog "关闭 antiddos PID $PID !"
-                else
-                    Println "$error AntiDDos 监控关闭超时, 请重试\n"
-                    exit 1
                 fi
             else
                 rm -f "$IPTV_ROOT/antiddos.pid"
@@ -31140,7 +32710,7 @@ then
             then
                 new_ips=()
                 new_jail_time=()
-                printf -v now '%(%s)T' -1
+                now=$(DateEpoch)
 
                 update=0
                 for((i=0;i<${#ips[@]};i++));
@@ -31175,13 +32745,13 @@ then
 
     MonitorLog()
     {
-        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+        date_now=$(date '+%m-%d %H:%M:%S')
         printf '%s\n' "$date_now $1" >> "$MONITOR_LOG"
     }
 
     MonitorErr()
     {
-        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+        date_now=$(date '+%m-%d %H:%M:%S')
         printf '%s\n' "$date_now [ERROR: $1]" >> "$MONITOR_LOG"
     }
     EditDefaultMenu()
@@ -31454,10 +33024,11 @@ then
     Set4gtvAccEmail()
     {
         Println "输入新账号邮箱"
-        while read -p "(默认: 随机): " _4gtv_acc_email 
+        while read -r -p "(默认: 随机): " _4gtv_acc_email
         do
-            [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
-            if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
+            [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(DateEpoch)@gmail.com"
+
+            if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]]
             then
                 break
             else
@@ -31470,10 +33041,10 @@ then
     Set4gtvAccPass()
     {
         Println "输入新账号密码(字母或数字 8-12 位)"
-        while read -p "(默认: 随机): " _4gtv_acc_pass 
+        while read -r -p "(默认: 随机): " _4gtv_acc_pass
         do
             [ -z "$_4gtv_acc_pass" ] && _4gtv_acc_pass=$(RandStr)
-            if [[ $_4gtv_acc_pass =~ ^[A-Za-z0-9]{8,12}$ ]] 
+            if [[ $_4gtv_acc_pass =~ ^[A-Za-z0-9]{8,12}$ ]]
             then
                 break
             else
@@ -31484,19 +33055,29 @@ then
     }
     Reg4gtvAcc()
     {
+        JQInstall
         Set4gtvAccEmail
         Set4gtvAccPass
         IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/signup.html' \
-            -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
+            --data-urlencode "fnREGISTER_TYPE=1" \
+            --data-urlencode "fsLOGIN_TYPE=" \
+            --data-urlencode "fsLINK_ID=" \
+            --data-urlencode "fsUSER=$_4gtv_acc_email" \
+            --data-urlencode "fsPASSWORD=$_4gtv_acc_pass" \
+            --data-urlencode "fsPASSWORD1=$_4gtv_acc_pass" \
+            --data-urlencode "fnBIRTH_YEAR=$((RANDOM%20+1980))" \
+            --data-urlencode "fsSEX=male" \
             https://api2.4gtv.tv/Account/Register \
             | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
         ) || true
 
         if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
         then
-            if [ ! -s "$SERVICES_CONFIG" ] 
+            mkdir -p "$SERVICES_ROOT"
+
+            if [ ! -s "$SERVICES_CONFIG" ]
             then
                 printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
             fi
@@ -31508,8 +33089,14 @@ then
                 }'
             )
             jq_path='["4gtv","accounts"]'
-            JQ add "$SERVICES_CONFIG" "[$new_acc]"
-            Println "$info 账号注册成功\n"
+
+            if JQ add "$SERVICES_CONFIG" "[$new_acc]"
+            then
+                Println "$info 账号注册成功\n"
+            else
+                Println "$error 账号保存失败\n"
+                return 1
+            fi
         else
             Println "$error 账号注册失败, 请重试\n\n$msg\n"
         fi
@@ -31519,6 +33106,7 @@ then
         ServiceGet 4gtv
         _4gtv_accs_list=""
 
+        local i
         for((i=0;i<_4gtv_accs_count;i++));
         do
             if [ -n "${_4gtv_accs_token[i]:-}" ]
@@ -31530,7 +33118,7 @@ then
             _4gtv_accs_list="$_4gtv_accs_list ${green}$((i+1)).${normal}${indent_6}邮箱: ${green}${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: ${green}${_4gtv_accs_pass[i]}${normal}\n\n"
         done
 
-        if [ -n "$_4gtv_accs_list" ] 
+        if [ -n "$_4gtv_accs_list" ]
         then
             Println "$_4gtv_accs_list"
         else
@@ -31539,7 +33127,7 @@ then
     }
     Login4gtvAcc()
     {
-        if [ ! -e "/usr/local/bin/imgcat" ] 
+        if [ ! -e "$IMGCAT_FILE" ]
         then
             ImgcatInstall
         fi
@@ -31550,7 +33138,7 @@ then
         echo -e " ${green}$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
 
         echo -e "选择账号"
-        while read -p "$i18n_default_cancel" _4gtv_accs_num
+        while read -r -p "$i18n_default_cancel" _4gtv_accs_num
         do
             case "$_4gtv_accs_num" in
                 "")
@@ -31563,6 +33151,12 @@ then
                     _4gtv_accs_index=$((_4gtv_accs_num-1))
                     Set4gtvAccEmail
                     Set4gtvAccPass
+                    mkdir -p "$SERVICES_ROOT"
+
+                    if [ ! -s "$SERVICES_CONFIG" ]
+                    then
+                        printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
+                    fi
                     new_acc=$(
                     $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
                         '{
@@ -31571,8 +33165,14 @@ then
                         }'
                     )
                     jq_path='["4gtv","accounts"]'
-                    JQ add "$SERVICES_CONFIG" "[$new_acc]"
-                    Println "$info 账号添加成功\n"
+
+                    if JQ add "$SERVICES_CONFIG" "[$new_acc]"
+                    then
+                        Println "$info 账号添加成功\n"
+                    else
+                        Println "$error 账号保存失败\n"
+                        return 1
+                    fi
                     break
                 ;;
                 *)
@@ -31589,33 +33189,52 @@ then
             esac
         done
 
-        IMG_FILE="$IPTV_ROOT/4gtv.png"
-
         ImageMagickInstall
 
-        while true 
+        local img_file
+        while true
         do
-            if CurlFake -s -Lm 20 \
+            img_file=$(mktemp "${TMPDIR:-/tmp}/aios-4gtv.XXXXXX")
+            if ! CurlFake -s -Lm 20 \
                 -H 'authority: www.4gtv.tv' \
                 -H 'referer: https://www.4gtv.tv/channel.html' \
-                "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && "$IMGCAT_FILE" --half-height "$IMG_FILE"
+                "https://www.4gtv.tv/validatecode?t=$(DateMs)" -o "$img_file" || [ ! -s "$img_file" ]
             then
-                rm -f "${IMG_FILE:-notfound}"
-                Println "$info 输入图片验证码: "
-                read -p "(默认: 刷新验证码): " validatecode
-                [ -z "$validatecode" ] && continue
-            else
-                ImageMagickInstall
-                rm -f "${IMG_FILE:-notfound}"
-                Println "$error 连接发生错误, 请重试\n"
+                rm -f "$img_file"
+                Println "$error 获取验证码图片失败, 请重试\n"
                 exit 1
             fi
+
+            if ! "$IMGCAT_FILE" --half-height "$img_file"
+            then
+                ImageMagickInstall
+
+                if ! "$IMGCAT_FILE" --half-height "$img_file"
+                then
+                    rm -f "$img_file"
+                    Println "$error 显示验证码图片失败, 请重试\n"
+                    exit 1
+                fi
+            fi
+
+            rm -f "$img_file"
+            Println "$info 输入图片验证码: "
+            read -r -p "(默认: 刷新验证码, 输入 q 退出): " validatecode
+
+            if [ "$validatecode" == "q" ] || [ "$validatecode" == "Q" ]
+            then
+                Println "$i18n_canceled...\n"
+                return 1
+            fi
+            [ -z "$validatecode" ] && continue
 
             Println "$info 登录账号..."
             IFS="^" read -r result msg token < <(CurlFake -s -Lm 20 \
                 -H 'Origin: https://www.4gtv.tv' \
                 -H 'Referer: https://www.4gtv.tv/channel.html' \
-                -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
+                --data-urlencode "fsUSER=$_4gtv_acc_email" \
+                --data-urlencode "fsPASSWORD=$_4gtv_acc_pass" \
+                --data-urlencode "fsVALIDATE_CODE=$validatecode" \
                 https://api2.4gtv.tv/Account/SignIn \
                 | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
             ) || true
@@ -31629,39 +33248,58 @@ then
         done
 
         jq_path='["4gtv","accounts",'"$_4gtv_accs_index"',"token"]'
-        JQ update "$SERVICES_CONFIG" "$token"
+
+        if ! JQ update "$SERVICES_CONFIG" "$token"
+        then
+            Println "$error 保存登录令牌失败\n"
+            return 1
+        fi
         Println "$info 账号登录成功"
         Println "$info 验证账号..."
+
+        local i
+        result=""
         for((i=0;i<3;i++));
         do
-            random_number=$(od -An -N6 -t u8 < /dev/urandom)
-            random_number=${random_number: -12}
+            random_number=$(od -An -N8 -t u8 < /dev/urandom | tr -d '[:space:]')
+            if [ "${#random_number}" -gt 12 ]
+            then
+                random_number=${random_number:$(( ${#random_number} - 12 ))}
+            fi
             fsLINK_ID="$random_number${random_number:0:9}"
             IFS="^" read -r result < <(CurlFake -s -Lm 20 \
                 -H 'Origin: https://www.4gtv.tv' \
                 -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
-                -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
+                -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper "$token")" \
                 https://api2.4gtv.tv/Account/SignIn \
                 | $JQ_FILE -r '.Success'
             ) || true
 
-            if [ "$result" = true ] 
+            if [ "$result" = true ]
             then
                 break
             fi
         done
-        Println "$info 账号验证成功"
+
+        if [ "$result" = true ]
+        then
+            Println "$info 账号验证成功"
+        else
+            Println "$error 账号验证失败, 请重试\n"
+            return 1
+        fi
+
         Println "$info 开启 30 天豪华套餐"
 
         IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
-            -d "fsVALUE=$(UrlencodeUpper $token)" \
+            -d "fsVALUE=$(UrlencodeUpper "$token")" \
             https://api2.4gtv.tv/Account/AccountPromo \
             | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
         ) || true
 
-        if [ "$result" = true ] 
+        if [ "$result" = true ]
         then
             Println "$info 30 天豪华套餐开启成功\n"
         else
@@ -31672,13 +33310,13 @@ then
     {
         List4gtvAccs
 
-        if [ "$_4gtv_accs_count" -eq 0 ] 
+        if [ "$_4gtv_accs_count" -eq 0 ]
         then
             exit 1
         fi
 
         echo -e "选择账号"
-        while read -p "$i18n_default_cancel" _4gtv_accs_num
+        while read -r -p "$i18n_default_cancel" _4gtv_accs_num
         do
             case "$_4gtv_accs_num" in
                 "")
@@ -31692,7 +33330,8 @@ then
                     then
                         _4gtv_accs_index=$((_4gtv_accs_num-1))
                         fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
-                        if [ -z "$fsVALUE" ] 
+
+                        if [ -z "$fsVALUE" ]
                         then
                             Println "$error 请先登录此账号\n"
                             exit 1
@@ -31701,17 +33340,21 @@ then
                             IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(CurlFake -s -Lm 20 \
                                 -H 'Origin: https://www.4gtv.tv' \
                                 -H 'Referer: https://www.4gtv.tv/channel.html' \
-                                -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
-                                https://api2.4gtv.tv//Account/GetAccountInfo \
+                                -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper "$fsVALUE")" \
+                                https://api2.4gtv.tv/Account/GetAccountInfo \
                                 | $JQ_FILE -r '[.Success,.ErrMessage,.Data.fnLEFT_PROMO_DAYS]|join("^")'
                             ) || true
-                            if [ "$result" = true ] 
+
+                            if [ "$result" = true ]
                             then
-                                if [ "$fnLEFT_PROMO_DAYS" -eq -1 ] 
+                                if [[ $fnLEFT_PROMO_DAYS =~ ^-?[0-9]+$ ]] && [ "$fnLEFT_PROMO_DAYS" -eq -1 ]
                                 then
                                     days_left="${red}未开通${normal}"
-                                else
+                                elif [[ $fnLEFT_PROMO_DAYS =~ ^-?[0-9]+$ ]]
+                                then
                                     days_left="还剩 ${green}$fnLEFT_PROMO_DAYS${normal} 天"
+                                else
+                                    days_left="${red}未知${normal}"
                                 fi
                                 Println "$info 豪华套餐: $days_left\n"
                             else
@@ -31730,13 +33373,13 @@ then
     {
         List4gtvAccs
 
-        if [ "$_4gtv_accs_count" -eq 0 ] 
+        if [ "$_4gtv_accs_count" -eq 0 ]
         then
             exit 1
         fi
 
         echo -e "选择账号"
-        while read -p "$i18n_default_cancel" _4gtv_accs_num
+        while read -r -p "$i18n_default_cancel" _4gtv_accs_num
         do
             case "$_4gtv_accs_num" in
                 "")
@@ -31758,10 +33401,16 @@ then
                                 password: $password
                             }'
                         )
-                        jq_json=true
+                        jq_merge=true
                         jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
-                        JQ update "$SERVICES_CONFIG" "$new_acc"
-                        Println "$info 账号修改成功\n"
+
+                        if JQ update "$SERVICES_CONFIG" "$new_acc"
+                        then
+                            Println "$info 账号修改成功\n"
+                        else
+                            Println "$error 账号修改失败\n"
+                            return 1
+                        fi
                         break
                     else
                         Println "$error $i18n_input_correct_no\n"
@@ -31774,13 +33423,13 @@ then
     {
         List4gtvAccs
 
-        if [ "$_4gtv_accs_count" -eq 0 ] 
+        if [ "$_4gtv_accs_count" -eq 0 ]
         then
             exit 1
         fi
 
         echo -e "选择账号"
-        while read -p "$i18n_default_cancel" _4gtv_accs_num
+        while read -r -p "$i18n_default_cancel" _4gtv_accs_num
         do
             case "$_4gtv_accs_num" in
                 "")
@@ -31794,8 +33443,14 @@ then
                     then
                         _4gtv_accs_index=$((_4gtv_accs_num-1))
                         jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
-                        JQ delete "$SERVICES_CONFIG"
-                        Println "$info 账号删除成功\n"
+
+                        if JQ delete "$SERVICES_CONFIG"
+                        then
+                            Println "$info 账号删除成功\n"
+                        else
+                            Println "$error 账号删除失败\n"
+                            return 1
+                        fi
                         break
                     else
                         Println "$error $i18n_input_correct_no\n"
@@ -31808,13 +33463,13 @@ then
     {
         List4gtvAccs
 
-        if [ "$_4gtv_accs_count" -eq 0 ] 
+        if [ "$_4gtv_accs_count" -eq 0 ]
         then
             exit 1
         fi
 
         echo -e "选择账号"
-        while read -p "$i18n_default_cancel" _4gtv_accs_num
+        while read -r -p "$i18n_default_cancel" _4gtv_accs_num
         do
             case "$_4gtv_accs_num" in
                 "")
@@ -31828,7 +33483,8 @@ then
                     then
                         _4gtv_accs_index=$((_4gtv_accs_num-1))
                         fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
-                        if [ -z "$fsVALUE" ] 
+
+                        if [ -z "$fsVALUE" ]
                         then
                             Println "$error 请先登录此账号\n"
                             exit 1
@@ -31844,9 +33500,15 @@ then
     Use4gtvProxy()
     {
         GetDefault
-        d_4gtv_proxy=${d_4gtv_proxy:-$d_proxy}
+        d_4gtv_proxy=${d_4gtv_proxy:-${d_proxy:-}}
+
+        if [ -z "$d_4gtv_proxy" ]
+        then
+            ServiceGet 4gtv
+            d_4gtv_proxy=${d_4gtv_proxy:-${d_proxy:-}}
+        fi
         Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
-        inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_4gtv_proxy:-$i18n_blank}"
+        inquirer text_input "请输入 4gtv 代理, 比如 http://username:password@127.0.0.1:5555 : " _4gtv_proxy "${d_4gtv_proxy:-$i18n_blank}"
         if [ -z "$_4gtv_proxy" ] || [ "$_4gtv_proxy" == "omit" ]
         then
             _4gtv_proxy=""
@@ -31857,19 +33519,29 @@ then
     }
     _4gtvCron()
     {
-        _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
+        JQInstall
+        _4gtv_acc_email="$(RandStr)_$(DateEpoch)@gmail.com"
         _4gtv_acc_pass=$(RandStr)
         IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/signup.html' \
-            -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
+            --data-urlencode "fnREGISTER_TYPE=1" \
+            --data-urlencode "fsLOGIN_TYPE=" \
+            --data-urlencode "fsLINK_ID=" \
+            --data-urlencode "fsUSER=$_4gtv_acc_email" \
+            --data-urlencode "fsPASSWORD=$_4gtv_acc_pass" \
+            --data-urlencode "fsPASSWORD1=$_4gtv_acc_pass" \
+            --data-urlencode "fnBIRTH_YEAR=$((RANDOM%20+1980))" \
+            --data-urlencode "fsSEX=male" \
             https://api2.4gtv.tv/Account/Register \
             | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
         ) || true
 
         if [ "$result" = true ]
         then
-            if [ ! -s "$SERVICES_CONFIG" ] 
+            mkdir -p "$SERVICES_ROOT"
+
+            if [ ! -s "$SERVICES_CONFIG" ]
             then
                 printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
             fi
@@ -31881,117 +33553,45 @@ then
                 }'
             )
             jq_path='["4gtv","accounts"]'
-            JQ add "$SERVICES_CONFIG" "[$new_acc]"
-            Println "$info 账号注册成功\n"
+
+            if JQ add "$SERVICES_CONFIG" "[$new_acc]"
+            then
+                Println "$info 账号注册成功\n"
+            else
+                Println "$error 账号保存失败\n"
+                exit 1
+            fi
         else
             Println "$error 账号注册失败, 请重试\n\n$msg\n"
         fi
 
         exit 0
-
-        IMG_FILE="$IPTV_ROOT/4gtv.png"
-
-        ImageMagickInstall
-
-        for((i=0;i<5;i++));
-        do
-            if CurlFake -s -Lm 20 \
-                -H 'authority: www.4gtv.tv' \
-                -H 'referer: https://www.4gtv.tv/channel.html' \
-                "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && "$IMGCAT_FILE" --half-height "$IMG_FILE"
-            then
-                rm -f "${IMG_FILE:-notfound}"
-                Println "$info 输入图片验证码: "
-                read -p "(默认: 刷新验证码): " validatecode
-                [ -z "$validatecode" ] && continue
-            else
-                ImageMagickInstall
-                rm -f "${IMG_FILE:-notfound}"
-            fi
-
-            Println "$info 登录账号..."
-            IFS="^" read -r result msg token < <(CurlFake -s -Lm 20 \
-                -H 'Origin: https://www.4gtv.tv' \
-                -H 'Referer: https://www.4gtv.tv/channel.html' \
-                -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
-                https://api2.4gtv.tv/Account/SignIn \
-                | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
-            ) || true
-
-            if [ "$result" = true ]
-            then
-                break
-            elif [ "$i" -eq 4 ] 
-            then
-                Println "$error 账号登录失败, 请重试\n\n$msg\n"
-                exit 1
-            fi
-        done
-
-        jq_map_string=true
-        jq_path='["4gtv","accounts"]'
-        jq_path2='["token"]'
-        JQ update "$SERVICES_CONFIG" email "$_4gtv_acc_email" "$token"
-
-        Println "$info 账号登录成功"
-        Println "$info 验证账号..."
-        for((i=0;i<3;i++));
-        do
-            random_number=$(od -An -N6 -t u8 < /dev/urandom)
-            random_number=${random_number: -12}
-            fsLINK_ID="$random_number${random_number:0:9}"
-            IFS="^" read -r result < <(CurlFake -s -Lm 20 \
-                -H 'Origin: https://www.4gtv.tv' \
-                -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
-                -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
-                https://api2.4gtv.tv/Account/SignIn \
-                | $JQ_FILE -r '.Success'
-            ) || true
-
-            if [ "$result" = true ] 
-            then
-                break
-            fi
-        done
-        Println "$info 账号验证成功"
-        Println "$info 开启 30 天豪华套餐"
-
-        IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
-            -H 'Origin: https://www.4gtv.tv' \
-            -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
-            -d "fsVALUE=$(UrlencodeUpper $token)" \
-            https://api2.4gtv.tv/Account/AccountPromo \
-            | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
-        ) || true
-
-        if [ "$result" = true ] 
-        then
-            Println "$info 30 天豪华套餐开启成功\n"
-        else
-            Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
-        fi
     }
     Enable4gtvCron()
     {
-        if crontab -l | grep -q "$AIOS_PREFIX/bin/tv 4g -" 2> /dev/null
+        if crontab -l 2> /dev/null | grep -Fq -- "$AIOS_PREFIX/bin/tv 4g -"
         then
             Println "$error 定时任务 (每5天注册账号) 已开启 !\n"
         else
-            crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-            printf '%s\n' "0 0 */5 * * $AIOS_PREFIX/bin/tv 4g -" >> "$IPTV_ROOT/cron_tmp"
-            crontab "$IPTV_ROOT/cron_tmp" > /dev/null
-            rm -f "$IPTV_ROOT/cron_tmp"
+            local cron_tmp
+            cron_tmp=$(mktemp "${TMPDIR:-/tmp}/aios-cron.XXXXXX")
+            crontab -l > "$cron_tmp" 2> /dev/null || true
+            printf '%s\n' "0 0 */5 * * $AIOS_PREFIX/bin/tv 4g -" >> "$cron_tmp"
+            crontab "$cron_tmp" > /dev/null
+            rm -f "$cron_tmp"
             Println "$info 定时任务 (每5天注册账号) 开启成功\n"
         fi
     }
     Disable4gtvCron()
     {
-        if crontab -l | grep -q "$AIOS_PREFIX/bin/tv 4g -" 2> /dev/null
+        if crontab -l 2> /dev/null | grep -Fq -- "$AIOS_PREFIX/bin/tv 4g -"
         then
-            crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-            sed -i "/\/usr\/local\/bin\/tv 4g -/d" "$IPTV_ROOT/cron_tmp"
-            crontab "$IPTV_ROOT/cron_tmp" > /dev/null
-            rm -f "$IPTV_ROOT/cron_tmp"
+            local cron_tmp
+            cron_tmp=$(mktemp "${TMPDIR:-/tmp}/aios-cron.XXXXXX")
+            crontab -l > "$cron_tmp" 2> /dev/null || true
+            FilterFileLines "$AIOS_PREFIX/bin/tv 4g -" "$cron_tmp"
+            crontab "$cron_tmp" > /dev/null
+            rm -f "$cron_tmp"
             Println "$info 定时任务 (每5天注册账号) 关闭成功\n"
         else
             Println "$error 定时任务 (每5天注册账号) 未开启 !\n"
@@ -31999,15 +33599,9 @@ then
     }
     Add4gtvLink()
     {
-        if [[ $stream_link_url =~ \.m3u8$ ]] 
+        if [[ $stream_link_url =~ \.m3u8$ ]]
         then
             Println "$error 你的 IP 可能已被禁\n"
-
-            if [ "$monitor" = true ] 
-            then
-                return 0
-            fi
-
             return 1
         fi
 
@@ -32017,13 +33611,19 @@ then
         stream_urls_list=""
         stream_urls_count=0
 
-        while IFS= read -r line 
+        local header_clean=${headers%\\r\\n}
+        header_clean=${header_clean%$'\r\n'}
+        header_clean=${header_clean%$'\n'}
+        header_clean=${header_clean%$'\r'}
+
+        local line
+        while IFS= read -r line
         do
-            if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+            if [[ $line =~ RESOLUTION=([^ ]+) ]]
             then
                 stream_url_resolution=${BASH_REMATCH[1]%%,*}
                 stream_urls_resolution+=("$stream_url_resolution")
-                if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+                if [[ $line =~ BANDWIDTH=([^ ]+) ]]
                 then
                     stream_url_bitrate=${BASH_REMATCH[1]%%,*}
                     stream_url_bitrate=$((stream_url_bitrate/1000))
@@ -32031,7 +33631,7 @@ then
                     stream_url_bitrate=""
                 fi
                 stream_urls_bitrate+=("$stream_url_bitrate")
-                if [ -n "$stream_url_bitrate" ] 
+                if [ -n "$stream_url_bitrate" ]
                 then
                     stream_url_bitrate_text=" [ $stream_url_bitrate k ]"
                 else
@@ -32039,17 +33639,18 @@ then
                 fi
                 stream_urls_count=$((stream_urls_count+1))
                 stream_urls_list="$stream_urls_list ${green}$stream_urls_count.${normal}${indent_6}$stream_url_resolution$stream_url_bitrate_text\n\n"
-            elif [[ $line =~ m3u8 ]] 
+            elif [[ $line =~ m3u8 ]]
             then
                 stream_urls+=("$stream_link_url_path/$line")
             fi
-        done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_link_url")
+        done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "$header_clean" "$stream_link_url")
 
-        if [ -n "$stream_urls_list" ] 
+        if [ -n "$stream_urls_list" ]
         then
             stream_url_root=${stream_link%%|*}
 
-            if [[ $stream_link =~ \|([^|]+)$ ]] 
+            local i j stream_url_num start end
+            if [[ $stream_link =~ \|([^|]+)$ ]]
             then
                 choose=0
                 stream_url_quality=${BASH_REMATCH[1]}
@@ -32073,14 +33674,15 @@ then
                     Println "$error ${stream_url_qualities[i]} 不存在 !"
                     choose=1
                     Println "$error 请重新选择 $channel_name 分辨率"
+                    break
                 done
             else
                 choose=1
             fi
 
-            if [ "$choose" -eq 1 ] 
+            if [ "$choose" -eq 1 ]
             then
-                if [ -z "${kind:-}" ] 
+                if [ -z "${kind:-}" ]
                 then
                     stream_urls_select_all=$((stream_urls_count+1))
                     stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}全部\n"
@@ -32092,11 +33694,11 @@ then
                     echo "选择分辨率"
                 fi
 
-                while read -p "(默认: $stream_urls_count): " stream_urls_num 
+                while read -r -p "(默认: $stream_urls_count): " stream_urls_num
                 do
                     stream_urls_num=${stream_urls_num:-$stream_urls_count}
 
-                    if [ "$stream_urls_num" == "$stream_urls_select_all" ] 
+                    if [ "$stream_urls_num" == "$stream_urls_select_all" ]
                     then
                         stream_url_qualities=()
                         stream_url_video_indices=()
@@ -32118,9 +33720,15 @@ then
                     do
                         case "$stream_url_num" in
                             *"-"*)
+                                if [[ ! $stream_url_num =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+                                then
+                                    error_no=3
+                                    break
+                                fi
                                 stream_url_num_start=${stream_url_num%-*}
                                 stream_url_num_end=${stream_url_num#*-}
-                                if [[ $stream_url_num_start == *[!0-9]* ]] || [[ $stream_url_num_end == *[!0-9]* ]] || [ "$stream_url_num_start" -eq 0 ] || [ "$stream_url_num_end" -eq 0 ] || [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
+
+                                if [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
                                 then
                                     error_no=3
                                     break
@@ -32131,7 +33739,7 @@ then
                                 break
                             ;;
                             *)
-                                if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ] 
+                                if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ]
                                 then
                                     error_no=2
                                     break
@@ -32150,7 +33758,7 @@ then
 
                             for stream_url_num in "${stream_urls_num_arr[@]}"
                             do
-                                if [[ $stream_url_num =~ - ]] 
+                                if [[ $stream_url_num =~ - ]]
                                 then
                                     start=${stream_url_num%-*}
                                     end=${stream_url_num#*-}
@@ -32177,9 +33785,9 @@ then
             stream_url_quality=${stream_url_quality:1}
             stream_links[0]="$stream_url_root|$stream_url_quality"
 
-            if [ -n "${_4gtv_proxy_command:-}" ] 
+            if [ -n "${_4gtv_proxy_command[*]:-}" ] && [ "${#_4gtv_proxy_command[@]}" -gt 0 ] && [[ $stream_link == https://* ]]
             then
-                stream_link="http://${stream_link:8}"
+                stream_link="http://${stream_link#https://}"
             fi
         else
             Println "$error 频道 [ $channel_name ] 不可用\n"
@@ -32188,14 +33796,10 @@ then
     }
     Start4gtvLink()
     {
-        if [[ $chnl_stream_link_url =~ \.m3u8$ ]] 
+        if [[ $chnl_stream_link_url =~ \.m3u8$ ]]
         then
             Println "$error 你的 IP 可能已被禁\n"
-            if [ "$monitor" = true ] 
-            then
-                return 0
-            fi
-            exit 1
+            return 1
         fi
 
         chnl_stream_urls=()
@@ -32204,13 +33808,19 @@ then
         chnl_stream_urls_list=""
         chnl_stream_urls_count=0
 
-        while IFS= read -r line 
+        local chnl_header_clean=${chnl_headers%\\r\\n}
+        chnl_header_clean=${chnl_header_clean%$'\r\n'}
+        chnl_header_clean=${chnl_header_clean%$'\n'}
+        chnl_header_clean=${chnl_header_clean%$'\r'}
+
+        local line
+        while IFS= read -r line
         do
-            if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+            if [[ $line =~ RESOLUTION=([^ ]+) ]]
             then
                 chnl_stream_url_resolution=${BASH_REMATCH[1]%%,*}
                 chnl_stream_urls_resolution+=("$chnl_stream_url_resolution")
-                if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+                if [[ $line =~ BANDWIDTH=([^ ]+) ]]
                 then
                     chnl_stream_url_bitrate=${BASH_REMATCH[1]%%,*}
                     chnl_stream_url_bitrate=$((chnl_stream_url_bitrate/1000))
@@ -32218,7 +33828,7 @@ then
                     chnl_stream_url_bitrate=""
                 fi
                 chnl_stream_urls_bitrate+=("$chnl_stream_url_bitrate")
-                if [ -n "$chnl_stream_url_bitrate" ] 
+                if [ -n "$chnl_stream_url_bitrate" ]
                 then
                     chnl_stream_url_bitrate_text=" [ $chnl_stream_url_bitrate k ]"
                 else
@@ -32226,18 +33836,19 @@ then
                 fi
                 chnl_stream_urls_count=$((chnl_stream_urls_count+1))
                 chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_count.${normal}${indent_6}$chnl_stream_url_resolution$chnl_stream_url_bitrate_text\n\n"
-            elif [[ $line =~ m3u8 ]] 
+            elif [[ $line =~ m3u8 ]]
             then
                 chnl_stream_urls+=("$chnl_stream_link_url_path/$line")
             fi
-        done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_link_url")
+        done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "$chnl_header_clean" "$chnl_stream_link_url")
 
-        if [ -n "$chnl_stream_urls_list" ] 
+        if [ -n "$chnl_stream_urls_list" ]
         then
             chnl_stream_url_root=${chnl_stream_link%%|*}
             chnl_stream_url_qualities_count=0
 
-            if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
+            local i j chnl_stream_url_num start end
+            if [[ $chnl_stream_link =~ \|([^|]+)$ ]]
             then
                 choose=0
                 chnl_stream_url_quality=${BASH_REMATCH[1]}
@@ -32247,7 +33858,7 @@ then
 
                 chnl_stream_url_video_indices=()
 
-                if [ "$monitor" = true ] 
+                if [ "$monitor" = true ]
                 then
                     auto_select=true
                 else
@@ -32255,7 +33866,7 @@ then
                 fi
 
                 choose_asked=false
-                quality_unset=false
+                local matched_qualities=()
 
                 for((i=0;i<chnl_stream_url_qualities_count;i++));
                 do
@@ -32263,7 +33874,7 @@ then
                     do
                         if { [ "$auto_select" = true ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                         then
-                            chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
+                            matched_qualities+=("${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}")
                             chnl_stream_url_video_indices+=("$j")
                             continue 2
                         fi
@@ -32271,20 +33882,18 @@ then
 
                     Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
 
-                    if [ "$monitor" = true ] 
+                    if [ "$monitor" = true ]
                     then
-                        quality_unset=true
-                        unset 'chnl_stream_url_qualities[i]'
-                        chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
                         continue
-                    elif [ "$choose_asked" = false ] 
+                    elif [ "$choose_asked" = false ]
                     then
                         choose_asked=true
                         echo
                         inquirer list_input_index "是否按分辨率自动选择" yn_options yn_index
 
-                        if [ "$yn_index" -eq 0 ] 
+                        if [ "$yn_index" -eq 0 ]
                         then
+                            auto_select=true
                             i=$((i-1))
                             continue
                         fi
@@ -32295,17 +33904,18 @@ then
                     break
                 done
 
-                if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+                if [ "$choose" -eq 0 ]
                 then
-                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
-                    return 1
-                fi
+                    chnl_stream_url_qualities=(${matched_qualities[@]+"${matched_qualities[@]}"})
+                    chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
 
-                if [ "$quality_unset" = true ] 
-                then
-                    chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
+                    if [ "$chnl_stream_url_qualities_count" -eq 0 ]
+                    then
+                        Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                        return 1
+                    fi
                 fi
-            elif [ "$monitor" = true ] 
+            elif [ "$monitor" = true ]
             then
                 Println "$error 请重新选择 $chnl_channel_name 分辨率"
                 return 1
@@ -32313,9 +33923,9 @@ then
                 choose=1
             fi
 
-            if [ "$choose" -eq 1 ] 
+            if [ "$choose" -eq 1 ]
             then
-                if [ -z "${kind:-}" ] 
+                if [ -z "${kind:-}" ]
                 then
                     chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
                     chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
@@ -32327,11 +33937,11 @@ then
                     echo "选择分辨率"
                 fi
 
-                while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+                while read -r -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num
                 do
                     chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
 
-                    if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
+                    if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ]
                     then
                         chnl_stream_url_qualities=()
                         chnl_stream_url_video_indices=()
@@ -32353,9 +33963,15 @@ then
                     do
                         case "$chnl_stream_url_num" in
                             *"-"*)
+                                if [[ ! $chnl_stream_url_num =~ ^[1-9][0-9]*-[1-9][0-9]*$ ]]
+                                then
+                                    error_no=3
+                                    break
+                                fi
                                 chnl_stream_url_num_start=${chnl_stream_url_num%-*}
                                 chnl_stream_url_num_end=${chnl_stream_url_num#*-}
-                                if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
+
+                                if [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
                                 then
                                     error_no=3
                                     break
@@ -32366,7 +33982,7 @@ then
                                 break
                             ;;
                             *)
-                                if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
+                                if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ]
                                 then
                                     error_no=2
                                     break
@@ -32385,7 +34001,7 @@ then
 
                             for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
                             do
-                                if [[ $chnl_stream_url_num =~ - ]] 
+                                if [[ $chnl_stream_url_num =~ - ]]
                                 then
                                     start=${chnl_stream_url_num%-*}
                                     end=${chnl_stream_url_num#*-}
@@ -32413,9 +34029,9 @@ then
 
             chnl_stream_links[0]="$chnl_stream_url_root|$chnl_stream_url_quality"
 
-            if [ -n "${_4gtv_proxy_command:-}" ] 
+            if [ -n "${_4gtv_proxy_command[*]:-}" ] && [ "${#_4gtv_proxy_command[@]}" -gt 0 ] && [[ $chnl_stream_link == https://* ]]
             then
-                chnl_stream_link="http://${chnl_stream_link:8}"
+                chnl_stream_link="http://${chnl_stream_link#https://}"
             fi
         else
             Println "$error 频道 [ $chnl_channel_name ] 不可用\n"
@@ -34602,119 +36218,144 @@ then
             JQInstall
             CurlImpersonateInstall
 
-            default=$(
-            $JQ_FILE -n \
-                --arg proxy '' \
-                --arg xc_proxy '' \
-                --arg user_agent "$USER_AGENT_TV" \
-                --arg headers '' \
-                --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
-                --arg playlist_name '' \
-                --arg seg_dir_name '' \
-                --arg seg_name '' \
-                --arg seg_length 6 \
-                --arg seg_count 5 \
-                --arg video_codec "libx264" \
-                --arg audio_codec "aac" \
-                --arg video_audio_shift '' \
-                --arg draw_text '' \
-                --arg quality '' \
-                --arg bitrate "900" \
-                --arg resolution "1280x720" \
-                --arg const "false" \
-                --arg const_cbr "false" \
-                --arg encrypt "false" \
-                --arg encrypt_session "false" \
-                --arg keyinfo_name '' \
-                --arg key_name '' \
-                --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
-                --arg output_flags "-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
-                --arg sync "true" \
-                --arg sync_file '' \
-                --arg sync_index "data:0:channels" \
-                --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
-                --arg schedule_file '' \
-                --arg flv_delay_seconds 20 \
-                --arg flv_restart_nums 20 \
-                --arg hls_delay_seconds 120 \
-                --arg hls_min_bitrate 500 \
-                --arg hls_max_seg_size 5 \
-                --arg hls_restart_nums 20 \
-                --arg hls_key_period 30 \
-                --arg hls_end_list "false" \
-                --arg anti_ddos_port 80 \
-                --arg anti_ddos_syn_flood "false" \
-                --arg anti_ddos_syn_flood_delay_seconds 3 \
-                --arg anti_ddos_syn_flood_seconds 3600 \
-                --arg anti_ddos "false" \
-                --arg anti_ddos_seconds 120 \
-                --arg anti_ddos_level 6 \
-                --arg anti_leech "false" \
-                --arg anti_leech_restart_nums 3 \
-                --arg anti_leech_restart_flv_changes "true" \
-                --arg anti_leech_restart_hls_changes "true" \
-                --arg recheck_period 0 \
-                --arg version "$sh_ver" \
-                '{
-                    proxy: $proxy,
-                    xc_proxy: $xc_proxy,
-                    user_agent: $user_agent,
-                    headers: $headers,
-                    cookies: $cookies,
-                    playlist_name: $playlist_name,
-                    seg_dir_name: $seg_dir_name,
-                    seg_name: $seg_name,
-                    seg_length: $seg_length | tonumber,
-                    seg_count: $seg_count | tonumber,
-                    video_codec: $video_codec,
-                    audio_codec: $audio_codec,
-                    video_audio_shift: $video_audio_shift,
-                    draw_text: $draw_text,
-                    quality: $quality,
-                    bitrate: $bitrate,
-                    resolution: $resolution,
-                    const: $const | test("true"),
-                    const_cbr: $const_cbr | test("true"),
-                    encrypt: $encrypt | test("true"),
-                    encrypt_session: $encrypt_session | test("true"),
-                    keyinfo_name: $keyinfo_name,
-                    key_name: $key_name,
-                    input_flags: $input_flags,
-                    output_flags: $output_flags,
-                    sync: $sync | test("true"),
-                    sync_file: $sync_file,
-                    sync_index: $sync_index,
-                    sync_pairs: $sync_pairs,
-                    schedule_file: $schedule_file,
-                    flv_delay_seconds: $flv_delay_seconds | tonumber,
-                    flv_restart_nums: $flv_restart_nums | tonumber,
-                    hls_delay_seconds: $hls_delay_seconds | tonumber,
-                    hls_min_bitrate: $hls_min_bitrate | tonumber,
-                    hls_max_seg_size: $hls_max_seg_size | tonumber,
-                    hls_restart_nums: $hls_restart_nums | tonumber,
-                    hls_key_period: $hls_key_period | tonumber,
-                    hls_end_list: $hls_end_list | test("true"),
-                    anti_ddos_port: $anti_ddos_port,
-                    anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
-                    anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
-                    anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                    anti_ddos: $anti_ddos | test("true"),
-                    anti_ddos_seconds: $anti_ddos_seconds | tonumber,
-                    anti_ddos_level: $anti_ddos_level | tonumber,
-                    anti_leech: $anti_leech | test("true"),
-                    anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-                    anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
-                    anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
-                    recheck_period: $recheck_period | tonumber,
-                    version: $version
-                }'
-            )
+            if [ -s "$CHANNELS_FILE" ] && [ ! -s "$IPTV_CONFIG" ] && $JQ_FILE -e '(.default | type) == "object"' "$CHANNELS_FILE" > /dev/null 2>&1
+            then
+                local tmp_cfg
+                tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+                if $JQ_FILE --arg version "$sh_ver" '.default | .ffmpeg_bin = (.ffmpeg_bin // "") | .version = (.version // $version) | .schema_version = (.schema_version // 3)' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+                then
+                    chmod +r "$tmp_cfg"
+                    mv "$tmp_cfg" "$IPTV_CONFIG"
+                    JQ mutate "$CHANNELS_FILE" 'del(.default)'
+                else
+                    rm -f "$tmp_cfg"
+                fi
+            fi
 
-            $JQ_FILE -n --argjson default "$default" \
-            '{
-                default: $default,
-                channels: []
-            }' > "$CHANNELS_FILE"
+            if [ ! -s "$IPTV_CONFIG" ]
+            then
+                local tmp_cfg
+                tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+                $JQ_FILE -n \
+                    --arg proxy '' \
+                    --arg xc_proxy '' \
+                    --arg user_agent "$USER_AGENT_TV" \
+                    --arg headers '' \
+                    --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
+                    --arg playlist_name '' \
+                    --arg seg_dir_name '' \
+                    --arg seg_name '' \
+                    --arg seg_length 6 \
+                    --arg seg_count 5 \
+                    --arg video_codec "libx264" \
+                    --arg audio_codec "aac" \
+                    --arg video_audio_shift '' \
+                    --arg draw_text '' \
+                    --arg quality '' \
+                    --arg bitrate "900" \
+                    --arg resolution "1280x720" \
+                    --arg const "false" \
+                    --arg const_cbr "false" \
+                    --arg encrypt "false" \
+                    --arg encrypt_session "false" \
+                    --arg keyinfo_name '' \
+                    --arg key_name '' \
+                    --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
+                    --arg output_flags "-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
+                    --arg sync "true" \
+                    --arg sync_file '' \
+                    --arg sync_index "data:0:channels" \
+                    --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
+                    --arg schedule_file '' \
+                    --arg flv_delay_seconds 20 \
+                    --arg flv_restart_nums 20 \
+                    --arg hls_delay_seconds 120 \
+                    --arg hls_min_bitrate 500 \
+                    --arg hls_max_seg_size 5 \
+                    --arg hls_restart_nums 20 \
+                    --arg hls_key_period 30 \
+                    --arg hls_end_list "false" \
+                    --arg anti_ddos_port 80 \
+                    --arg anti_ddos_syn_flood "false" \
+                    --arg anti_ddos_syn_flood_delay_seconds 3 \
+                    --arg anti_ddos_syn_flood_seconds 3600 \
+                    --arg anti_ddos "false" \
+                    --arg anti_ddos_seconds 120 \
+                    --arg anti_ddos_level 6 \
+                    --arg anti_leech "false" \
+                    --arg anti_leech_restart_nums 3 \
+                    --arg anti_leech_restart_flv_changes "true" \
+                    --arg anti_leech_restart_hls_changes "true" \
+                    --arg recheck_period 0 \
+                    --arg ffmpeg_bin '' \
+                    --arg version "$sh_ver" \
+                    '{
+                        proxy: $proxy,
+                        xc_proxy: $xc_proxy,
+                        user_agent: $user_agent,
+                        headers: $headers,
+                        cookies: $cookies,
+                        playlist_name: $playlist_name,
+                        seg_dir_name: $seg_dir_name,
+                        seg_name: $seg_name,
+                        seg_length: $seg_length | tonumber,
+                        seg_count: $seg_count | tonumber,
+                        video_codec: $video_codec,
+                        audio_codec: $audio_codec,
+                        video_audio_shift: $video_audio_shift,
+                        draw_text: $draw_text,
+                        quality: $quality,
+                        bitrate: $bitrate,
+                        resolution: $resolution,
+                        const: $const | test("true"),
+                        const_cbr: $const_cbr | test("true"),
+                        encrypt: $encrypt | test("true"),
+                        encrypt_session: $encrypt_session | test("true"),
+                        keyinfo_name: $keyinfo_name,
+                        key_name: $key_name,
+                        input_flags: $input_flags,
+                        output_flags: $output_flags,
+                        sync: $sync | test("true"),
+                        sync_file: $sync_file,
+                        sync_index: $sync_index,
+                        sync_pairs: $sync_pairs,
+                        schedule_file: $schedule_file,
+                        flv_delay_seconds: $flv_delay_seconds | tonumber,
+                        flv_restart_nums: $flv_restart_nums | tonumber,
+                        hls_delay_seconds: $hls_delay_seconds | tonumber,
+                        hls_min_bitrate: $hls_min_bitrate | tonumber,
+                        hls_max_seg_size: $hls_max_seg_size | tonumber,
+                        hls_restart_nums: $hls_restart_nums | tonumber,
+                        hls_key_period: $hls_key_period | tonumber,
+                        hls_end_list: $hls_end_list | test("true"),
+                        anti_ddos_port: $anti_ddos_port,
+                        anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
+                        anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                        anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                        anti_ddos: $anti_ddos | test("true"),
+                        anti_ddos_seconds: $anti_ddos_seconds | tonumber,
+                        anti_ddos_level: $anti_ddos_level | tonumber,
+                        anti_leech: $anti_leech | test("true"),
+                        anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
+                        anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                        anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
+                        recheck_period: $recheck_period | tonumber,
+                        ffmpeg_bin: $ffmpeg_bin,
+                        version: $version,
+                        schema_version: 3
+                    }' > "$tmp_cfg"
+                chmod +r "$tmp_cfg"
+                mv "$tmp_cfg" "$IPTV_CONFIG"
+            fi
+
+            if [ ! -s "$CHANNELS_FILE" ]
+            then
+                local tmp_chnls
+                tmp_chnls=$(mktemp "${TMPDIR:-/tmp}/aios-chnls.XXXXXX")
+                $JQ_FILE -n '{ channels: [] }' > "$tmp_chnls"
+                chmod +r "$tmp_chnls"
+                mv "$tmp_chnls" "$CHANNELS_FILE"
+            fi
 
             Println "`eval_gettext \"\\\$info 安装完成\"`\n"
         fi
@@ -34731,7 +36372,7 @@ then
         VipDisable
         CloudflareDisableWorkersMonitor
 
-        if [ -e "$NODE_ROOT/index.js" ] 
+        if [ -e "$NODE_ROOT/index.js" ]
         then
             pm2 stop 0 2> /dev/null || true
         fi
@@ -34739,7 +36380,7 @@ then
         if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
         then
             crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-            sed -i "/${LOGROTATE_CONFIG//\//\\/}/d" "$IPTV_ROOT/cron_tmp"
+            FilterFileLines "$LOGROTATE_CONFIG" "$IPTV_ROOT/cron_tmp"
             crontab "$IPTV_ROOT/cron_tmp" > /dev/null
             rm -f "$IPTV_ROOT/cron_tmp"
             Println "$info 已停止 logrotate\n"
@@ -34834,7 +36475,24 @@ then
 
     if [ -e "$IPTV_ROOT" ] && [ ! -e "$LOCK_FILE" ] 
     then
-        if [ ! -e "$JQ_FILE" ] 
+        UpdateSelfRollback()
+        {
+            if [ -n "${channels_backup:-}" ] && [ -f "$channels_backup" ]
+            then
+                cp -f "$channels_backup" "$CHANNELS_FILE"
+            fi
+
+            if [ -n "${config_backup:-}" ] && [ -f "$config_backup" ]
+            then
+                cp -f "$config_backup" "$IPTV_CONFIG"
+            elif [ "${config_existed_before:-false}" = false ]
+            then
+                rm -f "$IPTV_CONFIG"
+            fi
+            Println "$error 配置迁移失败, 已从备份回滚 !\n"
+        }
+
+        if [ ! -e "$JQ_FILE" ]
         then
             echo
             ExitOnList y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
@@ -34844,15 +36502,35 @@ then
             exit 0
         fi
 
-        GetDefault
-
-        if [ "${d_version%.*}" != "${sh_ver%.*}" ] 
+        has_legacy_default=false
+        if [ -s "$CHANNELS_FILE" ] && $JQ_FILE -e '(.default | type) == "object"' "$CHANNELS_FILE" > /dev/null 2>&1
         then
-            major_ver=${d_version%%.*}
-            minor_ver=${d_version#*.}
-            minor_ver=${minor_ver%%.*}
+            has_legacy_default=true
+        fi
 
-            if [ "$minor_ver" -lt 35 ] 
+        config_existed_before=false
+        if [ -s "$IPTV_CONFIG" ]
+        then
+            config_existed_before=true
+            cur_ver=$($JQ_FILE -r '.version // "0.0.0"' "$IPTV_CONFIG" 2> /dev/null || printf '0.0.0')
+            cur_schema=$($JQ_FILE -r '.schema_version // 0' "$IPTV_CONFIG" 2> /dev/null || printf '0')
+        elif [ "$has_legacy_default" = true ]
+        then
+            cur_ver=$($JQ_FILE -r '.default.version // "0.0.0"' "$CHANNELS_FILE" 2> /dev/null || printf '0.0.0')
+            cur_schema=$($JQ_FILE -r '.default.schema_version // 0' "$CHANNELS_FILE" 2> /dev/null || printf '0')
+        else
+            cur_ver="0.0.0"
+            cur_schema="0"
+        fi
+
+        if ! [[ $cur_schema =~ ^[0-9]+$ ]]
+        then
+            cur_schema=0
+        fi
+
+        if [ "$has_legacy_default" = true ] || [ ! -s "$IPTV_CONFIG" ] || VersionLt "$cur_ver" "$sh_ver" || [ "$cur_schema" -lt 3 ]
+        then
+            if VersionLt "$cur_ver" "1.35.0" && [ "$cur_ver" != "0.0.0" ]
             then
                 Println "$info 需要先关闭所有频道, 请稍等...\n"
                 StopChannelsForce
@@ -34862,484 +36540,322 @@ then
             fi
 
             Println "$info 更新中, 请稍等...\n"
-            printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
-            cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
+            update_date=$(date '+%m-%d-%H:%M:%S')
+            channels_backup=""
+            config_backup=""
+            orig_chnls_count=0
 
-            GetChannels
-
-            while [[ $d_headers =~ \\\\ ]]
-            do
-                d_headers=${d_headers//\\\\/\\}
-            done
-
-            if [[ ! $d_input_flags =~ -copy_unknown ]] 
+            if [ -s "$CHANNELS_FILE" ]
             then
-                d_input_flags="-copy_unknown $d_input_flags"
+                if ! $JQ_FILE empty "$CHANNELS_FILE" > /dev/null 2>&1
+                then
+                    Println "$error $CHANNELS_FILE JSON 格式错误, 取消迁移 !\n"
+                    exit 1
+                fi
+                orig_chnls_count=$($JQ_FILE '(.channels // []) | length' "$CHANNELS_FILE" 2> /dev/null || printf '-1')
+                channels_backup="${CHANNELS_FILE}_$update_date"
+                cp -f "$CHANNELS_FILE" "$channels_backup"
             fi
 
-            d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
-
-            if [ "$minor_ver" -lt 83 ] 
+            if [ -s "$IPTV_CONFIG" ]
             then
-                if [ "$d_const" == "yes" ] 
+                if ! $JQ_FILE empty "$IPTV_CONFIG" > /dev/null 2>&1
                 then
-                    d_const=true
-                else
-                    d_const=false
+                    Println "$error $IPTV_CONFIG JSON 格式错误, 取消迁移 !\n"
+                    exit 1
+                fi
+                config_backup="${IPTV_CONFIG}_$update_date"
+                cp -f "$IPTV_CONFIG" "$config_backup"
+            fi
+
+            if [ "$has_legacy_default" = true ]
+            then
+                if [ ! -s "$IPTV_CONFIG" ]
+                then
+                    tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
+                    if ! $JQ_FILE '.default' "$CHANNELS_FILE" > "$tmp_cfg" || [ ! -s "$tmp_cfg" ] || ! $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+                    then
+                        rm -f "$tmp_cfg"
+                        UpdateSelfRollback
+                        exit 1
+                    fi
+                    chmod +r "$tmp_cfg"
+                    mv "$tmp_cfg" "$IPTV_CONFIG"
                 fi
 
-                if [ "$d_encrypt" == "yes" ] 
+                if ! JQ mutate "$CHANNELS_FILE" 'del(.default)'
                 then
-                    d_encrypt=true
-                else
-                    d_encrypt=false
-                fi
-
-                if [ "$d_encrypt_session" == "yes" ] 
-                then
-                    d_encrypt_session=true
-                else
-                    d_encrypt_session=false
-                fi
-
-                if [ "$d_sync" == "yes" ] 
-                then
-                    d_sync=true
-                else
-                    d_sync=false
-                fi
-
-                if [ "$d_anti_ddos_syn_flood" == "yes" ] 
-                then
-                    d_anti_ddos_syn_flood=true
-                else
-                    d_anti_ddos_syn_flood=false
-                fi
-
-                if [ "$d_anti_ddos" == "yes" ] 
-                then
-                    d_anti_ddos=true
-                else
-                    d_anti_ddos=false
-                fi
-
-                if [ "$d_anti_leech" == "yes" ] 
-                then
-                    d_anti_leech=true
-                else
-                    d_anti_leech=false
-                fi
-
-                if [ "$d_anti_leech_restart_flv_changes" == "yes" ] 
-                then
-                    d_anti_leech_restart_flv_changes=true
-                else
-                    d_anti_leech_restart_flv_changes=false
-                fi
-
-                if [ "$d_anti_leech_restart_hls_changes" == "yes" ] 
-                then
-                    d_anti_leech_restart_hls_changes=true
-                else
-                    d_anti_leech_restart_hls_changes=false
+                    UpdateSelfRollback
+                    exit 1
                 fi
             fi
 
-            if [ "$minor_ver" -lt 86 ] 
+            if [ ! -s "$IPTV_CONFIG" ]
             then
-                IFS="=" read -r d_bitrate d_hls_min_bitrate < <($JQ_FILE -r '.default|[.bitrates,.hls_min_bitrates]|join("=")' $CHANNELS_FILE)
-
-                if [[ $d_bitrate =~ - ]] 
-                then
-                    d_resolution=${d_bitrate#*-}
-                    d_bitrate=${d_bitrate%-*}
-                elif [[ $d_bitrate =~ x ]] 
-                then
-                    d_resolution="$d_bitrate"
-                    d_bitrate=""
-                fi
-
-                IFS="=" read -r -a chnls_bitrates < <($JQ_FILE -r '[.channels[].bitrates]|join("=")' $CHANNELS_FILE)
-
-                for((i=0;i<chnls_count;i++));
-                do
-                    bitrate=""
-                    resolution=""
-
-                    if [ -n "${chnls_bitrates[i]:-}" ] 
-                    then
-                        IFS=, read -r -a chnl_bitrates <<< "${chnls_bitrates[i]}"
-
-                        for chnl_bitrate in "${chnl_bitrates[@]}"
-                        do
-                            [ -n "$bitrate" ] && bitrate="$bitrate,"
-                            [ -n "$resolution" ] && resolution="$resolution,"
-
-                            if [[ $chnl_bitrate =~ - ]] 
-                            then
-                                bitrate="$bitrate${chnl_bitrate%-*}"
-                                resolution="$resolution${chnl_bitrate#*-}"
-                            elif [[ $chnl_bitrate =~ x ]] 
-                            then
-                                resolution="$resolution$chnl_bitrate"
-                            else
-                                bitrate="$bitrate$chnl_bitrate"
-                            fi
-                        done
-                    fi
-
-                    chnls_bitrate[i]="$bitrate"
-                    chnls_resolution[i]="$resolution"
-                done
+                printf '{}\n' > "$IPTV_CONFIG"
             fi
 
-            default=$(
-            $JQ_FILE -n \
-                --arg proxy "$d_proxy" \
-                --arg xc_proxy "$d_xc_proxy" \
-                --arg user_agent "$d_user_agent" \
-                --arg headers "$d_headers" \
-                --arg cookies "$d_cookies" \
-                --arg playlist_name "$d_playlist_name" \
-                --arg seg_dir_name "$d_seg_dir_name" \
-                --arg seg_name "$d_seg_name" \
-                --arg seg_length "$d_seg_length" \
-                --arg seg_count "$d_seg_count" \
-                --arg video_codec "$d_video_codec" \
-                --arg audio_codec "$d_audio_codec" \
-                --arg video_audio_shift "$d_video_audio_shift" \
-                --arg draw_text "$d_draw_text" \
-                --arg quality "$d_quality" \
-                --arg bitrate "$d_bitrate" \
-                --arg resolution "$d_resolution" \
-                --arg const "$d_const" \
-                --arg const_cbr "$d_const_cbr" \
-                --arg encrypt "$d_encrypt" \
-                --arg encrypt_session "$d_encrypt_session" \
-                --arg keyinfo_name "$d_keyinfo_name" \
-                --arg key_name "$d_key_name" \
-                --arg input_flags "$d_input_flags" \
-                --arg output_flags "$d_output_flags" \
-                --arg sync "$d_sync" \
-                --arg sync_file "$d_sync_file" \
-                --arg sync_index "$d_sync_index" \
-                --arg sync_pairs "$d_sync_pairs" \
-                --arg schedule_file "$d_schedule_file" \
-                --arg flv_delay_seconds "$d_flv_delay_seconds" \
-                --arg flv_restart_nums "$d_flv_restart_nums" \
-                --arg hls_delay_seconds "$d_hls_delay_seconds" \
-                --arg hls_min_bitrate "$d_hls_min_bitrate" \
-                --arg hls_max_seg_size "$d_hls_max_seg_size" \
-                --arg hls_restart_nums "$d_hls_restart_nums" \
-                --arg hls_key_period "$d_hls_key_period" \
-                --arg hls_end_list "$d_hls_end_list" \
-                --arg anti_ddos_port "$d_anti_ddos_port" \
-                --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood" \
-                --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
-                --arg anti_ddos_syn_flood_seconds "$d_anti_ddos_syn_flood_seconds" \
-                --arg anti_ddos "$d_anti_ddos" \
-                --arg anti_ddos_seconds "$d_anti_ddos_seconds" \
-                --arg anti_ddos_level "$d_anti_ddos_level" \
-                --arg anti_leech "$d_anti_leech" \
-                --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" \
-                --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes" \
-                --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes" \
-                --arg recheck_period "$d_recheck_period" \
-                --arg version "$sh_ver" \
-                '{
-                    proxy: $proxy,
-                    xc_proxy: $xc_proxy,
-                    user_agent: $user_agent,
-                    headers: $headers,
-                    cookies: $cookies,
-                    playlist_name: $playlist_name,
-                    seg_dir_name: $seg_dir_name,
-                    seg_name: $seg_name,
-                    seg_length: $seg_length | tonumber,
-                    seg_count: $seg_count | tonumber,
-                    video_codec: $video_codec,
-                    audio_codec: $audio_codec,
-                    video_audio_shift: $video_audio_shift,
-                    draw_text: $draw_text,
-                    quality: $quality,
-                    bitrate: $bitrate,
-                    resolution: $resolution,
-                    const: $const | test("true"),
-                    const_cbr: $const_cbr | test("true"),
-                    encrypt: $encrypt | test("true"),
-                    encrypt_session: $encrypt_session | test("true"),
-                    keyinfo_name: $keyinfo_name,
-                    key_name: $key_name,
-                    input_flags: $input_flags,
-                    output_flags: $output_flags,
-                    sync: $sync | test("true"),
-                    sync_file: $sync_file,
-                    sync_index: $sync_index,
-                    sync_pairs: $sync_pairs,
-                    schedule_file: $schedule_file,
-                    flv_delay_seconds: $flv_delay_seconds | tonumber,
-                    flv_restart_nums: $flv_restart_nums | tonumber,
-                    hls_delay_seconds: $hls_delay_seconds | tonumber,
-                    hls_min_bitrate: $hls_min_bitrate | tonumber,
-                    hls_max_seg_size: $hls_max_seg_size | tonumber,
-                    hls_restart_nums: $hls_restart_nums | tonumber,
-                    hls_key_period: $hls_key_period | tonumber,
-                    hls_end_list: $hls_end_list | test("true"),
-                    anti_ddos_port: $anti_ddos_port,
-                    anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
-                    anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
-                    anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                    anti_ddos: $anti_ddos | test("true"),
-                    anti_ddos_seconds: $anti_ddos_seconds | tonumber,
-                    anti_ddos_level: $anti_ddos_level | tonumber,
-                    anti_leech: $anti_leech | test("true"),
-                    anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-                    anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
-                    anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
-                    recheck_period: $recheck_period | tonumber,
-                    version: $version
-                }'
-            )
+            if [ ! -s "$CHANNELS_FILE" ]
+            then
+                printf '{"channels":[]}\n' > "$CHANNELS_FILE"
+            fi
 
-            jq_json=true
-            jq_path='["default"]'
-            JQ update "$CHANNELS_FILE" "$default"
+            def_input_flags="-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error"
+            def_output_flags="-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main"
+            def_sync_pairs="chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live"
 
-            new_channels=()
-
-            for((i=0;i<chnls_count;i++));
-            do
-                while [[ ${chnls_headers[i]} =~ \\\\ ]]
-                do
-                    chnls_headers[i]=${chnls_headers[i]//\\\\/\\}
-                done
-
-                if [[ ! ${chnls_input_flags[i]} =~ -copy_unknown ]] 
-                then
-                    chnls_input_flags[i]="-copy_unknown ${chnls_input_flags[i]}"
-                fi
-
-                new_input_flags=${chnls_input_flags[i]//-timeout 2000000000/-rw_timeout 10000000}
-
-                if [ "$minor_ver" -lt 81 ] 
-                then
-                    IFS=" " read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
-                else
-                    IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
-                fi
-
-                stream_link="[]"
-
-                if [ -n "${chnl_stream_links:-}" ] 
-                then
-                    for chnl_stream_link in "${chnl_stream_links[@]}"
-                    do
-                        stream_link=$($JQ_FILE --arg stream_link "$chnl_stream_link" '. + [$stream_link]' <<< "$stream_link")
-                    done
-                fi
-
-                chnl_subtitle="[]"
-
-                if [ -n "${chnls_subtitle_name[i]}" ] 
-                then
-                    IFS="${delimiters[4]}" read -ra chnl_subtitles_name <<< "${chnls_subtitle_name[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_subtitles_map <<< "${chnls_subtitle_map[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_subtitles_language <<< "${chnls_subtitle_language[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_subtitles_default <<< "${chnls_subtitle_default[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_subtitles_auto_select <<< "${chnls_subtitle_auto_select[i]}"
-
-                    chnl_subtitles_indices=("${!chnls_subtitle_name[@]}")
-
-                    for chnl_subtitles_index in "${chnl_subtitles_indices[@]}"
-                    do
-                        chnl_subtitle=$(
-                            $JQ_FILE --arg name "${chnl_subtitles_name[chnl_subtitles_index]}" \
-                                --arg language "${chnl_subtitles_language[chnl_subtitles_index]:-}" \
-                                --arg default "${chnl_subtitles_default[chnl_subtitles_index]:-false}" \
-                                --arg auto_select "${chnl_subtitles_auto_select[chnl_subtitles_index]:-false}" \
-                                --arg map "${chnl_subtitles_map[chnl_subtitles_index]}" \
-                            '. + [
-                                {
-                                    "name": $name,
-                                    "language": $language,
-                                    "default": $default | test("true"),
-                                    "auto_select": $auto_select | test("true"),
-                                    "map": $map | tonumber
-                                }
-                            ]' <<< "$chnl_subtitle"
-                        )
-                    done
-                fi
-
-                chnl_schedule="[]"
-
-                if [ -n "${chnls_schedule_status[i]}" ] 
-                then
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
-                    IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[i]}"
-
-                    chnl_schedules_indices=("${!chnl_schedules_status[@]}")
-
-                    for chnl_schedules_index in "${chnl_schedules_indices[@]}"
-                    do
-                        chnl_schedule=$(
-                            $JQ_FILE --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
-                                --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
-                                --arg loop "${chnl_schedules_loop[chnl_schedules_index]:-false}" \
-                                --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]:-false}" \
-                                --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]:-true}" \
-                                --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]:-false}" \
-                                --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]:-}" \
-                                --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
-                            '. + [
-                                {
-                                    "start_time": $start_time | tonumber,
-                                    "end_time": $end_time | tonumber,
-                                    "loop": $loop | test("true"),
-                                    "auto_remove": $auto_remove | test("true"),
-                                    "hls_change": $hls_change | test("true"),
-                                    "hls_change_once": $hls_change_once | test("true"),
-                                    "channel_name": $channel_name,
-                                    "status": $status | tonumber
-                                }
-                            ]' <<< "$chnl_schedule"
-                        )
-                    done
-                fi
-
-                if [ "$minor_ver" -lt 83 ] 
-                then
-                    if [ "${chnls_live[i]}" == "yes" ] 
-                    then
-                        chnls_live[i]=true
+            cfg_migrate_jq='
+                def collapse_bs:
+                    if type == "string" then
+                        if test("\\\\\\\\") then gsub("\\\\\\\\"; "\\") | collapse_bs else . end
                     else
-                        chnls_live[i]=false
-                    fi
-
-                    if [ "${chnls_sync[i]}" == "yes" ] 
-                    then
-                        chnls_sync[i]=true
+                        ""
+                    end;
+                def to_bool($def):
+                    if type == "boolean" then .
+                    elif type == "string" then (. == "true" or . == "yes")
+                    else $def
+                    end;
+                def to_num($def):
+                    if type == "number" then .
+                    elif type == "string" and test("^-?[0-9]+(\\.[0-9]+)?$") then tonumber
+                    else $def
+                    end;
+                (if type == "object" then . else {} end)
+                | (if has("bitrates") and (.bitrates | type) == "string" and (.bitrates != "") then
+                    if (.bitrates | contains("-")) then
+                        .bitrate = ((.bitrates | split("-"))[0])
+                        | .resolution = ((.bitrates | split("-"))[1:] | join("-"))
+                    elif (.bitrates | contains("x")) then
+                        .resolution = .bitrates
+                        | .bitrate = ""
                     else
-                        chnls_sync[i]=false
-                    fi
-
-                    if [ "${chnls_const[i]}" == "yes" ] 
-                    then
-                        chnls_const[i]=true
-                    else
-                        chnls_const[i]=false
-                    fi
-
-                    if [ "${chnls_encrypt[i]}" == "yes" ] 
-                    then
-                        chnls_encrypt[i]=true
-                    else
-                        chnls_encrypt[i]=false
-                    fi
-
-                    if [ "${chnls_encrypt_session[i]}" == "yes" ] 
-                    then
-                        chnls_encrypt_session[i]=true
-                    else
-                        chnls_encrypt_session[i]=false
-                    fi
-
-                    if [ "${chnls_flv_h265[i]}" == "yes" ] 
-                    then
-                        chnls_flv_h265[i]=true
-                    else
-                        chnls_flv_h265[i]=false
-                    fi
-                fi
-
-                new_channel=$(
-                $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" --arg hide "${chnls_hide[i]}" \
-                    --argjson stream_link "$stream_link" --arg live "${chnls_live[i]}" \
-                    --arg proxy "${chnls_proxy[i]}" --arg xc_proxy "${chnls_xc_proxy[i]}" \
-                    --arg user_agent "${chnls_user_agent[i]}" --arg headers "${chnls_headers[i]}" \
-                    --arg cookies "${chnls_cookies[i]}" --arg output_dir_name "${chnls_output_dir_name[i]}" \
-                    --arg playlist_name "${chnls_playlist_name[i]}" --arg seg_dir_name "${chnls_seg_dir_name[i]}" \
-                    --arg seg_name "${chnls_seg_name[i]}" --arg seg_length "${chnls_seg_length[i]}" \
-                    --arg seg_count "${chnls_seg_count[i]}" --arg video_codec "${chnls_video_codec[i]}" \
-                    --arg audio_codec "${chnls_audio_codec[i]}" --arg video_audio_shift "${chnls_video_audio_shift[i]}" \
-                    --argjson subtitle "$chnl_subtitle" --arg draw_text "${chnls_draw_text[i]}" \
-                    --arg quality "${chnls_quality[i]}" --arg bitrate "${chnls_bitrate[i]}" \
-                    --arg resolution "${chnls_resolution[i]}" --arg const "${chnls_const[i]}" \
-                    --arg const_cbr "${chnls_const_cbr[i]}" --arg encrypt "${chnls_encrypt[i]}" \
-                    --arg encrypt_session "${chnls_encrypt_session[i]}" --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
-                    --arg key_name "${chnls_key_name[i]}" --arg key_time "${chnls_key_time[i]}" \
-                    --arg input_flags "$new_input_flags" --arg output_flags "${chnls_output_flags[i]}" \
-                    --arg channel_name "${chnls_channel_name[i]}" --arg channel_time "${chnls_channel_time[i]}" \
-                    --argjson schedule "$chnl_schedule" --arg sync "${chnls_sync[i]}" \
-                    --arg sync_file "${chnls_sync_file[i]}" --arg sync_index "${chnls_sync_index[i]}" \
-                    --arg sync_pairs "${chnls_sync_pairs[i]}" --arg hls_end_list "${chnls_hls_end_list[i]}" \
-                    --arg flv_status "${chnls_flv_status[i]}" --arg flv_h265 "${chnls_flv_h265[i]}" \
-                    --arg flv_push_link "${chnls_flv_push_link[i]}" --arg flv_pull_link "${chnls_flv_pull_link[i]}" \
-                    '{
-                        pid: $pid | tonumber,
-                        status: $status,
-                        hide: $hide | test("true"),
-                        stream_link: $stream_link,
-                        live: $live | test("true"),
-                        proxy: $proxy,
-                        xc_proxy: $xc_proxy,
-                        user_agent: $user_agent,
-                        headers: $headers,
-                        cookies: $cookies,
-                        output_dir_name: $output_dir_name,
-                        playlist_name: $playlist_name,
-                        seg_dir_name: $seg_dir_name,
-                        seg_name: $seg_name,
-                        seg_length: $seg_length | tonumber,
-                        seg_count: $seg_count | tonumber,
-                        video_codec: $video_codec,
-                        audio_codec: $audio_codec,
-                        video_audio_shift: $video_audio_shift,
-                        subtitle: $subtitle,
-                        draw_text: $draw_text,
-                        quality: $quality,
-                        bitrate: $bitrate,
-                        resolution: $resolution,
-                        const: $const | test("true"),
-                        const_cbr: $const_cbr | test("true"),
-                        encrypt: $encrypt | test("true"),
-                        encrypt_session: $encrypt_session | test("true"),
-                        keyinfo_name: $keyinfo_name,
-                        key_name: $key_name,
-                        key_time: $key_time | tonumber,
-                        input_flags: $input_flags,
-                        output_flags: $output_flags,
-                        channel_name: $channel_name,
-                        channel_time: $channel_time | tonumber,
-                        schedule: $schedule,
-                        sync: $sync | test("true"),
-                        sync_file: $sync_file,
-                        sync_index: $sync_index,
-                        sync_pairs: $sync_pairs,
-                        hls_end_list: $hls_end_list | test("true"),
-                        flv_status: $flv_status,
-                        flv_h265: $flv_h265 | test("true"),
-                        flv_push_link: $flv_push_link,
-                        flv_pull_link: $flv_pull_link
-                    }'
+                        .bitrate = .bitrates
+                    end
+                else . end)
+                | (if has("hls_min_bitrates") and (.hls_min_bitrates != null) and (.hls_min_bitrates != "") then
+                    .hls_min_bitrate = (.hls_min_bitrates | to_num(500))
+                else . end)
+                | del(.bitrates, .hls_min_bitrates, .txt_format)
+                | .proxy = (.proxy // "")
+                | .xc_proxy = (.xc_proxy // "")
+                | .user_agent = (if (.user_agent // "") == "" then $def_ua else .user_agent end)
+                | .headers = ((.headers // "") | collapse_bs)
+                | .cookies = (if (.cookies // "") == "" then "stb_lang=en; timezone=Europe/Amsterdam" else .cookies end)
+                | .playlist_name = (.playlist_name // "")
+                | .seg_dir_name = (.seg_dir_name // "")
+                | .seg_name = (.seg_name // "")
+                | .seg_length = (.seg_length | to_num(6))
+                | .seg_count = (.seg_count | to_num(5))
+                | .video_codec = (.video_codec // "libx264")
+                | .audio_codec = (.audio_codec // "aac")
+                | .video_audio_shift = (.video_audio_shift // "")
+                | .draw_text = (.draw_text // "")
+                | .quality = (.quality // "")
+                | .bitrate = ((.bitrate // "900") | tostring)
+                | .resolution = (.resolution // "1280x720")
+                | .const = (.const | to_bool(false))
+                | .const_cbr = (.const_cbr | to_bool(false))
+                | .encrypt = (.encrypt | to_bool(false))
+                | .encrypt_session = (.encrypt_session | to_bool(false))
+                | .keyinfo_name = (.keyinfo_name // "")
+                | .key_name = (.key_name // "")
+                | .input_flags = (
+                    (.input_flags // $def_in)
+                    | if type == "string" then
+                        (if (contains("-copy_unknown") | not) then "-copy_unknown " + . else . end)
+                        | gsub("-timeout 2000000000"; "-rw_timeout 10000000")
+                    else $def_in end
                 )
+                | .output_flags = (.output_flags // $def_out)
+                | .sync = (.sync | to_bool(true))
+                | .sync_file = (.sync_file // "")
+                | .sync_index = (.sync_index // "data:0:channels")
+                | .sync_pairs = (.sync_pairs // $def_sp)
+                | .schedule_file = (.schedule_file // "")
+                | .flv_delay_seconds = (.flv_delay_seconds | to_num(20))
+                | .flv_restart_nums = (.flv_restart_nums | to_num(20))
+                | .hls_delay_seconds = (.hls_delay_seconds | to_num(120))
+                | .hls_min_bitrate = (.hls_min_bitrate | to_num(500))
+                | .hls_max_seg_size = (.hls_max_seg_size | to_num(5))
+                | .hls_restart_nums = (.hls_restart_nums | to_num(20))
+                | .hls_key_period = (.hls_key_period | to_num(30))
+                | .hls_end_list = (.hls_end_list | to_bool(false))
+                | .anti_ddos_port = ((.anti_ddos_port // "80") | tostring)
+                | .anti_ddos_syn_flood = (.anti_ddos_syn_flood | to_bool(false))
+                | .anti_ddos_syn_flood_delay_seconds = (.anti_ddos_syn_flood_delay_seconds | to_num(3))
+                | .anti_ddos_syn_flood_seconds = (.anti_ddos_syn_flood_seconds | to_num(3600))
+                | .anti_ddos = (.anti_ddos | to_bool(false))
+                | .anti_ddos_seconds = (.anti_ddos_seconds | to_num(120))
+                | .anti_ddos_level = (.anti_ddos_level | to_num(6))
+                | .anti_leech = (.anti_leech | to_bool(false))
+                | .anti_leech_restart_nums = (.anti_leech_restart_nums | to_num(3))
+                | .anti_leech_restart_flv_changes = (.anti_leech_restart_flv_changes | to_bool(true))
+                | .anti_leech_restart_hls_changes = (.anti_leech_restart_hls_changes | to_bool(true))
+                | .recheck_period = (.recheck_period | to_num(0))
+                | .ffmpeg_bin = (.ffmpeg_bin // "")
+                | .version = $ver
+                | .schema_version = 3
+            '
 
-                new_channels+=("$new_channel")
-            done
+            if ! JQ mutate "$IPTV_CONFIG" "$cfg_migrate_jq" \
+                --arg def_ua "$USER_AGENT_TV" \
+                --arg def_in "$def_input_flags" \
+                --arg def_out "$def_output_flags" \
+                --arg def_sp "$def_sync_pairs" \
+                --arg ver "$sh_ver"
+            then
+                UpdateSelfRollback
+                exit 1
+            fi
 
-            jq_file=true
-            jq_file_json=true
-            jq_path='["channels"]'
-            JQ update "$CHANNELS_FILE" new_channels
+            chnls_migrate_jq='
+                def collapse_bs:
+                    if type == "string" then
+                        if test("\\\\\\\\") then gsub("\\\\\\\\"; "\\") | collapse_bs else . end
+                    else
+                        ""
+                    end;
+                def to_bool($def):
+                    if type == "boolean" then .
+                    elif type == "string" then (. == "true" or . == "yes")
+                    else $def
+                    end;
+                def to_num($def):
+                    if type == "number" then .
+                    elif type == "string" and test("^-?[0-9]+(\\.[0-9]+)?$") then tonumber
+                    else $def
+                    end;
+                (if type == "object" then . else {} end)
+                | del(.default)
+                | .channels = (
+                    (.channels // [])
+                    | if type == "array" then
+                        map(
+                            (if has("bitrates") and (.bitrates | type) == "string" then
+                                if .bitrates == "" then
+                                    .bitrate = (.bitrate // "")
+                                    | .resolution = (.resolution // "")
+                                else
+                                    (.bitrates | split(",")) as $parts
+                                    | .bitrate = ($parts | map(if contains("-") then (split("-")[0]) elif contains("x") then "" else . end) | join(","))
+                                    | .resolution = ($parts | map(if contains("-") then (split("-")[1:] | join("-")) elif contains("x") then . else "" end) | join(","))
+                                end
+                            else
+                                .bitrate = (.bitrate // "")
+                                | .resolution = (.resolution // "")
+                            end)
+                            | del(.bitrates, .txt_format)
+                            | .pid = (.pid | to_num(0))
+                            | .status = (.status // "off")
+                            | .hide = (.hide | to_bool(false))
+                            | .stream_link = (
+                                if (.stream_link | type) == "string" then
+                                    (.stream_link | split(" ") | map(select(length > 0)))
+                                elif (.stream_link | type) == "array" then
+                                    .stream_link
+                                else
+                                    []
+                                end
+                            )
+                            | .live = (.live | to_bool(false))
+                            | .proxy = (.proxy // "")
+                            | .xc_proxy = (.xc_proxy // "")
+                            | .user_agent = (.user_agent // "")
+                            | .headers = ((.headers // "") | collapse_bs)
+                            | .cookies = (.cookies // "")
+                            | .output_dir_name = (.output_dir_name // "")
+                            | .playlist_name = (.playlist_name // "")
+                            | .seg_dir_name = (.seg_dir_name // "")
+                            | .seg_name = (.seg_name // "")
+                            | .seg_length = (.seg_length | to_num(6))
+                            | .seg_count = (.seg_count | to_num(5))
+                            | .video_codec = (.video_codec // "")
+                            | .audio_codec = (.audio_codec // "")
+                            | .video_audio_shift = (.video_audio_shift // "")
+                            | .subtitle = (
+                                if (.subtitle | type) == "array" then
+                                    (.subtitle | map({
+                                        name: (.name // ""),
+                                        language: (.language // ""),
+                                        default: (.default | to_bool(false)),
+                                        auto_select: (.auto_select | to_bool(false)),
+                                        map: (.map | to_num(0))
+                                    }))
+                                else
+                                    []
+                                end
+                            )
+                            | .draw_text = (.draw_text // "")
+                            | .quality = (.quality // "")
+                            | .const = (.const | to_bool(false))
+                            | .const_cbr = (.const_cbr | to_bool(false))
+                            | .encrypt = (if .encrypt == "-e" then false else (.encrypt | to_bool(false)) end)
+                            | .encrypt_session = (.encrypt_session | to_bool(false))
+                            | .keyinfo_name = (.keyinfo_name // "")
+                            | .key_name = (.key_name // "")
+                            | .key_time = (.key_time | to_num(0))
+                            | .input_flags = (
+                                (.input_flags // "")
+                                | if type == "string" then
+                                    (if (contains("-copy_unknown") | not) then "-copy_unknown " + . else . end)
+                                    | gsub("-timeout 2000000000"; "-rw_timeout 10000000")
+                                else "" end
+                            )
+                            | .output_flags = (.output_flags // "")
+                            | .channel_name = (.channel_name // "")
+                            | .channel_time = (.channel_time | to_num(0))
+                            | .schedule = (
+                                if (.schedule | type) == "array" then
+                                    (.schedule | map({
+                                        start_time: (.start_time | to_num(0)),
+                                        end_time: (.end_time | to_num(0)),
+                                        loop: (.loop | to_bool(false)),
+                                        auto_remove: (.auto_remove | to_bool(false)),
+                                        hls_change: (.hls_change | to_bool(true)),
+                                        hls_change_once: (.hls_change_once | to_bool(false)),
+                                        channel_name: (.channel_name // ""),
+                                        status: (.status | to_num(0))
+                                    }))
+                                else
+                                    []
+                                end
+                            )
+                            | .sync = (.sync | to_bool(false))
+                            | .sync_file = (.sync_file // "")
+                            | .sync_index = (.sync_index // "")
+                            | .sync_pairs = (.sync_pairs // "")
+                            | .hls_end_list = (.hls_end_list | to_bool(false))
+                            | .flv_status = (.flv_status // "off")
+                            | .flv_h265 = (.flv_h265 | to_bool(false))
+                            | .flv_push_link = (.flv_push_link // "")
+                            | .flv_pull_link = (.flv_pull_link // "")
+                        )
+                    else
+                        []
+                    end
+                )
+            '
+
+            if ! JQ mutate "$CHANNELS_FILE" "$chnls_migrate_jq"
+            then
+                UpdateSelfRollback
+                exit 1
+            fi
+
+            new_chnls_count=$($JQ_FILE '(.channels // []) | length' "$CHANNELS_FILE" 2> /dev/null || printf '-1')
+            if ! $JQ_FILE empty "$IPTV_CONFIG" > /dev/null 2>&1 || ! $JQ_FILE empty "$CHANNELS_FILE" > /dev/null 2>&1 || [ "$new_chnls_count" != "$orig_chnls_count" ]
+            then
+                UpdateSelfRollback
+                exit 1
+            fi
+
+            d_version=""
         fi
 
-        printf '%s' "" > ${LOCK_FILE}
+        GetDefault
+
+        printf '%s' "" > "$LOCK_FILE"
     fi
 
     if [[ -n ${1+x} ]]
@@ -35593,11 +37109,11 @@ then
                         headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
                         stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                            -H "${headers:0:-4}" \
-                            "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+                            -H "$(StripSuffix "$headers" 4)" \
+                            "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
                         if [ -n "$stream_link_data" ] 
                         then
-                            stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                            stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "$(StripSuffix "${stream_link_data:12}" 1)")
                             if [ -z "$stream_link_data" ] 
                             then
                                 Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
@@ -35699,7 +37215,7 @@ then
                         do
                             stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                                -H "${headers:0:-4}" \
+                                -H "$(StripSuffix "$headers" 4)" \
                                 --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
                             if [ -n "$stream_link_data" ] 
                             then
@@ -37486,20 +39002,6 @@ then
                     printf -v today '%(%Y-%m-%d)T' -1
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
-                    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/"  https://widgets.metabroadcast.com/config/1/btsport_v4.js)
-                    #bt_prop="${bt_prop#*=}"
-                    #bt_prop="${bt_prop%;*}"
-                    #bt_prop="${bt_prop%;*}"
-                    #bt_channels=$($JQ_FILE -r '.epg.modules.common.channels|join(",")' <<< "$bt_prop")
-                    #api_key=$($JQ_FILE -r '.epg.modules.common.apiKey' <<< "$bt_prop")
-
-                    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" https://www.player.bt.com/)
-                    #bt_prop="${bt_prop##*src=\"}"
-                    #bt_prop="${bt_prop%%\"*}"
-                    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" https://www.player.bt.com/$bt_prop)
-                    #bt_prop="${bt_prop##*_yvContentEnabled\?\"}"
-                    #api_key="${bt_prop%%\"*}"
-
                     api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
 
                     for chnl in "${btsport_chnls[@]}"
@@ -38425,7 +39927,7 @@ then
                     if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
                     then
                         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-                        sed -i "/\/usr\/local\/bin\/tv s/d" "$IPTV_ROOT/cron_tmp"
+                        FilterFileLines "$AIOS_PREFIX/bin/tv s" "$IPTV_ROOT/cron_tmp"
                         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
                         rm -f "$IPTV_ROOT/cron_tmp"
                         Println "$info 计划任务已关闭\n"
@@ -39187,7 +40689,6 @@ then
                     )
 
                     btsport_chnls=(
-                        #"btsportespn:BT Sport//ESPN"
                         "btsportultimate:hspr:BT Sport Ultimate"
                         "btsport1:hspc:BT Sport 1"
                         "btsport2:hspd:BT Sport 2"
@@ -39720,7 +41221,7 @@ then
             ;;
             e) 
                 [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
-                editor "$CHANNELS_FILE" && exit 0
+                RunEditor "$CHANNELS_FILE" && exit 0
             ;;
             ee) 
                 [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
@@ -39729,7 +41230,7 @@ then
                 echo
                 edit_options=($d_sync_file)
                 inquirer list_input "选择修改的文件" edit_options edit_option
-                editor "$edit_option"
+                RunEditor "$edit_option"
                 exit 0
             ;;
             d)
@@ -39786,7 +41287,7 @@ then
                 exit 0
             ;;
             ffmpeg|FFmpeg|mirror) 
-                if [[ ! -x $(command -v curl) ]] 
+                if [[ ! -x $(command -v curl) ]]
                 then
                     DepsCheck
                 fi
@@ -39801,13 +41302,13 @@ then
                 git_version_old=""
                 release_version_old=""
 
-                if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ] 
+                if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ]
                 then
                     while IFS= read -r line
                     do
-                        if [[ $line == *"<th>"* ]] 
+                        if [[ $line == *"<th>"* ]]
                         then
-                            if [[ $line == *"git"* ]] 
+                            if [[ $line == *"git"* ]]
                             then
                                 git_version_old="$line"
                             else
@@ -39817,7 +41318,7 @@ then
                     done < "$FFMPEG_MIRROR_ROOT/index.html"
                 fi
 
-                if curl -s -L "https://www.johnvansickle.com/ffmpeg/index.html" -o "$FFMPEG_MIRROR_ROOT/index.html_tmp" 
+                if curl -s -L "https://www.johnvansickle.com/ffmpeg/index.html" -o "$FFMPEG_MIRROR_ROOT/index.html_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/index.html_tmp" "$FFMPEG_MIRROR_ROOT/index.html"
                     curl -s -L "https://www.johnvansickle.com/ffmpeg/style.css" -o "$FFMPEG_MIRROR_ROOT/style.css"
@@ -39825,13 +41326,13 @@ then
                     Println "$error FFmpeg 查询新版本出错, 无法连接 johnvansickle.com ?"
                 fi
 
-                if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ] 
+                if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ]
                 then
                     while IFS= read -r line
                     do
-                        if [[ $line == *"<th>"* ]] 
+                        if [[ $line == *"<th>"* ]]
                         then
-                            if [[ $line == *"git"* ]] 
+                            if [[ $line == *"git"* ]]
                             then
                                 git_version_new="$line"
                                 if [ "$git_version_new" != "$git_version_old" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/builds/ffmpeg-git-amd64-static.tar.xz" ]
@@ -39844,7 +41345,7 @@ then
                             fi
                         fi
 
-                        if [[ $line == *"tar.xz"* ]]  
+                        if [[ $line == *"tar.xz"* ]]
                         then
                             if [[ $line == *"git"* ]] && [ "$git_download" -eq 1 ]
                             then
@@ -39861,8 +41362,8 @@ then
                                         Println "$error FFmpeg git build 下载出错, 无法连接 github ?"
                                     fi
                                 fi
-                            else 
-                                if [ "$release_download" -eq 1 ] 
+                            else
+                                if [ "$release_download" -eq 1 ]
                                 then
                                     line=${line#*<td><a href=\"}
                                     release_link=${line%%\" style*}
@@ -39892,27 +41393,27 @@ then
 
                 while IFS= read -r line
                 do
-                    if [[ $line == *"latest stable release is"* ]] 
+                    if [[ $line == *"latest stable release is"* ]]
                     then
                         line=${line#*<a href=\"}
                         poppler_name=${line%%.tar.xz*}
-                        poppler_name="poppler-0.81.0"
-                        if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz" ] 
+                        poppler_name="poppler-${POPPLER_VER}"
+                        if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz" ]
                         then
                             Println "$info 下载 poppler ..."
                             rm -f "$FFMPEG_MIRROR_ROOT/poppler-"*.tar.xz
-                            if curl -s -L "https://poppler.freedesktop.org/$poppler_name.tar.xz" -o "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" 
+                            if curl -s -L "https://poppler.freedesktop.org/$poppler_name.tar.xz" -o "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp"
                             then
                                 mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
                             else
                                 Println "$error poppler 下载出错"
                             fi
                         fi
-                    elif [[ $line == *"poppler encoding data"* ]] 
+                    elif [[ $line == *"poppler encoding data"* ]]
                     then
                         line=${line#*<a href=\"}
                         poppler_data_name=${line%%.tar.gz*}
-                        if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz" ] 
+                        if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz" ]
                         then
                             Println "$info 下载 poppler-data ..."
                             rm -f "$FFMPEG_MIRROR_ROOT/poppler-data-"*.tar.gz
@@ -39927,14 +41428,14 @@ then
                     fi
                 done < <(curl -s -Lm 20 "https://poppler.freedesktop.org/" 2> /dev/null)
 
-                if jq_ver=$(curl -s -Lm 20 "https://api.github.com/repos/stedolan/jq/releases/latest" | $JQ_FILE -r '.tag_name')
+                if jq_ver=$(curl -s -Lm 20 "$JQ_API_LINK" | $JQ_FILE -r '.tag_name')
                 then
-                    if [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32" ] 
+                    if [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32" ]
                     then
                         Println "$info 下载 jq ..."
                         rm -rf "$FFMPEG_MIRROR_ROOT/jq-"*
                         mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
-                        if curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" && curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
+                        if curl -s -L "${JQ_REPO_LINK}/releases/download/$jq_ver/jq-linux64" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" && curl -s -L "${JQ_REPO_LINK}/releases/download/$jq_ver/jq-linux32" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
                         then
                             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
                             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
@@ -39948,16 +41449,16 @@ then
 
                 archs=( 32 64 arm32-v5 arm32-v6 arm32-v7a arm64-v8a s390x)
 
-                if v2ray_ver=$(curl -s -m 30 "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
+                if v2ray_ver=$(curl -s -m 30 "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name')
                 then
                     mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
                     for arch in "${archs[@]}"
                     do
-                        if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip" ] 
+                        if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip" ]
                         then
                             Println "$info 下载 v2ray-linux-$arch $v2ray_ver ..."
                             if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" \
-                            && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" 
+                            && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp"
                             then
                                 mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip"
                                 mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst"
@@ -39970,16 +41471,16 @@ then
                     Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
                 fi
 
-                if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
+                if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name')
                 then
                     mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
                     for arch in "${archs[@]}"
                     do
-                        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip" ] 
+                        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip" ]
                         then
                             Println "$info 下载 Xray-linux-$arch $xray_ver ..."
                             if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" \
-                            && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" 
+                            && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp"
                             then
                                 mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip"
                                 mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst"
@@ -39992,10 +41493,10 @@ then
                     Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
                 fi
 
-                if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/woniuzfb/openwrt-xray/releases/latest" | $JQ_FILE -r '.tag_name') 
+                if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/woniuzfb/openwrt-xray/releases/latest" | $JQ_FILE -r '.tag_name')
                 then
                     xray_ver=${xray_ver#*v}
-                    if [[ ! $xray_ver =~ - ]] 
+                    if [[ ! $xray_ver =~ - ]]
                     then
                         xray_package_ver="${xray_ver}-1"
                     else
@@ -40004,7 +41505,7 @@ then
                     xray_archs=( 'x86_64' 'aarch64_generic' 'aarch64_cortex-a53' )
                     for arch in "${xray_archs[@]}"
                     do
-                        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ] 
+                        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ]
                         then
                             Println "$info 下载 xray_${xray_package_ver}_$arch.ipk ..."
                             if curl -s -L "https://github.com/woniuzfb/openwrt-xray/releases/download/v$xray_ver/xray_${xray_package_ver}_$arch.ipk" -o "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk_tmp"
@@ -40041,7 +41542,7 @@ then
                     Println "$error luci-app-xray 下载出错, 无法连接 github ?"
                 fi
 
-                if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name') 
+                if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name')
                 then
                     archs=( arm arm64 i386 x86_64 )
 
@@ -40087,7 +41588,7 @@ then
                     Println "$error CImg 下载出错, 无法连接 github ?"
                 fi
 
-                if curl -s -L "https://api.github.com/repos/stedolan/jq/releases/latest" -o "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
+                if curl -s -L "$JQ_API_LINK" -o "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/jq.json_tmp" "$FFMPEG_MIRROR_ROOT/jq.json"
                 else
@@ -40150,17 +41651,17 @@ then
                     Println "$error vim-plug.vim 下载出错, 无法连接 github ?"
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}" ]
                 then
-                    if curl -s -L "https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp"
+                    if curl -s -L "https://raw.githubusercontent.com/openresty/openresty/master/patches/${OPENRESTY_OPENSSL_PATCH}" -o "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}_tmp"
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp" "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch"
+                        mv "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}_tmp" "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}"
                     else
                         Println "$error openssl patch 下载出错, 无法连接 github ?"
                     fi
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" ] 
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" ]
                 then
                     if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp"
                     then
@@ -40170,13 +41671,6 @@ then
                     fi
                 fi
 
-                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp"
-                then
-                    mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch"
-                else
-                    Println "$error Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch 下载出错, 无法连接 github ?"
-                fi
-
                 if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp" "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch"
@@ -40184,28 +41678,28 @@ then
                     Println "$error fix_ngx_lua_resp_get_headers_key_whitespace.patch 下载出错, 无法连接 github ?"
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz" ]
                 then
-                    if curl -s -L "https://github.com/fontforge/fontforge/releases/download/20190413/fontforge-20190413.tar.gz" -o "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp"
+                    if curl -s -L "https://github.com/fontforge/fontforge/releases/download/${FONTFORGE_VER}/fontforge-${FONTFORGE_VER}.tar.gz" -o "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz_tmp"
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz"
+                        mv "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz"
                     else
                         Println "$error fontforge 下载出错, 无法连接 github ?"
                     fi
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" ] 
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip" ]
                 then
                     Println "$info 下载 pdf2htmlEX ..."
-                    if curl -s -L "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v0.18.7-poppler-0.81.0.zip" -o "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp"
+                    if curl -s -L "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v${PDF2HTMLEX_VER}.zip" -o "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip_tmp"
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
+                        mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip"
                     else
                         Println "$error pdf2htmlEX 下载出错, 无法连接 github ?"
                     fi
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/nbfc.zip" ] 
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/nbfc.zip" ]
                 then
                     Println "$info 下载 nbfc ..."
                     if curl -s -L "https://github.com/hirschmann/nbfc/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nbfc.zip_tmp"
@@ -40216,14 +41710,14 @@ then
                     fi
                 fi
 
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz" ] 
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz" ]
                 then
-                    Println "$info 下载 OpenSSL_1_1_1w-quic1 ..."
-                    if curl -s -L "https://github.com/quictls/openssl/archive/refs/tags/OpenSSL_1_1_1w-quic1.tar.gz" -o "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz_tmp"
+                    Println "$info 下载 ${QUICTLS_TAG} ..."
+                    if curl -s -L "${QUICTLS_REPO_LINK}/${QUICTLS_TAG}.tar.gz" -o "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz_tmp"
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz"
+                        mv "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz"
                     else
-                        Println "$error OpenSSL_1_1_1w-quic1 下载出错, 无法连接 github ?"
+                        Println "$error ${QUICTLS_TAG} 下载出错, 无法连接 github ?"
                     fi
                 fi
 
@@ -40264,7 +41758,7 @@ then
 
                 TsGetToken()
                 {
-                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
                     then
                         Println "$error 无法连接服务器, 请重试"
                         return 1
@@ -40283,7 +41777,7 @@ then
 
                     sleep $refresh_time
 
-                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
                     then
                         Println "$error 无法连接服务器, 请重试"
                         return 3
@@ -40298,7 +41792,7 @@ then
                         return 4
                     fi
 
-                    printf -v now '%(%s)T' -1
+                    now=$(DateEpoch)
 
                     refresh=$((now+refresh_time))
                 }
@@ -40375,6 +41869,7 @@ then
 
                 EXIT_STATUS=0
 
+                ts_source=$($JQ_FILE '{data: ((if type == "array" then .[0].data else .data end) // [] | map(select(.reg_url != null)))}' <<< "$ts_source")
                 jq_payload=$(JQs flat "$ts_source")
 
                 jq_path='[
@@ -40413,7 +41908,7 @@ then
                     read -r ${var_name?} <<< "$value"
                 done < <(JQs gets jq_payload)
 
-                if [ -z "$m_name" ]
+                if [ -z "${jq_data_name:-}" ]
                 then
                     Println "$error 没有找到频道\n"
                     exit 1
@@ -40448,8 +41943,8 @@ then
                 IFS="${delimiters[3]}" read -ra ts_model <<< "$jq_data_extend_info_model"
                 IFS="${delimiters[3]}" read -ra ts_app_version <<< "$jq_data_extend_info_appversion"
 
-                rm -rf /tmp/cookie_jar
-                mkdir -p /tmp/cookie_jar
+                cookie_jar_dir=$(mktemp -d "${TMPDIR:-/tmp}/aios-cookie.XXXXXX")
+                trap 'rm -rf "$cookie_jar_dir"' EXIT
 
                 while true 
                 do
@@ -40464,7 +41959,7 @@ then
                         Println "$tip 部分地区不选择线路可能无法连接"
                         inquirer list_input_index "选择线路" lan_options lan_options_index
 
-                        sed -i '/.*.jxtvnet.tv/d' /etc/hosts
+                        FilterFileLines ".jxtvnet.tv" /etc/hosts
 
                         if [ "$lan_options_index" -eq 1 ] 
                         then
@@ -40539,8 +42034,8 @@ then
                         echo
                         ExitOnText "输入密码" password
 
-                        device_no=$(< /proc/sys/kernel/random/uuid)
-                        str=$(printf '%s' "$device_no" | md5sum)
+                        device_no=$(GenUuid)
+                        str=$(printf '%s' "$device_no" | Md5Hex)
                         str=${str%% *}
                         str=${str:7:1}
                         device_no="$device_no$str"
@@ -40550,9 +42045,9 @@ then
                             continue
                         fi
 
-                        if [ -s "/tmp/cookie_jar/$id" ] 
+                        if [ -s "$cookie_jar_dir/$id" ] 
                         then
-                            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                            cookie_jar=( -b "$cookie_jar_dir/$id" )
                         else
                             cookie_jar=()
                         fi
@@ -40580,11 +42075,11 @@ then
 
                                 if [ -z "$third_token_url" ] 
                                 then
-                                    if [ -s "/tmp/cookie_jar/$id" ] 
+                                    if [ -s "$cookie_jar_dir/$id" ] 
                                     then
-                                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                                        cookie_jar=( -b "$cookie_jar_dir/$id" )
                                     else
-                                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                                        cookie_jar=( -c "$cookie_jar_dir/$id" )
                                     fi
                                 else
                                     cookie_jar=()
@@ -40631,8 +42126,8 @@ then
                         echo
                         ExitOnText "输入密码" password
 
-                        device_no=$(< /proc/sys/kernel/random/uuid)
-                        str=$(printf '%s' "$device_no" | md5sum)
+                        device_no=$(GenUuid)
+                        str=$(printf '%s' "$device_no" | Md5Hex)
                         str=${str%% *}
                         str=${str:7:1}
                         device_no="$device_no$str"
@@ -40644,7 +42139,7 @@ then
 
                         if [ -z "$img_url" ] 
                         then
-                            md5_password=$(printf '%s' "$password" | md5sum)
+                            md5_password=$(printf '%s' "$password" | Md5Hex)
                             md5_password=${md5_password%% *}
 
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$reg_url?username=$user_name&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=$reg_type&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
@@ -40657,7 +42152,7 @@ then
                             Println "$info 注册成功, 请稍等..."
                             sleep 3
                         else
-                            if [ ! -e "/usr/local/bin/imgcat" ] 
+                            if [ ! -e "$IMGCAT_FILE" ] 
                             then
                                 ImgcatInstall
                             fi
@@ -40666,14 +42161,14 @@ then
                             do
                                 if [ -n "$third_token_url" ] 
                                 then
-                                    if [ -s "/tmp/cookie_jar/$id" ] 
+                                    if [ -s "$cookie_jar_dir/$id" ] 
                                     then
-                                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                                        cookie_jar=( -b "$cookie_jar_dir/$id" )
                                     else
-                                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                                        cookie_jar=( -c "$cookie_jar_dir/$id" )
                                     fi
 
-                                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
+                                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
                                     then
                                         Println "$error 无法获取 token, 请重试"
                                         continue 2
@@ -40681,10 +42176,10 @@ then
 
                                     IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.access_token]|join(" ")' <<< "$res")
                                 else
-                                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+                                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
                                     then
                                         Println "$error 无法获取 token, 请重试"
-                                        return 1
+                                        continue 2
                                     fi
 
                                     IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.accessToken]|join(" ")' <<< "$res")
@@ -40697,7 +42192,7 @@ then
                                     continue 2
                                 fi
 
-                                if [ ! -s "/tmp/cookie_jar/$id" ] 
+                                if [ ! -s "$cookie_jar_dir/$id" ] 
                                 then
                                     cookie_jar=()
                                 fi
@@ -40721,20 +42216,21 @@ then
                                 then
                                     chmod +r "$TMP_FILE"
                                 else
-                                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                    TMP_FILE=$(date '+%m-%d-%H:%M:%S')
                                 fi
 
                                 trap '
                                     rm -f "$TMP_FILE"
+                                    rm -rf "$cookie_jar_dir"
                                 ' EXIT
 
                                 base64 -d <<< "${image#*,}" > "$TMP_FILE"
 
-                                /usr/local/bin/imgcat --half-height "$TMP_FILE"
+                                "$IMGCAT_FILE" --half-height "$TMP_FILE"
 
                                 rm -f "$TMP_FILE"
 
-                                trap - EXIT
+                                trap 'rm -rf "$cookie_jar_dir"' EXIT
 
                                 echo
                                 inquirer text_input "输入图片验证码" pincode "刷新"
@@ -40750,7 +42246,7 @@ then
                                             continue 2
                                         fi
 
-                                        printf -v now '%(%s)T' -1
+                                        now=$(DateEpoch)
                                         next=$((now+120))
 
                                         echo
@@ -40758,7 +42254,7 @@ then
 
                                         if [ "$smscode" == "再次发送" ] 
                                         then
-                                            printf -v now '%(%s)T' -1
+                                            now=$(DateEpoch)
                                             if [ "$now" -lt "$next" ] 
                                             then
                                                 for((secs=next-now;secs>0;secs--));
@@ -40785,15 +42281,15 @@ then
                                             continue 2
                                         fi
 
-                                        md5_password=$(printf '%s' "$password" | md5sum)
+                                        md5_password=$(printf '%s' "$password" | Md5Hex)
                                         md5_password=${md5_password%% *}
-                                        printf -v timestamp '%(%s)T' -1
+                                        timestamp=$(DateEpoch)
                                         timestamp=$((timestamp * 1000))
                                         signature="$login|$md5_password|$device_no|yuj|$timestamp"
-                                        signature=$(printf '%s' "$signature" | md5sum)
+                                        signature=$(printf '%s' "$signature" | Md5Hex)
                                         signature=${signature%% *}
 
-                                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                                         then
                                             echo "$res"
                                             Println "$error 注册失败, 请重试"
@@ -40830,7 +42326,7 @@ then
 
                         if [ -n "$refresh" ] 
                         then
-                            printf -v now '%(%s)T' -1
+                            now=$(DateEpoch)
 
                             if [ "$now" -lt "$refresh" ] 
                             then
@@ -40840,8 +42336,8 @@ then
 
                         if [ -z "$device_no" ] 
                         then
-                            device_no=$(< /proc/sys/kernel/random/uuid)
-                            str=$(printf '%s' "$device_no" | md5sum)
+                            device_no=$(GenUuid)
+                            str=$(printf '%s' "$device_no" | Md5Hex)
                             str=${str%% *}
                             str=${str:7:1}
                             device_no="$device_no$str"
@@ -40852,15 +42348,15 @@ then
                             continue
                         fi
 
-                        if [ -s "/tmp/cookie_jar/$id" ] 
+                        if [ -s "$cookie_jar_dir/$id" ] 
                         then
-                            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                            cookie_jar=( -b "$cookie_jar_dir/$id" )
                         else
                             cookie_jar=()
                         fi
                     fi
 
-                    md5_password=$(printf '%s' "$password" | md5sum)
+                    md5_password=$(printf '%s' "$password" | Md5Hex)
                     md5_password=${md5_password%% *}
 
                     if [ -z "$img_url" ] 
@@ -40872,7 +42368,7 @@ then
                             continue
                         fi
                     else
-                        printf -v timestamp '%(%s)T' -1
+                        timestamp=$(DateEpoch)
                         timestamp=$((timestamp * 1000))
 
                         if [[ $user_name =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
@@ -40885,10 +42381,10 @@ then
                         fi
 
                         signature="$device_no|yuj|$login_acc_type|$login|$timestamp"
-                        signature=$(printf '%s' "$signature" | md5sum)
+                        signature=$(printf '%s' "$signature" | Md5Hex)
                         signature=${signature%% *}
 
-                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
                         then
                             Println "$error 无法登陆直播源, 请重试"
                             continue
@@ -41085,12 +42581,14 @@ then
                     echo
                     inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
 
-                    if [ -z "$play_url" ] 
+                    chnl_play_url="$play_url"
+
+                    if [ -z "$chnl_play_url" ] 
                     then
                         IFS="${delimiters[3]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
 
                         echo
-                        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls play_url
+                        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls chnl_play_url
                     fi
 
                     echo
@@ -41099,7 +42597,7 @@ then
 
                     if [ -z "$auth_info_url" ] 
                     then
-                        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
+                        stream_link="$chnl_play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
                     else
                         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_info_url?accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&verifycode=$device_id") 
                         then
@@ -41117,7 +42615,7 @@ then
                         fi
 
                         authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel$auth_random_sn"
-                        authtoken=$(printf '%s' "$authtoken" | md5sum)
+                        authtoken=$(printf '%s' "$authtoken" | Md5Hex)
                         authtoken=${authtoken%% *}
 
                         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_verify_url?programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&accesstoken=$access_token&verifycode=$device_id&authtoken=$authtoken") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
@@ -41126,13 +42624,11 @@ then
                             continue
                         fi
 
-                        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
+                        stream_link="$chnl_play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
                     fi
 
                     stream_link_parsed=true
                     stream_links=("$stream_link")
-
-                    ParseStream
 
                     if ! ParseStream
                     then
@@ -41188,6 +42684,8 @@ then
                             if [ "$ny_index" -eq 1 ] 
                             then
                                 kind="flv"
+                            else
+                                kind=""
                             fi
 
                             AddChannel
@@ -41234,9 +42732,9 @@ then
 
                     for i in "${indices[@]}"
                     do
-                        if [ "${chnls_flv_status[i]:-}" == "on" ] 
+                        if [ "${chnls_flv_status[i]:-}" == "on" ]
                         then
-                            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+                            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"
 
                             chnl_stream_links_list=""
 
@@ -41246,9 +42744,9 @@ then
                             done
 
                             flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
-                        elif [ "${chnls_status[i]:-}" == "on" ] 
+                        elif [ "${chnls_status[i]:-}" == "on" ]
                         then
-                            IFS="${delimiters[4]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+                            IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"
 
                             chnl_stream_links_list=""
 
@@ -41275,9 +42773,9 @@ then
                         echo -e "  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[hls_index]}\n\n${hls_stream_links_list[i]}"
                         if [ -d "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}" ] 
                         then
-                            if ls -A "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* > /dev/null 2>&1 
+                            if ls -A "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* > /dev/null 2>&1
                             then
-                                ls "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* -lght && echo
+                                ls -lght "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* && echo
                             else
                                 Println "$error 无\n"
                             fi
@@ -41316,9 +42814,9 @@ then
 
                         Println "$error 未知目录 $output_dir_name\n"
 
-                        if ls -A "$output_dir_root"/* > /dev/null 2>&1 
+                        if ls -A "$output_dir_root"/* > /dev/null 2>&1
                         then
-                            ls "$output_dir_root"/* -lght
+                            ls -lght "$output_dir_root"/*
                         fi
                     done
                 fi
@@ -41332,26 +42830,25 @@ then
                 exit 0
             ;;
             debug)
-                if [[ ${2:-1} == "1" ]] 
+                if [[ ${2:-1} == "1" ]]
                 then
                     flag=true
                 else
                     flag=false
                 fi
 
-                sed -i "0,/sh_debug=.*/s//sh_debug=$flag/" "$SH_FILE"
+                debug_tmp=$(mktemp "${TMPDIR:-/tmp}/aios-dbg.XXXXXX")
+                if awk -v f="$flag" '!done && sub(/sh_debug=.*/, "sh_debug=" f) { done=1 } 1' "$SH_FILE" > "$debug_tmp" && [ -s "$debug_tmp" ]
+                then
+                    cat "$debug_tmp" > "$SH_FILE"
+                fi
+                rm -f "$debug_tmp"
 
                 exit 0
             ;;
             ed|editor)
-                DepInstall vim
-                if [ "$dist" == "rpm" ] 
-                then
-                    alternatives --config editor
-                else
-                    update-alternatives --config editor
-                fi
-                exit 0
+                [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+                RunEditor "$IPTV_CONFIG" && exit 0
             ;;
             a)
                 if [[ ! -x $(command -v readlink) ]] 
@@ -41372,7 +42869,7 @@ then
                 "ibm cloud foundry" "cloudflare partner,workers" ffmpeg )
                 inquirer list_input_index "选择执行的脚本" alternative_options alternative_options_index
                 commands=( NX_FILE OR_FILE X_FILE V2_FILE ARM_FILE PVE_FILE IBM_FILE CF_FILE SH_FILE )
-                ln -s ${!commands[alternative_options_index]} /usr/bin/$name
+                ln -s "${!commands[alternative_options_index]}" "$AIOS_PREFIX/bin/$name"
                 Println "$info 自定义命令 $name 添加成功\n"
                 exit 0
             ;;
@@ -41415,7 +42912,13 @@ then
 
                 if [ "$color_options_index" -eq 1 ] 
                 then
-                    sed -E -i '/(bg_black|red|green|yellow|blue|cyan|white)=/d' "$i18n_FILE"
+                    FilterFileLines "bg_black=" "$i18n_FILE"
+                    FilterFileLines "red=" "$i18n_FILE"
+                    FilterFileLines "green=" "$i18n_FILE"
+                    FilterFileLines "yellow=" "$i18n_FILE"
+                    FilterFileLines "blue=" "$i18n_FILE"
+                    FilterFileLines "cyan=" "$i18n_FILE"
+                    FilterFileLines "white=" "$i18n_FILE"
                     Println "$info 颜色重置成功\n"
                     exit 0
                 fi
@@ -41430,31 +42933,31 @@ then
 
                 if [ "$color_options_index" -eq 0 ] 
                 then
-                    sed -i '/red=/d' "$i18n_FILE"
-                    printf "red='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "red=" "$i18n_FILE"
+                    printf "red='%s'\n" "$color_pick" >> "$i18n_FILE"
                 elif [ "$color_options_index" -eq 1 ] 
                 then
-                    sed -i '/green=/d' "$i18n_FILE"
-                    printf "green='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "green=" "$i18n_FILE"
+                    printf "green='%s'\n" "$color_pick" >> "$i18n_FILE"
                 elif [ "$color_options_index" -eq 2 ] 
                 then
-                    sed -i '/yellow=/d' "$i18n_FILE"
-                    printf "yellow='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "yellow=" "$i18n_FILE"
+                    printf "yellow='%s'\n" "$color_pick" >> "$i18n_FILE"
                 elif [ "$color_options_index" -eq 3 ] 
                 then
-                    sed -i '/blue=/d' "$i18n_FILE"
-                    printf "blue='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "blue=" "$i18n_FILE"
+                    printf "blue='%s'\n" "$color_pick" >> "$i18n_FILE"
                 elif [ "$color_options_index" -eq 4 ] 
                 then
-                    sed -i '/cyan=/d' "$i18n_FILE"
-                    printf "cyan='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "cyan=" "$i18n_FILE"
+                    printf "cyan='%s'\n" "$color_pick" >> "$i18n_FILE"
                 elif [ "$color_options_index" -eq 5 ] 
                 then
-                    sed -i '/white=/d' "$i18n_FILE"
-                    printf "white='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "white=" "$i18n_FILE"
+                    printf "white='%s'\n" "$color_pick" >> "$i18n_FILE"
                 else
-                    sed -i '/bg_black=/d' "$i18n_FILE"
-                    printf "bg_black='%s'" "$color_pick" >> "$i18n_FILE"
+                    FilterFileLines "bg_black=" "$i18n_FILE"
+                    printf "bg_black='%s'\n" "$color_pick" >> "$i18n_FILE"
                 fi
 
                 Println "$info 颜色设置成功\n"
@@ -41552,7 +43055,7 @@ then
                     node_source="$NODE_ROOT"
                 fi
 
-                nginx_source=/usr/local/nginx
+                nginx_source="${NGINX_PREFIX_DEFAULT}"
 
                 nginx_excludes_before=(
                     /logs/'*'.gz
@@ -41569,7 +43072,7 @@ then
                     /'***'
                 )
 
-                openresty_source=/usr/local/openresty
+                openresty_source="${OPENRESTY_PREFIX_DEFAULT}"
 
                 openresty_excludes_before=(
                     /nginx/logs/'*'.gz
@@ -41934,7 +43437,7 @@ then
             sync_pairs="${sync_pairs:-}"
             hls_end_list="${d_hls_end_list:-false}"
 
-            [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+            mkdir -p "$FFMPEG_LOG_ROOT"
 
             flv_h265="${flv_h265:-false}"
             flv_push_link="${flv_push_link:-}"
@@ -48959,7 +50462,7 @@ then
         local routing_rule_found=0
         local i
         api_inbound_tag=""
-        for ((i=0; i<routing_rules_count; i++))
+        for((i=0;i<routing_rules_count;i++));
         do
             if [ "${routing_rules_outboundTag[i]:-}" == "$api_tag" ]
             then
@@ -48980,7 +50483,7 @@ then
 
         api_inbound_listen=""
         api_inbound_port=""
-        for ((i=0; i<inbounds_count; i++))
+        for((i=0;i<inbounds_count;i++));
         do
             if [ "${inbounds_tag[i]}" == "$api_inbound_tag" ]
             then
@@ -50648,11 +52151,11 @@ then
                 then
                     if [ -n "$xray_bin" ]
                     then
-                        uuid=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+                        uuid=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
                     fi
                     if [ -z "$uuid" ] && command -v uuidgen > /dev/null 2>&1
                     then
-                        uuid=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+                        uuid=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
                     fi
                     if [ -z "$uuid" ] && [ -r /proc/sys/kernel/random/uuid ]
                     then
@@ -50680,11 +52183,11 @@ then
                 then
                     if [ -n "$xray_bin" ]
                     then
-                        uuid=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+                        uuid=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
                     fi
                     if [ -z "$uuid" ] && command -v uuidgen > /dev/null 2>&1
                     then
-                        uuid=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+                        uuid=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
                     fi
                     if [ -z "$uuid" ] && [ -r /proc/sys/kernel/random/uuid ]
                     then
@@ -50721,7 +52224,7 @@ then
                     then
                         ss_bytes=16
                     fi
-                    password=$(openssl rand -base64 "$ss_bytes" 2>/dev/null | tr -d '\r\n')
+                    password=$(openssl rand -base64 "$ss_bytes" 2> /dev/null | tr -d '\r\n')
                     if [ -z "$password" ]
                     then
                         Println "$error 自动生成 SS2022 密钥失败, 请手动输入\n"
@@ -50807,7 +52310,7 @@ then
                     if [ -n "$xray_bin" ]
                     then
                         local wg_out wg_pub=""
-                        wg_out=$("$xray_bin" wg 2>/dev/null)
+                        wg_out=$("$xray_bin" wg 2> /dev/null)
                         secret_key=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                         wg_pub=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Public[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                         if [ -n "$secret_key" ]
@@ -50959,7 +52462,7 @@ then
                 if [ -n "$xray_bin" ]
                 then
                     local x25519_out r_pub=""
-                    x25519_out=$("$xray_bin" x25519 2>/dev/null)
+                    x25519_out=$("$xray_bin" x25519 2> /dev/null)
                     r_pk=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                     r_pub=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^(Password|Public[ ]?[Kk]ey):/ {print $2; exit}' | tr -d '\r\n ')
                     if [ -n "$r_pk" ]
@@ -51097,11 +52600,11 @@ then
         local gen=""
         if [ -n "$xray_bin" ]
         then
-            gen=$("$xray_bin" uuid 2>/dev/null | head -n 1 | tr -d '\r\n')
+            gen=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
         fi
         if [ -z "$gen" ] && command -v uuidgen > /dev/null 2>&1
         then
-            gen=$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+            gen=$(uuidgen 2> /dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
         fi
         if [ -z "$gen" ] && [ -r /proc/sys/kernel/random/uuid ]
         then
@@ -51118,7 +52621,7 @@ then
         then
             bytes=16
         fi
-        openssl rand -base64 "$bytes" 2>/dev/null | tr -d '\r\n'
+        openssl rand -base64 "$bytes" 2> /dev/null | tr -d '\r\n'
     }
 
     XrayAddInboundAccount()
@@ -52257,7 +53760,7 @@ then
         routing_rules_count=0
         if [ -s "$X_CONFIG" ]
         then
-            routing_rules_count=$($JQ_FILE -r '(.routing.rules // []) | length' "$X_CONFIG" 2>/dev/null)
+            routing_rules_count=$($JQ_FILE -r '(.routing.rules // []) | length' "$X_CONFIG" 2> /dev/null)
             routing_rules_count="${routing_rules_count:-0}"
         fi
 
@@ -54065,7 +55568,7 @@ then
             apt_options=( '切换 非订阅源/订阅 源' '切换 debian 国内/国外 源' )
             inquirer list_input_index "选择操作" apt_options apt_options_index
 
-            . /etc/os-release
+            VERSION_CODENAME=$(AptGetCodename)
 
             if [ "$apt_options_index" -eq 0 ] 
             then
@@ -54269,7 +55772,7 @@ then
                 apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
                 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
                 echo "deb https://download.mono-project.com/repo/debian stable main" | tee /etc/apt/sources.list.d/mono-official-stable.list
-                apt-get update
+                AptUpdate force
                 apt-get -y install mono-complete git
             fi
 
@@ -54915,18 +56418,26 @@ then
             apt-get -y install ca-certificates gpg
             if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                local arm_codename
+                arm_codename=$(AptGetCodename)
+
+                if ! AptRepoCheck "${DOCKER_REPO_LINK}/debian" "$arm_codename"
                 then
-                    curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-                else
-                    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+                    Println "$error Docker 官方源暂不支持当前系统 (${arm_codename:-unknown}), 未写入失效源\n"
+                    exit 1
                 fi
+
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
+                then
+                    curl -fsSL "http://${USTC_MIRROR_HOST}/docker-ce/linux/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                else
+                    curl -fsSL "${DOCKER_REPO_LINK}/debian/gpg" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                fi
+
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ${DOCKER_REPO_LINK}/debian \
+            ${arm_codename} stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
             fi
-            apt-get update
+            AptUpdate force
             apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
             Println "$info docker 安装成功\n"
         ;;
@@ -61972,45 +63483,6 @@ then
         Println "$info workers 监控开启成功\n"
     }
 
-    CloudflareDisableWorkersMonitor()
-    {
-        # deprecated
-        if [ -s "/tmp/cf_workers.pid" ] 
-        then
-            cf_workers_pid=$(< /tmp/cf_workers.pid)
-            if kill -0 "$cf_workers_pid" 2> /dev/null
-            then
-                kill "$cf_workers_pid" 2> /dev/null
-                [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
-                MonitorLog "关闭 workers 监控 PID $cf_workers_pid !"
-                Println "$info workers 监控 关闭成功\n"
-            else
-                Println "$error workers 监控 未开启\n"
-            fi
-        elif [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ]
-        then
-            PID=$(< "$CF_WORKERS_ROOT/cf_workers.pid")
-            if kill -0 "$PID" 2> /dev/null 
-            then
-                Println "$info 关闭 workers 监控, 稍等..."
-                kill "$PID" 2> /dev/null
-                if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.pid" rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-                then
-                    MonitorLog "关闭 workers 监控 PID $PID !"
-                    Println "$info workers 监控 关闭成功 !\n"
-                else
-                    Println "$error workers 监控 关闭超时, 请重试\n"
-                    exit 1
-                fi
-            else
-                rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-                Println "$error workers 监控 未开启\n"
-            fi
-        else
-            [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
-            Println "$error workers 监控 未开启\n"
-        fi
-    }
 
     CloudflareWorkersMenu()
     {
@@ -67408,55 +68880,48 @@ then
         DepInstall gpg
 
         case $dist in
-            ubu)
+            ubu|deb)
+                local docker_dist="ubuntu" docker_codename docker_repo_base docker_key_url
+                if [ "$dist" == "deb" ]
+                then
+                    docker_dist="debian"
+                fi
+
+                docker_codename=$(AptGetCodename)
+
                 if grep -q "docker-ce" < /etc/apt/sources.list
                 then
                     sed -i '/docker-ce/d' /etc/apt/sources.list
                 fi
+
                 if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
                 then
-                    if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                    docker_repo_base="${DOCKER_REPO_LINK}/${docker_dist}"
+                    if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                     then
-                        curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-                        $(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list
+                        docker_key_url="http://${USTC_MIRROR_HOST}/docker-ce/linux/${docker_dist}/gpg"
                     else
-                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-                        $(. /etc/os-release && echo "${VERSION_CODENAME:-$UBUNTU_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list
+                        docker_key_url="${DOCKER_REPO_LINK}/${docker_dist}/gpg"
                     fi
-                    sudo apt-get update
+
+                    if ! AptRepoCheck "$docker_repo_base" "$docker_codename"
+                    then
+                        Println "$error Docker 官方源暂不支持当前系统 (${docker_codename:-unknown}), 未写入失效源\n"
+                        return 1
+                    fi
+
+                    curl -fsSL "$docker_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] ${docker_repo_base} \
+                ${docker_codename} stable" | tee /etc/apt/sources.list.d/docker.list
+                    AptUpdate force
                 fi
+
                 for pkg in docker.io docker-doc docker-compose podman-docker containerd runc
                 do
                     sudo apt-get -y remove $pkg || true
                 done
-                sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            ;;
-            deb)
-                if grep -q "docker-ce" < /etc/apt/sources.list
-                then
-                    sed -i '/docker-ce/d' /etc/apt/sources.list
-                fi
-                if [ ! -f "/etc/apt/sources.list.d/docker.list" ]
-                then
-                    if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
-                    then
-                        curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list
-                    else
-                        curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
-                        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list
-                    fi
-                    sudo apt-get update
-                fi
-                for pkg in docker.io docker-doc docker-compose podman-docker containerd runc
-                do
-                    sudo apt-get -y remove $pkg || true
-                done
-                sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+                AptInstall docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
             ;;
             rpm)
                 echo
@@ -67996,51 +69461,40 @@ EOF
         . /etc/os-release
 
         case $dist in
-            ubu)
-                if ! [[ "$VERSION_CODENAME" =~ mantic|lunar|jammy|focal ]]
-                then
-                    sudo apt-get -y install postgresql-12
-                    return 0
-                fi
-                DepInstall gpg
+            ubu|deb)
+                local pg_codename
+                pg_codename=$(AptGetCodename)
+
                 if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
                 then
-                    if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                    local pg_repo_base="$PGDG_APT_LINK"
+                    local pg_key_url="https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+
+                    if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                     then
-                        curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://mirrors.ustc.edu.cn/postgresql/repos/apt \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
-                    else
-                        curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+                        pg_repo_base="https://${USTC_MIRROR_HOST}/postgresql/repos/apt"
+                        pg_key_url="https://${USTC_MIRROR_HOST}/postgresql/repos/apt/ACCC4CF8.asc"
                     fi
-                    sudo apt-get update
-                fi
-                sudo apt-get -y install postgresql
-            ;;
-            deb)
-                if ! [[ "$VERSION_CODENAME" =~ bookworm|bullseye|buster|sid ]]
-                then
-                    sudo apt-get -y install postgresql-12
-                    return 0
-                fi
-                DepInstall gpg
-                if [ ! -f /etc/apt/sources.list.d/pgdg.list ]
-                then
-                    if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+
+                    if ! AptRepoCheck "$pg_repo_base" "${pg_codename}-pgdg"
                     then
-                        curl -fsSL https://mirrors.ustc.edu.cn/postgresql/repos/apt/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://mirrors.ustc.edu.cn/postgresql/repos/apt \
-                    ${VERSION_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
-                    else
-                        curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
-                        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt \
-                    ${VERSION_CODENAME}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
+                        if AptRepoCheck "$PGDG_ARCHIVE_APT_LINK" "${pg_codename}-pgdg"
+                        then
+                            pg_repo_base="$PGDG_ARCHIVE_APT_LINK"
+                        else
+                            Println "$tip PostgreSQL 官方源暂不支持当前系统 (${pg_codename:-unknown}), 改用系统默认源安装"
+                            AptInstall postgresql
+                            return $?
+                        fi
                     fi
-                    sudo apt-get update
+
+                    DepInstall gpg
+                    curl -fsSL "$pg_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] ${pg_repo_base} ${pg_codename}-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+                    AptUpdate force
                 fi
-                sudo apt-get -y install postgresql
+
+                AptInstall postgresql
             ;;
             rpm)
                 ArchCheck
@@ -68062,27 +69516,27 @@ EOF
                 then
                     sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}
                     sudo dnf -qy module disable postgresql || true
-                    sudo dnf install -y postgresql16-server
-                    sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
-                    sudo systemctl enable postgresql-16
-                    sudo systemctl start postgresql-16
+                    sudo dnf install -y "postgresql${POSTGRESQL_VER}-server"
+                    sudo "/usr/pgsql-${POSTGRESQL_VER}/bin/postgresql-${POSTGRESQL_VER}-setup" initdb
+                    sudo systemctl enable "postgresql-${POSTGRESQL_VER}"
+                    sudo systemctl start "postgresql-${POSTGRESQL_VER}"
                 else
                     sudo yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/${repo_name}/pgdg-redhat-repo-latest.noarch.rpm
-                    sudo yum install -y postgresql16-server
+                    sudo yum install -y "postgresql${POSTGRESQL_VER}-server"
                     if [ "${VERSION_ID%%.*}" -eq 7 ]
                     then
-                        sudo /usr/pgsql-16/bin/postgresql-16-setup initdb
-                        sudo systemctl enable postgresql-16
-                        sudo systemctl start postgresql-16
+                        sudo "/usr/pgsql-${POSTGRESQL_VER}/bin/postgresql-${POSTGRESQL_VER}-setup" initdb
+                        sudo systemctl enable "postgresql-${POSTGRESQL_VER}"
+                        sudo systemctl start "postgresql-${POSTGRESQL_VER}"
                     else
-                        sudo service postgresql-16 initdb
-                        sudo chkconfig postgresql-16 on
-                        sudo service postgresql-16 start
+                        sudo service "postgresql-${POSTGRESQL_VER}" initdb
+                        sudo chkconfig "postgresql-${POSTGRESQL_VER}" on
+                        sudo service "postgresql-${POSTGRESQL_VER}" start
                     fi
                 fi
             ;;
             opensuse)
-                zypper install -l -y postgresql16-server
+                zypper install -l -y "postgresql${POSTGRESQL_VER}-server"
                 systemctl enable postgresql.service
                 systemctl start postgresql.service
             ;;
@@ -68091,9 +69545,9 @@ EOF
                 then
                     SUSEConnect -p PackageHub/12/x86_64
                     SUSEConnect -p sle-sdk/12/x86_64
-                    zypper addrepo https://download.postgresql.org/pub/repos/zypp/repo/pgdg-sles-12-pg15.repo
+                    zypper addrepo "https://download.postgresql.org/pub/repos/zypp/repo/pgdg-sles-12-pg${POSTGRESQL_SLES12_VER}.repo"
                     zypper refresh
-                    zypper install postgresql15-server
+                    zypper install "postgresql${POSTGRESQL_SLES12_VER}-server"
                 else
                     zypper addrepo https://download.opensuse.org/repositories/devel:/libraries:/c_c++/${VERSION_ID}/devel:libraries:c_c++.repo
                     zypper addrepo https://download.opensuse.org/repositories/science/${VERSION_ID}/science.repo
@@ -68102,7 +69556,7 @@ EOF
                     SUSEConnect -p PackageHub/${VERSION_ID}/x86_64
                     zypper --gpg-auto-import-keys install -y zypper install https://download.postgresql.org/pub/repos/zypp/reporpms/SLES-15-x86_64/pgdg-suse-repo-latest.noarch.rpm
                     zypper refresh
-                    zypper install postgresql16-server
+                    zypper install "postgresql${POSTGRESQL_VER}-server"
                 fi
 
                 systemctl enable postgresql.service

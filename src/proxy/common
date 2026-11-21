@@ -1294,7 +1294,7 @@ ProxySelectBound()
             Println "$error 请先添加入站\n"
             return 1
         fi
-        for ((i=0; i<inbounds_count; i++))
+        for((i=0;i<inbounds_count;i++));
         do
             ridx="${inbounds_json_index[i]}"
             options+=("$((i+1)). [${inbounds_protocol[ridx]}] ${inbounds_tag[ridx]} (${inbounds_listen[ridx]}:${inbounds_port[ridx]})")
@@ -1309,7 +1309,7 @@ ProxySelectBound()
             Println "$error 没有出站\n"
             return 1
         fi
-        for ((i=0; i<outbounds_count; i++))
+        for((i=0;i<outbounds_count;i++));
         do
             ridx="${outbounds_json_index[i]}"
             options+=("$((i+1)). [${outbounds_protocol[ridx]}] ${outbounds_tag[ridx]} (${outbounds_sendThrough[ridx]})")

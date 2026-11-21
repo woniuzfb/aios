@@ -245,11 +245,11 @@ do
         headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
         stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-            -H "${headers:0:-4}" \
-            "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+            -H "$(StripSuffix "$headers" 4)" \
+            "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(DateMs)") || true
         if [ -n "$stream_link_data" ] 
         then
-            stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+            stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "$(StripSuffix "${stream_link_data:12}" 1)")
             if [ -z "$stream_link_data" ] 
             then
                 Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
@@ -351,7 +351,7 @@ do
         do
             stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                -H "${headers:0:-4}" \
+                -H "$(StripSuffix "$headers" 4)" \
                 --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
             if [ -n "$stream_link_data" ] 
             then

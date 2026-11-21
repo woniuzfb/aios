@@ -12,7 +12,7 @@ TesseractInstall()
     then
         add-apt-repository ppa:alex-p/tesseract-ocr -y
         apt-get -y update
-        apt-get -y install tesseract
+        AptInstall tesseract
     elif [ "$dist" == "deb" ] 
     then
         Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"

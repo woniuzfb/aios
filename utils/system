@@ -113,14 +113,377 @@ EOF
     fi
 }
 
+AptFixBrokenRepos()
+{
+    local err_file="$1"
+    local sources_dir="${APT_SOURCES_DIR:-/etc/apt/sources.list.d}"
+    local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+    local broken_urls=()
+    local line url
+
+    while IFS= read -r line
+    do
+        if [[ $line =~ The\ repository\ \'([^[:space:]\']+)[[:space:]]+[^\']*\'\ (no\ longer\ has|does\ not\ have)\ a\ Release\ file ]]
+        then
+            url="${BASH_REMATCH[1]}"
+
+            if ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        elif [[ $line =~ 仓库[[:space:]]*[“\"\'‘]([^[:space:]”\"\'’]+)[[:space:]]+[^”\"\'’]*[”\"\'’].*Release ]]
+        then
+            url="${BASH_REMATCH[1]}"
+
+            if ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        elif [[ $line =~ ^(Err|错误):[0-9]+[[:space:]]+(https?://[^[:space:]]+) ]]
+        then
+            url="${BASH_REMATCH[2]}"
+
+            if grep -q "404" "$err_file" && ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        fi
+    done < "$err_file"
+
+    if [ "${#broken_urls[@]}" -eq 0 ]
+    then
+        return 1
+    fi
+
+    local action_types=()
+    local action_files=()
+    local action_urls=()
+    local action_descs=()
+    local list_file
+
+    for url in "${broken_urls[@]}"
+    do
+        if [ -d "$sources_dir" ]
+        then
+            for list_file in "$sources_dir"/*.list "$sources_dir"/*.sources
+            do
+                if [ ! -f "$list_file" ]
+                then
+                    continue
+                fi
+
+                if grep -Fq -- "$url" "$list_file"
+                then
+                    if [[ $url == *apt.postgresql.org/pub/repos/apt* ]] && ! grep -Fq "apt-archive.postgresql.org" "$list_file"
+                    then
+                        action_types+=("pg_archive")
+                        action_files+=("$list_file")
+                        action_urls+=("$url")
+                        action_descs+=("切换 PostgreSQL 归档源: $list_file (apt.postgresql.org -> apt-archive.postgresql.org)")
+                    else
+                        action_types+=("disable_file")
+                        action_files+=("$list_file")
+                        action_urls+=("$url")
+                        action_descs+=("禁用失效源: $list_file -> ${list_file}.disabled ($url)")
+                    fi
+                fi
+            done
+        fi
+
+        if [ -f "$sources_file" ] && grep -Fq -- "$url" "$sources_file"
+        then
+            action_types+=("comment_line")
+            action_files+=("$sources_file")
+            action_urls+=("$url")
+            action_descs+=("在 $sources_file 中注释失效源: $url")
+        fi
+    done
+
+    if [ "${#action_types[@]}" -eq 0 ]
+    then
+        return 1
+    fi
+
+    Println "\n$tip 检测到以下失效 APT 软件源导致 apt-get update 失败:"
+
+    local idx
+    for((idx=0;idx<${#action_descs[@]};idx++));
+    do
+        Println "  $((idx + 1)). ${yellow}${action_descs[idx]}${normal}"
+    done
+
+    if [ "${APT_AUTO_FIX:-false}" != true ]
+    then
+        if [ -t 0 ]
+        then
+            local fix_opts=( '否' '是' )
+            local fix_idx=0
+            echo
+            inquirer list_input_index "是否允许按上述方案修改 APT 软件源并重试?" fix_opts fix_idx
+
+            if [ "$fix_idx" -ne 1 ]
+            then
+                Println "$info 已取消修改 APT 软件源, 请手动处理后重试\n"
+                return 1
+            fi
+        else
+            Println "$info 非交互模式不会自动修改 APT 软件源, 请手动处理上述失效源后重试\n"
+            return 1
+        fi
+    fi
+
+    local act_type act_file act_url tmp_f
+    for((idx=0;idx<${#action_types[@]};idx++));
+    do
+        act_type="${action_types[idx]}"
+        act_file="${action_files[idx]}"
+        act_url="${action_urls[idx]}"
+
+        case "$act_type" in
+            pg_archive)
+                tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                sed 's|apt\.postgresql\.org/pub/repos/apt|apt-archive.postgresql.org/pub/repos/apt|g' "$act_file" > "$tmp_f"
+                mv "$tmp_f" "$act_file"
+                Println "$info 已切换至 apt-archive.postgresql.org: ${green}$act_file${normal}"
+            ;;
+            disable_file)
+                mv "$act_file" "${act_file}.disabled"
+                Println "$info 已禁用失效源: ${yellow}${act_file} -> ${act_file}.disabled${normal}"
+            ;;
+            comment_line)
+                tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                awk -v u="$act_url" '
+                    index($0, u) > 0 && $0 !~ /^[[:space:]]*#/ { print "# [AIOS disabled broken repo] " $0; next }
+                    { print }
+                ' "$act_file" > "$tmp_f"
+                mv "$tmp_f" "$act_file"
+                Println "$info 已在 $act_file 中注释失效源: ${yellow}$act_url${normal}"
+            ;;
+        esac
+    done
+
+    return 0
+}
+
+AptGetCodename()
+{
+    local os_release="${OS_RELEASE_FILE:-/etc/os-release}"
+    local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+    local codename="" id="" id_like="" ubu_code="" deb_code="" ver_code=""
+
+    if [ -r "$os_release" ]
+    then
+        id=$(sed -nE 's/^ID="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        id_like=$(sed -nE 's/^ID_LIKE="?([^"]+)"?/\1/p' "$os_release" | head -n 1)
+        ubu_code=$(sed -nE 's/^UBUNTU_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        deb_code=$(sed -nE 's/^DEBIAN_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+        ver_code=$(sed -nE 's/^VERSION_CODENAME="?([^"[:space:]]+)"?/\1/p' "$os_release" | head -n 1)
+
+        if [ "$id" == "ubuntu" ] || [[ " $id_like " == *" ubuntu "* ]] || [ -n "$ubu_code" ]
+        then
+            codename="${ubu_code:-$ver_code}"
+        elif [ "$id" == "debian" ] || [[ " $id_like " == *" debian "* ]] || [ -n "$deb_code" ]
+        then
+            codename="${deb_code:-$ver_code}"
+        else
+            codename="${ver_code:-${ubu_code:-$deb_code}}"
+        fi
+    fi
+
+    if [ -z "$codename" ] && [[ -x $(command -v lsb_release) ]]
+    then
+        codename=$(lsb_release -cs 2> /dev/null || true)
+    fi
+
+    if [ -z "$codename" ] && [ -r "$sources_file" ]
+    then
+        codename=$(awk '
+            /^[[:space:]]*deb[[:space:]]/ {
+                for (i = 2; i <= NF; i++) {
+                    if ($i ~ /^\[/) {
+                        while (i <= NF && $i !~ /\]$/) i++
+                        continue
+                    }
+                    if ($i ~ /^https?:\/\//) {
+                        if (i + 1 <= NF) {
+                            suite = $(i + 1)
+                            sub(/-(updates|backports|security)$/, "", suite)
+                            if (suite !~ /\//) {
+                                print suite
+                                exit
+                            }
+                        }
+                    }
+                }
+            }
+        ' "$sources_file")
+    fi
+
+    printf '%s\n' "$codename"
+}
+
+AptRepoCheck()
+{
+    local repo_url="${1%/}"
+    local suite="${2:-}"
+
+    if [ -z "$repo_url" ] || [ -z "$suite" ]
+    then
+        return 1
+    fi
+
+    if curl -fsI -m 10 "${repo_url}/dists/${suite}/InRelease" > /dev/null 2>&1
+    then
+        return 0
+    fi
+
+    if curl -fsI -m 10 "${repo_url}/dists/${suite}/Release" > /dev/null 2>&1
+    then
+        return 0
+    fi
+
+    return 1
+}
+
 AptUpdate()
 {
-    if [ "${apt_updated:-false}" = false ]
+    local force="${1:-}"
+
+    if [ "$force" != "force" ] && [ "${apt_updated:-false}" = true ]
     then
-        Println "$info 更新软件包列表..."
-        apt-get update --allow-releaseinfo-change >/dev/null
-        apt_updated=true
+        return 0
     fi
+
+    Println "$info 更新软件包列表..."
+
+    local apt_err_file attempt=0 max_attempts=3 rc=0
+    apt_err_file=$(mktemp "${TMPDIR:-/tmp}/aios-apt-update.XXXXXX")
+
+    while [ "$attempt" -lt "$max_attempts" ]
+    do
+        attempt=$((attempt + 1))
+        rc=0
+
+        if [ "$force" == "force" ]
+        then
+            LC_ALL=C apt-get update --allow-releaseinfo-change -o Acquire::http::No-Cache=true -o Acquire::BrokenProxy=true > "$apt_err_file" 2>&1 || rc=$?
+        else
+            LC_ALL=C apt-get update --allow-releaseinfo-change > "$apt_err_file" 2>&1 || rc=$?
+        fi
+
+        if [ "$rc" -eq 0 ]
+        then
+            rm -f "$apt_err_file"
+            apt_updated=true
+            return 0
+        fi
+
+        if [ "$attempt" -lt "$max_attempts" ] && AptFixBrokenRepos "$apt_err_file"
+        then
+            continue
+        fi
+
+        break
+    done
+
+    Println "$error apt-get update 失败:\n$(cat "$apt_err_file")\n"
+    rm -f "$apt_err_file"
+    return "$rc"
+}
+
+AptInstall()
+{
+    if [ $# -eq 0 ]
+    then
+        return 0
+    fi
+
+    AptUpdate || return 1
+
+    local inst_err rc=0
+    inst_err=$(mktemp "${TMPDIR:-/tmp}/aios-apt-install.XXXXXX")
+    LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install "$@" > "$inst_err" 2>&1 || rc=$?
+
+    if [ "$rc" -eq 0 ]
+    then
+        rm -f "$inst_err"
+        return 0
+    fi
+
+    if grep -Eq 'Unable to fetch some archives|404[[:space:]]+Not Found|Failed to fetch' "$inst_err"
+    then
+        Println "$tip 软件包索引可能已过期, 正在强制刷新软件源 (No-Cache) 并重试安装..."
+
+        if AptUpdate force
+        then
+            rc=0
+            LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --fix-missing "$@" > "$inst_err" 2>&1 || rc=$?
+
+            if [ "$rc" -eq 0 ]
+            then
+                rm -f "$inst_err"
+                return 0
+            fi
+        fi
+
+        if grep -Eq '404[[:space:]]+Not Found|Failed to fetch' "$inst_err" && [ -t 0 ]
+        then
+            local codename
+            codename=$(AptGetCodename)
+
+            Println "\n$tip 刷新软件源后仍有软件包返回 404 (可能是老版本 Debian/Ubuntu 安全源已归档或镜像同步异常):"
+            grep -E '^(Err:|E: Failed to fetch)' "$inst_err" | head -n 6
+
+            local retry_opts=(
+                "不修改源，尝试从发行版主源 (-t ${codename:-stable}) 安装"
+                "将 /etc/apt/sources.list 中的 security.debian.org 切换至 archive.debian.org 并重试"
+                "放弃安装，自行手动处理"
+            )
+            local retry_idx=2
+            echo
+            inquirer list_input_index "请选择处理方式" retry_opts retry_idx
+
+            if [ "$retry_idx" -eq 0 ] && [ -n "$codename" ]
+            then
+                rc=0
+                LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --allow-downgrades -t "$codename" "$@" > "$inst_err" 2>&1 || rc=$?
+
+                if [ "$rc" -eq 0 ]
+                then
+                    rm -f "$inst_err"
+                    return 0
+                fi
+            elif [ "$retry_idx" -eq 1 ]
+            then
+                local sources_file="${APT_SOURCES_FILE:-/etc/apt/sources.list}"
+
+                if [ -f "$sources_file" ] && grep -Fq "security.debian.org" "$sources_file"
+                then
+                    local tmp_arc
+                    tmp_arc=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
+                    sed 's|security\.debian\.org|archive.debian.org|g' "$sources_file" > "$tmp_arc"
+                    mv "$tmp_arc" "$sources_file"
+                    Println "$info 已将 $sources_file 中的 security.debian.org 切换至 archive.debian.org\n"
+
+                    if AptUpdate force
+                    then
+                        rc=0
+                        LC_ALL=C DEBIAN_FRONTEND=noninteractive apt-get -y install --fix-missing "$@" > "$inst_err" 2>&1 || rc=$?
+
+                        if [ "$rc" -eq 0 ]
+                        then
+                            rm -f "$inst_err"
+                            return 0
+                        fi
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    Println "$error 软件包安装失败 ($*):\n$(cat "$inst_err")\n"
+    rm -f "$inst_err"
+    return "$rc"
 }
 
 BrewInstall()
@@ -211,7 +574,7 @@ DepInstall()
             if ! dpkg -s $dependency &>/dev/null
             then
                 AptUpdate
-                if apt-get -y install $dependency &>/dev/null
+                if AptInstall $dependency
                 then
                     Println "${green}[INFO]${normal} $dependency installation succeed..."
                 else
@@ -298,7 +661,7 @@ DepInstall()
         then
             AptUpdate
             Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
-            if apt-get -y install $1 >/dev/null 2>&1
+            if AptInstall "$1"
             then
                 Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
             else
@@ -389,7 +752,7 @@ DepsInstall()
             [[ -x $(command -v $depend) ]] && continue
             if ! dpkg -s "$depend" &> /dev/null
             then
-                if apt-get -y install "$depend" &> /dev/null
+                if AptInstall "$depend"
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else

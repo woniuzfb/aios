@@ -24,44 +24,66 @@ OpenrestyPackageInstall()
 
     case $dist in
         ubu)
-            DepInstall lsb-release
-            DepInstall ubuntu-keyring
-            DepInstall gpg
+            local or_codename or_repo_base or_key_url
+            or_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="https://${USTC_MIRROR_HOST}/openresty${arch_path}/ubuntu"
+                    or_key_url="https://${USTC_MIRROR_HOST}/openresty/pubkey.gpg"
                 else
-                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/ubuntu \
-                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="${OPENRESTY_LINK}/package${arch_path}/ubuntu"
+                    or_key_url="${OPENRESTY_LINK}/package/pubkey.gpg"
                 fi
-                sudo apt-get update
+
+                if ! AptRepoCheck "$or_repo_base" "$or_codename"
+                then
+                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall ubuntu-keyring
+                DepInstall gpg
+                curl -fsSL "$or_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] ${or_repo_base} \
+                ${or_codename} main" | tee /etc/apt/sources.list.d/openresty.list
+                AptUpdate force
             fi
-            sudo apt-get -y install openresty --no-install-recommends
+
+            AptInstall openresty --no-install-recommends
         ;;
         deb)
-            DepInstall lsb-release
-            DepInstall debian-archive-keyring
-            DepInstall gpg
+            local or_codename or_repo_base or_key_url
+            or_codename=$(AptGetCodename)
+
             if [ ! -f /etc/apt/sources.list.d/openresty.list ]
             then
-                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                if grep -q "$USTC_MIRROR_HOST" < /etc/apt/sources.list
                 then
-                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/debian \
-                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="https://${USTC_MIRROR_HOST}/openresty${arch_path}/debian"
+                    or_key_url="https://${USTC_MIRROR_HOST}/openresty/pubkey.gpg"
                 else
-                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
-                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/debian \
-                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                    or_repo_base="${OPENRESTY_LINK}/package${arch_path}/debian"
+                    or_key_url="${OPENRESTY_LINK}/package/pubkey.gpg"
                 fi
-                sudo apt-get update
+
+                if ! AptRepoCheck "$or_repo_base" "$or_codename"
+                then
+                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    return 1
+                fi
+
+                DepInstall debian-archive-keyring
+                DepInstall gpg
+                curl -fsSL "$or_key_url" | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] ${or_repo_base} \
+                ${or_codename} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                AptUpdate force
             fi
-            sudo apt-get -y install openresty --no-install-recommends
+
+            AptInstall openresty --no-install-recommends
         ;;
         rpm)
             DepInstall yum-utils
@@ -234,9 +256,9 @@ OpenrestySourceInstall()
         do
             if [ "$install_option" == "--with-http_postgres_module" ]
             then
-                DepInstall postgresql@14
-                cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/postgresql@14/include"
-                ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/postgresql@14/lib"
+                DepInstall "$POSTGRESQL_MAC_PKG"
+                cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/$POSTGRESQL_MAC_PKG/include"
+                ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/$POSTGRESQL_MAC_PKG/lib"
                 break
             fi
         done
@@ -247,9 +269,9 @@ OpenrestySourceInstall()
             cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
             ld_opt="$ld_opt -L$DEPENDS_ROOT/quictls/build/lib"
         else
-            DepInstall openresty/brew/openresty-openssl111
-            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/openresty-openssl111/include"
-            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/openresty-openssl111/lib"
+            DepInstall "$OPENRESTY_OPENSSL_MAC_PKG"
+            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/${OPENRESTY_OPENSSL_MAC_PKG##*/}/include"
+            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/${OPENRESTY_OPENSSL_MAC_PKG##*/}/lib"
         fi
 
         cd "$openresty_package_name/bundle/ngx_lua-"*
@@ -321,12 +343,12 @@ OpenrestySourceInstall()
 
         if [ "$pcre_options_index" -eq 0 ]
         then
-            pcre_name=pcre-8.45
+            pcre_name="pcre-${PCRE_LEGACY_VER}"
             if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
-                unzip $pcre_name.zip >/dev/null 2>&1
+                unzip $pcre_name.zip > /dev/null 2>&1
             fi
         else
             pcre_name=$(curl -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
@@ -334,26 +356,22 @@ OpenrestySourceInstall()
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
                 Println "$info 解压 $pcre_name ..."
-                unzip $pcre_name.zip >/dev/null 2>&1
+                unzip $pcre_name.zip > /dev/null 2>&1
             fi
         fi
 
-        openssl_url="https://www.openssl.org/source/old"
-        openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
+        local openssl_pack_url=""
+        openssl_url="${OPENSSL_SOURCE_LINK}/old/1.1.1"
+        openssl_pack_url=$(OpensslFetchPackUrl "$openssl_url" "1")
 
-        for openssl_ver in "${openssl_vers[@]}"
-        do
-            if [ "${openssl_ver%%.*}" -eq 1 ]
-            then
-                break
-            fi
-        done
+        if [ -z "$openssl_pack_url" ]
+        then
+            Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+            return 1
+        fi
 
-        openssl_url="$openssl_url/$openssl_ver"
-
-        openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
-        openssl_pack="${openssl_packs[0]}"
-        openssl_name=${openssl_pack%.tar*}
+        openssl_pack="${openssl_pack_url##*/}"
+        openssl_name="${openssl_pack%.tar*}"
 
         if [ "$openssl_options_index" -eq 1 ]
         then
@@ -361,30 +379,30 @@ OpenrestySourceInstall()
             openssl_name=openssl-OpenSSL_${openssl_ver//./_}-quic1
         fi
 
-        if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
+        if [ ! -d "${openssl_name}-patched" ] || [ ! -s "${openssl_name}-patched/${OPENRESTY_OPENSSL_PATCH}" ]
         then
-            rm -rf ${openssl_name}-patched
+            rm -rf "${openssl_name}-patched"
 
             if [ "$openssl_options_index" -eq 1 ]
             then
                 Println "$info 下载 ${openssl_name#*-} ..."
-                if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+                if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${openssl_name#*-}.tar.gz" -o "$openssl_name".tar.gz
                 then
                     curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
                 fi
                 Println "$info 解压 ${openssl_name#*-} ..."
                 tar xzf ${openssl_name}.tar.gz
             else
-                curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+                curl -L "$openssl_pack_url" -o "$openssl_pack"
                 Println "$info 解压 $openssl_name ..."
                 tar xzf "$openssl_pack"
             fi
 
-            cp -r ${openssl_name} ${openssl_name}-patched
-            cd ${openssl_name}-patched
+            cp -r ${openssl_name} "${openssl_name}-patched"
+            cd "${openssl_name}-patched"
 
-            curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
-            patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
+            curl -L "$FFMPEG_MIRROR_LINK/${OPENRESTY_OPENSSL_PATCH}" -o "$OPENRESTY_OPENSSL_PATCH"
+            patch -p1 < "$OPENRESTY_OPENSSL_PATCH" || true
             cd "$DEPENDS_ROOT"
         fi
 

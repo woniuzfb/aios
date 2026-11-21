@@ -625,7 +625,7 @@ SetEncrypt()
             then
                 encrypt_session=true
 
-                if [ ! -d /usr/local/nginx ] && [ ! -d /usr/local/openresty ]
+                if [ ! -d "$NGINX_PREFIX_DEFAULT" ] && [ ! -d "$OPENRESTY_PREFIX_DEFAULT" ]
                 then
                     echo
                     nginx_openresty_options=( 'nginx' 'openresty' '不安装' )
@@ -633,14 +633,14 @@ SetEncrypt()
 
                     if [ "$nginx_openresty_options_index" -eq 0 ] 
                     then
-                        nginx_prefix="/usr/local/nginx"
+                        nginx_prefix="$NGINX_PREFIX_DEFAULT"
                         nginx_name="nginx"
                         nginx_ctl="nx"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         NginxInstall
                     elif [ "$nginx_openresty_options_index" -eq 1 ] 
                     then
-                        nginx_prefix="/usr/local/openresty/nginx"
+                        nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                         nginx_name="openresty"
                         nginx_ctl="or"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
@@ -651,14 +651,14 @@ SetEncrypt()
                     fi
                 fi
 
-                if [ -d /usr/local/nginx ] || [ -d /usr/local/openresty ] 
+                if [ -d "$NGINX_PREFIX_DEFAULT" ] || [ -d "$OPENRESTY_PREFIX_DEFAULT" ] 
                 then
                     if [ -z "${nginx_name:-}" ] 
                     then
-                        if [ -d /usr/local/nginx ] && [ -d /usr/local/openresty ]
+                        if [ -d "$NGINX_PREFIX_DEFAULT" ] && [ -d "$OPENRESTY_PREFIX_DEFAULT" ]
                         then
                             echo
-                            if [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null
+                            if [ -s "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid" ] && kill -0 "$(< "$OPENRESTY_PREFIX_DEFAULT/nginx/logs/nginx.pid")" 2> /dev/null
                             then
                                 nginx_openresty_options=( 'openresty' 'nginx' )
                             else
@@ -667,21 +667,21 @@ SetEncrypt()
                             inquirer list_input "选择使用 nginx 或 openresty: " nginx_openresty_options nginx_openresty_selected
                             if [ "$nginx_openresty_selected" == "nginx" ] 
                             then
-                                nginx_prefix="/usr/local/nginx"
+                                nginx_prefix="$NGINX_PREFIX_DEFAULT"
                                 nginx_name="nginx"
                                 nginx_ctl="nx"
                             else
-                                nginx_prefix="/usr/local/openresty/nginx"
+                                nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                                 nginx_name="openresty"
                                 nginx_ctl="or"
                             fi
-                        elif [ -d /usr/local/nginx ] 
+                        elif [ -d "$NGINX_PREFIX_DEFAULT" ] 
                         then
-                            nginx_prefix="/usr/local/nginx"
+                            nginx_prefix="$NGINX_PREFIX_DEFAULT"
                             nginx_name="nginx"
                             nginx_ctl="nx"
                         else
-                            nginx_prefix="/usr/local/openresty/nginx"
+                            nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                             nginx_name="openresty"
                             nginx_ctl="or"
                         fi
@@ -1348,7 +1348,10 @@ SetFlvH265()
         flv_h265=false
     else
         flv_h265=true
-        if [[ ! -x $(command -v ffmpeg_c) ]] 
+        FFmpegResolveBin 2> /dev/null || true
+        FFmpegDetectCaps 2> /dev/null || true
+
+        if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = false ] && [[ ! -x $(command -v ffmpeg_c) ]]
         then
             echo
             ffmpeg_c_options=( '快速安装' '编译 FFmpeg (耗时非常非常久)' )

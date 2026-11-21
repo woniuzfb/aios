@@ -2,9 +2,9 @@ FilterString()
 {
     global_options=()
     global_flags=( 
-        cpuflags y n filter_threads stats stats_period progress debug_ts qphist benchmark 
+        cpuflags y n filter_threads stats stats_period progress debug_ts benchmark 
         benchmark_all timelimit dump hex filter_complex filter_complex_threads lavfi
-        filter_complex_script sdp_file abort_on max_error_rate xerror auto_conversion_filters
+        filter_complex_script /filter_complex fps_mode sdp_file abort_on max_error_rate xerror auto_conversion_filters
         nostats nostdin hide_banner loglevel
     )
 

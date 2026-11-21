@@ -72,12 +72,14 @@ EditStreamLink()
                     if [[ ${new_domains[xc_i]} =~ $chnl_domain ]] 
                     then
                         xc_macs=(${new_accounts[xc_i]} "输入mac" "输入新的直播源")
+                        xc_macs_count=$((${#xc_macs[@]} - 2))
                         inquirer list_input_index "选择操作" xc_macs xc_macs_index
-                        if [ "$xc_macs_index" -eq $xc_count ] 
+
+                        if [ "$xc_macs_index" -eq "$xc_macs_count" ]
                         then
                             ExitOnText "请输入mac: " new_mac
                             xc_select=true
-                        elif [ "$xc_macs_index" -lt $xc_count ] 
+                        elif [ "$xc_macs_index" -lt "$xc_macs_count" ]
                         then
                             new_mac="${xc_macs[xc_macs_index]}"
                             xc_select=true
@@ -472,7 +474,8 @@ EditChannelAll()
     SetLive
 
     xc_proxy=${xc_proxy:-}
-    if [[ $stream_link =~ ^http://([^/]+) ]] 
+
+    if [[ ${stream_link:-} =~ ^http://([^/]+) ]]
     then
         XtreamCodesGetDomains
 

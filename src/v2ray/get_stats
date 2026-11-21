@@ -36,7 +36,7 @@ V2rayGetStats()
     local routing_rule_found=0
     local i
     api_inbound_tag=""
-    for ((i=0; i<routing_rules_count; i++))
+    for((i=0;i<routing_rules_count;i++));
     do
         if [ "${routing_rules_outboundTag[i]:-}" == "$api_tag" ]
         then
@@ -57,7 +57,7 @@ V2rayGetStats()
 
     api_inbound_listen=""
     api_inbound_port=""
-    for ((i=0; i<inbounds_count; i++))
+    for((i=0;i<inbounds_count;i++));
     do
         if [ "${inbounds_tag[i]}" == "$api_inbound_tag" ]
         then

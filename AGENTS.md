@@ -48,13 +48,15 @@
     ```
   - 统一使用 **4 空格缩进**，禁止混用 Tab，避免尾随空格。
   - `if` / `elif` / `else` / `then` / `fi` 与 `for` / `while` / `do` / `done` 关键字独占一行（不写 `if ...; then`）。
-  - 常规条件判断优先使用 `[ ... ]`（`.shellcheckrc` 已禁用 `SC2292,SC2250`），正则 `=~` 与 extglob 使用 `[[ ... ]]`。
+  - **C 风格 `for` 循环**：严格沿用原作者 `for((i=0;i<n;i++));` 紧凑写法（`for` 与 `((` 之间**无空格**、分号后无空格、末尾带 `;`），严禁写成 `for ((i=0; i<n; i++))`。
+  - **重定向与比较符号**：重定向保留空格（`2> /dev/null`、`> /dev/null`，不写 `2>/dev/null`）；常规条件判断优先使用 `[ ... ]`（`.shellcheckrc` 已禁用 `SC2292,SC2250`），字符串相等用 `==`（`[ "$a" == "$b" ]`），布尔值用 `=`（`[ "$flag" = true ]`），正则 `=~` 与 extglob 使用 `[[ ... ]]`。
+  - **逻辑块空行与禁止防御性 `declare -F`**：普通语句或 `fi`/`done`/`esac` 之后若紧跟新的 `if` 块，必须保留一个空行（严禁无空行紧贴堆叠）；严禁用 `if declare -F ...` 掩盖缺失的 `Include`，必须显式 `Include` 依赖或拆出独立纯函数库。
   - 全局常量 `UPPER_SNAKE_CASE` 定义在 `env`；普通与局部变量 `lower_snake_case`，数组显式初始化 `local arr=()`。
   - 终端输出使用 `Println` + 颜色/缩进变量（`${green}` / `${red}` / `${normal}` / `$info` / `$error` / `$tip` / `${indent_6}`），交互使用 `utils/inquirer`，国际化使用 `gettext` / `eval_gettext`。
 - **目录与文件命名铁律（禁止 `.sh` 后缀）**：
   - 非交互式自动化测试统一放置在项目顶层 `test/` 目录（如 `test/run`、`test/lib/*`、`test/suites/*`）。
   - **`test/`、`src/`、`utils/` 三个目录下的任何文件都绝对禁止带有 `.sh` 后缀**（仅根目录/发布产物如 `aios.sh` 及 `scripts/`、`i18n/` 辅助脚本除外）。
-- **双端与旧版 Bash 兼容**：代码需兼容 Linux 与 macOS，且兼容旧版 Bash 3.2+（严禁使用仅 Bash 4+ 才支持的 `declare -A` 关联数组、`mapfile`/`readarray`、`${var,,}` 大小写转换等语法，除非有明确降级分支）。
+- **双端与 Bash 4.4+ 兼容**：代码需兼容 Linux 与 macOS，最低运行环境定为 **Bash 4.4+**（现代 Linux 发行版均自带 4.4~5.2；macOS 入口脚本 `make`/`aios.sh`/`debug`/`test/run` 统一使用 `#!/usr/bin/env bash`，并在启动头检测 `BASH_VERSINFO < 4.4` 时自动 `exec` 切换至 `/opt/homebrew/bin/bash` 或 `/usr/local/bin/bash`，未安装则提示 `brew install bash`）。核心库（如 `utils/jq`、`core`）对可能为空的数组仍推荐 `${arr[@]+"${arr[@]}"}` 防御写法，避免被旧环境单独 source 时触发 `unbound variable`。
 
 ---
 

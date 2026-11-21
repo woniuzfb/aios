@@ -35,10 +35,10 @@ GoInstall()
 
     JQInstall
 
-    if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
+    if ! go_version=$(curl -s -Lm 20 "${GO_DL_LINK}/?mode=json" | $JQ_FILE -r '.[0].version')
     then
         Println "$error 无法连接 go.dev ?"
-        go_version=1.22.2
+        go_version="$GO_FALLBACK_VER"
     fi
 
     if [ "$arch" == "i386" ] 
@@ -55,7 +55,7 @@ GoInstall()
         return 0
     fi
 
-    if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
+    if ! curl -L "${GO_DL_LINK}/$go_package" -o ~/$go_package && ! curl -L "${GO_DL_MIRROR_LINK}/$go_package" -o ~/$go_package
     then
         Println "$error 下载 golang 失败, 请稍后再试\n"
         return 1
