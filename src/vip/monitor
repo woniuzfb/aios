@@ -4,12 +4,14 @@ VipMonitor()
     trap 'MonitorErr $LINENO' ERR
 
     delete_on_term="${vip_public_root:-notfound}/vip"
+    local vip_pid
+    vip_pid=$(GetSubshellPid)
     pid_file="$IPTV_ROOT/vip.pid"
-    printf '%s' "$BASHPID" > "$pid_file"
+    printf '%s' "$vip_pid" > "$pid_file"
     {
         flock -x 205
         {
-            MonitorLog "启动 VIP  PID $BASHPID !"
+            MonitorLog "启动 VIP  PID $vip_pid !"
             printf -v now '%(%s)T' -1
             never=$((now+86400*720))
 
@@ -101,7 +103,11 @@ VipMonitor()
                                     do
                                         cs+=("$st2$ss$ct2$vip_channel_id$tid_lower")
                                     done
-                                    mapfile -t vip_channels_cs < <($MD5SUM_FILE "${cs[@]}")
+                                    vip_channels_cs=()
+                                    while IFS= read -r _vip_line
+                                    do
+                                        vip_channels_cs+=("$_vip_line")
+                                    done < <($MD5SUM_FILE ${cs[@]+"${cs[@]}"})
 
                                     case $vip_user_sum in
                                         "ssum") 
@@ -110,7 +116,11 @@ VipMonitor()
                                             do
                                                 ssum+=("$seed/$vip_channel_id/playlist.m3u8$tid$day")
                                             done
-                                            mapfile -t vip_channels_ssum < <($MD5SUM_FILE "${ssum[@]}")
+                                            vip_channels_ssum=()
+                                            while IFS= read -r _vip_line
+                                            do
+                                                vip_channels_ssum+=("$_vip_line")
+                                            done < <($MD5SUM_FILE ${ssum[@]+"${ssum[@]}"})
                                             for((k=0;k<vip_channels_count;k++));
                                             do
                                                 program_id=$((program_id+1))
@@ -125,7 +135,11 @@ VipMonitor()
                                             do
                                                 tsum+=("$seed/$vip_channel_id/playlist.m3u8$tid$ct")
                                             done
-                                            mapfile -t vip_channels_tsum < <($MD5SUM_FILE "${tsum[@]}")
+                                            vip_channels_tsum=()
+                                            while IFS= read -r _vip_line
+                                            do
+                                                vip_channels_tsum+=("$_vip_line")
+                                            done < <($MD5SUM_FILE ${tsum[@]+"${tsum[@]}"})
                                             for((k=0;k<vip_channels_count;k++));
                                             do
                                                 program_id=$((program_id+1))
@@ -139,7 +153,11 @@ VipMonitor()
                                             do
                                                 isum+=("$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid")
                                             done
-                                            mapfile -t vip_channels_isum < <($MD5SUM_FILE "${isum[@]}")
+                                            vip_channels_isum=()
+                                            while IFS= read -r _vip_line
+                                            do
+                                                vip_channels_isum+=("$_vip_line")
+                                            done < <($MD5SUM_FILE ${isum[@]+"${isum[@]}"})
                                             for((k=0;k<vip_channels_count;k++));
                                             do
                                                 program_id=$((program_id+1))

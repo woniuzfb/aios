@@ -56,7 +56,7 @@
 - **目录与文件命名铁律（禁止 `.sh` 后缀）**：
   - 非交互式自动化测试统一放置在项目顶层 `test/` 目录（如 `test/run`、`test/lib/*`、`test/suites/*`）。
   - **`test/`、`src/`、`utils/` 三个目录下的任何文件都绝对禁止带有 `.sh` 后缀**（仅根目录/发布产物如 `aios.sh` 及 `scripts/`、`i18n/` 辅助脚本除外）。
-- **双端与 Bash 4.4+ 兼容**：代码需兼容 Linux 与 macOS，最低运行环境定为 **Bash 4.4+**（现代 Linux 发行版均自带 4.4~5.2；macOS 入口脚本 `make`/`aios.sh`/`debug`/`test/run` 统一使用 `#!/usr/bin/env bash`，并在启动头检测 `BASH_VERSINFO < 4.4` 时自动 `exec` 切换至 `/opt/homebrew/bin/bash` 或 `/usr/local/bin/bash`，未安装则提示 `brew install bash`）。核心库（如 `utils/jq`、`core`）对可能为空的数组仍推荐 `${arr[@]+"${arr[@]}"}` 防御写法，避免被旧环境单独 source 时触发 `unbound variable`。
+- **双端与 Bash 3.2+ 兼容**：代码需兼容 Linux 与 macOS（含 macOS 原生 `/bin/bash` 3.2.57），严禁使用仅 Bash 4+ 才支持的语法（`declare -A`/`local -A`、`declare -n`/`local -n`、`mapfile`/`readarray`、`${var,,}`/`${var^^}`、未兜底的 `$BASHPID` 等）；在 `set -u` 下可能为空的数组展开必须使用 `${arr[@]+"${arr[@]}"}` 防御写法。
 
 ---
 

@@ -1,11 +1,11 @@
 # AIOS (All In One Script)
 
-纯 Bash + `jq` 驱动的多服务运维与媒体流管理面板，支持 Linux（Debian / Ubuntu / RHEL / CentOS / Fedora / openSUSE / SLES）与 macOS，通过模块化源码静态打包为单文件 `aios.sh`，运行时按命令软链自动分发至各管理模块。
+纯 Bash + `jq` 驱动的多服务运维与媒体流管理面板，支持 Linux 与 macOS，通过模块化源码静态打包为单文件 `aios.sh`，运行时按命令软链自动分发至各管理模块。
 
 <details>
 <summary><strong>目录</strong></summary>
 
-- [环境要求与快速开始](#环境要求与快速开始)
+- [快速开始](#快速开始)
 - [命令入口一览](#命令入口一览)
 - [Xray](#xray)
 - [V2Ray](#v2ray)
@@ -22,11 +22,7 @@
 
 </details>
 
-## 环境要求与快速开始
-
-- **Bash 4.4+**：现代 Linux 发行版（Debian 10+ / Ubuntu 18.04+ / RHEL 8+）均已内置。macOS 自带 `/bin/bash` 为 `3.2.57`，请先执行 `brew install bash`；脚本入口采用 `#!/usr/bin/env bash` 并在检测到旧版 Bash 时自动 `exec` 切换至 Homebrew Bash。
-- **安装路径前缀**：默认 `AIOS_PREFIX=/usr/local`，可通过环境变量自定义。
-- **APT 容错机制**：内置交互式失效源检测修复（未经用户确认绝不改动 `/etc/apt/sources.list*`）、过期索引 `No-Cache` 自动刷新重试，以及基于远端 `InRelease`/`Release` 的动态仓库探测（不再依赖易过时的发行版代号白名单）。
+## 快速开始
 
 一键下载运行（首次运行按指引安装软链，之后直接输入对应短命令）：
 
@@ -36,24 +32,24 @@ wget https://woniuzfb.github.io/aios/aios.sh && bash aios.sh
 
 ## 命令入口一览
 
-| 命令 | 模块 | 说明 |
-| :--- | :--- | :--- |
-| `tv` | FFmpeg / IPTV | HLS / FLV 推流、多码率转码、监控、防盗链、计划任务、节目表、VIP |
-| `x` | Xray | Xray-core 入站/出站/路由/DNS/策略/流量统计/分享链接与二维码 |
-| `v2` | V2Ray | V2Ray v4/v5 入站/出站/路由/DNS/策略/流量统计/分享链接 |
-| `nx` | Nginx | 编译/包安装、crossplane 五级配置管理、SNI/SSL/ALPN 分流 |
-| `or` | OpenResty | 编译/包安装、Nginx + Lua 扩展配置管理 |
-| `cx` | Xtream Codes | Xtream Codes / Stalker 账号与频道管理 |
-| `dr` | Docker | Docker / Compose 与常用服务编排 |
-| `ha` | HAProxy | 动/静态链接 PCRE / zlib / Lua / OpenSSL / QuicTLS 编译与管理 |
-| `rc` | Rclone | Remote / Mount / Serve / Sync 管理 |
-| `ali` | OpenList | OpenList 服务与账号管理 |
-| `cw` | Calibre | Calibre-Web 与 KCC 电子书转换 |
-| `lhh` | LianHuanHua | 连环画资源抓取与整理 |
-| `arm` | Armbian | 旁路由 OpenWrt、透明代理、DNSCrypt、Docker、NAT 检测 |
-| `pve` | Proxmox VE | NBFC、DNSCrypt、OpenWrt 透明代理与源管理 |
-| `cf` | Cloudflare | 多账号 CFP / Workers 管理与自动切换监控（已失效，仅归档） |
-| `ibm` | IBM CF | IBM Cloud Foundry 应用管理（已失效，仅归档） |
+| 命令  | 模块          | 说明                                                            |
+| :---- | :------------ | :-------------------------------------------------------------- |
+| `tv`  | FFmpeg / IPTV | HLS / FLV 推流、多码率转码、监控、防盗链、计划任务、节目表、VIP |
+| `x`   | Xray          | Xray-core 入站/出站/路由/DNS/策略/流量统计/分享链接与二维码     |
+| `v2`  | V2Ray         | V2Ray v4/v5 入站/出站/路由/DNS/策略/流量统计/分享链接           |
+| `nx`  | Nginx         | 编译/包安装、crossplane 五级配置管理、SNI/SSL/ALPN 分流         |
+| `or`  | OpenResty     | 编译/包安装、Nginx + Lua 扩展配置管理                           |
+| `cx`  | Xtream Codes  | Xtream Codes / Stalker 账号与频道管理                           |
+| `dr`  | Docker        | Docker / Compose 与常用服务编排                                 |
+| `ha`  | HAProxy       | 动/静态链接 PCRE / zlib / Lua / OpenSSL / QuicTLS 编译与管理    |
+| `rc`  | Rclone        | Remote / Mount / Serve / Sync 管理                              |
+| `ali` | OpenList      | OpenList 服务与账号管理                                         |
+| `cw`  | Calibre       | Calibre-Web 与 KCC 电子书转换                                   |
+| `lhh` | LianHuanHua   | 连环画资源抓取与整理                                            |
+| `arm` | Armbian       | 旁路由 OpenWrt、透明代理、DNSCrypt、Docker、NAT 检测            |
+| `pve` | Proxmox VE    | NBFC、DNSCrypt、OpenWrt 透明代理与源管理                        |
+| `cf`  | Cloudflare    | 多账号 CFP / Workers 管理与自动切换监控（已失效，仅归档）       |
+| `ibm` | IBM CF        | IBM Cloud Foundry 应用管理（已失效，仅归档）                    |
 
 ---
 

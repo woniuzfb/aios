@@ -68,8 +68,8 @@ AntiDDoSCleanExpiredIps()
 
         if [ "$update" -eq 1 ]
         then
-            ips=("${new_ips[@]}")
-            jail_time=("${new_jail_time[@]}")
+            ips=(${new_ips[@]+"${new_ips[@]}"})
+            jail_time=(${new_jail_time[@]+"${new_jail_time[@]}"})
 
             printf '%s' "" > "$IP_DENY"
 

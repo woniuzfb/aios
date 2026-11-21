@@ -124,7 +124,7 @@ BuildHoistPlan()
     do
         scan_seen=()
         CollectBranchIncludes "src/$bin"
-        for item in "${scan_seen[@]}"
+        for item in ${scan_seen[@]+"${scan_seen[@]}"}
         do
             [ "$item" == "src/$bin" ] && continue
             if EleInArray "$item" seen_once
@@ -139,7 +139,7 @@ BuildHoistPlan()
         done
     done
 
-    for item in "${seen_multi[@]}"
+    for item in ${seen_multi[@]+"${seen_multi[@]}"}
     do
         if EleInArray "$item" hoisted_files
         then

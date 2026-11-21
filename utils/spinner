@@ -19,21 +19,24 @@ Spinner()
     fi
 
     trap '
-        rm -f "$TMP_FILE"
+        rm -f "${TMP_FILE:-}"
         inquirer cleanup
     ' EXIT
 
-    stty -echo
-    tput civis
+    if [ -t 0 ]
+    then
+        stty -echo
+    fi
+    tput civis 2> /dev/null || true
 
     $FUNCTION_NAME > "$TMP_FILE" 2>> "$TMP_FILE" &
     local pid=$!
 
     echo
-    tput sc
+    tput sc 2> /dev/null || true
     printf '%b %b' "${list[i]}" "${green}$1${normal}"
-    tput el
-    tput rc
+    tput el 2> /dev/null || true
+    tput rc 2> /dev/null || true
 
     while ps -p $pid -o pid= >/dev/null
     do
@@ -43,7 +46,7 @@ Spinner()
         printf "\b\b\b"
     done
 
-    tput el
+    tput el 2> /dev/null || true
 
     if [[ -n $VARIABLE_NAME ]]
     then
@@ -54,8 +57,11 @@ Spinner()
 
     rm -f "$TMP_FILE"
 
-    tput cnorm
-    stty echo
+    tput cnorm 2> /dev/null || true
+    if [ -t 0 ]
+    then
+        stty echo
+    fi
 
     trap - EXIT
 

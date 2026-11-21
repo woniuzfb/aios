@@ -506,12 +506,14 @@ CloudflareWorkersMonitor()
     trap '' HUP INT
     trap 'MonitorErr $LINENO' ERR
 
+    local cf_pid
+    cf_pid=$(GetSubshellPid)
     pid_file="$CF_WORKERS_ROOT/cf_workers.pid"
-    printf '%s' "$BASHPID" > "$pid_file"
+    printf '%s' "$cf_pid" > "$pid_file"
     {
         flock -x 204
         {
-            MonitorLog "启动 workers 监控  PID $BASHPID !"
+            MonitorLog "启动 workers 监控  PID $cf_pid !"
 
             clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
             emails_dead=()

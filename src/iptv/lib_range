@@ -62,7 +62,11 @@ ParseIndexRange()
         fi
     done
 
-    local -n _pir_out="$_pir_out_name"
-    _pir_out=("${_pir_res[@]}")
+    if ! [[ $_pir_out_name =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
+    then
+        return 1
+    fi
+
+    eval "$_pir_out_name=( \"\${_pir_res[@]+\"\${_pir_res[@]}\"}\" )"
     return 0
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg / 
-# Nginx / Openresty / V2ray / Xray / Armbian / PVE / 
+# Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg /
+# Nginx / Openresty / V2ray / Xray / Armbian / PVE /
 # Samba / LianHuanHua / ...
 # Copyright (C) 2019-2026
 # Released under GPL Version 3 License
@@ -14,8 +14,6 @@ then
             exec "$_aios_bash" "$0" "$@"
         fi
     done
-    printf 'AIOS requires Bash 4.4+ (current: %s). On macOS, run: brew install bash\n' "${BASH_VERSION:-unknown}" >&2
-    exit 1
 fi
 
 set -euo pipefail
@@ -4686,21 +4684,24 @@ Spinner()
     fi
 
     trap '
-        rm -f "$TMP_FILE"
+        rm -f "${TMP_FILE:-}"
         inquirer cleanup
     ' EXIT
 
-    stty -echo
-    tput civis
+    if [ -t 0 ]
+    then
+        stty -echo
+    fi
+    tput civis 2> /dev/null || true
 
     $FUNCTION_NAME > "$TMP_FILE" 2>> "$TMP_FILE" &
     local pid=$!
 
     echo
-    tput sc
+    tput sc 2> /dev/null || true
     printf '%b %b' "${list[i]}" "${green}$1${normal}"
-    tput el
-    tput rc
+    tput el 2> /dev/null || true
+    tput rc 2> /dev/null || true
 
     while ps -p $pid -o pid= >/dev/null
     do
@@ -4710,7 +4711,7 @@ Spinner()
         printf "\b\b\b"
     done
 
-    tput el
+    tput el 2> /dev/null || true
 
     if [[ -n $VARIABLE_NAME ]]
     then
@@ -4721,8 +4722,11 @@ Spinner()
 
     rm -f "$TMP_FILE"
 
-    tput cnorm
-    stty echo
+    tput cnorm 2> /dev/null || true
+    if [ -t 0 ]
+    then
+        stty echo
+    fi
 
     trap - EXIT
 
@@ -17541,8 +17545,12 @@ then
             fi
         done
 
-        local -n _pir_out="$_pir_out_name"
-        _pir_out=("${_pir_res[@]}")
+        if ! [[ $_pir_out_name =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]
+        then
+            return 1
+        fi
+
+        eval "$_pir_out_name=( \"\${_pir_res[@]+\"\${_pir_res[@]}\"}\" )"
         return 0
     }
     FFmpegResolvePidCollision()
@@ -27995,8 +28003,8 @@ then
 
             if [ "$update" -eq 1 ]
             then
-                ips=("${new_ips[@]}")
-                jail_time=("${new_jail_time[@]}")
+                ips=(${new_ips[@]+"${new_ips[@]}"})
+                jail_time=(${new_jail_time[@]+"${new_jail_time[@]}"})
 
                 printf '%s' "" > "$IP_DENY"
 
@@ -32912,12 +32920,14 @@ then
         trap 'MonitorErr $LINENO' ERR
 
         delete_on_term="${vip_public_root:-notfound}/vip"
+        local vip_pid
+        vip_pid=$(GetSubshellPid)
         pid_file="$IPTV_ROOT/vip.pid"
-        printf '%s' "$BASHPID" > "$pid_file"
+        printf '%s' "$vip_pid" > "$pid_file"
         {
             flock -x 205
             {
-                MonitorLog "启动 VIP  PID $BASHPID !"
+                MonitorLog "启动 VIP  PID $vip_pid !"
                 printf -v now '%(%s)T' -1
                 never=$((now+86400*720))
 
@@ -33009,7 +33019,11 @@ then
                                         do
                                             cs+=("$st2$ss$ct2$vip_channel_id$tid_lower")
                                         done
-                                        mapfile -t vip_channels_cs < <($MD5SUM_FILE "${cs[@]}")
+                                        vip_channels_cs=()
+                                        while IFS= read -r _vip_line
+                                        do
+                                            vip_channels_cs+=("$_vip_line")
+                                        done < <($MD5SUM_FILE ${cs[@]+"${cs[@]}"})
 
                                         case $vip_user_sum in
                                             "ssum") 
@@ -33018,7 +33032,11 @@ then
                                                 do
                                                     ssum+=("$seed/$vip_channel_id/playlist.m3u8$tid$day")
                                                 done
-                                                mapfile -t vip_channels_ssum < <($MD5SUM_FILE "${ssum[@]}")
+                                                vip_channels_ssum=()
+                                                while IFS= read -r _vip_line
+                                                do
+                                                    vip_channels_ssum+=("$_vip_line")
+                                                done < <($MD5SUM_FILE ${ssum[@]+"${ssum[@]}"})
                                                 for((k=0;k<vip_channels_count;k++));
                                                 do
                                                     program_id=$((program_id+1))
@@ -33033,7 +33051,11 @@ then
                                                 do
                                                     tsum+=("$seed/$vip_channel_id/playlist.m3u8$tid$ct")
                                                 done
-                                                mapfile -t vip_channels_tsum < <($MD5SUM_FILE "${tsum[@]}")
+                                                vip_channels_tsum=()
+                                                while IFS= read -r _vip_line
+                                                do
+                                                    vip_channels_tsum+=("$_vip_line")
+                                                done < <($MD5SUM_FILE ${tsum[@]+"${tsum[@]}"})
                                                 for((k=0;k<vip_channels_count;k++));
                                                 do
                                                     program_id=$((program_id+1))
@@ -33047,7 +33069,11 @@ then
                                                 do
                                                     isum+=("$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid")
                                                 done
-                                                mapfile -t vip_channels_isum < <($MD5SUM_FILE "${isum[@]}")
+                                                vip_channels_isum=()
+                                                while IFS= read -r _vip_line
+                                                do
+                                                    vip_channels_isum+=("$_vip_line")
+                                                done < <($MD5SUM_FILE ${isum[@]+"${isum[@]}"})
                                                 for((k=0;k<vip_channels_count;k++));
                                                 do
                                                     program_id=$((program_id+1))
@@ -60147,12 +60173,14 @@ then
         trap '' HUP INT
         trap 'MonitorErr $LINENO' ERR
 
+        local cf_pid
+        cf_pid=$(GetSubshellPid)
         pid_file="$CF_WORKERS_ROOT/cf_workers.pid"
-        printf '%s' "$BASHPID" > "$pid_file"
+        printf '%s' "$cf_pid" > "$pid_file"
         {
             flock -x 204
             {
-                MonitorLog "启动 workers 监控  PID $BASHPID !"
+                MonitorLog "启动 workers 监控  PID $cf_pid !"
 
                 clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
                 emails_dead=()

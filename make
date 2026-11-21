@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg / 
-# Nginx / Openresty / V2ray / Xray / Armbian / PVE / 
+# Docker / HAProxy / Rclone / OpenList / Calibre / FFmpeg /
+# Nginx / Openresty / V2ray / Xray / Armbian / PVE /
 # Samba / LianHuanHua / ...
 # Copyright (C) 2019-2026
 # Released under GPL Version 3 License
@@ -14,8 +14,6 @@ then
             exec "$_aios_bash" "$0" "$@"
         fi
     done
-    printf 'AIOS requires Bash 4.4+ (current: %s). On macOS, run: brew install bash\n' "${BASH_VERSION:-unknown}" >&2
-    exit 1
 fi
 
 set -euo pipefail
@@ -33,7 +31,7 @@ Include()
     INCLUDE_PATH="$DEV_PATH"
     include_name="$1"
 
-    while [[ $include_name =~ \/ ]] 
+    while [[ $include_name =~ \/ ]]
     do
         INCLUDE_PATH="$INCLUDE_PATH/${include_name%%/*}"
         include_name="${include_name#*/}"

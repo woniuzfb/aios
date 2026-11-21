@@ -1,18 +1,5 @@
 #!/usr/bin/env bash
 
-if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -lt 4 ]; }
-then
-    for _aios_bash in /opt/homebrew/bin/bash /usr/local/bin/bash
-    do
-        if [ -x "$_aios_bash" ] && [ "$_aios_bash" != "$BASH" ]
-        then
-            exec "$_aios_bash" "$0" "$@"
-        fi
-    done
-    printf 'AIOS requires Bash 4.4+ (current: %s). On macOS, run: brew install bash\n' "${BASH_VERSION:-unknown}" >&2
-    exit 1
-fi
-
 set -euo pipefail
 
 DEV_PATH=$(dirname "$0")
@@ -28,7 +15,7 @@ Include()
     INCLUDE_PATH="$DEV_PATH"
     include_name="$1"
 
-    while [[ $include_name =~ \/ ]] 
+    while [[ $include_name =~ \/ ]]
     do
         INCLUDE_PATH="$INCLUDE_PATH/${include_name%%/*}"
         include_name="${include_name#*/}"
@@ -53,18 +40,18 @@ Include core "$@"
 
 Include utils/i18n "$@"
 
-if [ -z "$*" ] 
+if [ -z "$*" ]
 then
     echo
     debug_options=( '编译' '测试' )
     inquirer list_input_index "选择操作" debug_options debug_options_index
 
-    if [ "$debug_options_index" -eq 0 ] 
+    if [ "$debug_options_index" -eq 0 ]
     then
         echo
         inquirer list_input_index "是否部署" ny_options ny_index
 
-        if [ "$ny_index" -eq 0 ] 
+        if [ "$ny_index" -eq 0 ]
         then
             "$DEV_PATH"/make
         else
@@ -72,12 +59,12 @@ then
         fi
 
         exit 0
-    elif [ "$debug_options_index" -eq 1 ] 
+    elif [ "$debug_options_index" -eq 1 ]
     then
         self_options=()
         for file in "$DEV_PATH"/src/*
         do
-            if [ ! -d "$file" ] 
+            if [ ! -d "$file" ]
             then
                 self_options+=("${file##*/}")
             fi
@@ -89,7 +76,7 @@ then
         echo
         inquirer text_input "输入参数" args_input "$i18n_blank"
 
-        if [ -z "$args_input" ] 
+        if [ -z "$args_input" ]
         then
             args=()
         else
