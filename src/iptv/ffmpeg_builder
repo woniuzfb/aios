@@ -1,0 +1,631 @@
+FFmpegResolvePidCollision()
+{
+    local target_pid="$1"
+
+    if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$target_pid"')' "$CHANNELS_FILE") ]]
+    then
+        true &
+        local rand_pid=$!
+        while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]]
+        do
+            true &
+            rand_pid=$!
+        done
+
+        jq_number=true
+        jq_path='["channels"]'
+        jq_path2='["pid"]'
+        JQ update "$CHANNELS_FILE" pid "$target_pid" "$rand_pid"
+    fi
+}
+
+FFmpegCheckDrawtextCap()
+{
+    local vcodec="${1:-}"
+    local dtext="${2:-}"
+
+    if [ "$vcodec" != "copy" ] && [ -n "$dtext" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
+    then
+        Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+        return 1
+    fi
+
+    return 0
+}
+
+FFmpegLoadChannelContext()
+{
+    local source_from="${1:-AddChannel}"
+
+    if [ "$source_from" == "StartChannel" ]
+    then
+        ctx_live="${chnl_live:-false}"
+        ctx_proxy="${chnl_proxy:-}"
+        ctx_user_agent="${chnl_user_agent:-}"
+        ctx_headers="${chnl_headers:-}"
+        ctx_cookies="${chnl_cookies:-}"
+        ctx_output_dir_root="${chnl_output_dir_root:-}"
+        ctx_output_dir_name="${chnl_output_dir_name:-}"
+        ctx_playlist_name="${chnl_playlist_name:-}"
+        ctx_seg_dir_path="${chnl_seg_dir_path:-}"
+        ctx_seg_name="${chnl_seg_name:-}"
+        ctx_seg_length="${chnl_seg_length:-0}"
+        ctx_seg_count="${chnl_seg_count:-0}"
+        ctx_video_codec="${chnl_video_codec:-}"
+        ctx_audio_codec="${chnl_audio_codec:-}"
+        ctx_video_shift="${chnl_video_shift:-}"
+        ctx_audio_shift="${chnl_audio_shift:-}"
+        ctx_draw_text="${chnl_draw_text:-}"
+        ctx_extra_filters="${chnl_extra_filters:-}"
+        ctx_quality="${chnl_quality:-}"
+        ctx_bitrate="${chnl_bitrate:-}"
+        ctx_resolution="${chnl_resolution:-}"
+        ctx_const="${chnl_const:-false}"
+        ctx_const_cbr="${chnl_const_cbr:-false}"
+        ctx_encrypt="${chnl_encrypt:-false}"
+        ctx_encrypt_session="${chnl_encrypt_session:-false}"
+        ctx_keyinfo_name="${chnl_keyinfo_name:-}"
+        ctx_key_name="${chnl_key_name:-}"
+        ctx_input_flags="${chnl_input_flags:-}"
+        ctx_output_flags="${chnl_output_flags:-}"
+        ctx_input_flags_command="${chnl_input_flags_command:-}"
+        ctx_output_flags_command="${chnl_output_flags_command:-}"
+        ctx_hls_end_list="${chnl_hls_end_list:-false}"
+        ctx_subtitle_append="${chnl_subtitle_append:-}"
+        ctx_flv_h265="${chnl_flv_h265:-false}"
+        ctx_flv_push_link="${chnl_flv_push_link:-}"
+        ctx_stream_link="${chnl_stream_link:-}"
+        ctx_stream_url_cdn="${chnl_stream_url_cdn:-}"
+        ctx_use_primary_playlist="${chnl_use_primary_playlist:-false}"
+        ctx_stream_url_qualities_count="${chnl_stream_url_qualities_count:-0}"
+        ctx_stream_url_audio_count="${chnl_stream_url_audio_count:-}"
+        ctx_stream_url_subtitles_count="${chnl_stream_url_subtitles_count:-0}"
+
+        ctx_flags_command=( ${chnl_flags_command[@]+"${chnl_flags_command[@]}"} )
+        ctx_stream_urls=( ${chnl_stream_urls[@]+"${chnl_stream_urls[@]}"} )
+        ctx_stream_url_video_indices=( ${chnl_stream_url_video_indices[@]+"${chnl_stream_url_video_indices[@]}"} )
+        ctx_stream_url_qualities=( ${chnl_stream_url_qualities[@]+"${chnl_stream_url_qualities[@]}"} )
+        ctx_stream_urls_bitrate=( ${chnl_stream_urls_bitrate[@]+"${chnl_stream_urls_bitrate[@]}"} )
+        ctx_stream_urls_resolution=( ${chnl_stream_urls_resolution[@]+"${chnl_stream_urls_resolution[@]}"} )
+        ctx_stream_urls_audio=( ${chnl_stream_urls_audio[@]+"${chnl_stream_urls_audio[@]}"} )
+        ctx_stream_urls_subtitles=( ${chnl_stream_urls_subtitles[@]+"${chnl_stream_urls_subtitles[@]}"} )
+        ctx_stream_audio_url=( ${chnl_stream_audio_url[@]+"${chnl_stream_audio_url[@]}"} )
+        ctx_stream_url_audio_indices=( ${chnl_stream_url_audio_indices[@]+"${chnl_stream_url_audio_indices[@]}"} )
+        ctx_stream_audio_group_id=( ${chnl_stream_audio_group_id[@]+"${chnl_stream_audio_group_id[@]}"} )
+        ctx_stream_audio_name=( ${chnl_stream_audio_name[@]+"${chnl_stream_audio_name[@]}"} )
+        ctx_stream_audio_default=( ${chnl_stream_audio_default[@]+"${chnl_stream_audio_default[@]}"} )
+        ctx_stream_audio_language=( ${chnl_stream_audio_language[@]+"${chnl_stream_audio_language[@]}"} )
+        ctx_stream_subtitles_url=( ${chnl_stream_subtitles_url[@]+"${chnl_stream_subtitles_url[@]}"} )
+        ctx_stream_url_subtitles_indices=( ${chnl_stream_url_subtitles_indices[@]+"${chnl_stream_url_subtitles_indices[@]}"} )
+        ctx_stream_subtitles_group_id=( ${chnl_stream_subtitles_group_id[@]+"${chnl_stream_subtitles_group_id[@]}"} )
+        ctx_stream_subtitles_name=( ${chnl_stream_subtitles_name[@]+"${chnl_stream_subtitles_name[@]}"} )
+        ctx_stream_subtitles_default=( ${chnl_stream_subtitles_default[@]+"${chnl_stream_subtitles_default[@]}"} )
+        ctx_stream_subtitles_language=( ${chnl_stream_subtitles_language[@]+"${chnl_stream_subtitles_language[@]}"} )
+    else
+        ctx_live="${live:-false}"
+        ctx_proxy="${proxy:-}"
+        ctx_user_agent="${user_agent:-}"
+        ctx_headers="${headers:-}"
+        ctx_cookies="${cookies:-}"
+        ctx_output_dir_root="${output_dir_root:-}"
+        ctx_output_dir_name="${output_dir_name:-}"
+        ctx_playlist_name="${playlist_name:-}"
+        ctx_seg_dir_path="${seg_dir_path:-}"
+        ctx_seg_name="${seg_name:-}"
+        ctx_seg_length="${seg_length:-0}"
+        ctx_seg_count="${seg_count:-0}"
+        ctx_video_codec="${video_codec:-}"
+        ctx_audio_codec="${audio_codec:-}"
+        ctx_video_shift="${video_shift:-}"
+        ctx_audio_shift="${audio_shift:-}"
+        ctx_draw_text="${draw_text:-}"
+        ctx_extra_filters="${extra_filters:-}"
+        ctx_quality="${quality:-}"
+        ctx_bitrate="${bitrate:-}"
+        ctx_resolution="${resolution:-}"
+        ctx_const="${const:-false}"
+        ctx_const_cbr="${const_cbr:-false}"
+        ctx_encrypt="${encrypt:-false}"
+        ctx_encrypt_session="${encrypt_session:-false}"
+        ctx_keyinfo_name="${keyinfo_name:-}"
+        ctx_key_name="${key_name:-}"
+        ctx_input_flags="${input_flags:-}"
+        ctx_output_flags="${output_flags:-}"
+        ctx_input_flags_command="${input_flags_command:-}"
+        ctx_output_flags_command="${output_flags_command:-}"
+        ctx_hls_end_list="${hls_end_list:-false}"
+        ctx_subtitle_append="${subtitle_append:-}"
+        ctx_flv_h265="${flv_h265:-false}"
+        ctx_flv_push_link="${flv_push_link:-}"
+        ctx_stream_link="${stream_link:-}"
+        ctx_stream_url_cdn="${stream_url_cdn:-}"
+        ctx_use_primary_playlist="${use_primary_playlist:-false}"
+        ctx_stream_url_qualities_count="${stream_url_qualities_count:-0}"
+        ctx_stream_url_audio_count="${stream_url_audio_count:-}"
+        ctx_stream_url_subtitles_count="${stream_url_subtitles_count:-0}"
+
+        ctx_flags_command=( ${flags_command[@]+"${flags_command[@]}"} )
+        ctx_stream_urls=( ${stream_urls[@]+"${stream_urls[@]}"} )
+        ctx_stream_url_video_indices=( ${stream_url_video_indices[@]+"${stream_url_video_indices[@]}"} )
+        ctx_stream_url_qualities=( ${stream_url_qualities[@]+"${stream_url_qualities[@]}"} )
+        ctx_stream_urls_bitrate=( ${stream_urls_bitrate[@]+"${stream_urls_bitrate[@]}"} )
+        ctx_stream_urls_resolution=( ${stream_urls_resolution[@]+"${stream_urls_resolution[@]}"} )
+        ctx_stream_urls_audio=( ${stream_urls_audio[@]+"${stream_urls_audio[@]}"} )
+        ctx_stream_urls_subtitles=( ${stream_urls_subtitles[@]+"${stream_urls_subtitles[@]}"} )
+        ctx_stream_audio_url=( ${stream_audio_url[@]+"${stream_audio_url[@]}"} )
+        ctx_stream_url_audio_indices=( ${stream_url_audio_indices[@]+"${stream_url_audio_indices[@]}"} )
+        ctx_stream_audio_group_id=( ${stream_audio_group_id[@]+"${stream_audio_group_id[@]}"} )
+        ctx_stream_audio_name=( ${stream_audio_name[@]+"${stream_audio_name[@]}"} )
+        ctx_stream_audio_default=( ${stream_audio_default[@]+"${stream_audio_default[@]}"} )
+        ctx_stream_audio_language=( ${stream_audio_language[@]+"${stream_audio_language[@]}"} )
+        ctx_stream_subtitles_url=( ${stream_subtitles_url[@]+"${stream_subtitles_url[@]}"} )
+        ctx_stream_url_subtitles_indices=( ${stream_url_subtitles_indices[@]+"${stream_url_subtitles_indices[@]}"} )
+        ctx_stream_subtitles_group_id=( ${stream_subtitles_group_id[@]+"${stream_subtitles_group_id[@]}"} )
+        ctx_stream_subtitles_name=( ${stream_subtitles_name[@]+"${stream_subtitles_name[@]}"} )
+        ctx_stream_subtitles_default=( ${stream_subtitles_default[@]+"${stream_subtitles_default[@]}"} )
+        ctx_stream_subtitles_language=( ${stream_subtitles_language[@]+"${stream_subtitles_language[@]}"} )
+    fi
+
+    if [ -z "$ctx_stream_url_audio_count" ]
+    then
+        ctx_stream_url_audio_count=${#ctx_stream_url_audio_indices[@]}
+    fi
+}
+
+FFmpegRegisterNewChannel()
+{
+    local mode="${1:-hls}"
+    local init_status="on"
+    local init_flv_status="off"
+    local init_flv_push=""
+    local init_flv_pull=""
+
+    if [ "$mode" == "flv" ]
+    then
+        init_status="off"
+        init_flv_status="on"
+        init_flv_push="${flv_push_link:-}"
+        init_flv_pull="${flv_pull_link:-}"
+    fi
+
+    local stream_links_json="[]"
+    local link
+    for link in "${stream_links[@]}"
+    do
+        stream_links_json=$($JQ_FILE --arg stream_link "$link" '. + [$stream_link]' <<< "$stream_links_json")
+    done
+
+    local new_channel
+    new_channel=$(
+        $JQ_FILE -n --arg pid "$pid" --arg status "$init_status" --arg hide "false" \
+            --argjson stream_link "$stream_links_json" --arg live "$live" \
+            --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
+            --arg user_agent "$user_agent" --arg headers "$headers" \
+            --arg cookies "$cookies" --arg output_dir_name "$output_dir_name" \
+            --arg playlist_name "$playlist_name" --arg seg_dir_name "$seg_dir_name" \
+            --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
+            --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
+            --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
+            --argjson subtitle "$subtitle" --arg draw_text "$draw_text" \
+            --arg quality "$quality" --arg bitrate "$bitrate" \
+            --arg resolution "$resolution" --arg const "$const" \
+            --arg const_cbr "$const_cbr" --arg encrypt "$encrypt" \
+            --arg encrypt_session "$encrypt_session" --arg keyinfo_name "$keyinfo_name" \
+            --arg key_name "$key_name" --arg input_flags "$input_flags" \
+            --arg output_flags "$output_flags" --arg channel_name "$channel_name" \
+            --argjson schedule "[]" --arg sync "$sync" \
+            --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
+            --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+            --arg flv_status "$init_flv_status" --arg flv_h265 "$flv_h265" \
+            --arg flv_push_link "$init_flv_push" --arg flv_pull_link "$init_flv_pull" \
+            '{
+                pid: $pid | tonumber,
+                status: $status,
+                hide: $hide | test("true"),
+                stream_link: $stream_link,
+                live: $live | test("true"),
+                proxy: $proxy,
+                xc_proxy: $xc_proxy,
+                user_agent: $user_agent,
+                headers: $headers,
+                cookies: $cookies,
+                output_dir_name: $output_dir_name,
+                playlist_name: $playlist_name,
+                seg_dir_name: $seg_dir_name,
+                seg_name: $seg_name,
+                seg_length: $seg_length | tonumber,
+                seg_count: $seg_count | tonumber,
+                video_codec: $video_codec,
+                audio_codec: $audio_codec,
+                video_audio_shift: $video_audio_shift,
+                subtitle: $subtitle,
+                draw_text: $draw_text,
+                quality: $quality,
+                bitrate: $bitrate,
+                resolution: $resolution,
+                const: $const | test("true"),
+                const_cbr: $const_cbr | test("true"),
+                encrypt: $encrypt | test("true"),
+                encrypt_session: $encrypt_session | test("true"),
+                keyinfo_name: $keyinfo_name,
+                key_name: $key_name,
+                key_time: now | strflocaltime("%s") | tonumber,
+                input_flags: $input_flags,
+                output_flags: $output_flags,
+                channel_name: $channel_name,
+                channel_time: now | strflocaltime("%s") | tonumber,
+                schedule: $schedule,
+                sync: $sync | test("true"),
+                sync_file: $sync_file,
+                sync_index: $sync_index,
+                sync_pairs: $sync_pairs,
+                hls_end_list: $hls_end_list | test("true"),
+                flv_status: $flv_status,
+                flv_h265: $flv_h265 | test("true"),
+                flv_push_link: $flv_push_link,
+                flv_pull_link: $flv_pull_link
+            }'
+    )
+
+    jq_path='["channels"]'
+    JQ add "$CHANNELS_FILE" "[$new_channel]"
+
+    action="add"
+    SyncFile
+}
+
+FFmpegPrepareRequestContext()
+{
+    ff_input_command=()
+    ff_output_command=()
+    ff_map_command=()
+    ff_filter_complex=""
+    ff_headers_command=""
+    ff_cookies_command=""
+
+    [ -n "${ctx_headers:-}" ] && printf -v ff_headers_command '%b' "$ctx_headers"
+
+    if [ -n "${ctx_cookies:-}" ]
+    then
+        Trim ctx_cookies
+        ctx_cookies="${ctx_cookies%\;}"
+        printf -v ff_cookies_command '%b' "${ctx_cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
+
+    if [ -n "${ctx_stream_url_cdn:-}" ]
+    then
+        ctx_stream_link="$ctx_stream_url_cdn"
+    fi
+
+    if [ -n "${ctx_input_flags_command:-}" ]
+    then
+        ctx_input_flags_command=$(FFmpegNormalizeFlags "$ctx_input_flags_command" "${ctx_stream_link:-}")
+    fi
+
+    if [ -n "${ctx_output_flags_command:-}" ]
+    then
+        ctx_output_flags_command=$(FFmpegNormalizeFlags "$ctx_output_flags_command" "${ctx_stream_link:-}")
+    fi
+}
+
+FFmpegResolveFlvBin()
+{
+    ff_bin="$FFMPEG_FILE"
+
+    if [ "${ctx_flv_h265:-false}" = true ]
+    then
+        if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = true ]
+        then
+            ff_bin="$FFMPEG_FILE"
+        elif [ -x "$AIOS_PREFIX/bin/ffmpeg_c" ]
+        then
+            ff_bin="$AIOS_PREFIX/bin/ffmpeg_c"
+        fi
+    fi
+}
+
+FFmpegAppendInputArgs()
+{
+    local url="$1"
+    local offset="${2:-}"
+
+    if [[ $url =~ ^https?:// ]]
+    then
+        [ -n "${ctx_proxy:-}" ] && ff_input_command+=( -http_proxy "$ctx_proxy" )
+        [ -n "${ctx_user_agent:-}" ] && ff_input_command+=( -user_agent "$ctx_user_agent" )
+        [ -n "${ff_headers_command:-}" ] && ff_input_command+=( -headers "$ff_headers_command" )
+        [ -n "${ff_cookies_command:-}" ] && ff_input_command+=( -cookies "$ff_cookies_command" )
+    elif [[ $url =~ ^icecast?:// ]]
+    then
+        [ -n "${ctx_user_agent:-}" ] && ff_input_command+=( -user_agent "$ctx_user_agent" )
+    fi
+
+    if [ -n "$offset" ]
+    then
+        # shellcheck disable=SC2206
+        ff_input_command+=( $ctx_input_flags_command -itsoffset "$offset" -i "$url" )
+    else
+        # shellcheck disable=SC2206
+        ff_input_command+=( $ctx_input_flags_command -i "$url" )
+    fi
+}
+
+FFmpegAppendVariantRateArgs()
+{
+    local idx="$1"
+    local v_quality="$2"
+    local v_bitrate="$3"
+
+    if [ -n "$v_quality" ]
+    then
+        ff_output_command+=( "-crf:v:$idx" "$v_quality" )
+
+        # VBV
+        if [ "$ctx_const" = true ] && [ -n "$v_bitrate" ]
+        then
+            if [ "$ctx_video_codec" == "libx264" ]
+            then
+                ff_output_command+=( "-maxrate:v:$idx" "${v_bitrate}k" "-bufsize:v:$idx" "${v_bitrate}k" )
+            elif [ "$ctx_video_codec" == "libx265" ]
+            then
+                ff_output_command+=( "-x265-params:v:$idx" "vbv-maxrate=${v_bitrate}:vbv-bufsize=${v_bitrate}" )
+            elif [ "$ctx_video_codec" == "libvpx-vp9" ]
+            then
+                ff_output_command+=( "-b:v:$idx" "${v_bitrate}k" )
+            fi
+        fi
+    elif [ -n "$v_bitrate" ]
+    then
+        ff_output_command+=( "-b:v:$idx" "${v_bitrate}k" )
+
+        if [ "$ctx_const" = true ]
+        then
+            if [ "$ctx_const_cbr" = true ]
+            then
+                if [ "$ctx_video_codec" == "libx264" ]
+                then
+                    ff_output_command+=( "-minrate:v:$idx" "${v_bitrate}k" "-maxrate:v:$idx" "${v_bitrate}k" "-bufsize:v:$idx" "${v_bitrate}k" "-x264-params:v:$idx" "nal-hrd=cbr:force-cfr=1" )
+                elif [ "$ctx_video_codec" == "libx265" ]
+                then
+                    ff_output_command+=( "-x265-params:v:$idx" "strict-cbr=1:vbv-maxrate=${v_bitrate}:vbv-bufsize=${v_bitrate}" )
+                elif [ "$ctx_video_codec" == "libvpx-vp9" ]
+                then
+                    ff_output_command+=( "-minrate:v:$idx" "${v_bitrate}k" "-maxrate:v:$idx" "${v_bitrate}k" )
+                fi
+            else
+                # VBV
+                if [ "$ctx_video_codec" == "libx264" ] || [ "$ctx_video_codec" == "libvpx-vp9" ]
+                then
+                    ff_output_command+=( "-maxrate:v:$idx" "${v_bitrate}k" "-bufsize:v:$idx" "${v_bitrate}k" )
+                elif [ "$ctx_video_codec" == "libx265" ]
+                then
+                    ff_output_command+=( "-x265-params:v:$idx" "vbv-maxrate=${v_bitrate}:vbv-bufsize=${v_bitrate}" )
+                fi
+            fi
+        fi
+    fi
+}
+
+FFmpegEstimateCrfBitrate()
+{
+    local v_quality="$1"
+    local v_codec="$2"
+    local base=15
+    local est_bitrate=4000000
+    local j
+
+    if [ "$v_codec" == "libx264" ]
+    then
+        base=18
+    elif [ "$v_codec" == "libx265" ]
+    then
+        base=24
+    fi
+
+    if [ "$v_quality" -gt "$base" ]
+    then
+        for((j=0;j<(v_quality-base)/6;j++));
+        do
+            est_bitrate=$((est_bitrate/2))
+        done
+    fi
+
+    printf '%s\n' "$est_bitrate"
+}
+
+FFmpegAppendFilter()
+{
+    local expr="$1"
+
+    if [ -n "$ff_filter_complex" ]
+    then
+        ff_filter_complex="${ff_filter_complex};${expr}"
+    else
+        ff_filter_complex="$expr"
+    fi
+}
+
+FFmpegHasNoAudio()
+{
+    [[ ${ctx_input_flags:-} =~ -an ]] || [[ ${ctx_output_flags:-} =~ -an ]]
+}
+
+FFmpegBuildMultiVariantAudio()
+{
+    local mode="${1:-hls}"
+    local i a_idx
+
+    if [ -n "${ctx_stream_audio_url:-}" ]
+    then
+        if [ "${ctx_stream_url_audio_count:-0}" -gt 0 ]
+        then
+            for((i=0;i<ctx_stream_url_audio_count;i++));
+            do
+                a_idx=${ctx_stream_url_audio_indices[i]}
+
+                if [ "$mode" == "hls" ]
+                then
+                    ff_hls_master_list="${ff_hls_master_list}#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"${ctx_stream_audio_group_id[a_idx]}\",NAME=\"${ctx_stream_audio_name[a_idx]}\",DEFAULT=\"${ctx_stream_audio_default[a_idx]}\",AUTOSELECT=YES,LANGUAGE=\"${ctx_stream_audio_language[a_idx]}\",URI=\"${ctx_playlist_name}_${ctx_stream_audio_name[a_idx]}.m3u8\"\n"
+                    ff_var_stream_map="${ff_var_stream_map} a:$i,agroup:${ctx_stream_audio_group_id[a_idx]},default:${ctx_stream_audio_default[a_idx]},language:${ctx_stream_audio_language[a_idx]},name:${ctx_stream_audio_name[a_idx]}"
+                fi
+
+                if [ "$ctx_use_primary_playlist" = false ]
+                then
+                    FFmpegAppendInputArgs "${ctx_stream_audio_url[a_idx]}"
+                    ff_map_command+=( -map $((i+ctx_stream_url_qualities_count)):a )
+                else
+                    ff_map_command+=( -map "0:a:$a_idx" )
+                fi
+            done
+        fi
+    else
+        for((i=0;i<ctx_stream_url_qualities_count;i++));
+        do
+            if [ "$ctx_use_primary_playlist" = false ]
+            then
+                ff_map_command+=( -map "$i:a" )
+            else
+                ff_map_command+=( -map "0:a:$i" )
+            fi
+        done
+    fi
+}
+
+FFmpegBuildSingleInputAndShift()
+{
+    if [ "${ctx_stream_url_qualities_count:-0}" -eq 1 ]
+    then
+        local s_idx=${ctx_stream_url_video_indices[0]}
+        ctx_stream_link=${ctx_stream_urls[s_idx]}
+
+        if [ -n "${ctx_input_flags_command:-}" ]
+        then
+            ctx_input_flags_command=$(FFmpegNormalizeFlags "$ctx_input_flags_command" "${ctx_stream_link:-}")
+        fi
+    fi
+
+    FFmpegAppendInputArgs "$ctx_stream_link"
+
+    ff_video_shift_index=0
+    ff_audio_shift_index=0
+
+    if ! FFmpegHasNoAudio
+    then
+        if [ -n "${ctx_video_shift:-}" ]
+        then
+            ff_video_shift_index=1
+            FFmpegAppendInputArgs "$ctx_stream_link" "$ctx_video_shift"
+        elif [ -n "${ctx_audio_shift:-}" ]
+        then
+            if [ "$ctx_audio_codec" == "copy" ]
+            then
+                ff_audio_shift_index=1
+                FFmpegAppendInputArgs "$ctx_stream_link" "$ctx_audio_shift"
+            else
+                FFmpegAppendFilter "[0:a] adelay=delays=${ctx_audio_shift}s:all=1 [delayed_audio]"
+            fi
+        fi
+    fi
+}
+
+FFmpegParseVariantsSpec()
+{
+    ff_qualities=()
+    ff_bitrates=()
+    ff_resolutions=()
+
+    IFS="," read -r -a ff_qualities <<< "$ctx_quality"
+    IFS="," read -r -a ff_bitrates <<< "$ctx_bitrate"
+    IFS="," read -r -a ff_resolutions <<< "$ctx_resolution"
+
+    local q_cnt=${#ff_qualities[@]}
+    local b_cnt=${#ff_bitrates[@]}
+    local r_cnt=${#ff_resolutions[@]}
+
+    if [ "$b_cnt" -gt "$q_cnt" ]
+    then
+        ff_variants_count=$b_cnt
+    else
+        ff_variants_count=$q_cnt
+    fi
+
+    if [ "$r_cnt" -gt "$ff_variants_count" ]
+    then
+        ff_variants_count=$r_cnt
+    fi
+}
+
+FFmpegAppendSingleVariantMaps()
+{
+    local label_suffix="${1:-}"
+
+    if [ "$ctx_video_codec" != "copy" ] && [ -n "${ctx_draw_text:-}" ]
+    then
+        FFmpegAppendFilter "[$ff_video_shift_index:v] ${ctx_extra_filters:-}drawtext=$ctx_draw_text [drawtext_video${label_suffix}]"
+        ff_map_command+=( -map "[drawtext_video${label_suffix}]" )
+    else
+        ff_map_command+=( -map "$ff_video_shift_index:v" )
+    fi
+
+    if ! FFmpegHasNoAudio
+    then
+        if [ -n "${ctx_audio_shift:-}" ] && [ "$ctx_audio_codec" != "copy" ]
+        then
+            ff_map_command+=( -map '[delayed_audio]' )
+        else
+            ff_map_command+=( -map "$ff_audio_shift_index:a" )
+        fi
+    fi
+}
+
+FFmpegBuildHlsBaseArgs()
+{
+    ff_hls_command=( -hls_time "$ctx_seg_length" -hls_list_size "$ctx_seg_count" )
+    ff_hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
+    ff_var_stream_map=""
+    ff_var_stream_map_command=()
+
+    if [ "$ctx_seg_count" -gt 0 ]
+    then
+        ff_hls_command+=( -hls_delete_threshold "$ctx_seg_count" )
+    fi
+
+    local hls_flags_val=""
+
+    if [ "$ctx_encrypt" = true ]
+    then
+        hls_flags_val="periodic_rekey"
+    fi
+
+    if [ "$ctx_live" = true ] && [ "$ctx_seg_count" -gt 0 ]
+    then
+        if [ -n "$hls_flags_val" ]
+        then
+            hls_flags_val="${hls_flags_val}+delete_segments"
+        else
+            hls_flags_val="delete_segments"
+        fi
+    fi
+
+    if [ -n "$hls_flags_val" ]
+    then
+        ff_hls_command+=( -hls_flags "$hls_flags_val" )
+    fi
+}
+
+FFmpegSetupHlsEncrypt()
+{
+    if [ "$ctx_encrypt" = true ]
+    then
+        openssl rand 16 > "$ctx_output_dir_root/$ctx_key_name.key"
+
+        if [ "$ctx_encrypt_session" = true ]
+        then
+            echo -e "/keys?key=$ctx_key_name&channel=$ctx_output_dir_name\n$ctx_output_dir_root/$ctx_key_name.key\n$(openssl rand -hex 16)" > "$ctx_output_dir_root/$ctx_keyinfo_name.keyinfo"
+        else
+            echo -e "$ctx_key_name.key\n$ctx_output_dir_root/$ctx_key_name.key\n$(openssl rand -hex 16)" > "$ctx_output_dir_root/$ctx_keyinfo_name.keyinfo"
+        fi
+
+        ff_hls_command+=( -hls_key_info_file "$ctx_output_dir_root/$ctx_keyinfo_name.keyinfo" )
+    fi
+}

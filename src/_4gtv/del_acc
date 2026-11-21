@@ -1,40 +1,14 @@
 Del4gtvAcc()
 {
-    List4gtvAccs
+    Select4gtvAcc || return 1
 
-    if [ "$_4gtv_accs_count" -eq 0 ]
+    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
+
+    if JQ delete "$SERVICES_CONFIG"
     then
-        exit 1
+        Println "$info 账号删除成功\n"
+    else
+        Println "$error 账号删除失败\n"
+        return 1
     fi
-
-    echo -e "选择账号"
-    while read -r -p "$i18n_default_cancel" _4gtv_accs_num
-    do
-        case "$_4gtv_accs_num" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
-            ;;
-            *)
-                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
-                then
-                    _4gtv_accs_index=$((_4gtv_accs_num-1))
-                    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
-
-                    if JQ delete "$SERVICES_CONFIG"
-                    then
-                        Println "$info 账号删除成功\n"
-                    else
-                        Println "$error 账号删除失败\n"
-                        return 1
-                    fi
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
-            ;;
-        esac
-    done
 }

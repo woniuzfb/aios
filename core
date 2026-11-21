@@ -53,7 +53,7 @@ ToJsonArray()
     fi
     local arr=("${!var}")
     local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s -c .)
-    echo $json_array
+    echo "$json_array"
 }
 
 ToQuoteArray()

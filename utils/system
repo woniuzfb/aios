@@ -123,7 +123,7 @@ AptFixBrokenRepos()
 
     while IFS= read -r line
     do
-        if [[ $line =~ The\ repository\ \'([^[:space:]\']+)[[:space:]]+[^\']*\'\ (no\ longer\ has|does\ not\ have)\ a\ Release\ file ]]
+        if [[ $line =~ The\ repository\ \'([^[:space:]\']+)[[:space:]]+[^\']*\'\ (no\ longer\ has\ a\ Release\ file|does\ not\ have\ a\ Release\ file|is\ not\ signed) ]]
         then
             url="${BASH_REMATCH[1]}"
 
@@ -131,7 +131,15 @@ AptFixBrokenRepos()
             then
                 broken_urls+=("$url")
             fi
-        elif [[ $line =~ 仓库[[:space:]]*[“\"\'‘]([^[:space:]”\"\'’]+)[[:space:]]+[^”\"\'’]*[”\"\'’].*Release ]]
+        elif [[ $line =~ 仓库[[:space:]]*[“\"\'‘]([^[:space:]”\"\'’]+)[[:space:]]+[^”\"\'’]*[”\"\'’].*(Release|没有数字签名) ]]
+        then
+            url="${BASH_REMATCH[1]}"
+
+            if ! EleInArray "$url" broken_urls
+            then
+                broken_urls+=("$url")
+            fi
+        elif [[ $line =~ GPG\ error:[[:space:]]+(https?://[^[:space:]]+) ]]
         then
             url="${BASH_REMATCH[1]}"
 
@@ -143,7 +151,7 @@ AptFixBrokenRepos()
         then
             url="${BASH_REMATCH[2]}"
 
-            if grep -q "404" "$err_file" && ! EleInArray "$url" broken_urls
+            if grep -Eq "404|EXPKEYSIG|NO_PUBKEY|signatures were invalid|not signed" "$err_file" && ! EleInArray "$url" broken_urls
             then
                 broken_urls+=("$url")
             fi

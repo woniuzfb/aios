@@ -15,14 +15,31 @@ UpdateSelfRollback()
     Println "$error 配置迁移失败, 已从备份回滚 !\n"
 }
 
-if [ ! -e "$JQ_FILE" ]
+if [ ! -x "$JQ_FILE" ]
 then
-    echo
-    ExitOnList y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
+    if [ -x "$IPTV_ROOT/jq" ]
+    then
+        mkdir -p "$(dirname "$JQ_FILE")" 2> /dev/null || true
+        ln -sf "$IPTV_ROOT/jq" "$JQ_FILE" 2> /dev/null || JQ_FILE="$IPTV_ROOT/jq"
+    elif [[ -x $(command -v jq) ]]
+    then
+        JQ_FILE=$(command -v jq)
+    fi
+fi
 
-    Uninstall
-    Install
-    exit 0
+if [ ! -x "$JQ_FILE" ]
+then
+    if [ -s "$CHANNELS_FILE" ]
+    then
+        JQInstall
+    else
+        echo
+        ExitOnList y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
+
+        Uninstall
+        Install
+        exit 0
+    fi
 fi
 
 has_legacy_default=false
@@ -51,7 +68,7 @@ then
     cur_schema=0
 fi
 
-if [ "$has_legacy_default" = true ] || [ ! -s "$IPTV_CONFIG" ] || VersionLt "$cur_ver" "$sh_ver" || [ "$cur_schema" -lt 3 ]
+if [ "$has_legacy_default" = true ] || [ ! -s "$IPTV_CONFIG" ] || VersionLt "$cur_ver" "$sh_ver" || [ "$cur_schema" -lt 1 ]
 then
     if VersionLt "$cur_ver" "1.35.0" && [ "$cur_ver" != "0.0.0" ]
     then
@@ -134,15 +151,15 @@ then
             else
                 ""
             end;
-        def to_bool($def):
+        def to_bool($dval):
             if type == "boolean" then .
             elif type == "string" then (. == "true" or . == "yes")
-            else $def
+            else $dval
             end;
-        def to_num($def):
+        def to_num($dval):
             if type == "number" then .
             elif type == "string" and test("^-?[0-9]+(\\.[0-9]+)?$") then tonumber
-            else $def
+            else $dval
             end;
         (if type == "object" then . else {} end)
         | (if has("bitrates") and (.bitrates | type) == "string" and (.bitrates != "") then
@@ -163,7 +180,7 @@ then
         | .proxy = (.proxy // "")
         | .xc_proxy = (.xc_proxy // "")
         | .user_agent = (if (.user_agent // "") == "" then $def_ua else .user_agent end)
-        | .headers = ((.headers // "") | collapse_bs)
+        | .headers = ([(if (.headers | type) == "string" then .headers else "" end)] | @tsv | collapse_bs)
         | .cookies = (if (.cookies // "") == "" then "stb_lang=en; timezone=Europe/Amsterdam" else .cookies end)
         | .playlist_name = (.playlist_name // "")
         | .seg_dir_name = (.seg_dir_name // "")
@@ -218,7 +235,7 @@ then
         | .recheck_period = (.recheck_period | to_num(0))
         | .ffmpeg_bin = (.ffmpeg_bin // "")
         | .version = $ver
-        | .schema_version = 3
+        | .schema_version = 1
     '
 
     if ! JQ mutate "$IPTV_CONFIG" "$cfg_migrate_jq" \
@@ -239,15 +256,15 @@ then
             else
                 ""
             end;
-        def to_bool($def):
+        def to_bool($dval):
             if type == "boolean" then .
             elif type == "string" then (. == "true" or . == "yes")
-            else $def
+            else $dval
             end;
-        def to_num($def):
+        def to_num($dval):
             if type == "number" then .
             elif type == "string" and test("^-?[0-9]+(\\.[0-9]+)?$") then tonumber
-            else $def
+            else $dval
             end;
         (if type == "object" then . else {} end)
         | del(.default)
@@ -285,7 +302,7 @@ then
                     | .proxy = (.proxy // "")
                     | .xc_proxy = (.xc_proxy // "")
                     | .user_agent = (.user_agent // "")
-                    | .headers = ((.headers // "") | collapse_bs)
+                    | .headers = ([(if (.headers | type) == "string" then .headers else "" end)] | @tsv | collapse_bs)
                     | .cookies = (.cookies // "")
                     | .output_dir_name = (.output_dir_name // "")
                     | .playlist_name = (.playlist_name // "")

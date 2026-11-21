@@ -1,0 +1,673 @@
+GetCronChnls()
+{
+    cron_providers=()
+    cron_chnls=()
+    cron_providers_list=""
+    cron_providers_count=0
+    while IFS= read -r line
+    do
+        if [[ $line == *"|"* ]]
+        then
+            cron_providers_count=$((cron_providers_count+1))
+            cron_provider=${line%%|*}
+            for provider in "${providers[@]}"
+            do
+                if [ "${provider%:*}" == "$cron_provider" ]
+                then
+                    cron_provider_name="${provider#*:}"
+                    break
+                fi
+            done
+
+            cron_providers+=("$cron_provider")
+            cron_chnls+=("${line#*|}")
+            cron_providers_list="$cron_providers_list ${green}$cron_providers_count.${normal}${indent_6}$cron_provider_name\n\n"
+        fi
+    done < <($JQ_FILE -r '.schedule[]|[.provider,.chnls[]]|join("|")' "$CRON_FILE")
+}
+
+ScheduleView()
+{
+    GetCronChnls
+
+    providers_list=""
+    providers_count=0
+
+    for provider in "${providers[@]}"
+    do
+        providers_count=$((providers_count+1))
+        providers_list="$providers_list ${green}$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
+    done
+
+    Println "节目表来源\n\n$providers_list"
+
+    while read -p "$i18n_default_cancel" provider_num
+    do
+        case "$provider_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$providers_count" ]
+                then
+                    provider="${providers[$((provider_num-1))]%:*}"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    var=("$provider"_chnls[@])
+
+    for((i=0;i<cron_providers_count;i++));
+    do
+        if [ "${cron_providers[i]}" == "$provider" ]
+        then
+            IFS="|" read -r -a cron_chnls <<< "${cron_chnls[i]}|"
+            break
+        fi
+    done
+
+    chnls_list=""
+    chnls_count=0
+
+    for chnl in "${!var}"
+    do
+        using=""
+        for cron_chnl in "${cron_chnls[@]}"
+        do
+            if [ "$cron_chnl" == "$chnl" ]
+            then
+                using="${green}[已添加]${normal}"
+                break
+            fi
+        done
+        chnl_name=${chnl##*:}
+        if [ "$provider" == "ontvtonight" ]
+        then
+            chnl_id=${chnl%%@*}
+        else
+            chnl_id=${chnl%%:*}
+        fi
+        chnls_count=$((chnls_count+1))
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name [$chnl_id] $using\n\n"
+    done
+
+    chnls=("${!var}")
+
+    echo -e "\n$chnls_list"
+}
+
+ScheduleAddChannel()
+{
+    for cron_chnl in "${cron_chnls[@]}"
+    do
+        if [ "$cron_chnl" == "$chnl" ]
+        then
+            return 0
+        fi
+    done
+    if [ "${add_provider:-1}" -eq 1 ] && [[ -z $($JQ_FILE '.schedule[] | select(.provider=="'"$provider"'")' "$CRON_FILE") ]]
+    then
+        add_provider=0
+        new_provider=$(
+        $JQ_FILE -n --arg provider "$provider" --arg chnl "$chnl" \
+        '{
+            "provider": $provider,
+            "chnls": [
+                $chnl
+            ]
+        }')
+        jq_path='["schedule"]'
+        JQ add "$CRON_FILE" "[$new_provider]"
+    else
+        jq_map_string=true
+        jq_path='["schedule"]'
+        jq_path2='["chnls"]'
+        JQ add "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
+        add_provider=0
+    fi
+    Println "$info 频道 [ ${chnl##*:} ] 添加成功"
+}
+
+ScheduleAdd()
+{
+    ScheduleView
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+
+    Println "多个频道用空格分隔 比如: 5 7 9-11"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ]
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ]
+        then
+            for chnl in "${chnls[@]}"
+            do
+                ScheduleAddChannel
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]]
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            chnl="${chnls[i]}"
+                            ScheduleAddChannel
+                        done
+                    else
+                        chnl="${chnls[chnl_num-1]}"
+                        ScheduleAddChannel
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+ScheduleDelChannel()
+{
+    jq_map_string=true
+    jq_path='["schedule"]'
+    jq_path2='["chnls"]'
+    JQ delete "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
+}
+
+ScheduleViewCron()
+{
+    GetCronChnls
+
+    [ -z "$cron_providers_list" ] && Println "$error 没有计划任务\n" && exit 1
+
+    Println "计划任务节目表\n\n$cron_providers_list"
+
+    while read -p "$i18n_default_cancel" provider_num
+    do
+        case "$provider_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$cron_providers_count" ]
+                then
+                    provider="${cron_providers[provider_num-1]}"
+                    IFS="|" read -r -a chnls <<< "${cron_chnls[provider_num-1]}|"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    chnls_list=""
+    chnls_count=0
+
+    for chnl in ${chnls[@]+"${chnls[@]}"}
+    do
+        chnl_name=${chnl##*:}
+        chnls_count=$((chnls_count+1))
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name\n\n"
+    done
+
+    Println "计划任务频道\n\n$chnls_list"
+}
+
+ScheduleDel()
+{
+    ScheduleViewCron
+
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+
+    Println "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ]
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ]
+        then
+            jq_map_string=true
+            jq_json=true
+            jq_path='["schedule"]'
+            jq_path2='["chnls"]'
+            JQ update "$CRON_FILE" provider "$provider" []
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]]
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            chnl="${chnls[i]}"
+                            ScheduleDelChannel
+                        done
+                    else
+                        chnl="${chnls[chnl_num-1]}"
+                        ScheduleDelChannel
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+    Println "$info 删除成功\n"
+}
+
+ScheduleExec()
+{
+    if [ -s "$CRON_FILE" ] && [[ $($JQ_FILE '.schedule' "$CRON_FILE") != null ]]
+    then
+        printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
+        while IFS="=" read -r provider_id chnls option
+        do
+            if [ "$chnls" != null ]
+            then
+                var=("$provider_id"_chnls[@])
+                if [[ -n ${!var:-} ]]
+                then
+                    unset "$provider_id"_chnls
+                    IFS="|" read -r -a "$provider_id"_chnls <<< "${chnls}|"
+                fi
+                if [ "$provider_id" == "other" ]
+                then
+                    for chnl in "${other_chnls[@]}"
+                    do
+                        chnl_id=${chnl%%:*}
+                        chnl_name=${chnl#*:}
+                        chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+
+                        if ! Schedule"$chnl_id_upper"
+                        then
+                            Println "$error $chnl_name 再次尝试..."
+                            Schedule"$chnl_id_upper" || Println "$error $chnl_id_upper 失败"
+                        fi
+                    done
+                else
+                    provider_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${provider_id:0:1}")"${provider_id:1}"
+
+                    if ! Schedule"$provider_id_upper" "$option"
+                    then
+                        for provider in "${providers[@]}"
+                        do
+                            if [ "${provider%%:*}" == "$provider_id" ]
+                            then
+                                provider_name="${#*:}"
+                                break
+                            fi
+                        done
+
+                        Println "$error $provider_name 再次尝试..."
+                        Schedule"$provider_id_upper" "$option" || Println "$error $provider_name 失败"
+                    fi
+                fi
+            fi
+        done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+        if [ -e "$IPTV_ROOT/vip.pid" ]
+        then
+            printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
+        fi
+    else
+        Println "$error 计划任务为空, 请先添加频道 !\n"
+    fi
+}
+
+ScheduleBackup()
+{
+    if [ ! -s "$CRON_FILE" ]
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    echo
+    inquirer text_input "输入备份名称: " backup_name "无"
+    backup_schedule=""
+    while IFS="=" read -r provider chnls option
+    do
+        if [ "$chnls" != null ]
+        then
+            [ -n "$backup_schedule" ] && backup_schedule="$backup_schedule,"
+            backup_schedule=$backup_schedule'{
+                "provider":"'"$provider"'",
+                "chnls":"'"$chnls"'"
+            }'
+        fi
+    done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+    if [ -z "$backup_schedule" ]
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    new_backup=$(
+    $JQ_FILE -n --arg name "$backup_name" --argjson schedule "[$backup_schedule]" \
+        '{
+            name: $name,
+            date: now|strflocaltime("%s")|tonumber,
+            schedule: $schedule
+        }'
+    )
+    jq_path='["schedule_backup"]'
+    JQ add "$CRON_FILE" "[$new_backup]"
+    Println "$info 任务备份成功\n"
+}
+
+ScheduleListBackup()
+{
+    schedule_backup_names=()
+    schedule_backup_dates=()
+    schedule_backup_schedules=()
+    schedule_backup_count=0
+    schedule_backup_list=""
+    while IFS="^" read -r backup_name backup_date backup_schedule
+    do
+        schedule_backup_count=$((schedule_backup_count+1))
+        schedule_backup_names+=("$backup_name")
+        schedule_backup_dates+=("$backup_date")
+        schedule_backup_schedules+=("$backup_schedule")
+        printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
+        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: ${green}$backup_name${normal} 备份日期: ${green}$date${normal}\n\n"
+    done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
+
+    if [ "$schedule_backup_count" -eq 0 ]
+    then
+        Println "$error 没有备份\n"
+        exit 1
+    fi
+
+    Println "$schedule_backup_list"
+}
+
+ScheduleViewBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    schedule="${schedule_backup_schedules[backup_num-1]}"
+                    IFS="," read -r -a schedules <<< "$schedule"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+
+    for((i=0;i<${#schedules[@]};i++));
+    do
+        schedule_provider=${schedules[i]%=*}
+        for provider in "${providers[@]}"
+        do
+            if [ "${provider%:*}" == "$schedule_provider" ]
+            then
+                schedule_provider_name="${provider#*:}"
+                break
+            fi
+        done
+        schedule_chnl=${schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            if [ "$schedule_provider" == "ontvtonight" ]
+            then
+                schedule_chnl_id=${schedule_chnl%%@*}
+            else
+                schedule_chnl_id=${schedule_chnl%%:*}
+            fi
+            schedule_chnls_list="$schedule_chnls_list${indent_6}${schedule_chnl##*:} ($schedule_chnl_id)\n"
+        done
+        schedules_list="$schedules_list ${green}$((i+1)).${normal}${indent_6}$schedule_provider_name\n\n$schedule_chnls_list\n"
+    done
+
+    Println "$schedules_list"
+}
+
+ScheduleEditBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name_old=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    echo
+    inquirer text_input "输入新的备份名称: " backup_name "$backup_name_old"
+
+    jq_path='["schedule_backup",'"$backup_index"',"name"]'
+    JQ update "$CRON_FILE" "$backup_name"
+    Println "$info 备份修改成功\n"
+}
+
+ScheduleDelBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["schedule_backup",'"$backup_index"']'
+    JQ delete "$CRON_FILE"
+    Println "$info 备份 $backup_name 删除成功\n"
+}
+
+ScheduleRestoreBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    backup_schedule="${schedule_backup_schedules[backup_index]}"
+                    IFS="," read -r -a backup_schedules <<< "$backup_schedule"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+    for((i=0;i<${#backup_schedules[@]};i++));
+    do
+        schedule_provider=${backup_schedules[i]%=*}
+        schedule_chnl=${backup_schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            [ -n "$schedule_chnls_list" ] && schedule_chnls_list="$schedule_chnls_list,"
+            schedule_chnls_list=$schedule_chnls_list'"'$schedule_chnl'"'
+        done
+        [ -n "$schedules_list" ] && schedules_list="$schedules_list,"
+        schedules_list=$schedules_list'{
+            "provider":"'"$schedule_provider"'",
+            "chnls":['"$schedule_chnls_list"']
+        }'
+    done
+
+    jq_json=true
+    jq_path='["schedule"]'
+    JQ update "$CRON_FILE" "[$schedules_list]"
+    Println "$info 备份 $backup_name 恢复成功\n"
+}
+
+ScheduleEnableCron()
+{
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
+    then
+        Println "$error 计划任务已开启 !\n"
+    else
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        printf '%s\n' "0 0 * * * $AIOS_PREFIX/bin/tv s -" >> "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 计划任务开启成功 !\n"
+    fi
+}
+
+ScheduleDisableCron()
+{
+    if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
+    then
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        FilterFileLines "$AIOS_PREFIX/bin/tv s" "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 计划任务已关闭\n"
+    else
+        Println "$error 计划任务未开启 !\n"
+    fi
+}

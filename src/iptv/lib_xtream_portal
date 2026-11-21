@@ -1,0 +1,150 @@
+XtreamPortalParseMacLink()
+{
+    local link="${1:-${chnl_stream_link:-}}"
+
+    chnl_mac=""
+
+    if [[ ${link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]
+    then
+        chnl_domain=${link%%|*}
+        chnl_mac=${link##*|}
+        chnl_cmd=${link%|*}
+        chnl_cmd=${chnl_cmd##*|}
+
+        chnl_cmd=${chnl_cmd%\_}
+        chnl_cmd="http://localhost/ch/${chnl_cmd##*/}_"
+        return 0
+    fi
+
+    return 1
+}
+
+XtreamPortalHandshake()
+{
+    local domain="$1"
+    local target_mac="$2"
+    local xc_proxy="${3:-}"
+
+    if [ -n "$xc_proxy" ]
+    then
+        server="${xc_proxy%\/}/http://$domain"
+    else
+        server="http://$domain"
+    fi
+
+    access_token=""
+    profile=""
+    exp_date=""
+    chnl_user_agent="$USER_AGENT_TV"
+    mac=$(UrlencodeUpper "$target_mac")
+    timezone=$(UrlencodeUpper "Europe/Amsterdam")
+    chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+    token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
+    profile_url="$server/portal.php?type=stb&action=get_profile"
+    account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+    genres_url="$server/portal.php?type=itv&action=get_genres"
+
+    access_token=$(CurlFake xtream_codes -s -Lm 10 \
+        -H "User-Agent: $chnl_user_agent" \
+        --cookie "$chnl_cookies" "$token_url" \
+        | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
+    if [ -z "$access_token" ]
+    then
+        return 1
+    fi
+
+    chnl_headers="Authorization: Bearer $access_token\r\n"
+    printf -v chnl_headers_command '%b' "$chnl_headers"
+    printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
+    profile=$(CurlFake xtream_codes -s -Lm 10 \
+        -H "User-Agent: $chnl_user_agent" \
+        -H "$(StripSuffix "$chnl_headers" 4)" \
+        --cookie "$chnl_cookies" "$profile_url" \
+        | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+    exp_date=$(CurlFake xtream_codes -s -Lm 10 \
+        -H "User-Agent: $chnl_user_agent" \
+        -H "$(StripSuffix "$chnl_headers" 4)" \
+        --cookie "$chnl_cookies" "$account_info_url" \
+        | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+    if [ -z "$exp_date" ]
+    then
+        return 2
+    fi
+
+    return 0
+}
+
+XtreamPortalCreateLink()
+{
+    local target_cmd="$1"
+    local xc_proxy="${2:-}"
+
+    if [ -n "$xc_proxy" ]
+    then
+        server=${xc_proxy%\/}
+        IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "$(StripSuffix "$chnl_headers" 4)" \
+            --cookie "$chnl_cookies" \
+            "$server/?cmd=$target_cmd&check=1" \
+            | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+
+        if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]]
+        then
+            return 1
+        fi
+
+        access_token="$new_access_token"
+        chnl_cookies="$new_cookies"
+
+        if [[ ${BASH_REMATCH[1]} =~ [a-z] ]]
+        then
+            chnl_stream_link="$server/?cmd=$target_cmd"
+            chnl_headers=""
+            chnl_headers_command=""
+        else
+            chnl_headers="Authorization: Bearer $access_token\r\n"
+            printf -v chnl_headers_command '%b' "$chnl_headers"
+        fi
+    else
+        create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$target_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
+        cmd=$(CurlFake xtream_codes -s -Lm 10 \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "$(StripSuffix "$chnl_headers" 4)" \
+            --cookie "$chnl_cookies" "$create_link_url" \
+            | $JQ_FILE -r '.js.cmd') || true
+
+        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]]
+        then
+            chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
+        else
+            return 2
+        fi
+    fi
+
+    return 0
+}
+
+XtreamPortalProbeAudioVideo()
+{
+    audio=0
+    video=0
+
+    while IFS= read -r line
+    do
+        if [[ $line == *"codec_type=audio"* ]]
+        then
+            audio=1
+        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]]
+        then
+            audio=0
+        elif [[ $line == *"codec_type=video"* ]]
+        then
+            video=1
+        fi
+    done < <($FFPROBE_FILE "$@" -rw_timeout 10000000 -show_streams -loglevel quiet)
+}

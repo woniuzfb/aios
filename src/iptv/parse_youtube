@@ -180,63 +180,12 @@ ParseYoutube()
                 break
             fi
 
-            IFS=" " read -ra formats_num_arr <<< "$formats_num"
-
-            error_no=0
-            for format_num in "${formats_num_arr[@]}"
-            do
-                case "$format_num" in
-                    *"-"*)
-                        format_num_start=${format_num%-*}
-                        format_num_end=${format_num#*-}
-                        if [[ $format_num_start == *[!0-9]* ]] || [[ $format_num_end == *[!0-9]* ]] || [ "$format_num_start" -eq 0 ] || [ "$format_num_end" -eq 0 ] || [ "$format_num_end" -gt "$count" ] || [ "$format_num_start" -ge "$format_num_end" ]
-                        then
-                            error_no=3
-                            break
-                        fi
-                    ;;
-                    *[!0-9]*)
-                        error_no=1
-                        break
-                    ;;
-                    *)
-                        if [ "$format_num" -lt 1 ] || [ "$format_num" -gt "$count" ] 
-                        then
-                            error_no=2
-                            break
-                        fi
-                    ;;
-                esac
-            done
-
-            case "$error_no" in
-                1|2|3)
-                    Println "$error $i18n_input_correct_number\n"
-                ;;
-                *)
-                    declare -a new_array
-                    for format_num in "${formats_num_arr[@]}"
-                    do
-                        if [[ $format_num =~ - ]] 
-                        then
-                            start=${format_num%-*}
-                            end=${format_num#*-}
-                            for((i=start-1;i<end;i++));
-                            do
-                                new_array+=("$i")
-                            done
-                        else
-                            new_array+=("$((format_num-1))")
-                        fi
-                    done
-
-                    formats_indices=("${new_array[@]}")
-
-                    unset new_array
-
-                    break
-                ;;
-            esac
+            if ParseIndexRange "$formats_num" "$count" formats_indices
+            then
+                break
+            else
+                Println "$error $i18n_input_correct_number\n"
+            fi
         done
     fi
 

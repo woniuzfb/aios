@@ -1,0 +1,797 @@
+MonitorHlsRemoveFailed()
+{
+    declare -a new_array
+    for((failed_i=0;failed_i<${#hls_failed[@]};failed_i++));
+    do
+        failed_index=${hls_failed[failed_i]}
+
+        if [ "${monitor_output_dir_names[failed_index]}" == "$output_dir_name" ]
+        then
+            unset 'hls_change[failed_index]'
+            unset 'hls_change_once[failed_index]'
+            unset 'hls_changed[failed_index]'
+            unset 'channel_name[failed_index]'
+
+            unset 'hls_recheck_time[failed_i]'
+            hls_recheck_time=("${hls_recheck_time[@]}")
+        else
+            new_array+=("$failed_index")
+        fi
+    done
+
+    if [ -z "${new_array:-}" ]
+    then
+        hls_failed=()
+    else
+        hls_failed=("${new_array[@]}")
+    fi
+
+    unset new_array
+}
+
+MonitorHlsRestartSuccess()
+{
+    if [ -n "${failed_restart_nums:-}" ]
+    then
+        unset 'hls_failed[failed_i]'
+        unset 'hls_recheck_time[failed_i]'
+
+        hls_failed=("${hls_failed[@]}")
+        hls_recheck_time=("${hls_recheck_time[@]}")
+    fi
+
+    MonitorLog "$chnl_channel_name 重启成功"
+}
+
+MonitorHlsRestartFail()
+{
+    StopChannel
+    now=$(DateEpoch)
+    recheck_time=$((now+recheck_period))
+
+    if [ -n "${failed_restart_nums:-}" ]
+    then
+        hls_recheck_time[failed_i]="$recheck_time"
+    else
+        hls_recheck_time+=("$recheck_time")
+        hls_failed+=("$hls_index")
+    fi
+
+    declare -a new_array
+    for element in "${hls_indices[@]}"
+    do
+        [ "$element" != "$hls_index" ] && new_array+=("$element")
+    done
+
+    if [ -z "${new_array:-}" ]
+    then
+        hls_indices=()
+    else
+        hls_indices=("${new_array[@]}")
+    fi
+
+    unset new_array
+
+    MonitorLog "$chnl_channel_name 重启失败"
+}
+
+MonitorFlvRestartSuccess()
+{
+    if [ -n "${failed_restart_nums:-}" ]
+    then
+        declare -a new_array
+        for element in ${flv_failed[@]+"${flv_failed[@]}"}
+        do
+            [ "$element" != "$flv_index" ] && new_array+=("$element")
+        done
+
+        if [ -z "${new_array:-}" ]
+        then
+            flv_failed=()
+        else
+            flv_failed=("${new_array[@]}")
+        fi
+
+        unset new_array
+
+        declare -a new_array
+        for element in ${flv_recheck_time[@]+"${flv_recheck_time[@]}"}
+        do
+            [ "$element" != "${flv_recheck_time[failed_i]}" ] && new_array+=("$element")
+        done
+
+        if [ -z "${new_array:-}" ]
+        then
+            flv_recheck_time=()
+        else
+            flv_recheck_time=("${new_array[@]}")
+        fi
+
+        unset new_array
+    fi
+
+    MonitorLog "$chnl_channel_name 重启成功"
+}
+
+MonitorFlvRestartFail()
+{
+    StopChannel
+    now=$(DateEpoch)
+    recheck_time=$((now+recheck_period))
+
+    if [ -n "${failed_restart_nums:-}" ]
+    then
+        flv_recheck_time[failed_i]="$recheck_time"
+    else
+        flv_recheck_time+=("$recheck_time")
+        flv_failed+=("$flv_index")
+    fi
+
+    declare -a new_array
+    for element in "${flv_indices[@]}"
+    do
+        [ "$element" != "$flv_index" ] && new_array+=("$element")
+    done
+
+    if [ -z "${new_array:-}" ]
+    then
+        flv_indices=()
+    else
+        flv_indices=("${new_array[@]}")
+    fi
+
+    unset new_array
+
+    MonitorLog "$chnl_channel_name FLV 重启超过${flv_restart_nums:-20}次关闭"
+}
+
+MonitorApplyAntiLeech()
+{
+    local mode="$1"
+
+    if [ "$anti_leech" != true ]
+    then
+        return 0
+    fi
+
+    if [ "$mode" == "hls" ] && [ "$anti_leech_restart_hls_changes" = true ]
+    then
+        if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]}" = false ]; }
+        then
+            if [ "${hls_change_once[hls_index]}" = true ]
+            then
+                hls_changed[hls_index]=true
+            fi
+            chnl_playlist_name=$(RandStr)
+            chnl_seg_name="$chnl_playlist_name"
+        fi
+
+        if [ "$chnl_encrypt" = true ]
+        then
+            chnl_key_name=$(RandStr)
+        fi
+    elif [ "$mode" == "flv" ] && [ "$anti_leech_restart_flv_changes" = true ]
+    then
+        stream_name=${chnl_flv_push_link##*/}
+        new_stream_name=$(RandStr)
+        while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]]
+        do
+            new_stream_name=$(RandStr)
+        done
+        chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+        monitor_flv_push_links[i]="$chnl_flv_push_link"
+
+        if [ -n "$chnl_flv_pull_link" ]
+        then
+            chnl_flv_pull_link="${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}"
+            monitor_flv_pull_links[i]="$chnl_flv_pull_link"
+        fi
+    fi
+}
+
+MonitorProbeHlsSegment()
+{
+    local check_master="${1:-false}"
+
+    if [ "$chnl_status" != "on" ] || ! ls -A "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts > /dev/null 2>&1
+    then
+        return 2
+    fi
+
+    if [ "$chnl_encrypt" = true ]
+    then
+        if [ -e "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" ] && \
+        [ -e "$chnl_output_dir_root/$chnl_key_name.key" ] && \
+        iv_hex=$(awk 'NR==3{print}' "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo") && \
+        encrypt_key=$(hexdump -e '16/1 "%02x"' < "$chnl_output_dir_root/$chnl_key_name.key")
+        then
+            encrypt_command="-key $encrypt_key -iv $iv_hex"
+        else
+            return 2
+        fi
+    else
+        encrypt_command=""
+    fi
+
+    audio=0
+    video=0
+    video_bitrate=0
+    bitrate_check=0
+
+    f_count=1
+    for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
+    do
+        f_count=$((f_count+1))
+    done
+
+    f_num=$((f_count/2))
+    f_count=1
+
+    for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
+    do
+        if [ "$f_count" -lt "$f_num" ]
+        then
+            f_count=$((f_count+1))
+            continue
+        fi
+        [ -n "$encrypt_command" ] && f="crypto:$f"
+        while IFS= read -r line
+        do
+            if [[ $line == *"codec_type=video"* ]]
+            then
+                video=1
+            elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]]
+            then
+                line=${line#*bit_rate=}
+                video_bitrate=${line//N\/A/$hls_min_bitrate}
+                bitrate_check=1
+            elif [[ $line == *"codec_type=audio"* ]]
+            then
+                audio=1
+            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]]
+            then
+                audio=0
+            fi
+        done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+        break
+    done
+
+    if [ "$check_master" = true ]
+    then
+        if { [ "$master" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrate ]]; } || { [ "$master" -eq 1 ] && [ "$audio" -eq 1 ]; } || { [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrate ]]; }
+        then
+            return 0
+        fi
+    else
+        if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrate ]]
+        then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+MonitorRestartFallback()
+{
+    local mode="$1"
+    local try_accounts="$2"
+
+    if [ "$try_accounts" = true ]
+    then
+        domains_tried+=("$chnl_domain")
+        try_success=0
+        MonitorTryAccounts
+
+        if [ "$try_success" -eq 1 ]
+        then
+            if [ "$mode" == "hls" ]
+            then
+                MonitorHlsRestartSuccess
+            else
+                MonitorFlvRestartSuccess
+            fi
+            return 0
+        fi
+    fi
+
+    if [ "$restart_i" -eq $((restart_nums-1)) ]
+    then
+        if [ "$mode" == "hls" ]
+        then
+            MonitorHlsRestartFail
+        else
+            MonitorFlvRestartFail
+        fi
+        return 1
+    fi
+
+    return 2
+}
+
+MonitorRestartChannel()
+{
+    local mode="$1"
+    local fb_rc probe_rc try_flag
+
+    if [ "$mode" == "hls" ]
+    then
+        hls_change[hls_index]=${hls_change[hls_index]:-true}
+        hls_change_once[hls_index]=${hls_change_once[hls_index]:-false}
+        hls_changed[hls_index]=${hls_changed[hls_index]:-false}
+    fi
+
+    XtreamCodesGetChnls
+    domains_tried=()
+    unset failed_restart_nums
+
+    if [ "$mode" == "hls" ]
+    then
+        hls_restart_nums=${hls_restart_nums:-20}
+        for((failed_i=0;failed_i<${#hls_failed[@]};failed_i++));
+        do
+            if [ "${hls_failed[failed_i]}" == "$hls_index" ]
+            then
+                failed_restart_nums=3
+                break
+            fi
+        done
+        restart_nums=${failed_restart_nums:-$hls_restart_nums}
+    else
+        flv_restart_nums=${flv_restart_nums:-20}
+        for((failed_i=0;failed_i<${#flv_failed[@]};failed_i++));
+        do
+            if [ "${flv_failed[failed_i]}" == "$flv_index" ]
+            then
+                failed_restart_nums=3
+                break
+            fi
+        done
+        restart_nums=${failed_restart_nums:-$flv_restart_nums}
+    fi
+
+    if [ "$chnl_stream_links_count" -gt "$restart_nums" ]
+    then
+        restart_nums="$chnl_stream_links_count"
+    fi
+
+    for((restart_i=0;restart_i<restart_nums;restart_i++));
+    do
+        if [ "$restart_i" -gt 0 ] && [ "$chnl_stream_links_count" -gt 1 ]
+        then
+            chnl_stream_links=("${chnl_stream_links[@]:1}" "${chnl_stream_links[@]:0:1}")
+            chnl_stream_link=${chnl_stream_links[0]}
+        fi
+
+        if XtreamPortalParseMacLink "$chnl_stream_link"
+        then
+            to_try=0
+            for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
+            do
+                if [ "$xc_domain" == "$chnl_domain" ]
+                then
+                    to_try=1
+                    for domain in ${domains_tried[@]+"${domains_tried[@]}"}
+                    do
+                        if [ "$domain" == "$chnl_domain" ]
+                        then
+                            to_try=0
+                            break
+                        fi
+                    done
+                    break
+                fi
+            done
+
+            xc_chnl_found=0
+
+            if [ "$to_try" -eq 1 ]
+            then
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ]
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$xc_chnl_found" -eq 1 ]
+            then
+                fb_rc=0
+                MonitorRestartFallback "$mode" true || fb_rc=$?
+
+                if [ "$fb_rc" -eq 2 ]
+                then
+                    continue
+                else
+                    break
+                fi
+            fi
+
+            try_flag=false
+            [ "$to_try" -eq 1 ] && try_flag=true
+
+            if ! XtreamPortalHandshake "$chnl_domain" "$chnl_mac" "${chnl_xc_proxy:-}"
+            then
+                fb_rc=0
+                MonitorRestartFallback "$mode" "$try_flag" || fb_rc=$?
+
+                if [ "$fb_rc" -eq 2 ]
+                then
+                    continue
+                else
+                    break
+                fi
+            fi
+
+            if ! XtreamPortalCreateLink "$chnl_cmd" "${chnl_xc_proxy:-}"
+            then
+                fb_rc=0
+                MonitorRestartFallback "$mode" "$try_flag" || fb_rc=$?
+
+                if [ "$fb_rc" -eq 2 ]
+                then
+                    continue
+                else
+                    break
+                fi
+            fi
+
+            chnl_stream_links[0]="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
+        else
+            to_try=0
+
+            if [[ $chnl_stream_link =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]]
+            then
+                chnl_domain=${BASH_REMATCH[1]}
+
+                for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
+                do
+                    if [ "$xc_domain" == "$chnl_domain" ]
+                    then
+                        to_try=1
+                        for domain in ${domains_tried[@]+"${domains_tried[@]}"}
+                        do
+                            if [ "$domain" == "$chnl_domain" ]
+                            then
+                                to_try=0
+                                break
+                            fi
+                        done
+                        break
+                    fi
+                done
+            fi
+
+            xc_chnl_found=0
+
+            if [ "$to_try" -eq 1 ]
+            then
+                [ "$mode" == "flv" ] && to_try=0
+
+                if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
+                then
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+                else
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+                fi
+                for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
+                do
+                    if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ]
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$xc_chnl_found" -eq 1 ]
+            then
+                fb_rc=0
+                MonitorRestartFallback "$mode" true || fb_rc=$?
+
+                if [ "$fb_rc" -eq 2 ]
+                then
+                    continue
+                else
+                    break
+                fi
+            fi
+        fi
+
+        StopChannel
+
+        MonitorApplyAntiLeech "$mode"
+
+        if [ "$mode" == "hls" ] && [ -n "${channel_name[hls_index]:-}" ]
+        then
+            chnl_channel_name="${channel_name[hls_index]}"
+        fi
+
+        StartChannel
+
+        if [ "$mode" == "hls" ]
+        then
+            sleep $((15+chnl_seg_length))
+            GetChannel || GetChannel
+
+            probe_rc=0
+            MonitorProbeHlsSegment true || probe_rc=$?
+
+            if [ "$probe_rc" -eq 0 ]
+            then
+                MonitorHlsRestartSuccess
+                break
+            elif [ "$probe_rc" -eq 1 ]
+            then
+                MonitorErr "频道 [ $chnl_channel_name ] audio $audio, video $video, bitrate $video_bitrate"
+            fi
+        else
+            sleep 15
+            GetChannel
+
+            if [ "$chnl_flv_status" == "on" ]
+            then
+                XtreamPortalProbeAudioVideo -i "${chnl_flv_pull_link:-$chnl_flv_push_link}"
+
+                if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+                then
+                    MonitorFlvRestartSuccess
+                    break
+                fi
+            fi
+        fi
+
+        if [ "$to_try" -eq 1 ]
+        then
+            domains_tried+=("$chnl_domain")
+            try_success=0
+            MonitorTryAccounts
+
+            if [ "$try_success" -eq 1 ]
+            then
+                if [ "$mode" == "hls" ]
+                then
+                    MonitorHlsRestartSuccess
+                else
+                    MonitorFlvRestartSuccess
+                fi
+                break
+            fi
+        fi
+
+        if [ "$restart_i" -eq $((restart_nums-1)) ]
+        then
+            if [ "$mode" == "hls" ]
+            then
+                MonitorHlsRestartFail
+            else
+                MonitorFlvRestartFail
+            fi
+            break
+        fi
+    done
+}
+
+MonitorHlsRestartChannel()
+{
+    MonitorRestartChannel hls
+}
+
+MonitorFlvRestartChannel()
+{
+    MonitorRestartChannel flv
+}
+
+MonitorTryAccountActivate()
+{
+    StopChannel
+
+    chnl_stream_links[0]="$1"
+
+    if [ "$monitor" = true ]
+    then
+        if [ -z "${kind:-}" ]
+        then
+            MonitorApplyAntiLeech hls
+        elif [ "${kind:-}" == "flv" ]
+        then
+            MonitorApplyAntiLeech flv
+        fi
+
+        if [ -n "${channel_name[hls_index]:-}" ]
+        then
+            chnl_channel_name="${channel_name[hls_index]}"
+        fi
+    fi
+
+    StartChannel
+
+    if [ "$monitor" = false ]
+    then
+        try_success=1
+        sleep 3
+        return 0
+    fi
+
+    if [ "${kind:-}" == "flv" ]
+    then
+        sleep 15
+        GetChannel
+        XtreamPortalProbeAudioVideo -i "${chnl_flv_pull_link:-$chnl_flv_push_link}"
+
+        if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+        then
+            try_success=1
+            MonitorLog "$chnl_channel_name 重启成功"
+            return 0
+        fi
+    else
+        sleep $((15+chnl_seg_length))
+        GetChannel
+
+        if MonitorProbeHlsSegment false
+        then
+            try_success=1
+            MonitorLog "$chnl_channel_name 重启成功"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+MonitorTryAccounts()
+{
+    accounts=()
+    macs=()
+
+    while IFS= read -r line
+    do
+        if [[ $line == *"$chnl_domain"* ]]
+        then
+            line=${line#* }
+            account_line=${line#* }
+
+            if [[ $account_line == *" "* ]]
+            then
+                new_account_line=""
+                while [[ $account_line == *" "* ]]
+                do
+                    if [[ ${account_line%% *} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]
+                    then
+                        macs+=("${account_line%% *}")
+                        account_line=${account_line#* }
+                        continue
+                    fi
+                    [ -n "$new_account_line" ] && new_account_line=" $new_account_line"
+                    new_account_line="${account_line%% *}$new_account_line"
+                    account_line=${account_line#* }
+                done
+            else
+                if [[ $account_line =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]
+                then
+                    macs+=("$account_line")
+                fi
+                new_account_line="$account_line"
+            fi
+
+            IFS=" " read -ra accounts <<< "$new_account_line"
+            break
+        fi
+    done < "$XTREAM_CODES"
+
+    if [ -n "${chnl_mac:-}" ]
+    then
+        if [ -n "${macs:-}" ]
+        then
+            GetDefault
+
+            macs+=("$chnl_mac")
+            macs_count=${#macs[@]}
+            echo
+            for((macs_i=0;macs_i<macs_count;macs_i++));
+            do
+                if [ "$monitor" = false ]
+                then
+                    printf '%b' "\r$macs_i/$macs_count 检测中..."
+                fi
+                mac_address=${macs[macs_i]}
+
+                xc_chnl_found=0
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$mac_address" ]
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+
+                valid=0
+
+                if [ "$xc_chnl_found" -eq 0 ]
+                then
+                    if ! XtreamPortalHandshake "$chnl_domain" "$mac_address" "${chnl_xc_proxy:-}"
+                    then
+                        continue
+                    fi
+
+                    if ! XtreamPortalCreateLink "$chnl_cmd" "${chnl_xc_proxy:-}"
+                    then
+                        continue
+                    fi
+
+                    XtreamPortalProbeAudioVideo $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link"
+
+                    if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+                    then
+                        valid=1
+                    fi
+
+                    if [ "$valid" -eq 1 ]
+                    then
+                        if MonitorTryAccountActivate "$chnl_domain|$chnl_stream_link|$chnl_cmd|$mac_address"
+                        then
+                            break
+                        fi
+                    fi
+                fi
+            done
+            echo
+        fi
+    elif [ -n "${accounts:-}" ]
+    then
+        accounts+=("$chnl_account")
+        accounts_count=${#accounts[@]}
+        echo
+        for((accounts_i=0;accounts_i<accounts_count;accounts_i++));
+        do
+            if [ "$monitor" = false ]
+            then
+                printf '%b' "\r$accounts_i/$accounts_count 检测中..."
+            fi
+            account=${accounts[accounts_i]}
+
+            xc_chnl_found=0
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
+            do
+                if [ "$xc_chnl" == "$chnl_domain/$account" ]
+                then
+                    xc_chnl_found=1
+                    break
+                fi
+            done
+
+            valid=0
+
+            if [ "$xc_chnl_found" -eq 0 ]
+            then
+                if [[ $chnl_stream_link == *"/live/"* ]]
+                then
+                    chnl_stream_link="http://$chnl_domain/live/${account//:/\/}/${chnl_stream_link##*/}"
+                else
+                    chnl_stream_link="http://$chnl_domain/${account//:/\/}/${chnl_stream_link##*/}"
+                fi
+
+                XtreamPortalProbeAudioVideo $chnl_proxy_command -i "$chnl_stream_link"
+
+                if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+                then
+                    valid=1
+                fi
+            fi
+
+            if [ "$valid" -eq 1 ]
+            then
+                if MonitorTryAccountActivate "$chnl_stream_link"
+                then
+                    break
+                fi
+            fi
+        done
+        echo
+    fi
+}

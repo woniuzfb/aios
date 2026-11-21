@@ -64,40 +64,15 @@ InputChannelsIndex()
             fi
         fi
 
-        IFS=" " read -ra chnls_indices_input_arr <<< "$chnls_indices_input"
+        if ! ParseIndexRange "$chnls_indices_input" "$chnls_count" chnls_indices
+        then
+            Println "$error $i18n_input_correct_no\n"
+            continue
+        fi
 
-        for chnl_index in "${chnls_indices_input_arr[@]}"
+        for chnl_index in "${chnls_indices[@]}"
         do
-            if [[ $chnl_index =~ - ]] 
-            then
-                chnl_index_start=${chnl_index%-*}
-                chnl_index_end=${chnl_index#*-}
-
-                if [[ $chnl_index_start == *[!0-9]* ]] || [[ $chnl_index_end == *[!0-9]* ]] 
-                then
-                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
-                    continue 2
-                elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
-                then
-                    chnl_index_start=$((chnl_index_start-1))
-                    for((i=chnl_index_start;i<chnl_index_end;i++));
-                    do
-                        chnls_pid_chosen+=("${chnls_pid[i]}")
-                        chnls_indices+=("$i")
-                    done
-                else
-                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
-                    continue 2
-                fi
-            elif [[ $chnl_index == *[!0-9]* ]] || [[ $chnl_index -eq 0 ]] || [[ $chnl_index -gt $chnls_count ]] 
-            then
-                Println "$error $i18n_input_correct_no\n"
-                continue 2
-            else
-                chnl_index=$((chnl_index-1))
-                chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
-                chnls_indices+=("$chnl_index")
-            fi
+            chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
         done
         break
     done

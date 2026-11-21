@@ -1,0 +1,68 @@
+ParseIndexRange()
+{
+    local _pir_input="${1:-}"
+    local _pir_max="${2:-0}"
+    local _pir_out_name="${3:-}"
+
+    if [ -z "$_pir_input" ] || [[ ! $_pir_max =~ ^[0-9]+$ ]] || [ "$_pir_max" -lt 1 ]
+    then
+        return 1
+    fi
+
+    if [[ ! $_pir_out_name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]
+    then
+        return 1
+    fi
+
+    local -a _pir_tokens=()
+    local -a _pir_res=()
+    IFS=" " read -r -a _pir_tokens <<< "$_pir_input"
+
+    if [ "${#_pir_tokens[@]}" -eq 0 ]
+    then
+        return 1
+    fi
+
+    local _pir_tok _pir_start _pir_end _pir_num _pir_i
+    for _pir_tok in "${_pir_tokens[@]}"
+    do
+        if [[ $_pir_tok == *-* ]]
+        then
+            if [[ ! $_pir_tok =~ ^[0-9]+-[0-9]+$ ]]
+            then
+                return 1
+            fi
+
+            _pir_start=$((10#${_pir_tok%-*}))
+            _pir_end=$((10#${_pir_tok#*-}))
+
+            if [ "$_pir_start" -lt 1 ] || [ "$_pir_end" -gt "$_pir_max" ] || [ "$_pir_start" -ge "$_pir_end" ]
+            then
+                return 1
+            fi
+
+            for((_pir_i=_pir_start-1;_pir_i<_pir_end;_pir_i++));
+            do
+                _pir_res+=("$_pir_i")
+            done
+        else
+            if [[ ! $_pir_tok =~ ^[0-9]+$ ]]
+            then
+                return 1
+            fi
+
+            _pir_num=$((10#$_pir_tok))
+
+            if [ "$_pir_num" -lt 1 ] || [ "$_pir_num" -gt "$_pir_max" ]
+            then
+                return 1
+            fi
+
+            _pir_res+=("$((_pir_num-1))")
+        fi
+    done
+
+    local -n _pir_out="$_pir_out_name"
+    _pir_out=("${_pir_res[@]}")
+    return 0
+}

@@ -11,6 +11,8 @@ Include utils/mongodb "$@"
 Include src/iptv/filter_string "$@"
 Include src/iptv/rand_name "$@"
 Include src/iptv/sync_file "$@"
+Include src/iptv/lib_range "$@"
+Include src/iptv/ffmpeg_builder "$@"
 Include src/iptv/flv_creator "$@"
 Include src/iptv/hls_creator "$@"
 Include src/iptv/get_default "$@"
@@ -28,6 +30,7 @@ Include src/iptv/add_channel "$@"
 Include src/iptv/edit_channel "$@"
 Include src/iptv/menu_edit_channel "$@"
 Include src/iptv/toggle_channel "$@"
+Include src/iptv/lib_xtream_portal "$@"
 Include src/iptv/check_xtream "$@"
 Include src/iptv/start_channel "$@"
 Include src/iptv/stop_channel "$@"
@@ -52,6 +55,7 @@ Include src/cloudflare/disable_workers_monitor "$@"
 Include src/_4gtv/set_acc "$@"
 Include src/_4gtv/reg_acc "$@"
 Include src/_4gtv/list_accs "$@"
+Include src/_4gtv/select_acc "$@"
 Include src/_4gtv/login_acc "$@"
 Include src/_4gtv/list_acc "$@"
 Include src/_4gtv/edit_acc "$@"
@@ -137,7 +141,7 @@ Install()
         then
             local tmp_cfg
             tmp_cfg=$(mktemp "${TMPDIR:-/tmp}/aios-cfg.XXXXXX")
-            if $JQ_FILE --arg version "$sh_ver" '.default | .ffmpeg_bin = (.ffmpeg_bin // "") | .version = (.version // $version) | .schema_version = (.schema_version // 3)' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
+            if $JQ_FILE --arg version "$sh_ver" '.default | .ffmpeg_bin = (.ffmpeg_bin // "") | .version = (.version // $version) | .schema_version = (.schema_version // 1)' "$CHANNELS_FILE" > "$tmp_cfg" && [ -s "$tmp_cfg" ] && $JQ_FILE empty "$tmp_cfg" > /dev/null 2>&1
             then
                 chmod +r "$tmp_cfg"
                 mv "$tmp_cfg" "$IPTV_CONFIG"
@@ -257,7 +261,7 @@ Install()
                     recheck_period: $recheck_period | tonumber,
                     ffmpeg_bin: $ffmpeg_bin,
                     version: $version,
-                    schema_version: 3
+                    schema_version: 1
                 }' > "$tmp_cfg"
             chmod +r "$tmp_cfg"
             mv "$tmp_cfg" "$IPTV_CONFIG"
@@ -388,6 +392,60 @@ Update()
     Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0
 }
 
+IptvMigrateLegacyRoot()
+{
+    local legacy_root="$AIOS_PREFIX/iptv"
+
+    if [ ! -e "$IPTV_ROOT" ] && [ -d "$legacy_root" ] && [ "$legacy_root" != "$IPTV_ROOT" ]
+    then
+        Println "$info 检测到旧版 v1 目录 ${yellow}$legacy_root${normal}, 正在迁移至 ${green}$IPTV_ROOT${normal} ..."
+        mkdir -p "$AIOS_ROOT"
+        mv "$legacy_root" "$IPTV_ROOT"
+
+        if [ -f "$LOGROTATE_CONFIG" ] && grep -Fq "$legacy_root" "$LOGROTATE_CONFIG"
+        then
+            local tmp_lr
+            tmp_lr=$(mktemp "${TMPDIR:-/tmp}/aios-lr.XXXXXX")
+            awk -v old="$legacy_root" -v new="$IPTV_ROOT" '
+                {
+                    while ((idx = index($0, old)) > 0) {
+                        $0 = substr($0, 1, idx - 1) new substr($0, idx + length(old))
+                    }
+                    print
+                }
+            ' "$LOGROTATE_CONFIG" > "$tmp_lr"
+            mv "$tmp_lr" "$LOGROTATE_CONFIG"
+        fi
+
+        if [ -x "$IPTV_ROOT/jq" ] && [ ! -e "$JQ_FILE" ]
+        then
+            mkdir -p "$(dirname "$JQ_FILE")"
+            ln -sf "$IPTV_ROOT/jq" "$JQ_FILE"
+        fi
+
+        local legacy_ff_dir
+        for legacy_ff_dir in "$IPTV_ROOT"/ffmpeg-git-*
+        do
+            if [ -x "$legacy_ff_dir/ffmpeg" ] && [ ! -e "$FFMPEG_FILE" ]
+            then
+                mkdir -p "$(dirname "$FFMPEG_FILE")"
+                ln -sf "$legacy_ff_dir/ffmpeg" "$FFMPEG_FILE"
+
+                if [ -x "$legacy_ff_dir/ffprobe" ] && [ ! -e "$FFPROBE_FILE" ]
+                then
+                    ln -sf "$legacy_ff_dir/ffprobe" "$FFPROBE_FILE"
+                fi
+                break
+            fi
+        done
+
+        rm -f "$LOCK_FILE"
+        Println "$info 旧版目录迁移完成\n"
+    fi
+}
+
+IptvMigrateLegacyRoot
+
 if [ -e "$IPTV_ROOT" ] && [ ! -e "$LOCK_FILE" ] 
 then
     Include src/iptv/update_self
@@ -398,9 +456,12 @@ then
     case $1 in
         4g)
             Include src/iptv/menu_4gtv "$@"
+            Menu4gtv "$@"
         ;;
         s) 
             Include src/iptv/menu_listings "$@"
+            Schedule "$@"
+            exit 0
         ;;
         singtel) 
             Include src/iptv/cmd_singtel "$@"
@@ -423,8 +484,9 @@ then
         ffmpeg|FFmpeg|mirror) 
             Include utils/mirror "$@"
         ;;
-        ts) 
+        ts)
             Include src/iptv/menu_ts "$@"
+            TsMenu "$@"
         ;;
         f|flv) 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
@@ -454,6 +516,7 @@ then
         ;;
         color)
             Include src/iptv/menu_color "$@"
+            ColorMenu "$@"
         ;;
         curl)
             Include src/iptv/cmd_curl "$@"

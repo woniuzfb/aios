@@ -322,6 +322,20 @@ RunSuiteCoreJq()
         AptUpdate force > /dev/null
         [ ! -f "$APT_SOURCES_DIR/dead.list" ] && [ -f "$APT_SOURCES_DIR/dead.list.disabled" ] || exit 13
 
+        # Case 2b: expired GPG key / unsigned repo (EXPKEYSIG + is not signed) with consent -> disabled to .disabled
+        printf 'deb https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse\n' > "$APT_SOURCES_DIR/mongodb-org-4.4.list"
+        apt-get()
+        {
+            if [ ! -f "$APT_SOURCES_DIR/mongodb-org-4.4.list" ]
+            then
+                return 0
+            fi
+            printf "Err:5 https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 InRelease\n  The following signatures were invalid: EXPKEYSIG 656408E390CFB1F5 MongoDB 4.4 Release Signing Key\nW: GPG error: https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 InRelease: The following signatures were invalid: EXPKEYSIG 656408E390CFB1F5\nE: The repository 'https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 InRelease' is not signed.\n"
+            return 100
+        }
+        AptUpdate force > /dev/null
+        [ ! -f "$APT_SOURCES_DIR/mongodb-org-4.4.list" ] && [ -f "$APT_SOURCES_DIR/mongodb-org-4.4.list.disabled" ] || exit 24
+
         # Case 3: AptInstall stale index 404 -> refreshes via AptUpdate force and retries --fix-missing
         local install_calls=0
         apt-get()

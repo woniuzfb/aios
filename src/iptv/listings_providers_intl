@@ -1,0 +1,489 @@
+ScheduleHboasia()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${hboasia_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        hbo_id=${chnl_name%:*}
+        chnl_name=${chnl_name#*:}
+
+        schedule=""
+        while IFS="^" read -r program_time program_title program_classification
+        do
+            program_time=${program_time#\"}
+            program_classification=${program_classification%\"}
+
+            if [ -n "$program_classification" ]
+            then
+                program_title="$program_title($program_classification)"
+            fi
+
+            program_sys_time=$(date -d "$program_time" +%s)
+            new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "id":"'"$hbo_id"'",
+                "title":"'"$program_title"'",
+                "time":"'"$new_program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" \
+                -d "channel=$hbo_id" \
+                -d "date=$today" \
+                https://hboasia.com/ajax/getschedule.php | $JQ_FILE '.[] | [.publictime,.title,.classification] | join("^")')
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] hbo亚洲 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] hbo亚洲 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleHbous()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "us_hbo" > "$SCHEDULE_JSON"
+    fi
+
+    if [ "${1:-}" == "WEST" ] || [ "${1:-}" == "west" ]
+    then
+        zone="WEST"
+    else
+        zone="EAST"
+    fi
+
+    for chnl in "${hbous_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl=${chnl#*:}
+        hbous_name=${chnl%%:*}
+        chnl_zone=${chnl#*:}
+        chnl_name=${chnl_zone#*:}
+        chnl_zone=${chnl_zone%%:*}
+
+        if [ "$zone" != "$chnl_zone" ]
+        then
+            continue
+        fi
+
+        schedule=""
+
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$program_time" +%s)
+            if [ "$program_sys_time" -ge "$min_sys_time" ]
+            then
+                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$yesterday" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+
+        min_sys_time=${program_sys_time:-$sys_time}
+
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$program_time" +%s)
+            if [ "$program_sys_time" -le "$max_sys_time" ] && [ "$program_sys_time" -gt "$min_sys_time" ]
+            then
+                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$today" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] hbous 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] hbous 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleOntvtonight()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "us_abc" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${ontvtonight_chnls[@]}"
+    do
+        IFS="@" read -r chnl_id chnl_name chnl_no chnl_zone <<< "$chnl"
+
+        chnl_zone=${chnl_zone%:*}
+        schedule=""
+        start=0
+
+        if [ "${chnl_id%_*}" == "us" ] || [ "${chnl_id%_*}" == "foxnews" ]
+        then
+            ct=""
+        else
+            ct="${chnl_id%_*}/"
+        fi
+
+        while IFS= read -r line
+        do
+            if [[ $line == *"<tbody>"* ]]
+            then
+                start=1
+            elif [ "$start" -eq 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]]
+            then
+                line=${line#*>}
+                program_time=${line%<*}
+                new_program_time=${program_time% *}
+                hour=${new_program_time%:*}
+                if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                then
+                    hour=$((hour+12))
+                    new_program_time="$hour:${new_program_time#*:}"
+                elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                then
+                    new_program_time="00:${new_program_time#*:}"
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</a></h5>"* ]]
+            then
+                line=${line%%<\/a>*}
+                Trim line
+                program_title="${line}"
+                program_title=${program_title//amp;/}
+                program_title=${program_title//&#039;/\'}
+                program_sys_time=$(date -d "${yesterday}T$new_program_time$chnl_zone" +%s)
+                if [ "$program_sys_time" -ge "$min_sys_time" ]
+                then
+                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]]
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" 2> /dev/null)
+
+        while IFS= read -r line
+        do
+            if [[ $line == *"<tbody>"* ]]
+            then
+                start=1
+            elif [ "$start" -eq 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]]
+            then
+                line=${line#*>}
+                program_time=${line%<*}
+                new_program_time=${program_time% *}
+                hour=${new_program_time%:*}
+                if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                then
+                    hour=$((hour+12))
+                    new_program_time="$hour:${new_program_time#*:}"
+                elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                then
+                    new_program_time="00:${new_program_time#*:}"
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</a></h5>"* ]]
+            then
+                line=${line%%<\/a>*}
+                Trim line
+                program_title="$line"
+                program_title=${program_title//amp;/}
+                program_title=${program_title//&#039;/\'}
+                program_sys_time=$(date -d "${today}T$new_program_time$chnl_zone" +%s)
+                if [ "$program_sys_time" -le "$max_sys_time" ]
+                then
+                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]]
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" 2> /dev/null)
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] ontvtonight 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] ontvtonight 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleDisneyjr()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "disneyjr" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+    while IFS= read -r program
+    do
+        program_title=${program#*show_title: }
+        program_title=${program_title%%, time: *}
+        program_time=${program#*, time: }
+        program_time=${program_time%%, iso8601_utc_time: *}
+        program_sys_time=${program#*, iso8601_utc_time: }
+        program_sys_time=${program_sys_time%\"}
+        program_sys_time=$(date -d "$program_sys_time" +%s)
+
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$program_title"'",
+            "time":"'"$program_time"'",
+            "sys_time":"'"$program_sys_time"'"
+        }'
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.schedule | to_entries | map(.value.schedule_items[]) | to_entries | map("show_title: \(.value.show_title), time: \(.value.time), iso8601_utc_time: \(.value.iso8601_utc_time)")[]')
+
+    if [ -n "$schedule" ]
+    then
+        jq_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleFoxmovies()
+{
+    printf -v today '%(%Y-%-m-%-d)T' -1
+    SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "foxmovies" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+    while IFS= read -r line
+    do
+        if [[ $line == *"<td>"* ]]
+        then
+            line=${line#*<td>}
+            line=${line%%<\/td>*}
+
+            if [[ $line == *"<br>"* ]]
+            then
+                line=${line%% <br>*}
+                line=${line//\"/}
+                line=${line//\'/}
+                line=${line//\\/\'}
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$line"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                time=${line#* }
+            fi
+        fi
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK")
+
+    if [ -n "$schedule" ]
+    then
+        jq_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleAmlh()
+{
+    printf -v today '%(%Y-%-m-%-d)T' -1
+    timestamp=$(date -d $today +%s)
+
+    SCHEDULE_LINK="http://www.macaulotustv.cc/index.php/index/getdetail.html"
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "amlh" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$((timestamp-86400))" "$SCHEDULE_LINK") || true
+
+    if [[ $line == *"<li>"* ]]
+    then
+        line=${line#*<em>}
+        time=${line%%<*}
+        while [ -n "$time" ]
+        do
+            time=${time:0:5}
+            line=${line#*<span>}
+            if [ "${flag:-0}" -gt 0 ] && [ "${time:0:1}" -eq 0 ]
+            then
+                title=${line%%<*}
+                title=${title//\\t/ }
+                title=$(printf %b "$title")
+                if [ "${title:0:4}" == "經典影院" ]
+                then
+                    title=${title:5}
+                fi
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$title"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                flag=${time:0:1}
+            fi
+            if [[ $line == *"<em>"* ]]
+            then
+                line=${line#*<em>}
+                time=${line%%<*}
+            else
+                break
+            fi
+        done
+    fi
+
+    flag=0
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$timestamp" "$SCHEDULE_LINK") || true
+
+    while [[ $line == *"<li>"* ]]
+    do
+        line=${line#*<em>}
+        time=${line%%<*}
+        time=${time:0:5}
+        line=${line#*<span>}
+
+        if [ -z "${time:-}" ] || [ "$flag" -gt "${time:0:1}" ]
+        then
+            break 2
+        fi
+
+        flag=${time:0:1}
+        title=${line%%<*}
+        title=${title//\\t/ }
+        title=$(printf %b "$title")
+        if [ "${title:0:4}" == "經典影院" ]
+        then
+            title=${title:5}
+        fi
+        sys_time=$(date -d "$today $time" +%s)
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$title"'",
+            "time":"'"$time"'",
+            "sys_time":"'"$sys_time"'"
+        }'
+    done
+
+    if [ -n "$schedule" ]
+    then
+        jq_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleFoxnews()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+    schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://apps.foxnews.com/schedule_new/feed/fox-news.jn" |
+        $JQ_FILE --arg today "$today" --arg yesterday "$yesterday" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' '.day
+        | map(select(.["@attributes"].value == $yesterday or .["@attributes"].value == $today).show[]
+        | .["sys_time"] = (."start-utc"|fromdate)
+        | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber))
+        | .["time"] = (.sys_time|strflocaltime("%-H:%M%p"))
+        | with_entries(select(.key as $k | $keys | index($k))))[]')
+
+    if [ -n "$schedule" ]
+    then
+        jq_file=true
+        jq_file_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" schedule
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleOther()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "amlh" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${other_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+        Schedule"$chnl_id_upper"
+    done
+}

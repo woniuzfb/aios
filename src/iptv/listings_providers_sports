@@ -1,0 +1,500 @@
+ScheduleAstro()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "iqiyi" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${astro_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        astro_id=${chnl#*:}
+        chnl_name=${astro_id#*:}
+        astro_id=${astro_id%%:*}
+
+        schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" |
+            $JQ_FILE --arg today "$today" --argjson keys '["title","time","sys_time"]' '.response.schedule[$today]
+            | map(.["time"] = (.datetime|sub("(?<date>.*) (?<time>.*):[\\d]{2}\\.[\\d]{1}"; "\(.time)"))
+            | .["sys_time"] = (.datetimeInUtc|sub("(?<date>.*) (?<time>.*)\\.[\\d]{1}"; "\(.date)T\(.time)Z")|fromdate)
+            | .title =
+                if .title[0:.title|length/2-1] == .title[.title|length/2+1:.title|length]
+                then
+                    .title[0:.title|length/2-1]
+                elif .title[4:.title|length/2+1] == .title[.title|length/2+3:.title|length]
+                then
+                    .title[0:.title|length/2+1]
+                else
+                    .title
+                end
+            | with_entries(select(.key as $k | $keys | index($k))))')
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] astro 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] astro 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleNbcsn()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    timestamp=$(date -d "$yesterday 08:00:00" +%s)
+
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "nbcsn" > "$SCHEDULE_JSON"
+    fi
+
+    IFS=" " read -r -a nbcsn_pro < <(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+        https://tvlistings.gracenote.com/gapzap_webapi/api/affiliates/getaffiliatesprop/nbcsports/en-us | $JQ_FILE -r '[.defaultheadend,.defaultlanguage,.defaultpostalcode,.device,.dstend,.dststart,.dstutcoffset,.stdutcoffset]|join(" ")')
+
+    IFS=" " read -r prgsvcid callsign < <(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+        -d "aid=nbcsports&prgsvcid=&headendId=${nbcsn_pro[0]}&countryCode=USA&postalCode=${nbcsn_pro[2]}&device=${nbcsn_pro[3]}&languagecode=${nbcsn_pro[1]}" \
+        https://tvlistings.gracenote.com/api/grid/channelList  | $JQ_FILE -r '[([.[].prgsvcid]|join("=")),([.[].callsign]|join("="))]|join(" ")')
+
+    IFS="=" read -r -a prgsvcids <<< "$prgsvcid"
+    IFS="=" read -r -a callsigns <<< "$callsign"
+
+    nbcsn_indices=("${!prgsvcids[@]}")
+
+    for chnl in "${nbcsn_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        nbcsn_id=${chnl#*:}
+        chnl_name=${nbcsn_id#*:}
+        nbcsn_id=${nbcsn_id%%:*}
+
+        for nbcsn_index in "${nbcsn_indices[@]}"
+        do
+            if [ "${callsigns[nbcsn_index]}" == "$nbcsn_id" ]
+            then
+                break
+            fi
+        done
+
+        sslgrid=$(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+            -d "timespan=336&timestamp=$timestamp&prgsvcid=${prgsvcids[nbcsn_index]}&headendId=${nbcsn_pro[0]}&countryCode=USA&postalCode=${nbcsn_pro[2]}&device=${nbcsn_pro[3]}&userId=-&aid=nbcsports&DSTUTCOffset=+420&STDUTCOffset=+480&DSTStart=$(Urlencode ${nbcsn_pro[5]})&DSTEnd=$(Urlencode ${nbcsn_pro[4]})&languagecode=en-us" \
+            https://tvlistings.gracenote.com/api/sslgrid)
+
+        yesterday_schedule=$($JQ_FILE --arg index "$yesterday" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.[$index] | map(select(.startTime|tonumber > ($min|tonumber)) | .["title"] = (if .program.episodeTitle then .program.title + ": " + .program.episodeTitle else .program.title end) | .["time"] = .startTimeFormatted | .["sys_time"] = .startTime | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sslgrid")
+        today_schedule=$($JQ_FILE --arg index "$today" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.[$index] | map(select(.startTime|tonumber < ($max|tonumber)) | .["title"] = (if .program.episodeTitle then .program.title + ": " + .program.episodeTitle else .program.title end) | .["time"] = .startTimeFormatted | .["sys_time"] = .startTime | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sslgrid")
+
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge' <<< "$yesterday_schedule")
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] nbcsn 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] nbcsn 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBeinsports()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "beinsportsenglish1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    be_html=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://epg.beinsports.com/utctime.php?offset=+8&mins=00&serviceidentity=beinsports.com&category=sports&id=123)
+
+    for chnl in "${beinsports_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        be_id=${chnl#*:}
+        chnl_name=${be_id#*:}
+        be_id=${be_id%%:*}
+
+        schedule=()
+        found=0
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ id=channels_$be_id\> ]]
+            then
+                found=1
+            elif [ "$found" -eq 1 ]
+            then
+                if [[ $line =~ class=title\>(.+)\</p\> ]]
+                then
+                    title="${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=time\>(.+)\&nbsp\;-\&nbsp\;(.+)\</p\> ]]
+                then
+                    start_time="${BASH_REMATCH[1]}"
+                    end_time="${BASH_REMATCH[2]}"
+
+                    if [ -z "${schedule:-}" ] && [ "${start_time%:*}" -gt "${end_time%:*}" ]
+                    then
+                        sys_time=$(date -d "$yesterday $start_time" +%s)
+                    else
+                        sys_time=$(date -d "$today $start_time" +%s)
+                    fi
+
+                    new_schedule=$(
+                    $JQ_FILE -n --arg schedule_title "$title" --arg schedule_time "$start_time" --arg schedule_sys_time "$sys_time" \
+                        '{
+                            title: $schedule_title,
+                            time: $schedule_time,
+                            sys_time: $schedule_sys_time
+                        }'
+                    )
+
+                    schedule+=("$new_schedule")
+                elif [[ $line =~ \<div\>\<ul\> ]]
+                then
+                    break
+                fi
+            fi
+        done <<< "$be_html"
+
+        if [ -n "${schedule:-}" ]
+        then
+            jq_file=true
+            jq_file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] beinsports 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] beinsports 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBeinsportsau()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "beinsports1au" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    beau_html=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://epg.beinsports.com/utctime_au.php?offset=+8&mins=00&id=123)
+
+    for chnl in "${beinsportsau_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        beau_id=${chnl#*:}
+        chnl_name=${beau_id#*:}
+        beau_id=${beau_id%%:*}
+
+        schedule=()
+        found=0
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ $beau_id ]]
+            then
+                found=1
+            elif [ "$found" -eq 1 ]
+            then
+                if [[ $line =~ class=title\>(.+)\</p\> ]]
+                then
+                    title="${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=format\>(.+)\</p\> ]]
+                then
+                    title="$title - ${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=time\>(.+)\&nbsp\;-\&nbsp\;(.+)\</td\>\<td ]]
+                then
+                    start_time="${BASH_REMATCH[1]}"
+                    end_time="${BASH_REMATCH[2]}"
+
+                    if [ -z "${schedule:-}" ] && [ "${start_time%:*}" -gt "${end_time%:*}" ]
+                    then
+                        sys_time=$(date -d "$yesterday $start_time" +%s)
+                    else
+                        sys_time=$(date -d "$today $start_time" +%s)
+                    fi
+
+                    new_schedule=$(
+                    $JQ_FILE -n --arg schedule_title "$title" --arg schedule_time "$start_time" --arg schedule_sys_time "$sys_time" \
+                        '{
+                            title: $schedule_title,
+                            time: $schedule_time,
+                            sys_time: $schedule_sys_time
+                        }'
+                    )
+
+                    schedule+=("$new_schedule")
+                elif [[ $line =~ item_normal ]]
+                then
+                    break
+                fi
+            fi
+        done <<< "$beau_html"
+
+        if [ -n "${schedule:-}" ]
+        then
+            jq_file=true
+            jq_file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] beinsports AU 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] beinsports AU 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleSupersport()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "supersportfootball" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date -d "yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+
+    ss_yesterday_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$yesterday&liveOnly=false")
+    ss_today_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$today&liveOnly=false")
+
+    for chnl in "${supersport_chnls[@]}"
+    do
+        chnl_id="${chnl%%:*}"
+        chnl_name="${chnl#*:}"
+        supersport_name="${chnl_name%:*}"
+        chnl_name="${chnl_name#*:}"
+
+        yesterday_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name)
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name)
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_today_schedule")
+
+        schedule=$($JQ_FILE --argjson today "$today_schedule" '.+=$today' <<< "$yesterday_schedule")
+
+        if [ "$schedule" != "[]" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] SuperSport 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] SuperSport 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBtsport()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
+
+    for chnl in "${btsport_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name="${chnl#*:}"
+        bt_id=${chnl_name%:*}
+        chnl_name="${chnl_name#*:}"
+
+        schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" "https://voila.metabroadcast.com/4/schedules/$bt_id.json?key=$api_key&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&annotations=content.description,content.brand_summary,content.broadcasts,content.locations" | $JQ_FILE --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedule.entries | map(select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) |.["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))')
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] BT Sport 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] BT Sport 节目表更新失败"
+            return 1
+        fi
+    done
+}
+
+ScheduleBtsportOn()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    btsport_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/sport/watch/whats-on" "https://www.bt.com/content/experience-fragments/bt/portal/sport/system_json/live_on_bt_sport/asset-exporter/master/jcr:content/root/asset_exporter.model.json")
+
+    for chnl in "${btsporton_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name="${chnl#*:}"
+
+        schedule=$($JQ_FILE --arg channel_name "$chnl_name" --argjson keys '["title","time","sys_time"]' '.liveEventsList | map(select(.channels[].name | test($channel_name;"i")) | .["time"] = (.startDate|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate|strflocaltime("%H:%M")) | .["sys_time"] = (.startDate|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | .["title"] = .competition + " - " + .title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$btsport_schedule")
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] BT Sport on 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] BT Sport on 节目表更新失败"
+        fi
+    done
+}
+
+SchedulePremiersports()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "premiersports1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+
+    for chnl in "${premiersports_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        pr_id="${chnl#*:}"
+        chnl_name="${pr_id#*:}"
+        pr_id=${pr_id%%:*}
+
+        schedule=()
+
+        pr_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.premiersports.com/system/get-tv-schedule?channel=$pr_id")
+        pr_schedule="${pr_schedule#*<li }"
+
+        while [[ $pr_schedule =~ datetime=\"([0-9T:-]+)\" ]]
+        do
+            schedule_time="${BASH_REMATCH[1]}"
+            schedule_sys_time=$(date -d "$schedule_time" +%s)
+
+            if [ "$schedule_sys_time" -lt "$min_sys_time" ]
+            then
+                pr_schedule="${pr_schedule#*<li }"
+                continue
+            elif [ "$schedule_sys_time" -gt "$max_sys_time" ]
+            then
+                break
+            fi
+
+            printf -v schedule_time '%(%H:%M)T' "$schedule_sys_time"
+
+            new_schedule="${pr_schedule%%</li>*}"
+            schedule_title=""
+
+            if [[ $new_schedule =~ live-status ]]
+            then
+                schedule_title="LIVE - "
+            elif [[ $new_schedule =~ itemprop=\"name\"\>(.+)\</h3\> ]]
+            then
+                schedule_title="${BASH_REMATCH[1]}"
+            fi
+
+            new_schedule="${new_schedule#*<h4 }"
+
+            if [[ $new_schedule =~ itemprop=\"name\"\>(.+)\</h4\> ]]
+            then
+                if [ -n "$schedule_title" ]
+                then
+                    schedule_title="$schedule_title - "
+                fi
+                schedule_title="$schedule_title${BASH_REMATCH[1]}"
+            fi
+
+            new_schedule=$(
+            $JQ_FILE -n --arg schedule_title "$schedule_title" --arg schedule_time "$schedule_time" --arg schedule_sys_time "$schedule_sys_time" \
+                '{
+                    title: $schedule_title,
+                    time: $schedule_time,
+                    sys_time: $schedule_sys_time
+                }'
+            )
+
+            schedule+=("$new_schedule")
+            pr_schedule="${pr_schedule#*<li }"
+        done
+
+        if [ -n "${schedule:-}" ]
+        then
+            jq_file=true
+            jq_file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] Premier Sports 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] Premier Sports 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleSky()
+{
+    if [ ! -s "$SCHEDULE_JSON" ]
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+
+    chnls_sid=""
+
+    for chnl in "${sky_chnls[@]}"
+    do
+        sk_sid="${chnl#*:}"
+        sk_sid="${sk_sid%%:*}"
+        [ -n "$chnls_sid" ] && chnls_sid="$chnls_sid,"
+        chnls_sid="$chnls_sid$sk_sid"
+    done
+
+    sk_yesterday_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://awk.epgsky.com/hawk/linear/schedule/$yesterday/$chnls_sid")
+    sk_today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://awk.epgsky.com/hawk/linear/schedule/$today/$chnls_sid")
+
+    for chnl in "${sky_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        sk_sid="${chnl#*:}"
+        chnl_name="${sk_sid#*:}"
+        sk_sid=${sk_sid%%:*}
+
+        yesterday_schedule=$($JQ_FILE --arg sid "$sk_sid" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.schedule | map(select(.sid == $sid).events[] | select((.st|tonumber) > ($min|tonumber)) | .["time"] = (.st|strflocaltime("%H:%M")) | .["sys_time"] = .st | .["title"] = .t | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sk_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg sid "$sk_sid" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.schedule | map(select(.sid == $sid).events[] | select((.st|tonumber) < ($max|tonumber)) | .["time"] = (.st|strflocaltime("%H:%M")) | .["sys_time"] = .st | .["title"] = .t | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sk_today_schedule")
+
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge|unique_by(.sys_time)' <<< "$yesterday_schedule")
+
+        if [ -n "$schedule" ]
+        then
+            jq_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] Sky 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] Sky 节目表更新失败"
+        fi
+    done
+}

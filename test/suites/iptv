@@ -156,6 +156,7 @@ MIXEOF
       "name": "CCTV1",
       "output_dir_name": "cctv1",
       "stream_link": ["http://example.test/live.m3u8"],
+      "headers": "x-forwarded-for: 127.0.0.1\r\n",
       "live": true,
       "status": "off",
       "txt_format": "webvtt",
@@ -170,12 +171,13 @@ MIGEOF
 
         [ -s "$IPTV_CONFIG" ] || exit 11
         [ "$("$JQ_FILE" -r '.version' "$IPTV_CONFIG")" = "$sh_ver" ] || exit 12
-        [ "$("$JQ_FILE" -r '.schema_version' "$IPTV_CONFIG")" = "3" ] || exit 13
+        [ "$("$JQ_FILE" -r '.schema_version' "$IPTV_CONFIG")" = "1" ] || exit 13
         [ "$("$JQ_FILE" -r 'has("txt_format")' "$IPTV_CONFIG")" = "false" ] || exit 14
         [ "$("$JQ_FILE" -r 'has("default")' "$CHANNELS_FILE")" = "false" ] || exit 15
         [ "$("$JQ_FILE" -r '.channels | length' "$CHANNELS_FILE")" = "1" ] || exit 16
         [ "$("$JQ_FILE" -r '.channels[0].live' "$CHANNELS_FILE")" = "true" ] || exit 17
         [ "$("$JQ_FILE" -r '.channels[0] | has("subtitle") and has("hide") and has("const_cbr")' "$CHANNELS_FILE")" = "true" ] || exit 18
+        [ "$("$JQ_FILE" -r '.channels[0].headers' "$CHANNELS_FILE")" = 'x-forwarded-for: 127.0.0.1\r\n' ] || exit 21
 
         # Run update_self second time (idempotent 2.1.0 -> 2.1.0)
         rm -f "$LOCK_FILE"
@@ -254,6 +256,35 @@ MIGEOF
             AssertEq "0" "$?" "$ff_label: real Enhanced FLV HEVC + x265 vbv encode succeeds"
         fi
     done
+
+    # 6. Legacy v1 $AIOS_PREFIX/iptv -> v2 $AIOS_ROOT/iptv migration
+    local legacy_rc=0
+    (
+        local leg_prefix="$tmpdir/legacy_prefix"
+        AIOS_PREFIX="$leg_prefix"
+        AIOS_ROOT="$AIOS_PREFIX/aios"
+        IPTV_ROOT="$AIOS_ROOT/iptv"
+        JQ_FILE="$AIOS_PREFIX/bin/jq"
+        FFMPEG_FILE="$AIOS_PREFIX/bin/ffmpeg"
+        FFPROBE_FILE="$AIOS_PREFIX/bin/ffprobe"
+        LOCK_FILE="$IPTV_ROOT/lock"
+        LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
+        mkdir -p "$leg_prefix/iptv/ffmpeg-git-20240101-amd64-static"
+        printf '#!/bin/sh\nexit 0\n' > "$leg_prefix/iptv/jq"
+        printf '#!/bin/sh\nexit 0\n' > "$leg_prefix/iptv/ffmpeg-git-20240101-amd64-static/ffmpeg"
+        chmod +x "$leg_prefix/iptv/jq" "$leg_prefix/iptv/ffmpeg-git-20240101-amd64-static/ffmpeg"
+        printf 'old\n' > "$leg_prefix/iptv/lock"
+        printf '%s/iptv/monitor.log {\n}\n' "$leg_prefix" > "$leg_prefix/iptv/logrotate"
+        eval "$(sed -n '/^IptvMigrateLegacyRoot()/,/^}/p' "$DEV_PATH/src/tv")"
+        IptvMigrateLegacyRoot > /dev/null
+        [ ! -e "$leg_prefix/iptv" ] || exit 1
+        [ -d "$IPTV_ROOT" ] || exit 2
+        [ ! -e "$LOCK_FILE" ] || exit 3
+        grep -Fq "$IPTV_ROOT/monitor.log" "$LOGROTATE_CONFIG" || exit 4
+        [ -L "$JQ_FILE" ] && [ -x "$JQ_FILE" ] || exit 5
+        [ -L "$FFMPEG_FILE" ] && [ -x "$FFMPEG_FILE" ] || exit 6
+    ) || legacy_rc=$?
+    AssertEq "0" "$legacy_rc" "IptvMigrateLegacyRoot moves legacy \$AIOS_PREFIX/iptv, rewrites logrotate, and clears old lock"
 
     rm -rf "$tmpdir"
 }

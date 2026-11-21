@@ -1,0 +1,401 @@
+MonitorFlushRemovedSchedules()
+{
+    local rm_i
+
+    if [ "${#schedules_to_remove[@]}" -gt 0 ]
+    then
+        for((rm_i=${#schedules_to_remove[@]}-1;rm_i>=0;rm_i--));
+        do
+            jq_map_string=true
+            jq_path='["channels"]'
+            jq_path2='["schedule",'"${schedules_to_remove[rm_i]}"']'
+            JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+        done
+        schedules_to_remove=()
+    fi
+}
+
+MonitorScheduleExpireEntry()
+{
+    if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ]
+    then
+        update=$(
+            $JQ_FILE -n --arg start_time "$((${chnl_schedules_start_time[chnl_schedules_index]}+86400))" \
+                --arg end_time "$((${chnl_schedules_end_time[chnl_schedules_index]}+86400))" \
+                --arg loop "${chnl_schedules_loop[chnl_schedules_index]}" \
+                --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]}" \
+                --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" \
+                --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]}" \
+                --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
+                --arg status 0 \
+            '{
+                    "start_time": $start_time | tonumber,
+                    "end_time": $end_time | tonumber,
+                    "loop": $loop | test("true"),
+                    "auto_remove": $auto_remove | test("true"),
+                    "hls_change": $hls_change | test("true"),
+                    "hls_change_once": $hls_change_once | test("true"),
+                    "channel_name": $channel_name,
+                    "status": $status | tonumber
+            }'
+        )
+        jq_merge=true
+        jq_map_string=true
+        jq_path='["channels"]'
+        jq_path2='["schedule",'"$chnl_schedules_index"']'
+        JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" "$update"
+    elif [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ]
+    then
+        schedules_to_remove+=("$chnl_schedules_index")
+    else
+        jq_map_string=true
+        jq_number=true
+        jq_path='["channels"]'
+        jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+        JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 2
+    fi
+}
+
+MonitorScheduleDetachHls()
+{
+    local new_array=()
+
+    for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+    do
+        if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ]
+        then
+            unset 'hls_change[hls_index]'
+            unset 'hls_change_once[hls_index]'
+            unset 'hls_changed[hls_index]'
+            unset 'channel_name[hls_index]'
+        else
+            new_array+=("$hls_index")
+        fi
+    done
+
+    if [ -z "${new_array:-}" ]
+    then
+        hls_indices=()
+    else
+        hls_indices=("${new_array[@]}")
+    fi
+
+    MonitorHlsRemoveFailed
+}
+
+MonitorScheduleApplyHlsMeta()
+{
+    local idx="$1"
+
+    hls_change[idx]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+
+    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ]
+    then
+        hls_change_once[idx]=true
+    else
+        if [ "${hls_changed[idx]:-false}" = true ]
+        then
+            hls_changed[idx]=false
+        fi
+        hls_change_once[idx]=false
+    fi
+
+    if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ]
+    then
+        channel_name[idx]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+    fi
+}
+
+MonitorScheduleAttachHls()
+{
+    local check_failed="${1:-false}"
+    local i
+
+    if [ "$check_failed" = true ]
+    then
+        for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
+        do
+            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ]
+            then
+                MonitorScheduleApplyHlsMeta "$hls_index"
+                return 0
+            fi
+        done
+    fi
+
+    for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+    do
+        if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ]
+        then
+            MonitorScheduleApplyHlsMeta "$hls_index"
+            return 0
+        fi
+    done
+
+    if [ -n "${monitor_output_dir_names:-}" ]
+    then
+        for((i=0;i<${#monitor_output_dir_names[@]};i++));
+        do
+            if [ "${monitor_output_dir_names[i]}" == "$output_dir_name" ]
+            then
+                hls_indices+=("$i")
+                MonitorScheduleApplyHlsMeta "$i"
+                return 0
+            fi
+        done
+    fi
+
+    monitor_output_dir_names+=("$output_dir_name")
+    hls_index=$((${#monitor_output_dir_names[@]}-1))
+    hls_indices+=("$hls_index")
+    MonitorScheduleApplyHlsMeta "$hls_index"
+}
+
+MonitorProcessSchedules()
+{
+    if [ "$chnls_count" -le 0 ]
+    then
+        return 0
+    fi
+
+    chnls_indices=("${!chnls_pid[@]}")
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        if [ -z "${chnls_schedule_status[chnls_index]:-}" ]
+        then
+            continue
+        fi
+
+        output_dir_name="${chnls_output_dir_name[chnls_index]}"
+
+        IFS="${delimiters[4]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]:-}"
+        IFS="${delimiters[4]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-}"
+
+        chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+        if [ "${chnls_status[chnls_index]}" == "on" ]
+        then
+            schedules_to_remove=()
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
+                then
+                    if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ]
+                    then
+                        MonitorScheduleExpireEntry
+                        MonitorScheduleDetachHls
+
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
+                        GetChannel
+                        StopChannel
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
+                    else
+                        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ]
+                        then
+                            jq_map_string=true
+                            jq_number=true
+                            jq_path='["channels"]'
+                            jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 1
+                        fi
+
+                        MonitorScheduleAttachHls false
+                    fi
+                    break
+                fi
+            done
+            MonitorFlushRemovedSchedules
+        elif [ "${chnls_flv_status[chnls_index]}" == "off" ]
+        then
+            for flv_index in ${flv_indices[@]+"${flv_indices[@]}"}
+            do
+                if [ "${monitor_flv_push_links[flv_index]}" == "${chnls_flv_push_link[chnls_index]}" ]
+                then
+                    continue 2
+                fi
+            done
+
+            for flv_index in ${flv_failed[@]+"${flv_failed[@]}"}
+            do
+                if [ "${monitor_flv_push_links[flv_index]}" == "${chnls_flv_push_link[chnls_index]}" ]
+                then
+                    continue 2
+                fi
+            done
+
+            schedules_to_remove=()
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
+                then
+                    if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ]
+                    then
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
+                        MonitorScheduleExpireEntry
+                        MonitorScheduleDetachHls
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
+                    elif [ "${chnl_schedules_start_time[chnl_schedules_index]}" -le "$now" ]
+                    then
+                        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ]
+                        then
+                            jq_map_string=true
+                            jq_number=true
+                            jq_path='["channels"]'
+                            jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 1
+                        fi
+
+                        MonitorScheduleAttachHls true
+                    else
+                        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
+                        then
+                            jq_map_string=true
+                            jq_number=true
+                            jq_path='["channels"]'
+                            jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 0
+                        fi
+
+                        MonitorScheduleDetachHls
+                    fi
+                    break
+                fi
+            done
+            MonitorFlushRemovedSchedules
+        fi
+    done
+}
+
+MonitorCalcAntiLeechSlots()
+{
+    if [ "$anti_leech" != true ] || [ "$anti_leech_restart_nums" -le 0 ] || [ "${rand_restart_flv_done:-}" == 0 ] || [ "${rand_restart_hls_done:-}" == 0 ]
+    then
+        return 0
+    fi
+
+    current_minute_old=${current_minute:-}
+    current_hour_old=${current_hour:-25}
+    current_time=$(date '+%H:%M')
+    current_hour=${current_time%:*}
+    current_minute=${current_time#*:}
+
+    if [ "${current_hour:0:1}" -eq 0 ]
+    then
+        current_hour=${current_hour:1}
+    fi
+
+    if [ "${current_minute:0:1}" -eq 0 ]
+    then
+        current_minute=${current_minute:1}
+    fi
+
+    if [ "$current_hour" != "$current_hour_old" ]
+    then
+        minutes=()
+        skip_hour=""
+    fi
+
+    if [ -n "${minutes:-}" ] && [ "$current_minute" -gt "$current_minute_old" ]
+    then
+        declare -a new_array
+
+        for minute in "${minutes[@]}"
+        do
+            if [ "$minute" -gt "$current_minute" ]
+            then
+                new_array+=("$minute")
+            else
+                rand_restart_flv_done=0
+                rand_restart_hls_done=0
+            fi
+        done
+
+        if [ -z "${new_array:-}" ]
+        then
+            minutes=()
+        else
+            minutes=("${new_array[@]}")
+        fi
+
+        unset new_array
+        [ -z "${minutes:-}" ] && skip_hour=$current_hour
+    fi
+
+    if [ -z "${minutes:-}" ] && [ "$current_minute" -lt 59 ] && [ "$current_hour" != "${skip_hour:-}" ]
+    then
+        rand_restart_flv_done=""
+        rand_restart_hls_done=""
+        minutes_left=$((59 - current_minute))
+        restart_nums=$anti_leech_restart_nums
+        [ "$restart_nums" -gt "$minutes_left" ] && restart_nums=$minutes_left
+        minute_gap=$((minutes_left / anti_leech_restart_nums / 2))
+        [ "$minute_gap" -eq 0 ] && minute_gap=1
+
+        for((i=0;i<restart_nums;i++));
+        do
+            tries=0
+            max_tries=200
+            found_minute=0
+
+            while [ "$tries" -lt "$max_tries" ]
+            do
+                tries=$((tries+1))
+                rand_minute=$((RANDOM % 60))
+
+                if [ "$rand_minute" -gt "$current_minute" ]
+                then
+                    valid=1
+
+                    for minute in ${minutes[@]+"${minutes[@]}"}
+                    do
+                        if [ "$minute" -eq "$rand_minute" ]
+                        then
+                            valid=0
+                            break
+                        elif [ "$minute" -gt "$rand_minute" ] && [ "$((minute-rand_minute))" -lt "$minute_gap" ]
+                        then
+                            valid=0
+                            break
+                        elif [ "$rand_minute" -gt "$minute" ] && [ "$((rand_minute-minute))" -lt "$minute_gap" ]
+                        then
+                            valid=0
+                            break
+                        fi
+                    done
+
+                    if [ "$valid" -eq 1 ]
+                    then
+                        found_minute=1
+                        break
+                    fi
+                fi
+            done
+
+            if [ "$found_minute" -eq 0 ]
+            then
+                minutes=()
+                slot_step=$((minutes_left / restart_nums))
+                [ "$slot_step" -lt 1 ] && slot_step=1
+
+                for((j=0;j<restart_nums;j++));
+                do
+                    slot_minute=$((current_minute + 1 + j * slot_step))
+                    [ "$slot_minute" -gt 59 ] && break
+                    minutes+=("$slot_minute")
+                done
+                break
+            fi
+
+            minutes+=("$rand_minute")
+        done
+
+        MonitorLog "计划重启时间 ${minutes[*]}"
+    fi
+}
