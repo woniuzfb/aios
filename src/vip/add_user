@@ -26,5 +26,5 @@ VipAddUser()
     jq_path='["users"]'
     JQ add "$VIP_FILE" "[$new_user]"
 
-    Println "$info 添加成功\n"
+    Println "$(eval_gettext "\$info 添加成功")\n"
 }

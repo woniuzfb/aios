@@ -16,7 +16,7 @@ VerifyXtreamCodesMac()
             return 0
         fi
 
-        Println "$info 验证 $domain ..."
+        Println "$(eval_gettext "\$info 验证 \$domain ...")"
 
         server="http://$domain"
         token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"

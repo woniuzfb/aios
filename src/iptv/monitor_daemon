@@ -23,13 +23,13 @@ MonitorSet()
             chnl_stream_links_text=""
             for((list_i=0;list_i<${#chnl_stream_links[@]};list_i++));
             do
-                chnl_stream_links_text="$chnl_stream_links_text${indent_6}源$((list_i+1)): ${chnl_stream_links[list_i]}\n"
+                chnl_stream_links_text="$chnl_stream_links_text${indent_6}$(gettext "源")$((list_i+1)): ${chnl_stream_links[list_i]}\n"
             done
 
             monitor_flv_push_links+=("${chnls_flv_push_link[i]}")
             monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
 
-            flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}推: ${chnls_flv_push_link[i]}\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
+            flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}$(gettext "推"): ${chnls_flv_push_link[i]}\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$(gettext "无")}\n\n"
         elif [ -d "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" = true ] && [ "${chnls_seg_count[i]}" != 0 ]
         then
             hls_count=$((hls_count + 1))
@@ -41,11 +41,11 @@ MonitorSet()
     if [ "$flv_count" -gt 0 ]
     then
         Println "$flv_list"
-        Println "  ${green}$((flv_count+1)).${normal}${indent_6}全部"
-        Println "  ${green}$((flv_count+2)).${normal}${indent_6}不设置"
+        Println "  ${green}$((flv_count+1)).${normal}${indent_6}$(gettext "全部")"
+        Println "  ${green}$((flv_count+2)).${normal}${indent_6}$(gettext "不设置")"
 
-        Println "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)"
-        while read -p "(默认: 不设置): " flv_nums
+        Println "$(gettext "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)")"
+        while read -p "$(gettext "(默认: 不设置): ")" flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((flv_count+2)) ]
             then
@@ -75,16 +75,16 @@ MonitorSet()
     if [ -n "$hls_list" ]
     then
         Println "$hls_list"
-        Println "  ${green}$((hls_count+1)).${normal}${indent_6}全部"
-        Println "  ${green}$((hls_count+2)).${normal}${indent_6}不设置"
+        Println "  ${green}$((hls_count+1)).${normal}${indent_6}$(gettext "全部")"
+        Println "  ${green}$((hls_count+2)).${normal}${indent_6}$(gettext "不设置")"
 
-        Println "请选择需要监控的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)"
-        while read -p "(默认: 不设置): " hls_nums
+        Println "$(gettext "请选择需要监控的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)")"
+        while read -p "$(gettext "(默认: 不设置): ")" hls_nums
         do
             if [ -z "$hls_nums" ] || [ "$hls_nums" == $((hls_count+2)) ]
             then
                 hls_indices=()
-                Println "$info 继续为频道计划设置"
+                Println "$(eval_gettext "\$info 继续为频道计划设置")"
                 break
             fi
 
@@ -102,7 +102,7 @@ MonitorSet()
             fi
         done
     else
-        Println "$info 继续为频道计划设置"
+        Println "$(eval_gettext "\$info 继续为频道计划设置")"
     fi
 
     SetHlsDelaySeconds
@@ -168,7 +168,7 @@ Monitor()
         printf '%s' "$self_pid" > "$pid_file"
         {
             mkdir -p "$LIVE_ROOT"
-            MonitorLog "监控启动成功 PID $self_pid !"
+            MonitorLog "$(eval_gettext "监控启动成功 PID \$self_pid !")"
 
             FFmpegInstall
 
@@ -258,13 +258,13 @@ Monitor()
                                 if [ $((flv_fail_time - flv_first_fail)) -gt "$flv_delay_seconds" ]
                                 then
                                     flv_first_fail=""
-                                    MonitorLog "$chnl_channel_name FLV 超时重启"
+                                    MonitorLog "$(eval_gettext "\$chnl_channel_name FLV 超时重启")"
                                     MonitorFlvRestartChannel
                                 fi
                             else
                                 if [ "$chnl_flv_status" == "off" ]
                                 then
-                                    MonitorLog "$chnl_channel_name FLV 恢复启动"
+                                    MonitorLog "$(eval_gettext "\$chnl_channel_name FLV 恢复启动")"
                                     MonitorFlvRestartChannel
                                 else
                                     flv_first_fail=$(DateEpoch)
@@ -290,7 +290,7 @@ Monitor()
                             then
                                 rand_restart_flv_done=1
                                 GetChannel
-                                MonitorLog "$chnl_channel_name FLV 随机重启"
+                                MonitorLog "$(eval_gettext "\$chnl_channel_name FLV 随机重启")"
                                 MonitorFlvRestartChannel
                             fi
                         fi
@@ -335,7 +335,7 @@ Monitor()
                             then
                                 GetChannel
 
-                                MonitorLog "$chnl_channel_name 文件过大重启"
+                                MonitorLog "$(eval_gettext "\$chnl_channel_name 文件过大重启")"
 
                                 for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
                                 do
@@ -367,7 +367,7 @@ Monitor()
                             if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ]
                             then
                                 GetChannel
-                                MonitorLog "$chnl_channel_name 超时重启"
+                                MonitorLog "$(eval_gettext "\$chnl_channel_name 超时重启")"
                                 MonitorHlsRestartChannel
                                 break 2
                             fi
@@ -413,7 +413,7 @@ Monitor()
                                         break 2
                                     elif [ "$chnl_status" == "off" ]
                                     then
-                                        MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} 开启"
+                                        MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $(gettext "已开启")"
                                         MonitorHlsRestartChannel
                                         break 2
                                     fi
@@ -470,7 +470,7 @@ Monitor()
                                             encrypt_command="-key $encrypt_key -iv $iv_hex"
                                         else
                                             GetChannel
-                                            MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} 开启"
+                                            MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $(gettext "已开启")"
                                             MonitorHlsRestartChannel
                                             break 2
                                         fi
@@ -572,7 +572,7 @@ Monitor()
                                             if [ "$fail_count" -gt 3 ]
                                             then
                                                 GetChannel
-                                                MonitorLog "$chnl_channel_name 码率过低重启"
+                                                MonitorLog "$(eval_gettext "\$chnl_channel_name 码率过低重启")"
                                                 MonitorHlsRestartChannel
                                                 break 2
                                             fi
@@ -613,7 +613,7 @@ Monitor()
                             fi
                             output_dir_name="${monitor_output_dir_names[hls_index]}"
                             GetChannel
-                            MonitorLog "$chnl_channel_name HLS 随机重启"
+                            MonitorLog "$(eval_gettext "\$chnl_channel_name HLS 随机重启")"
                             MonitorHlsRestartChannel
                         done
                     fi
@@ -637,7 +637,7 @@ MonitorStop()
 
         if kill -0 "$PID" 2> /dev/null
         then
-            Println "$info 关闭 HLS/FLV 监控, 稍等..."
+            Println "$(eval_gettext "\$info 关闭 HLS/FLV 监控, 稍等...")"
             kill "$PID" 2> /dev/null
 
             i=0
@@ -651,19 +651,19 @@ MonitorStop()
                 fi
                 sleep 0.05
                 i=$((i+1))
-                [ "$i" == 200 ] && Println "$error HLS/FLV 监控关闭超时, 请重试\n" && exit 1
+                [ "$i" == 200 ] && Println "$(eval_gettext "\$error HLS/FLV 监控关闭超时, 请重试")\n" && exit 1
             done
 
             rm -f "$IPTV_ROOT/monitor.pid"
-            Println "$info HLS/FLV 监控 关闭成功 !\n"
-            MonitorLog "关闭监控 PID $PID !"
+            Println "$(eval_gettext "\$info HLS/FLV 监控 关闭成功 !")\n"
+            MonitorLog "$(eval_gettext "关闭监控 PID \$PID !")"
         else
             rm -f "$IPTV_ROOT/monitor.pid"
-            Println "$info HLS/FLV 监控 关闭成功 !\n"
+            Println "$(eval_gettext "\$info HLS/FLV 监控 关闭成功 !")\n"
         fi
     else
         [ -e "$IPTV_ROOT/monitor.pid" ] && rm -f "$IPTV_ROOT/monitor.pid"
-        Println "$error HLS/FLV 监控 未开启\n"
+        Println "$(eval_gettext "\$error HLS/FLV 监控 未开启")\n"
     fi
 
     if [ -s "$IPTV_ROOT/antiddos.pid" ]
@@ -672,17 +672,17 @@ MonitorStop()
 
         if kill -0 "$PID" 2> /dev/null
         then
-            Println "$info 关闭 antiddos, 稍等..."
+            Println "$(eval_gettext "\$info 关闭 antiddos, 稍等...")"
             kill "$PID" 2> /dev/null
 
             if command -v flock > /dev/null 2>&1
             then
                 if flock -E 1 -w 20 -x "$IPTV_ROOT/antiddos.pid" rm -f "$IPTV_ROOT/antiddos.pid"
                 then
-                    Println "$info AntiDDos 监控 关闭成功 !\n"
-                    MonitorLog "关闭 antiddos PID $PID !"
+                    Println "$(eval_gettext "\$info AntiDDos 监控 关闭成功 !")\n"
+                    MonitorLog "$(eval_gettext "关闭 antiddos PID \$PID !")"
                 else
-                    Println "$error AntiDDos 监控关闭超时, 请重试\n"
+                    Println "$(eval_gettext "\$error AntiDDos 监控关闭超时, 请重试")\n"
                     exit 1
                 fi
             else
@@ -697,20 +697,20 @@ MonitorStop()
                     fi
                     sleep 0.05
                     i=$((i+1))
-                    [ "$i" == 200 ] && Println "$error AntiDDos 监控关闭超时, 请重试\n" && exit 1
+                    [ "$i" == 200 ] && Println "$(eval_gettext "\$error AntiDDos 监控关闭超时, 请重试")\n" && exit 1
                 done
                 rm -f "$IPTV_ROOT/antiddos.pid"
-                Println "$info AntiDDos 监控 关闭成功 !\n"
-                MonitorLog "关闭 antiddos PID $PID !"
+                Println "$(eval_gettext "\$info AntiDDos 监控 关闭成功 !")\n"
+                MonitorLog "$(eval_gettext "关闭 antiddos PID \$PID !")"
             fi
         else
             rm -f "$IPTV_ROOT/antiddos.pid"
-            Println "$info AntiDDos 监控 关闭成功 !\n"
+            Println "$(eval_gettext "\$info AntiDDos 监控 关闭成功 !")\n"
         fi
     elif [ -e "$IPTV_ROOT/antiddos.pid" ]
     then
         rm -f "$IPTV_ROOT/antiddos.pid"
-        Println "$error AntiDDos 监控 未开启\n"
+        Println "$(eval_gettext "\$error AntiDDos 监控 未开启")\n"
     fi
 
     if [ -s "$IP_DENY" ]

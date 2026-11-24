@@ -35,9 +35,9 @@ ScheduleAstro()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] astro 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] astro 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] astro 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] astro 节目表更新失败")"
         fi
     done
 }
@@ -97,9 +97,9 @@ ScheduleNbcsn()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] nbcsn 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] nbcsn 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] nbcsn 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] nbcsn 节目表更新失败")"
         fi
     done
 }
@@ -172,9 +172,9 @@ ScheduleBeinsports()
             jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
-            Println "$info $chnl_name [$chnl_id] beinsports 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] beinsports 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] beinsports 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] beinsports 节目表更新失败")"
         fi
     done
 }
@@ -250,9 +250,9 @@ ScheduleBeinsportsau()
             jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
-            Println "$info $chnl_name [$chnl_id] beinsports AU 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] beinsports AU 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] beinsports AU 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] beinsports AU 节目表更新失败")"
         fi
     done
 }
@@ -291,9 +291,9 @@ ScheduleSupersport()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] SuperSport 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] SuperSport 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] SuperSport 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] SuperSport 节目表更新失败")"
         fi
     done
 }
@@ -324,9 +324,9 @@ ScheduleBtsport()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] BT Sport 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] BT Sport 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] BT Sport 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] BT Sport 节目表更新失败")"
             return 1
         fi
     done
@@ -353,9 +353,9 @@ ScheduleBtsportOn()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] BT Sport on 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] BT Sport on 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] BT Sport on 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] BT Sport on 节目表更新失败")"
         fi
     done
 }
@@ -442,9 +442,9 @@ SchedulePremiersports()
             jq_file_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" schedule
-            Println "$info $chnl_name [$chnl_id] Premier Sports 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] Premier Sports 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] Premier Sports 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] Premier Sports 节目表更新失败")"
         fi
     done
 }
@@ -492,9 +492,9 @@ ScheduleSky()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] Sky 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] Sky 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] Sky 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] Sky 节目表更新失败")"
         fi
     done
 }

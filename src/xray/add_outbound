@@ -3,32 +3,32 @@ XrayAddOutbound()
     local proto_options=( 'freedom' 'blackhole' 'dns' 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'loopback' 'hysteria' 'wireguard' 'masque' )
     local proto_idx=0
     echo
-    inquirer list_input_index "选择出站协议" proto_options proto_idx
+    inquirer list_input_index "$(gettext "选择出站协议")" proto_options proto_idx
     local protocol="${proto_options[$proto_idx]}"
 
     local tag send_through target_strategy="" dialer_proxy
-    inquirer text_input "输入出站标识 (留空随机)" tag ""
+    inquirer text_input "$(gettext "输入出站标识 (留空随机)")" tag ""
     if [ -z "$tag" ]
     then
         tag=$(ProxyGetFreeTag "$X_CONFIG" "${protocol}-out-")
     fi
-    inquirer text_input "输入 sendThrough (可留空)" send_through ""
+    inquirer text_input "$(gettext "输入 sendThrough (可留空)")" send_through ""
     if [ "$protocol" != "freedom" ]
     then
-        inquirer text_input "输入 targetStrategy (AsIs/UseIP/UseIPv4/UseIPv6, 可留空)" target_strategy ""
+        inquirer text_input "$(gettext "输入 targetStrategy (AsIs/UseIP/UseIPv4/UseIPv6, 可留空)")" target_strategy ""
     fi
-    inquirer text_input "输入前置代理 sockopt.dialerProxy (可留空)" dialer_proxy ""
+    inquirer text_input "$(gettext "输入前置代理 sockopt.dialerProxy (可留空)")" dialer_proxy ""
 
     local settings_json='{}'
     local hy_auth=""
     case "$protocol" in
         freedom)
             local redirect proxy_proto
-            inquirer text_input "输入 redirect (可留空)" redirect ""
-            inquirer text_input "输入 proxyProtocol (0/1/2, 可留空)" proxy_proto ""
+            inquirer text_input "$(gettext "输入 redirect (可留空)")" redirect ""
+            inquirer text_input "$(gettext "输入 proxyProtocol (0/1/2, 可留空)")" proxy_proto ""
             if [ -n "$proxy_proto" ] && [[ ! $proxy_proto =~ ^[0-2]$ ]]
             then
-                Println "$error proxyProtocol 必须为 0、1 或 2\n"
+                Println "$(eval_gettext "\$error proxyProtocol 必须为 0、1 或 2")\n"
                 return 1
             fi
             JQs build settings_json '{
@@ -38,17 +38,17 @@ XrayAddOutbound()
         ;;
         blackhole)
             local resp_type
-            inquirer text_input "响应类型 (none/http)" resp_type "none"
+            inquirer text_input "$(gettext "响应类型 (none/http)")" resp_type "none"
             JQs build settings_json '{"response": {"type": $rt}}' --arg rt "$resp_type"
         ;;
         dns)
             local rw_net rw_addr rw_port
-            inquirer text_input "rewriteNetwork (tcp/udp, 可留空)" rw_net ""
-            inquirer text_input "rewriteAddress (可留空)" rw_addr ""
-            inquirer text_input "rewritePort (可留空)" rw_port ""
+            inquirer text_input "$(gettext "rewriteNetwork (tcp/udp, 可留空)")" rw_net ""
+            inquirer text_input "$(gettext "rewriteAddress (可留空)")" rw_addr ""
+            inquirer text_input "$(gettext "rewritePort (可留空)")" rw_port ""
             if [ -n "$rw_port" ] && ([[ ! $rw_port =~ ^[0-9]+$ ]] || [ "$rw_port" -lt 1 ] || [ "$rw_port" -gt 65535 ])
             then
-                Println "$error rewritePort 必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error rewritePort 必须为 1-65535 的整数")\n"
                 return 1
             fi
             JQs build settings_json '{
@@ -59,16 +59,16 @@ XrayAddOutbound()
         ;;
         vless)
             local addr port uuid encryption flow
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "用户 UUID" uuid ""
+            inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "encryption" encryption "none"
-            inquirer text_input "flow (可留空)" flow ""
+            inquirer text_input "$(gettext "flow (可留空)")" flow ""
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -79,14 +79,14 @@ XrayAddOutbound()
         ;;
         vmess)
             local addr port uuid sec
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "用户 UUID" uuid ""
+            inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "security (auto/aes-128-gcm/chacha20-poly1305)" sec "auto"
             JQs build settings_json '{
                 "address": $addr,
@@ -97,14 +97,14 @@ XrayAddOutbound()
         ;;
         trojan)
             local addr port password
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "密码 password" password ""
+            inquirer text_input "$(gettext "密码 password")" password ""
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -113,15 +113,15 @@ XrayAddOutbound()
         ;;
         shadowsocks)
             local addr port method password
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "8388"
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "8388"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "加密方式 method" method "2022-blake3-aes-256-gcm"
-            inquirer text_input "密钥 password" password ""
+            inquirer text_input "$(gettext "加密方式 method")" method "2022-blake3-aes-256-gcm"
+            inquirer text_input "$(gettext "密钥 password")" password ""
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -131,15 +131,15 @@ XrayAddOutbound()
         ;;
         socks|http)
             local addr port user pass
-            inquirer text_input "服务端地址 address" addr "127.0.0.1"
-            inquirer text_input "服务端端口 port" port "1080"
+            inquirer text_input "$(gettext "服务端地址 address")" addr "127.0.0.1"
+            inquirer text_input "$(gettext "服务端端口 port")" port "1080"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "用户名 (可留空)" user ""
-            inquirer text_input "密码 (可留空)" pass ""
+            inquirer text_input "$(gettext "用户名 (可留空)")" user ""
+            inquirer text_input "$(gettext "密码 (可留空)")" pass ""
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -149,27 +149,27 @@ XrayAddOutbound()
         ;;
         loopback)
             local inb_tag
-            inquirer text_input "目标 inboundTag" inb_tag ""
+            inquirer text_input "$(gettext "目标 inboundTag")" inb_tag ""
             JQs build settings_json '{"inboundTag": $t}' --arg t "$inb_tag"
         ;;
         hysteria)
             local addr port
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
             if [[ ! $port =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "认证密钥 auth" hy_auth ""
+            inquirer text_input "$(gettext "认证密钥 auth")" hy_auth ""
             JQs build settings_json '{"version": 2, "address": $addr, "port": ($port | tonumber)}' --arg addr "$addr" --arg port "$port"
         ;;
         wireguard)
             local sk addr endpoint pk
-            inquirer text_input "本地 secretKey" sk ""
-            inquirer text_input "本地接口地址 (逗号分隔)" addr "10.0.0.2/32"
-            inquirer text_input "对端 endpoint" endpoint ""
-            inquirer text_input "对端 publicKey" pk ""
+            inquirer text_input "$(gettext "本地 secretKey")" sk ""
+            inquirer text_input "$(gettext "本地接口地址 (逗号分隔)")" addr "10.0.0.2/32"
+            inquirer text_input "$(gettext "对端 endpoint")" endpoint ""
+            inquirer text_input "$(gettext "对端 publicKey")" pk ""
             JQs build settings_json '{
                 "secretKey": $sk,
                 "address": ($addr | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
@@ -178,19 +178,19 @@ XrayAddOutbound()
         ;;
         masque)
             local m_addr m_port m_user m_pass m_mtu
-            inquirer text_input "服务端地址 address" m_addr ""
-            inquirer text_input "服务端端口 port" m_port "443"
+            inquirer text_input "$(gettext "服务端地址 address")" m_addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" m_port "443"
             if [[ ! $m_port =~ ^[0-9]+$ ]] || [ "$m_port" -lt 1 ] || [ "$m_port" -gt 65535 ]
             then
-                Println "$error 服务端端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "用户 email (可留空)" m_user ""
-            inquirer text_input "用户 pass (可留空)" m_pass ""
+            inquirer text_input "$(gettext "用户 email (可留空)")" m_user ""
+            inquirer text_input "$(gettext "用户 pass (可留空)")" m_pass ""
             inquirer text_input "MTU" m_mtu "1280"
             if [[ ! $m_mtu =~ ^[0-9]+$ ]]
             then
-                Println "$error MTU 必须为正整数\n"
+                Println "$(eval_gettext "\$error MTU 必须为正整数")\n"
                 return 1
             fi
             JQs build settings_json '{
@@ -213,65 +213,65 @@ XrayAddOutbound()
         hysteria)
             network="hysteria"
             security="tls"
-            inquirer text_input "TLS serverName (可留空)" tls_sni ""
-            inquirer text_input "TLS fingerprint (如 chrome, 可留空)" tls_fp ""
+            inquirer text_input "$(gettext "TLS serverName (可留空)")" tls_sni ""
+            inquirer text_input "$(gettext "TLS fingerprint (如 chrome, 可留空)")" tls_fp ""
         ;;
         masque)
             network="masque"
             security="tls"
-            inquirer text_input "TLS serverName (可留空)" tls_sni ""
-            inquirer text_input "TLS fingerprint (如 chrome, 可留空)" tls_fp ""
+            inquirer text_input "$(gettext "TLS serverName (可留空)")" tls_sni ""
+            inquirer text_input "$(gettext "TLS fingerprint (如 chrome, 可留空)")" tls_fp ""
         ;;
         vless|vmess|trojan|shadowsocks)
             local net_options=( 'raw' 'xhttp' 'ws' 'grpc' 'httpupgrade' 'kcp' )
             local net_idx=0
-            inquirer list_input_index "选择传输方式" net_options net_idx
+            inquirer list_input_index "$(gettext "选择传输方式")" net_options net_idx
             network="${net_options[$net_idx]}"
 
             if [ "$network" == "raw" ] || [ "$network" == "xhttp" ] || [ "$network" == "grpc" ]
             then
                 local sec_options=( 'none' 'tls' 'reality' )
                 local sec_idx=0
-                inquirer list_input_index "选择传输安全" sec_options sec_idx
+                inquirer list_input_index "$(gettext "选择传输安全")" sec_options sec_idx
                 security="${sec_options[$sec_idx]}"
             else
                 local sec_options=( 'none' 'tls' )
                 local sec_idx=0
-                inquirer list_input_index "选择传输安全" sec_options sec_idx
+                inquirer list_input_index "$(gettext "选择传输安全")" sec_options sec_idx
                 security="${sec_options[$sec_idx]}"
             fi
 
             case "$network" in
                 xhttp)
-                    inquirer text_input "XHTTP host (可留空)" xhttp_host ""
+                    inquirer text_input "$(gettext "XHTTP host (可留空)")" xhttp_host ""
                     inquirer text_input "XHTTP path" xhttp_path "/"
                     local xm_opts=( 'auto' 'packet-up' 'stream-up' 'stream-one' )
-                    inquirer list_input "选择 XHTTP mode" xm_opts xhttp_mode
+                    inquirer list_input "$(gettext "选择 XHTTP mode")" xm_opts xhttp_mode
                 ;;
                 ws)
                     inquirer text_input "WebSocket path" ws_path "/"
-                    inquirer text_input "WebSocket host (可留空)" ws_host ""
+                    inquirer text_input "$(gettext "WebSocket host (可留空)")" ws_host ""
                 ;;
                 grpc)
                     inquirer text_input "gRPC serviceName" grpc_svc ""
                 ;;
                 httpupgrade)
                     inquirer text_input "HTTPUpgrade path" hu_path "/"
-                    inquirer text_input "HTTPUpgrade host (可留空)" hu_host ""
+                    inquirer text_input "$(gettext "HTTPUpgrade host (可留空)")" hu_host ""
                 ;;
             esac
 
             if [ "$security" == "tls" ]
             then
-                inquirer text_input "TLS serverName (可留空)" tls_sni ""
-                inquirer text_input "TLS fingerprint (如 chrome, 可留空)" tls_fp ""
+                inquirer text_input "$(gettext "TLS serverName (可留空)")" tls_sni ""
+                inquirer text_input "$(gettext "TLS fingerprint (如 chrome, 可留空)")" tls_fp ""
             elif [ "$security" == "reality" ]
             then
                 inquirer text_input "REALITY serverName" r_sni ""
                 inquirer text_input "REALITY fingerprint" r_fp "chrome"
-                inquirer text_input "REALITY 公钥 password" r_pw ""
-                inquirer text_input "REALITY shortId (可留空)" r_sid ""
-                inquirer text_input "REALITY spiderX (可留空)" r_spx ""
+                inquirer text_input "$(gettext "REALITY 公钥 password")" r_pw ""
+                inquirer text_input "$(gettext "REALITY shortId (可留空)")" r_sid ""
+                inquirer text_input "$(gettext "REALITY spiderX (可留空)")" r_spx ""
             fi
         ;;
     esac
@@ -339,9 +339,9 @@ XrayAddOutbound()
 
     if ! ProxyAddBound "$X_CONFIG" outbounds "$outbound_json"
     then
-        Println "$error 添加 Xray 出站 ${tag} 失败\n"
+        Println "$(eval_gettext "\$error 添加 Xray 出站 \${tag} 失败")\n"
         return 1
     fi
     ProxyRestartIfActive xray
-    Println "$info 已添加 Xray 出站 ${green}${tag}${normal} (${protocol})\n"
+    Println "$(eval_gettext "\$info 已添加 Xray 出站 \${green}\${tag}\${normal} (\${protocol})")\n"
 }

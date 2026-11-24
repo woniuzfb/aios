@@ -1,6 +1,6 @@
 PostgresqlInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ]
     then
@@ -8,10 +8,10 @@ PostgresqlInstall()
         then
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v psql) ]]
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     if [ "$dist" == "mac" ]
@@ -25,10 +25,10 @@ PostgresqlInstall()
         open /Applications/Postgres.app
         if [ ! -f /etc/paths.d/postgresapp ]
         then
-            Println "$info 输入密码配置命令行: "
+            Println "$(eval_gettext "\$info 输入密码配置命令行: ")"
             sudo mkdir -p /etc/paths.d && echo /Applications/Postgres.app/Contents/Versions/latest/bin | sudo tee /etc/paths.d/postgresapp
         fi
-        Println "$info postgresql ${install}成功\n"
+        Println "$(eval_gettext "\$info postgresql \${install}成功")\n"
         return 0
     fi
 
@@ -59,7 +59,8 @@ PostgresqlInstall()
                     then
                         pg_repo_base="$PGDG_ARCHIVE_APT_LINK"
                     else
-                        Println "$tip PostgreSQL 官方源暂不支持当前系统 (${pg_codename:-unknown}), 改用系统默认源安装"
+                        local pg_codename_text="${pg_codename:-unknown}"
+                        Println "$(eval_gettext "\$tip PostgreSQL 官方源暂不支持当前系统 (\$pg_codename_text), 改用系统默认源安装")"
                         AptInstall postgresql
                         return $?
                     fi
@@ -140,7 +141,7 @@ PostgresqlInstall()
             systemctl start postgresql.service
         ;;
         *)
-            Println "$error 不支持的系统\n"
+            Println "$(eval_gettext "\$error 不支持的系统")\n"
             return 1
         ;;
     esac
@@ -151,5 +152,5 @@ PostgresqlInstall()
         createdb "$USER"
     fi
 
-    Println "$info postgresql 安装成功\n"
+    Println "$(eval_gettext "\$info postgresql 安装成功")\n"
 }

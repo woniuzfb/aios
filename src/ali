@@ -6,8 +6,8 @@ Include src/openlist/api
 Include src/openlist/act
 
 echo
-openlist_options=( '文件管理' 'OpenList管理' '账号管理' '退出' )
-inquirer list_input_index "请选择" openlist_options openlist_options_index
+openlist_options=( "$(gettext "文件管理")" "$(gettext "OpenList管理")" "$(gettext "账号管理")" "$(gettext "退出")" )
+inquirer list_input_index "$(gettext "请选择")" openlist_options openlist_options_index
 
 case $openlist_options_index in
     0) 
@@ -15,8 +15,8 @@ case $openlist_options_index in
     ;;
     1) 
         echo
-        openlist_app_options=( '查看' '添加' '修改' '删除' '本地安装/升级' )
-        inquirer list_input_index "选择操作" openlist_app_options openlist_app_options_index
+        openlist_app_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "本地安装/升级")" )
+        inquirer list_input_index "$(gettext "选择操作")" openlist_app_options openlist_app_options_index
 
         case $openlist_app_options_index in
             0) OpenListAppView
@@ -33,8 +33,8 @@ case $openlist_options_index in
     ;;
     2) 
         echo
-        openlist_acc_options=( '查看' '添加' '登陆' '修改' '删除' )
-        inquirer list_input_index "选择操作" openlist_acc_options openlist_acc_options_index
+        openlist_acc_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "登录")" "$(gettext "修改")" "$(gettext "删除")" )
+        inquirer list_input_index "$(gettext "选择操作")" openlist_acc_options openlist_acc_options_index
 
         case $openlist_acc_options_index in
             0) OpenListAccView

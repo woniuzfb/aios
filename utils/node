@@ -16,5 +16,5 @@ NodeInstallToutiao()
     fi
     cd "$NODE_ROOT"/toutiao/
     npm i playwright-chromium
-    Println "$info 头条签名 node 安装成功"
+    Println "$(eval_gettext "\$info 头条签名 node 安装成功")"
 }

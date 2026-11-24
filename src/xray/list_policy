@@ -4,8 +4,8 @@ XrayListPolicy()
     out=$(ProxyRenderPolicy "$X_CONFIG" xray)
     if [ -z "$out" ]
     then
-        Println "$error 未配置策略\n"
+        Println "$(eval_gettext "\$error 未配置策略")\n"
         return 1
     fi
-    Println "\n=== Xray 策略配置 ===\n$out\n"
+    Println "\n$(gettext "=== Xray 策略配置 ===")\n$out\n"
 }

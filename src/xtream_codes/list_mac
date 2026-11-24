@@ -2,7 +2,7 @@ XtreamCodesListMac()
 {
     XtreamCodesList mac
 
-    Println "请输入服务器的序号"
+    Println "$(gettext "请输入服务器的序号")"
     while read -p "$i18n_default_cancel" server_num
     do
         case $server_num in
@@ -35,7 +35,7 @@ XtreamCodesListMac()
         done
         Println "$domains_list"
 
-        Println "请选择域名"
+        Println "$(gettext "选择域名")"
         while read -p "$i18n_default_cancel" domains_num
         do
             case $domains_num in
@@ -74,7 +74,7 @@ XtreamCodesListMac()
     macs_count=${#macs[@]}
     if [ "$macs_count" -gt 1 ] 
     then
-        macs_list="mac 地址: \n\n"
+        macs_list="$(gettext "mac 地址"): \n\n"
         for((i=0;i<macs_count;i++));
         do
             using=""
@@ -82,7 +82,7 @@ XtreamCodesListMac()
             do
                 if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
                 then
-                    using="${red}[使用中]${normal}"
+                    using="${red}[$(gettext "使用中")]${normal}"
                     break
                 fi
             done
@@ -95,10 +95,10 @@ XtreamCodesListMac()
         do
             if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
             then
-                using="${red}[使用中]${normal}"
+                using="${red}[$(gettext "使用中")]${normal}"
                 break
             fi
         done
-        Println "mac 地址: \n\n${green}$((i+1)).${normal}${indent_6}${macs[0]} $using\n"
+        Println "$(gettext "mac 地址"): \n\n${green}$((i+1)).${normal}${indent_6}${macs[0]} $using\n"
     fi
 }

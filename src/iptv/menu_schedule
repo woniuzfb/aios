@@ -1,8 +1,8 @@
 ScheduleMenu()
 {
     echo
-    chnls_schedule_options=( '查看' '添加' '修改' '排序' '删除' )
-    inquirer list_input_index "请选择" chnls_schedule_options chnls_schedule_options_index
+    chnls_schedule_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "排序")" "$(gettext "删除")" )
+    inquirer list_input_index "$(gettext "请选择")" chnls_schedule_options chnls_schedule_options_index
 
     if [ "$chnls_schedule_options_index" -eq 0 ] 
     then
@@ -10,7 +10,7 @@ ScheduleMenu()
 
         if [ -z "$chnls_schedule_list" ] 
         then
-            Println "$error 请先添加频道计划\n"
+            Println "$(eval_gettext "\$error 请先添加频道计划")\n"
             exit 1
         fi
     elif [ "$chnls_schedule_options_index" -eq 1 ] 

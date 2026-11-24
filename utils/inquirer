@@ -764,7 +764,7 @@ inquirer()
                 tput el
                 tput cud1
 
-                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( $arrow_up 返回)${normal}\n"
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}$(gettext "输入搜索内容")${bold} ${dim}( $arrow_up $(gettext "返回"))${normal}\n"
 
                 stty -echo
                 tput cnorm
@@ -1511,7 +1511,7 @@ inquirer()
                 tput el
                 tput cud1
 
-                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( $arrow_up 返回)${normal}\n"
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}$(gettext "输入搜索内容")${bold} ${dim}( $arrow_up $(gettext "返回"))${normal}\n"
 
                 stty -echo
                 tput cnorm

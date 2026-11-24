@@ -1,7 +1,7 @@
-[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+[ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
 
 echo
-ExitOnList n "请确保已经升级到最新脚本, 是否继续"
+ExitOnList n "$(gettext "请确保已经升级到最新脚本, 是否继续")"
 
 ShFallback
 
@@ -23,7 +23,7 @@ do
     channels="$channels$line"
 done < <(curl -s -Lm 20 "$SH_FALLBACK/$DEFAULT_DEMOS")
 
-[ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试 !\n" && exit 1
+[ -z "$channels" ] && Println "$(eval_gettext "\$error 暂时无法连接服务器, 请稍后再试 !")\n" && exit 1
 
 SetDelimiters
 
@@ -36,16 +36,16 @@ channel_name=$(JQs get jq_payload)
 IFS="${delimiters[1]}" read -r -a channels_name <<< "$channel_name"
 
 echo
-channels_name+=("全部")
-inquirer list_input "选择添加的频道" channels_name channel_name
+channels_name+=("$(gettext "全部")")
+inquirer list_input "$(gettext "选择添加的频道")" channels_name channel_name
 
-if [ "$channel_name" != "全部" ]
+if [ "$channel_name" != "$(gettext "全部")" ]
 then
     channels=$($JQ_FILE '[.[]|select(.channel_name=="'"$channel_name"'")]' <<< "$channels")
 fi
 
 jq_path='["channels"]'
 JQ add "$CHANNELS_FILE" "$channels"
-Println "$info 频道添加成功 !\n"
+Println "$(eval_gettext "\$info 频道添加成功 !")\n"
 
 exit 0

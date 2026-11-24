@@ -29,7 +29,7 @@ ParseYoutube()
                 Trim line
 
                 format_ext=${line%% *}
-                format_ext="格式: ${green}$format_ext${normal}, "
+                format_ext="$(gettext "格式"): ${green}$format_ext${normal}, "
 
                 line=${line#* }
                 Trim line
@@ -59,7 +59,7 @@ ParseYoutube()
                     format_resolution=${format_resolution_fps%% *}
                     format_info="${format_resolution_fps##* }fps"
                     formats_resolution+=("$format_resolution")
-                    format_resolution="分辨率: ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
+                    format_resolution="$(gettext "分辨率"): ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
                 else
                     format_info="$format_resolution_fps"
                     formats_resolution+=("")
@@ -86,7 +86,7 @@ ParseYoutube()
 
                 format_info="$format_info${format_more[*]}"
 
-                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}其它: $format_info\n\n"
+                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}$(gettext "其他"): $format_info\n\n"
             fi
         done < <(yt-dlp --no-warnings -F "$link")
     else
@@ -107,7 +107,7 @@ ParseYoutube()
                 Trim line
 
                 format_ext=${line%% *}
-                format_ext="格式: ${green}$format_ext${normal}, "
+                format_ext="$(gettext "格式"): ${green}$format_ext${normal}, "
 
                 line=${line#* }
                 Trim line
@@ -134,10 +134,10 @@ ParseYoutube()
                         formats_bitrate+=("$format_bitrate")
                     fi
 
-                    format_resolution="分辨率: ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
+                    format_resolution="$(gettext "分辨率"): ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
                 fi
 
-                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}其它: $format_info\n\n"
+                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}$(gettext "其他"): $format_info\n\n"
             fi
         done < <(youtube-dl -F "$link")
     fi
@@ -172,7 +172,7 @@ ParseYoutube()
         Println "$formats_list"
 
         echo -e "`eval_gettext \"\\\$tip 多个序号用空格分隔 比如: 5 7 9-11\"`\n"
-        while read -p "请输入序号(默认: $count): " formats_num
+        while read -p "$(eval_gettext "请输入序号(默认: \$count): ")" formats_num
         do
             if [ -z "$formats_num" ] 
             then

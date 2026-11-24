@@ -2,7 +2,7 @@ CalibreWebPatch()
 {
     if [ ! -d "$CALIBRE_ROOT/web" ] 
     then
-        Println "$error 请先安装 Calibre Web\n"
+        Println "$(eval_gettext "\$error 请先安装 Calibre Web")\n"
         return 1
     fi
 
@@ -67,7 +67,7 @@ CalibreWebInstall()
         git stash
         git pull
         git stash pop
-        Println "$info Calibre Web 更新成功\n"
+        Println "$(eval_gettext "\$info Calibre Web 更新成功")\n"
         return
     fi
 
@@ -83,7 +83,7 @@ CalibreWebInstall()
         python3 -m venv venv
     fi
     ./venv/bin/python3 -m pip install -r requirements.txt
-    Println "$info Calibre Web 安装成功\n"
+    Println "$(eval_gettext "\$info Calibre Web 安装成功")\n"
 }
 
 CalibreWebStart()
@@ -92,7 +92,7 @@ CalibreWebStart()
 
     if ServiceControl is-active "$service_name"
     then
-        Println "$error $service_name 已运行\n"
+        Println "$(eval_gettext "\$error \$service_name 已运行")\n"
         return 1
     fi
 
@@ -100,11 +100,11 @@ CalibreWebStart()
 
     if ! err_msg=$(ServiceControl start "$service_name" service_commands)
     then
-        Println "$error $service_name 启动失败, $err_msg\n"
+        Println "$(eval_gettext "\$error \$service_name 启动失败, \$err_msg")\n"
         return 1
     fi
 
-    Println "$info $service_name 启动成功\n"
+    Println "$(eval_gettext "\$info \$service_name 启动成功")\n"
 }
 
 CalibreWebStop()
@@ -113,17 +113,17 @@ CalibreWebStop()
 
     if ! ServiceControl is-active "$service_name"
     then
-        Println "$error $service_name 未运行\n"
+        Println "$(eval_gettext "\$error \$service_name 未运行")\n"
         return 1
     fi
 
     if ! err_msg=$(ServiceControl stop "$service_name")
     then
-        Println "$error $service_name 关闭失败, $err_msg\n"
+        Println "$(eval_gettext "\$error \$service_name 关闭失败, \$err_msg")\n"
         return 1
     fi
 
-    Println "$info $service_name 关闭成功\n"
+    Println "$(eval_gettext "\$info \$service_name 关闭成功")\n"
 }
 
 CalibreWebRestart()
@@ -132,7 +132,7 @@ CalibreWebRestart()
 
     if ServiceControl is-active "$service_name" && ! err_msg=$(ServiceControl stop "$service_name")
     then
-        Println "$error $service_name 关闭失败, $err_msg\n"
+        Println "$(eval_gettext "\$error \$service_name 关闭失败, \$err_msg")\n"
         return 1
     fi
 
@@ -140,11 +140,11 @@ CalibreWebRestart()
 
     if ! err_msg=$(ServiceControl start "$service_name" service_commands)
     then
-        Println "$error $service_name 重启失败, $err_msg\n"
+        Println "$(eval_gettext "\$error \$service_name 重启失败, \$err_msg")\n"
         return 1
     fi
 
-    Println "$info $service_name 重启成功\n"
+    Println "$(eval_gettext "\$info \$service_name 重启成功")\n"
 }
 
 CalibreWebView()
@@ -153,11 +153,11 @@ CalibreWebView()
 
     if ! ServiceControl is-active "$service_name"
     then
-        Println "$error $service_name 未运行\n"
+        Println "$(eval_gettext "\$error \$service_name 未运行")\n"
         return 1
     fi
 
-    Println "$info 访问 Calibre Web: http://localhost:8083 , 用户名 admin 初始密码 admin123\n"
+    Println "$(eval_gettext "\$info 访问 Calibre Web: http://localhost:8083 , 用户名 admin 初始密码 admin123")\n"
 
     if [ "$dist" == "mac" ] 
     then

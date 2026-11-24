@@ -2,7 +2,7 @@ XrayConfigDomain()
 {
     if [ ! -e "$X_CONFIG" ]
     then
-        Println "$error 尚未安装 xray, 请检查 !\n"
+        Println "$(eval_gettext "\$error 尚未安装 xray, 请检查 !")\n"
         return 1
     fi
 
@@ -12,9 +12,9 @@ XrayConfigDomain()
     if [ -x "$NGINX_FILE" ]
     then
         echo
-        local target_opts=( "xray 直连 TLS 证书" "${nginx_name} 反代站点管理" )
+        local target_opts=( "$(gettext "xray 直连 TLS 证书")" "$(eval_gettext "\${nginx_name} 反代站点管理")" )
         local target_idx=""
-        inquirer list_input_index "选择配置目标" target_opts target_idx
+        inquirer list_input_index "$(gettext "选择配置目标")" target_opts target_idx
         if [ "$target_idx" -eq 1 ]
         then
             target_mode="nginx"
@@ -23,11 +23,11 @@ XrayConfigDomain()
 
     if [ "$target_mode" == "nginx" ]
     then
-        Println "$info 检测到 ${green}${nginx_name}${normal}, 可通过 ${green}${nginx_ctl}${normal} 管理站点反代与 TLS 证书\n"
+        Println "$(eval_gettext "\$info 检测到 \${green}\${nginx_name}\${normal}, 可通过 \${green}\${nginx_ctl}\${normal} 管理站点反代与 TLS 证书")\n"
         return 0
     fi
 
-    if ! ProxySelectBound "$X_CONFIG" "inbounds" "选择要管理证书的直连入站"
+    if ! ProxySelectBound "$X_CONFIG" "inbounds" "$(gettext "选择要管理证书的直连入站")"
     then
         return 1
     fi
@@ -44,7 +44,7 @@ XrayConfigDomain()
 
     if [ "$sec_type" != "tls" ]
     then
-        Println "$error 入站 ${green}${ib_tag}${normal} 当前安全类型为 ${green}${sec_type}${normal} (非 tls), 无需配置 TLS 证书\n"
+        Println "$(eval_gettext "\$error 入站 \${green}\${ib_tag}\${normal} 当前安全类型为 \${green}\${sec_type}\${normal} (非 tls), 无需配置 TLS 证书")\n"
         return 1
     fi
 
@@ -61,20 +61,20 @@ XrayConfigDomain()
         | "\(.key)\t\(.value.usage // "encipherment")\t\(.value.certificateFile // "")\t\(.value.keyFile // "")\t\(.value.ocspStapling // "")"
     ' --argjson i "$ib_idx")
 
-    local action_opts=( "修改证书文件路径" "修改密钥文件路径" "修改证书用途 / OCSP" "添加新证书条目" "删除证书条目" )
+    local action_opts=( "$(gettext "修改证书文件路径")" "$(gettext "修改密钥文件路径")" "$(gettext "修改证书用途 / OCSP")" "$(gettext "添加新证书条目")" "$(gettext "删除证书条目")" )
     local cert_indices=()
     local cert_labels=()
 
     if [ -n "$certs_info" ]
     then
-        Println "${green}入站 ${ib_tag} 当前 TLS 证书:${normal}\n"
+        Println "$(eval_gettext "\${green}入站 \${ib_tag} 当前 TLS 证书:\${normal}")\n"
         local line c_idx c_usage c_file k_file c_ocsp
         while IFS=$'\t' read -r c_idx c_usage c_file k_file c_ocsp
         do
             [ -z "$c_idx" ] && continue
             cert_indices+=("$c_idx")
             cert_labels+=("#$((c_idx + 1)) [${c_usage}] ${c_file:-<inline>}")
-            Println "  $((c_idx + 1)). 用途: ${green}${c_usage}${normal}  证书: ${green}${c_file:-<inline>}${normal}  密钥: ${green}${k_file:-<inline>}${normal}"
+            Println "  $((c_idx + 1)). $(gettext "用途"): ${green}${c_usage}${normal}  $(gettext "证书"): ${green}${c_file:-<inline>}${normal}  $(gettext "密钥"): ${green}${k_file:-<inline>}${normal}"
             if [ -n "$c_ocsp" ]
             then
                 Println "     OCSP Stapling: ${green}${c_ocsp}s${normal}"
@@ -82,80 +82,80 @@ XrayConfigDomain()
         done <<< "$certs_info"
         echo
     else
-        Println "$tip 当前入站尚未配置证书条目\n"
+        Println "$(eval_gettext "\$tip 当前入站尚未配置证书条目")\n"
     fi
 
     local action_idx=""
-    inquirer list_input_index "选择证书操作" action_opts action_idx
+    inquirer list_input_index "$(gettext "选择证书操作")" action_opts action_idx
 
     case "$action_idx" in
         0)
             if [ ${#cert_indices[@]} -eq 0 ]
             then
-                Println "$error 没有可修改的证书条目\n"
+                Println "$(eval_gettext "\$error 没有可修改的证书条目")\n"
                 return 1
             fi
             local sel_c=0
             if [ ${#cert_indices[@]} -gt 1 ]
             then
-                inquirer list_input_index "选择证书条目" cert_labels sel_c
+                inquirer list_input_index "$(gettext "选择证书条目")" cert_labels sel_c
             fi
             local target_c="${cert_indices[$sel_c]}"
             local new_crt=""
-            inquirer text_input "输入新的证书文件路径 (certificateFile): " new_crt
+            inquirer text_input "$(gettext "输入新的证书文件路径 (certificateFile): ")" new_crt
             [ -z "$new_crt" ] && return 1
             jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"',"certificateFile"]'
             if ! JQ update "$X_CONFIG" "$new_crt"
             then
-                Println "$error 证书路径修改失败\n"
+                Println "$(eval_gettext "\$error 证书路径修改失败")\n"
                 return 1
             fi
-            Println "$info 证书路径修改成功\n"
+            Println "$(eval_gettext "\$info 证书路径修改成功")\n"
         ;;
         1)
             if [ ${#cert_indices[@]} -eq 0 ]
             then
-                Println "$error 没有可修改的证书条目\n"
+                Println "$(eval_gettext "\$error 没有可修改的证书条目")\n"
                 return 1
             fi
             local sel_c=0
             if [ ${#cert_indices[@]} -gt 1 ]
             then
-                inquirer list_input_index "选择证书条目" cert_labels sel_c
+                inquirer list_input_index "$(gettext "选择证书条目")" cert_labels sel_c
             fi
             local target_c="${cert_indices[$sel_c]}"
             local new_key=""
-            inquirer text_input "输入新的密钥文件路径 (keyFile): " new_key
+            inquirer text_input "$(gettext "输入新的密钥文件路径 (keyFile): ")" new_key
             [ -z "$new_key" ] && return 1
             jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"',"keyFile"]'
             if ! JQ update "$X_CONFIG" "$new_key"
             then
-                Println "$error 密钥路径修改失败\n"
+                Println "$(eval_gettext "\$error 密钥路径修改失败")\n"
                 return 1
             fi
-            Println "$info 密钥路径修改成功\n"
+            Println "$(eval_gettext "\$info 密钥路径修改成功")\n"
         ;;
         2)
             if [ ${#cert_indices[@]} -eq 0 ]
             then
-                Println "$error 没有可修改的证书条目\n"
+                Println "$(eval_gettext "\$error 没有可修改的证书条目")\n"
                 return 1
             fi
             local sel_c=0
             if [ ${#cert_indices[@]} -gt 1 ]
             then
-                inquirer list_input_index "选择证书条目" cert_labels sel_c
+                inquirer list_input_index "$(gettext "选择证书条目")" cert_labels sel_c
             fi
             local target_c="${cert_indices[$sel_c]}"
             local usage_opts=( "encipherment" "verify" "issue" )
             local usage_idx=""
-            inquirer list_input_index "选择证书用途 (usage)" usage_opts usage_idx
+            inquirer list_input_index "$(gettext "选择证书用途 (usage)")" usage_opts usage_idx
             local new_usage="${usage_opts[$usage_idx]}"
             local new_ocsp="" cert_patch=""
-            inquirer text_input "OCSP Stapling 间隔秒数 (默认 0 不启用, 留空不修改): " new_ocsp
+            inquirer text_input "$(gettext "OCSP Stapling 间隔秒数 (默认 0 不启用, 留空不修改): ")" new_ocsp
             if [ -n "$new_ocsp" ] && [[ ! $new_ocsp =~ ^[0-9]+$ ]]
             then
-                Println "$error ocspStapling 必须为非负整数\n"
+                Println "$(eval_gettext "\$error ocspStapling 必须为非负整数")\n"
                 return 1
             fi
             JQs build cert_patch '{"usage": $u, "ocspStapling": (if $o != "" then ($o | tonumber) else null end)}' \
@@ -164,33 +164,33 @@ XrayConfigDomain()
             jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"']'
             if ! JQ update "$X_CONFIG" "$cert_patch"
             then
-                Println "$error 证书用途 / OCSP 更新失败\n"
+                Println "$(eval_gettext "\$error 证书用途 / OCSP 更新失败")\n"
                 return 1
             fi
-            Println "$info 证书用途 / OCSP 更新成功\n"
+            Println "$(eval_gettext "\$info 证书用途 / OCSP 更新成功")\n"
         ;;
         3)
             local usage_opts=( "encipherment" "verify" "issue" )
             local usage_idx=""
-            inquirer list_input_index "选择证书用途 (usage)" usage_opts usage_idx
+            inquirer list_input_index "$(gettext "选择证书用途 (usage)")" usage_opts usage_idx
             local new_usage="${usage_opts[$usage_idx]}"
             local new_crt="" new_key="" new_ocsp="" cert_json=""
-            inquirer text_input "证书文件路径 (certificateFile): " new_crt
-            inquirer text_input "密钥文件路径 (keyFile, verify 用途可留空): " new_key
-            inquirer text_input "OCSP Stapling 间隔秒数 (默认 0 不启用, 留空跳过): " new_ocsp
+            inquirer text_input "$(gettext "证书文件路径 (certificateFile): ")" new_crt
+            inquirer text_input "$(gettext "密钥文件路径 (keyFile, verify 用途可留空): ")" new_key
+            inquirer text_input "$(gettext "OCSP Stapling 间隔秒数 (默认 0 不启用, 留空跳过): ")" new_ocsp
             if [ -z "$new_crt" ]
             then
-                Println "$error 证书文件路径不能为空\n"
+                Println "$(eval_gettext "\$error 证书文件路径不能为空")\n"
                 return 1
             fi
             if [ "$new_usage" != "verify" ] && [ -z "$new_key" ]
             then
-                Println "$error 非 verify 用途必须填写密钥文件路径 (keyFile)\n"
+                Println "$(eval_gettext "\$error 非 verify 用途必须填写密钥文件路径 (keyFile)")\n"
                 return 1
             fi
             if [ -n "$new_ocsp" ] && [[ ! $new_ocsp =~ ^[0-9]+$ ]]
             then
-                Println "$error ocspStapling 必须为非负整数\n"
+                Println "$(eval_gettext "\$error ocspStapling 必须为非负整数")\n"
                 return 1
             fi
             JQs build cert_json '{
@@ -202,30 +202,30 @@ XrayConfigDomain()
             jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates"]'
             if ! JQ add "$X_CONFIG" "[$cert_json]"
             then
-                Println "$error 添加证书条目失败\n"
+                Println "$(eval_gettext "\$error 添加证书条目失败")\n"
                 return 1
             fi
-            Println "$info 已添加证书条目\n"
+            Println "$(eval_gettext "\$info 已添加证书条目")\n"
         ;;
         4)
             if [ ${#cert_indices[@]} -eq 0 ]
             then
-                Println "$error 没有可删除的证书条目\n"
+                Println "$(eval_gettext "\$error 没有可删除的证书条目")\n"
                 return 1
             fi
             local sel_c=0
             if [ ${#cert_indices[@]} -gt 1 ]
             then
-                inquirer list_input_index "选择要删除的证书条目" cert_labels sel_c
+                inquirer list_input_index "$(gettext "选择要删除的证书条目")" cert_labels sel_c
             fi
             local target_c="${cert_indices[$sel_c]}"
             jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"']'
             if ! JQ delete "$X_CONFIG"
             then
-                Println "$error 删除证书条目失败\n"
+                Println "$(eval_gettext "\$error 删除证书条目失败")\n"
                 return 1
             fi
-            Println "$info 已删除证书条目\n"
+            Println "$(eval_gettext "\$info 已删除证书条目")\n"
         ;;
     esac
 

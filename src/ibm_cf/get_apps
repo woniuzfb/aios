@@ -22,7 +22,7 @@ IbmGetCfApps()
         route_path=${route_path%\"}
         ibm_cf_apps_route_path+=("$route_path")
 
-        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$ibm_cf_apps_count.${normal}${indent_6}APP: ${green}$name${normal}  用户: ${green}$user_email${normal}  路由数: ${green}$routes_count${normal}\n\n"
+        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$ibm_cf_apps_count.${normal}${indent_6}APP: ${green}$name${normal}  $(gettext "用户"): ${green}$user_email${normal}  $(gettext "路由数"): ${green}$routes_count${normal}\n\n"
     done < <($JQ_FILE '.cf.apps[]|[.name,.user_email,(.routes|length),([.routes[].hostname]|join("|")),([.routes[].port]|join("|")),([.routes[].domain]|join("|")),([.routes[].path]|join("|"))]|join("^")' "$IBM_CONFIG")
     return 0
 }

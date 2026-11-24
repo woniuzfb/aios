@@ -2,7 +2,7 @@ NginxCheckLocalhost()
 {
     if [ ! -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 未安装 !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 !")\n"
         exit 1
     fi
 

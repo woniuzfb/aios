@@ -1,14 +1,14 @@
 CloudflareSetWorkerName()
 {
-    Println "请输入 cloudflare worker 名称"
+    Println "$(gettext "请输入 cloudflare worker 名称")"
     read -p "$i18n_default_cancel" cf_worker_name
     [ -z "$cf_worker_name" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  worker 名称: ${green} $cf_worker_name ${normal}\n"
+    Println "$(eval_gettext "  worker 名称: \${green} \$cf_worker_name \${normal}")\n"
 }
 
 CloudflareSetWorkerPath()
 {
-    Println "请输入 cloudflare worker 路径名称"
+    Println "$(gettext "请输入 cloudflare worker 路径名称")"
     while read -p "$i18n_default_cancel" cf_worker_path 
     do
         case $cf_worker_path in
@@ -17,20 +17,20 @@ CloudflareSetWorkerPath()
                 exit 1
             ;;
             *[!0-9A-Za-z_-.@]*) 
-                Println "$error 路径格式错误\n"
+                Println "$(eval_gettext "\$error 路径格式错误")\n"
             ;;
             *) 
                 break
             ;;
         esac
     done
-    Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
+    Println "$(eval_gettext "  worker 路径: \${green} \$cf_worker_path \${normal}")\n"
 }
 
 CloudflareSetWorkerProjectName()
 {
-    Println "请输入 cloudflare worker 项目名称"
-    while read -p "(默认: 随机): " cf_worker_project_name 
+    Println "$(gettext "请输入 cloudflare worker 项目名称")"
+    while read -p "$(gettext "(默认: 随机): ")" cf_worker_project_name 
     do
         case $cf_worker_project_name in
             "") 
@@ -44,12 +44,12 @@ CloudflareSetWorkerProjectName()
                     cf_worker_project_name=$(tr '[:upper:]' '[:lower:]' <<< "$cf_worker_project_name")
                     break
                 else
-                    Println "$error 项目名称格式错误\n"
+                    Println "$(eval_gettext "\$error 项目名称格式错误")\n"
                 fi
             ;;
         esac
     done
-    Println "  worker 项目名称: ${green} $cf_worker_project_name ${normal}\n"
+    Println "$(eval_gettext "  worker 项目名称: \${green} \$cf_worker_project_name \${normal}")\n"
 }
 
 CloudflareSetWorkerUpstream()
@@ -60,12 +60,12 @@ CloudflareSetWorkerUpstream()
         if [ "$ibm_cf_apps_count" -gt 0 ] 
         then
             echo
-            inquirer list_input "worker: $cf_worker_name 是否指向 IBM CF APP" yn_options use_ibm_cf_app_yn
+            inquirer list_input "$(eval_gettext "worker: \$cf_worker_name 是否指向 IBM CF APP")" yn_options use_ibm_cf_app_yn
 
             if [ "$use_ibm_cf_app_yn" == "$i18n_yes" ] 
             then
                 IbmListCfApps
-                echo -e "选择 APP"
+                echo -e "$(gettext "选择 APP")"
                 while read -p "$i18n_default_cancel" ibm_cf_apps_num
                 do
                     case "$ibm_cf_apps_num" in
@@ -110,12 +110,12 @@ CloudflareSetWorkerUpstream()
                     fi
                     upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
                     ibm_cf_apps_link+=("$upstream")
-                    ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}$upstream${normal} 端口: ${green}${ibm_cf_app_routes_port[i]}${normal}\n\n"
+                    ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}$(gettext "源站"): ${green}$upstream${normal} $(gettext "端口"): ${green}${ibm_cf_app_routes_port[i]}${normal}\n\n"
                 done
 
                 Println "$ibm_cf_apps_list"
 
-                echo -e "选择源站"
+                echo -e "$(gettext "选择源站")"
                 while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
                 do
                     case $ibm_cf_apps_link_num in
@@ -143,7 +143,7 @@ CloudflareSetWorkerUpstream()
     fi
     if [ -z "${cf_worker_upstream:-}" ] 
     then
-        Println "$tip 比如: youdomain.com/path"
-        ExitOnText "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream
+        Println "$(eval_gettext "\$tip 比如: youdomain.com/path")"
+        ExitOnText "$(eval_gettext "输入 worker: \$cf_worker_name 源站地址: ")" cf_worker_upstream
     fi
 }

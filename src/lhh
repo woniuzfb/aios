@@ -31,7 +31,7 @@ LhhDownload()
         if [ "${curl_print_error:-true}" = true ] 
         then
             echo "$@"
-            Println "$error \n发生错误请重试\n"
+            Println "$error \n$(gettext "发生错误请重试")\n"
         fi
         return 1
     fi
@@ -145,7 +145,7 @@ ZhLhhDownload()
 ZhLhh()
 {
     local search_keys=( a b c d e f a )
-    local search_means=( '书名' '原著' '改编' '绘画' '出版社' '颜色' '人物' )
+    local search_means=( "$(gettext "书名")" "$(gettext "原著")" "$(gettext "改编")" "$(gettext "绘画")" "$(gettext "出版社")" "$(gettext "颜色")" "$(gettext "人物")" )
     libcode=A7CCFF874E0E58868FF7FA84BF94B4C94E9F781AEF6E50E0359E12099735745F2B943218D8F245B2BD8EFA919770D399
     COOKIE_FILE="$LIANHUANHUA_ROOT/cookie_zhlhh"
 
@@ -203,11 +203,11 @@ ZhLhh()
 
     if [ "$books_total" -gt 0 ] 
     then
-        search_means=( '不搜索' "${search_means[@]}" )
+        search_means=( "$(gettext "不搜索")" "${search_means[@]}" )
     fi
 
-    Println "$tip 人物只能单独查询"
-    inquirer checkbox_input_indices "选择查询选项" search_means search_keys_indices 20
+    Println "$(eval_gettext "\$tip 人物只能单独查询")"
+    inquirer checkbox_input_indices "$(gettext "选择查询选项")" search_means search_keys_indices 20
 
     if [ "$books_total" -gt 0 ] && EleInArray 0 search_keys_indices
     then
@@ -217,11 +217,11 @@ ZhLhh()
             bookname="${books_bookname[i]}"
             if [ "${books_downloaded[i]}" = true ] 
             then
-                bookname="$bookname ${green}[已下载]${normal}"
+                bookname="$bookname ${green}[$(gettext "已下载")]${normal}"
             fi
             if [ "${books_fav[i]}" = true ] 
             then
-                bookname="$bookname ${green}[已收藏]${normal}"
+                bookname="$bookname ${green}[$(gettext "已收藏")]${normal}"
             fi
             result_bookname+=("$bookname")
         done
@@ -234,11 +234,12 @@ ZhLhh()
         if EleInArray $((${#search_means[@]}-1)) search_keys_indices
         then
             echo
-            ExitOnText "输入查询的人物" search_text
+            ExitOnText "$(gettext "输入查询的人物")" search_text
             post_data="${search_keys[6]}=$search_text&p=1&s=1000"
             post_url="http://www.zhlhh.com/web/handler/main.ashx/G_P_B"
         else
-            colors=( '全部' '黑白' '彩色' )
+            colors=( "$(gettext "全部")" "$(gettext "黑白")" "$(gettext "彩色")" )
+            colors_values=( '全部' '黑白' '彩色' )
             for search_keys_index in "${search_keys_indices[@]}"
             do
                 if [ "$books_total" -gt 0 ] 
@@ -248,32 +249,32 @@ ZhLhh()
                 case $search_keys_index in
                     0) 
                         echo
-                        ExitOnText "输入书名" book_name
+                        ExitOnText "$(gettext "输入书名")" book_name
                     ;;
                     1) 
                         echo
-                        ExitOnText "输入原著" book_original
+                        ExitOnText "$(gettext "输入原著")" book_original
                     ;;
                     2) 
                         echo
-                        ExitOnText "输入改编" book_adapter
+                        ExitOnText "$(gettext "输入改编")" book_adapter
                     ;;
                     3) 
                         echo
-                        ExitOnText "输入绘画" book_drawing
+                        ExitOnText "$(gettext "输入绘画")" book_drawing
                     ;;
                     4) 
                         echo
-                        ExitOnText "输入出版社" book_publish
+                        ExitOnText "$(gettext "输入出版社")" book_publish
                     ;;
                     5) 
                         echo
-                        inquirer list_input_index "选择颜色" colors colors_index
+                        inquirer list_input_index "$(gettext "选择颜色")" colors colors_index
                     ;;
                 esac
             done
 
-            post_data="a=${book_name:-}&b=${book_original:-}&c=${book_adapter:-}&d=${book_drawing:-}&e=${book_publish:-}&f=${colors[${colors_index:-0}]}&p=1&s=1000"
+            post_data="a=${book_name:-}&b=${book_original:-}&c=${book_adapter:-}&d=${book_drawing:-}&e=${book_publish:-}&f=${colors_values[${colors_index:-0}]}&p=1&s=1000"
             post_url="http://www.zhlhh.com/web/handler/main.ashx/G_F_B"
         fi
 
@@ -310,7 +311,7 @@ ZhLhh()
 
         if [ "$result_count" -eq 0 ] 
         then
-            Println "$error 没有结果"
+            Println "$(eval_gettext "\$error 没有结果")"
             exit 1
         fi
 
@@ -341,12 +342,12 @@ ZhLhh()
                     then
                         if [ "${books_downloaded[j]}" = true ] 
                         then
-                            result_bookname[i]="${result_bookname[i]} ${green}[已下载]${normal}"
+                            result_bookname[i]="${result_bookname[i]} ${green}[$(gettext "已下载")]${normal}"
                         fi
 
                         if [ "${books_fav[j]}" = true ] 
                         then
-                            result_bookname[i]="${result_bookname[i]} ${green}[已收藏]${normal}"
+                            result_bookname[i]="${result_bookname[i]} ${green}[$(gettext "已收藏")]${normal}"
                         fi
                         books_indices+=("$j")
                         break
@@ -407,22 +408,22 @@ ZhLhh()
     fi
 
     echo
-    inquirer checkbox_input_indices "选择连环画" result_bookname result_indices 20
+    inquirer checkbox_input_indices "$(gettext "选择连环画")" result_bookname result_indices 20
 
     echo
-    result_options=( '下载' '收藏' '取消收藏' )
-    inquirer checkbox_input_indices "选择操作" result_options result_options_indices
+    result_options=( "$(gettext "下载")" "$(gettext "收藏")" "$(gettext "取消收藏")" )
+    inquirer checkbox_input_indices "$(gettext "选择操作")" result_options result_options_indices
 
     for result_options_index in "${result_options_indices[@]}"
     do
         if [ "$result_options_index" -eq 0 ] 
         then
             echo
-            inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+            inquirer text_input "$(gettext "输入存储文件夹目录")" save_dir "${default_save_dir}"
             RemoveQuotes save_dir
             if [ -z "$save_dir" ] 
             then
-                Println "已取消...\n"
+                Println "$(gettext "已取消")...\n"
                 exit 1
             fi
 
@@ -447,7 +448,7 @@ ZhLhh()
                 fi
             done
 
-            Println "$info 下载完成\n"
+            Println "$(eval_gettext "\$info 下载完成")\n"
         elif [ "$result_options_index" -eq 1 ] 
         then
             for result_index in "${result_indices[@]}"
@@ -460,7 +461,7 @@ ZhLhh()
                     JQ update "$LIANHUANHUA_CONFIG" true
                 fi
             done
-            Println "$info 已添加到收藏\n"
+            Println "$(eval_gettext "\$info 已添加到收藏")\n"
         else
             for result_index in "${result_indices[@]}"
             do
@@ -472,7 +473,7 @@ ZhLhh()
                     JQ update "$LIANHUANHUA_CONFIG" false
                 fi
             done
-            Println "$info 已取消收藏\n"
+            Println "$(eval_gettext "\$info 已取消收藏")\n"
         fi
     done
 }
@@ -510,7 +511,7 @@ HdlzZhihuDownload()
 
             echo -ne "\r"
             tput el
-            echo -n "还剩 $result_count 本, $title ${book_image_formated}.jpg"
+            echo -n "$(eval_gettext "还剩 \$result_count 本, \$title \${book_image_formated}.jpg")"
 
             LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -o "$book_path/${book_image_formated}.jpg" "$book_image"
         done
@@ -545,7 +546,7 @@ HdlzZhihuDownload()
 
                 echo -ne "\r"
                 tput el
-                echo -n "还剩 $result_count 本, $title ${book_image_formated}.jpg"
+                echo -n "$(eval_gettext "还剩 \$result_count 本, \$title \${book_image_formated}.jpg")"
 
                 LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -o "$book_path/${book_images_name}/${book_image_formated}.jpg" "$book_image"
             done
@@ -592,7 +593,7 @@ HdlzToutiaoDownload()
 
         echo -ne "\r"
         tput el
-        echo -n "还剩 $result_count 本, $title ${book_image_formated}.jpg"
+        echo -n "$(eval_gettext "还剩 \$result_count 本, \$title \${book_image_formated}.jpg")"
 
         while true 
         do
@@ -603,7 +604,7 @@ HdlzToutiaoDownload()
                 HdlzGetTouTiaoCookies
                 if ! book_images=($(LhhDownload -s -L -A "$getinfo_useragent" -H "referer: $signed_url" -H "cookie: ${toutiao_cookies[*]}" "https://www.toutiao.com/article/${id}" | grep -oP '<article[^>]*>.*?</article>' | grep -oP '<img[^>]*src="\K[^"]*(?=")'))
                 then
-                    Println "$error 无法获取图片\n"
+                    Println "$(eval_gettext "\$error 无法获取图片")\n"
                     exit 1
                 fi
                 continue
@@ -620,7 +621,7 @@ HdlzGetTouTiaoCookies()
 {
     if ! toutiao_init=$(node "$NODE_ROOT"/toutiao/browser.js)
     then
-        Println "$error 无法使用 头条 node\n"
+        Println "$(eval_gettext "\$error 无法使用 头条 node")\n"
         exit 1
     fi
 
@@ -714,8 +715,8 @@ HdlzLhh()
     if [ "$books_total" -gt 0 ] 
     then
         echo
-        lookup_options=( '不查询' '查询知乎' '查询头条' '查询全部' )
-        inquirer list_input_index "是否重新查询" lookup_options lookup_options_index
+        lookup_options=( "$(gettext "不查询")" "$(gettext "查询知乎")" "$(gettext "查询头条")" "$(gettext "查询全部")" )
+        inquirer list_input_index "$(gettext "是否重新查询")" lookup_options lookup_options_index
     fi
 
     COOKIE_FILE="$LIANHUANHUA_ROOT/cookie_hdlz"
@@ -724,7 +725,7 @@ HdlzLhh()
     then
         if ! CurlFake -s -L -b "$COOKIE_FILE" -c "$COOKIE_FILE" https://www.zhihu.com/column/c_1396234006309003264 > /dev/null
         then
-            Println "$error 无法连接知乎, 请稍后再试"
+            Println "$(eval_gettext "\$error 无法连接知乎, 请稍后再试")"
             exit 1
         fi
 
@@ -735,7 +736,7 @@ HdlzLhh()
             echo -ne "\r"
             tput el
 
-            echo -n "搜索知乎 $((1+loop*20))~$((20+loop*20)), 共 2568 条"
+            echo -n "$(gettext "搜索知乎") $((1+loop*20))~$((20+loop*20)), $(gettext "共 2568 条")"
 
             response=$(
                 CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: https://www.zhihu.com/column/c_1396234006309003264" ${paging_next:-'http://www.zhihu.com/api/v4/columns/c_1396234006309003264/items?limit=20&offset=0'}
@@ -977,7 +978,7 @@ HdlzLhh()
             echo -ne "\r"
             tput el
 
-            echo -n "搜索头条 $((toutiao_total+1))~$((toutiao_total+result_total))"
+            echo -n "$(gettext "搜索头条") $((toutiao_total+1))~$((toutiao_total+result_total))"
 
             toutiao_total=$((toutiao_total+result_total))
 
@@ -1047,31 +1048,31 @@ HdlzLhh()
         result_title[i]="${books_title[i]#*｜}"
         if [ "${books_downloaded[i]}" = true ] 
         then
-            result_title[i]="${result_title[i]} ${green}[已下载]${normal}"
+            result_title[i]="${result_title[i]} ${green}[$(gettext "已下载")]${normal}"
         fi
         if [ "${books_fav[i]}" = true ] 
         then
-            result_title[i]="${result_title[i]} ${green}[已收藏]${normal}"
+            result_title[i]="${result_title[i]} ${green}[$(gettext "已收藏")]${normal}"
         fi
     done
 
     echo
-    inquirer checkbox_input_indices "选择连环画" result_title result_indices 20
+    inquirer checkbox_input_indices "$(gettext "选择连环画")" result_title result_indices 20
 
     echo
-    result_options=( '下载' '收藏' '取消收藏' )
-    inquirer checkbox_input_indices "选择操作" result_options result_options_indices
+    result_options=( "$(gettext "下载")" "$(gettext "收藏")" "$(gettext "取消收藏")" )
+    inquirer checkbox_input_indices "$(gettext "选择操作")" result_options result_options_indices
 
     for result_options_index in "${result_options_indices[@]}"
     do
         if [ "$result_options_index" -eq 0 ] 
         then
             echo
-            inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+            inquirer text_input "$(gettext "输入存储文件夹目录")" save_dir "${default_save_dir}"
             RemoveQuotes save_dir
             if [ -z "$save_dir" ] 
             then
-                Println "已取消...\n"
+                Println "$(gettext "已取消")...\n"
                 exit 1
             fi
 
@@ -1091,7 +1092,7 @@ HdlzLhh()
                 then
                     if ! HdlzZhihuDownload "${books_id[result_index]}" "${books_title[result_index]#*｜}" ${books_excerpt[result_index]}
                     then
-                        Println "$error ${books_title[result_index]#*｜} 下载失败, 请检查资源是否存在 https://zhuanlan.zhihu.com/p/${books_id[result_index]}\n"
+                        Println "$error ${books_title[result_index]#*｜} $(gettext "下载失败, 请检查资源是否存在") https://zhuanlan.zhihu.com/p/${books_id[result_index]}\n"
                         all_success=false
                         continue
                     fi
@@ -1102,7 +1103,7 @@ HdlzLhh()
                     fi
                     if ! HdlzToutiaoDownload "${books_id[result_index]}" "${books_title[result_index]#*｜}"
                     then
-                        Println "$error ${books_title[result_index]#*｜} 下载失败, 请检查资源是否存在 https://www.toutiao.com/article/${books_id[result_index]}\n"
+                        Println "$error ${books_title[result_index]#*｜} $(gettext "下载失败, 请检查资源是否存在") https://www.toutiao.com/article/${books_id[result_index]}\n"
                         all_success=false
                         continue
                     fi
@@ -1120,13 +1121,13 @@ HdlzLhh()
 
             if [ "$all_failed" = true ] 
             then
-                Println "$error 所有资源下载失败\n"
+                Println "$(eval_gettext "\$error 所有资源下载失败")\n"
                 exit 1
             elif [ "$all_success" = true ] 
             then
-                Println "$info 下载完成\n"
+                Println "$(eval_gettext "\$info 下载完成")\n"
             else
-                Println "$info 部分下载完成\n"
+                Println "$(eval_gettext "\$info 部分下载完成")\n"
             fi
         elif [ "$result_options_index" -eq 1 ] 
         then
@@ -1136,7 +1137,7 @@ HdlzLhh()
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
                 JQ update "$LIANHUANHUA_CONFIG" true
             done
-            Println "$info 已添加到收藏\n"
+            Println "$(eval_gettext "\$info 已添加到收藏")\n"
         else
             for result_index in "${result_indices[@]}"
             do
@@ -1144,7 +1145,7 @@ HdlzLhh()
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
                 JQ update "$LIANHUANHUA_CONFIG" false
             done
-            Println "$info 已取消收藏\n"
+            Println "$(eval_gettext "\$info 已取消收藏")\n"
         fi
     done
 }
@@ -1197,12 +1198,12 @@ DangValidateEndPage()
 DangCloudDownload()
 {
     echo
-    inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+    inquirer text_input "$(gettext "输入存储文件夹目录")" save_dir "${default_save_dir}"
     RemoveQuotes save_dir
 
     if [ -z "$save_dir" ] 
     then
-        Println "已取消...\n"
+        Println "$(gettext "已取消")...\n"
         return 1
     fi
 
@@ -1245,7 +1246,7 @@ DangCloudDownload()
 
         echo -ne "\r"
         tput el
-        echo -n "还剩 $((book_images_count-i)) 张, $book_title ${book_image_formated}.jpg"
+        echo -n "$(gettext "还剩") $((book_images_count-i)) $(gettext "张"), $book_title ${book_image_formated}.jpg"
 
         LhhDownload -s -L -A "$USER_AGENT_BROWSER" -o "$book_path/${book_image_save_formated}.jpg" "${book_img%/*}/${book_id}_P${book_image_formated}_epub.jpg"
     done
@@ -1299,29 +1300,29 @@ DangCloud()
     if [ "$books_total" -gt 0 ] 
     then
         echo
-        dang_options=( '添加' '选择' )
-        inquirer list_input_index "请选择操作" dang_options dang_options_index
+        dang_options=( "$(gettext "添加")" "$(gettext "选择")" )
+        inquirer list_input_index "$(gettext "选择操作")" dang_options dang_options_index
     fi
 
     if [ "$dang_options_index" -eq 0 ] 
     then
         echo
-        ExitOnText "输入书名" book_title
+        ExitOnText "$(gettext "输入书名")" book_title
 
-        Println "$tip 比如 https://img7x6.ddimg.cn/imgother10/xx/xx/xxxxxxxxxx_cover_epub.jpg"
-        ExitOnText "输入图片链接" book_img DangValidateId "此书已经存在"
+        Println "$(eval_gettext "\$tip 比如 https://img7x6.ddimg.cn/imgother10/xx/xx/xxxxxxxxxx_cover_epub.jpg")"
+        ExitOnText "$(gettext "输入图片链接")" book_img DangValidateId "$(gettext "此书已经存在")"
 
         book_id=${book_img##*/}
         book_id=${book_id%%_*}
 
         echo
-        ExitOnText "输入起始页码" book_start DangValidateStartPage "请输入数字"
+        ExitOnText "$(gettext "输入起始页码")" book_start DangValidateStartPage "$(gettext "请输入数字")"
 
         echo
-        ExitOnText "输入结束页码" book_end DangValidateEndPage "请输入数字且不能小于起始页码"
+        ExitOnText "$(gettext "输入结束页码")" book_end DangValidateEndPage "$(gettext "请输入数字且不能小于起始页码")"
 
         echo
-        inquirer list_input_index "收藏" ny_options ny_index
+        inquirer list_input_index "$(gettext "收藏")" ny_options ny_index
 
         if [ "$ny_index" -eq 0 ] 
         then
@@ -1331,7 +1332,7 @@ DangCloud()
         fi
 
         echo
-        inquirer list_input_index "下载" ny_options ny_index
+        inquirer list_input_index "$(gettext "下载")" ny_options ny_index
 
         if [ "$ny_index" -eq 0 ] 
         then
@@ -1360,7 +1361,7 @@ DangCloud()
         jq_path='["books","dang"]'
         JQ add "$LIANHUANHUA_CONFIG" "[$new_book]"
 
-        Println "$info ${book_title} 添加成功\n"
+        Println "$(eval_gettext "\$info \${book_title} 添加成功")\n"
     fi
 
     echo
@@ -1368,8 +1369,8 @@ DangCloud()
 }
 
 echo
-lhh_options=( '中华连环画' '瀚大黎众连环画' '当当云阅读(漫画)' )
-inquirer list_input_index "选择连环画" lhh_options lhh_options_index
+lhh_options=( "$(gettext "中华连环画")" "$(gettext "瀚大黎众连环画")" "$(gettext "当当云阅读(漫画)")" )
+inquirer list_input_index "$(gettext "选择连环画")" lhh_options lhh_options_index
 
 case $lhh_options_index in
     0) ZhLhh

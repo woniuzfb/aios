@@ -45,7 +45,7 @@ LuaInstall()
             fi
 
             curl -L "https://www.lua.org/ftp/$lua_package" -o "$lua_package"
-            Println "$info 解压 $lua_name ..."
+            Println "$(eval_gettext "\$info 解压 \$lua_name ...")"
             tar xzf "$lua_package"
             cd "$lua_name"
 

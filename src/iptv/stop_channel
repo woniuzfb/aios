@@ -34,27 +34,27 @@ StopChannel()
     then
         if [ "$kind" != "flv" ]
         then
-            Println "$error 暂不支持 $kind ...\n" && exit 1
+            Println "$(eval_gettext "\$error 暂不支持 \$kind ...")\n" && exit 1
         elif [ "$chnl_status" == "on" ]
         then
-            Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
+            Println "$(eval_gettext "\$error HLS 频道正开启, 走错片场了?")\n" && exit 1
         fi
     elif [ "$chnl_flv_status" == "on" ]
     then
-        Println "$error FLV 频道正开启, 走错片场了？\n" && exit 1
+        Println "$(eval_gettext "\$error FLV 频道正开启, 走错片场了?")\n" && exit 1
     fi
 
-    Println "$info 关闭频道 [ $chnl_channel_name ] 请稍等..."
+    Println "$(eval_gettext "\$info 关闭频道 [ \$chnl_channel_name ] 请稍等...")"
 
     if [ "${kind:-}" == "flv" ]
     then
         if ! kill -0 "$chnl_pid" 2> /dev/null
         then
-            MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+            MonitorLog "$(eval_gettext "频道 [ \$chnl_channel_name ] 进程 \$chnl_pid 不存在")"
             jq_path='["channels"]'
             jq_path2='["flv_status"]'
             JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
-            MonitorLog "$chnl_channel_name FLV 关闭"
+            MonitorLog "$(eval_gettext "\$chnl_channel_name FLV 关闭")"
             action="stop"
             SyncFile
             rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
@@ -63,11 +63,11 @@ StopChannel()
 
             if ! WaitChannelPid "$chnl_pid" 30 "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
-                MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                MonitorLog "$(eval_gettext "频道 [ \$chnl_channel_name ] 进程 \$chnl_pid 不存在")"
                 jq_path='["channels"]'
                 jq_path2='["flv_status"]'
                 JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
-                MonitorLog "$chnl_channel_name FLV 关闭"
+                MonitorLog "$(eval_gettext "\$chnl_channel_name FLV 关闭")"
                 action="stop"
                 SyncFile
             fi
@@ -76,11 +76,11 @@ StopChannel()
     else
         if ! kill -0 "$chnl_pid" 2> /dev/null
         then
-            MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+            MonitorLog "$(eval_gettext "频道 [ \$chnl_channel_name ] 进程 \$chnl_pid 不存在")"
             jq_path='["channels"]'
             jq_path2='["status"]'
             JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
-            MonitorLog "$chnl_channel_name HLS 关闭"
+            MonitorLog "$(eval_gettext "\$chnl_channel_name HLS 关闭")"
             action="stop"
             SyncFile
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
@@ -97,11 +97,11 @@ StopChannel()
                     done
                     sleep "$chnl_seg_length"
                 fi
-                MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                MonitorLog "$(eval_gettext "频道 [ \$chnl_channel_name ] 进程 \$chnl_pid 不存在")"
                 jq_path='["channels"]'
                 jq_path2='["status"]'
                 JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
-                MonitorLog "$chnl_channel_name HLS 关闭"
+                MonitorLog "$(eval_gettext "\$chnl_channel_name HLS 关闭")"
                 action="stop"
                 SyncFile
             fi
@@ -110,7 +110,7 @@ StopChannel()
         chnl_status="off"
     fi
 
-    Println "$info 频道 [ $chnl_channel_name ] 已关闭 !\n"
+    Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 已关闭 !")\n"
 }
 
 StopChannelsForce()
@@ -202,5 +202,5 @@ StopChannelsForce()
         fi
     done
 
-    Println "$info 全部频道已关闭 !\n"
+    Println "$(eval_gettext "\$info 全部频道已关闭 !")\n"
 }

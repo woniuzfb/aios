@@ -1,8 +1,8 @@
 VipEditChannel()
 {
     VipListChannels
-    echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
-    while read -p "请选择频道: " vip_channels_num
+    echo -e "$(eval_gettext "\$tip 多个频道用空格分隔, 比如 5 7 9-11")"
+    while read -p "$(gettext "选择频道"): " vip_channels_num
     do
         [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
@@ -64,36 +64,36 @@ VipEditChannel()
                     vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
 
                     Println "
-选择修改频道 ${green}[ $vip_channel_name ]${normal} 内容
+$(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内容")
 
-    ${green}1.${normal} 修改频道 ID 
-    ${green}2.${normal} 修改频道名称
-    ${green}3.${normal} 修改频道 epg
+    ${green}1.${normal} $(gettext "修改频道 ID") 
+    ${green}2.${normal} $(gettext "修改频道名称")
+    ${green}3.${normal} $(gettext "修改频道 epg")
 
 "
                     read -p "$i18n_default_cancel" edit_vip_channel_num
 
                     case $edit_vip_channel_num in
                         1) 
-                            Println "原频道 ID: ${red}$vip_channel_id${normal}"
+                            Println "$(eval_gettext "原频道 ID: \${red}\$vip_channel_id\${normal}")"
                             VipSetChannelId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"id"]'
                             JQ update "$VIP_FILE" "$vip_channel_id"
-                            Println "$info 频道 ID 修改成功\n"
+                            Println "$(eval_gettext "\$info 频道 ID 修改成功")\n"
                         ;;
                         2) 
-                            Println "原频道名称: ${red}$vip_channel_name${normal}"
+                            Println "$(eval_gettext "原频道名称: \${red}\$vip_channel_name\${normal}")"
                             VipSetChannelName
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"name"]'
                             JQ update "$VIP_FILE" "$vip_channel_name"
-                            Println "$info 频道名称修改成功\n"
+                            Println "$(eval_gettext "\$info 频道名称修改成功")\n"
                         ;;
                         3) 
-                            Println "原频道 epg: ${red}${vip_channel_epg_id:-无}${normal}"
+                            Println "$(gettext "原频道 epg"): ${red}${vip_channel_epg_id:-$(gettext "无")}${normal}"
                             VipSetChannelEpgId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"epg_id"]'
                             JQ update "$VIP_FILE" "$vip_channel_epg_id"
-                            Println "$info 频道 epg 修改成功\n"
+                            Println "$(eval_gettext "\$info 频道 epg 修改成功")\n"
                         ;;
                         *) Println "$i18n_canceled...\n" && exit 1
                         ;;

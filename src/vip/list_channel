@@ -2,8 +2,8 @@ VipListChannel()
 {
     VipListChannels
 
-    echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
-    while read -p "请选择频道: " vip_channels_num
+    echo -e "$(eval_gettext "\$tip 多个频道用空格分隔, 比如 5 7 9-11")"
+    while read -p "$(gettext "选择频道"): " vip_channels_num
     do
         [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
@@ -64,7 +64,7 @@ VipListChannel()
 
     VipListUsers
 
-    while read -p "请选择用户: " vip_users_num
+    while read -p "$(gettext "选择用户"): " vip_users_num
     do
         case "$vip_users_num" in
             "")
@@ -96,7 +96,7 @@ VipListChannel()
     fi
 
     echo
-    inquirer list_input_index "测试频道" ny_options ny_index
+    inquirer list_input_index "$(gettext "测试频道")" ny_options ny_index
 
     if [ "$ny_index" -eq 1 ] 
     then
@@ -121,9 +121,9 @@ VipListChannel()
             then
                 if [ -n "${vip_public_host:-}" ] 
                 then
-                    Println "$error 频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
                 else
-                    Println "$error 频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
                 fi
 
                 continue
@@ -132,9 +132,9 @@ VipListChannel()
 
         if [ -n "${vip_public_host:-}" ] 
         then
-            Println "频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
         else
-            Println "频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
         fi
     done
 }

@@ -1,6 +1,6 @@
 DockerInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ]
     then
@@ -8,16 +8,16 @@ DockerInstall()
         then
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v docker) ]]
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     if [ "$dist" == "mac" ]
     then
         brew install --cask docker
-        Println "$info docker ${install}成功, 打开 docker app 完成最后设置!\n"
+        Println "$(eval_gettext "\$info docker \${install}成功, 打开 docker app 完成最后设置!")\n"
         return 0
     fi
 
@@ -52,7 +52,8 @@ DockerInstall()
 
                 if ! AptRepoCheck "$docker_repo_base" "$docker_codename"
                 then
-                    Println "$error Docker 官方源暂不支持当前系统 (${docker_codename:-unknown}), 未写入失效源\n"
+                    local docker_codename_display="${docker_codename:-unknown}"
+                    Println "$(eval_gettext "\$error Docker 官方源暂不支持当前系统 (\$docker_codename_display), 未写入失效源")\n"
                     return 1
                 fi
 
@@ -84,7 +85,7 @@ DockerInstall()
             sudo yum -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
         ;;
         *)
-            Println "$error 不支持的系统\n"
+            Println "$(eval_gettext "\$error 不支持的系统")\n"
             return 1
         ;;
     esac
@@ -99,5 +100,5 @@ EOF
         systemctl restart docker
     fi
 
-    Println "$info docker 安装成功\n"
+    Println "$(eval_gettext "\$info docker 安装成功")\n"
 }

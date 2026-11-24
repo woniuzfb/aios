@@ -2,7 +2,7 @@ NginxDeleteDomain()
 {
     NginxListDomains
 
-    [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
+    [ "$nginx_domains_count" -eq 0 ] && Println "$(eval_gettext "\$error 没有域名")\n" && exit 1
 
     echo "`gettext \"输入序号\"`"
     while read -p "$i18n_default_cancel" nginx_domains_index
@@ -32,5 +32,5 @@ NginxDeleteDomain()
         NginxDisableDomain
     fi
     rm -f "$nginx_prefix/conf/sites_available/$server_domain.conf"
-    Println "$info $server_domain 删除成功\n"
+    Println "$(eval_gettext "\$info \$server_domain 删除成功")\n"
 }

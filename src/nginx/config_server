@@ -1,13 +1,13 @@
 NginxConfigServerHttpPort()
 {
     echo
-    inquirer text_input "输入 http 端口: " server_http_port 80
+    inquirer text_input "$(gettext "输入 http 端口: ")" server_http_port 80
 }
 
 NginxConfigServerHttpsPort()
 {
     echo
-    inquirer text_input "输入 https 端口: " server_https_port 443
+    inquirer text_input "$(gettext "输入 https 端口: ")" server_https_port 443
 }
 
 NginxConfigServerRoot()
@@ -15,11 +15,11 @@ NginxConfigServerRoot()
     while true 
     do
         echo
-        inquirer text_input "设置公开的根目录" server_root "$nginx_prefix/html"
+        inquirer text_input "$(gettext "设置公开的根目录")" server_root "$nginx_prefix/html"
 
         if [ "${server_root:0:1}" != "/" ] 
         then
-            Println "$error 输入错误\n"
+            Println "$(eval_gettext "\$error 输入错误")\n"
         else
             server_root="${server_root%/}"
 
@@ -34,11 +34,11 @@ NginxConfigServerLiveRoot()
     while true 
     do
         echo
-        inquirer text_input "设置公开目录下的(live目录 - HLS输出目录)位置" server_live_root "$server_root"
+        inquirer text_input "$(gettext "设置公开目录下的(live目录 - HLS输出目录)位置")" server_live_root "$server_root"
 
         if [ "${server_live_root:0:1}" != "/" ] 
         then
-            Println "$error 输入错误\n"
+            Println "$(eval_gettext "\$error 输入错误")\n"
         else
             server_live_root="${server_live_root%/}"
 

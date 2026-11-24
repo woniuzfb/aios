@@ -163,14 +163,14 @@ V2rayStreamTlsSettings()
         if [ "$stream_tls_disable_system_root" = false ]
         then
             echo
-            inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
+            inquirer list_input_ny "$(gettext "是否继续添加证书")" ft_options continue_yn
             if [ "$continue_yn" = false ]
             then
                 break
             fi
         fi
 
-        Println "$info 设置证书"
+        Println "$(eval_gettext "\$info 设置证书")"
         V2raySetStreamTlsCertificate
 
         JQs merge_c stream_security_settings --argjson certificates "[$stream_tls_certificate]" \
@@ -181,7 +181,7 @@ V2rayStreamTlsSettings()
         if [ "$stream_tls_disable_system_root" = true ]
         then
             echo
-            inquirer list_input_ny "是否继续添加证书" ft_options continue_yn
+            inquirer list_input_ny "$(gettext "是否继续添加证书")" ft_options continue_yn
             if [ "$continue_yn" = false ]
             then
                 break
@@ -225,7 +225,7 @@ V2rayStreamTlsSettings()
 
 V2rayStreamUtlsTlsConfig()
 {
-    Println "$info 以下为嵌入的 TLS 设置，只有部分内容会被应用到 uTLS"
+    Println "$(eval_gettext "\$info 以下为嵌入的 TLS 设置, 只有部分内容会被应用到 uTLS")"
 
     V2rayStreamTlsSettings
 
@@ -274,7 +274,7 @@ V2rayStreamSocketMark()
 V2rayStreamSocketTFO()
 {
     echo
-    inquirer list_input_yn "socket TCP Fast Open 使用系统默认设置" tf_options stream_socket_tfo_system
+    inquirer list_input_yn "$(gettext "socket TCP Fast Open 使用系统默认设置")" tf_options stream_socket_tfo_system
 
     if [ "$stream_socket_tfo_system" = false ]
     then
@@ -305,7 +305,7 @@ V2rayStreamSocketBindToDevice()
 V2rayStreamSocketMptcp()
 {
     echo
-    inquirer list_input_yn "socket 多路径 TCP 使用系统默认设置" tf_options stream_socket_mptcp_system
+    inquirer list_input_yn "$(gettext "socket 多路径 TCP 使用系统默认设置")" tf_options stream_socket_mptcp_system
 
     if [ "$stream_socket_mptcp_system" = false ]
     then
@@ -405,7 +405,7 @@ V2rayStream()
         utls)
             if [ "$stream_transports_index" -gt 1 ]
             then
-                Println "$error 仅可以在 TCP, WebSocket 传输方式中使用 uTLS\n"
+                Println "$(eval_gettext "\$error 仅可以在 TCP, WebSocket 传输方式中使用 uTLS")\n"
             fi
             V2rayStreamUtlsSettings
         ;;

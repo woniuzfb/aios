@@ -75,7 +75,7 @@ SourceInstallReady()
                     7) 
                         yum install -y epel-release
                     ;;
-                    *) Println "$error 不支持的系统版本\n"; return 1
+                    *) Println "$(eval_gettext "\$error 不支持的系统版本")\n"; return 1
                     ;;
                 esac
             fi

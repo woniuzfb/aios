@@ -209,6 +209,6 @@ do
     rsync -avP --safe-links --delete --delete-excluded ${rsync_commands[@]+"${rsync_commands[@]}"} "$source/" "$BACKUP_ROOT/$backup/"
 done
 
-Println "$info 已创建备份 $BACKUP_ROOT\n"
+Println "$(eval_gettext "\$info 已创建备份 \$BACKUP_ROOT")\n"
 
 exit 0

@@ -1,8 +1,8 @@
 ColorMenu()
 {
     echo
-    color_options=( '设置颜色' '恢复默认' )
-    inquirer list_input_index "选择操作" color_options color_options_index
+    color_options=( "$(gettext "设置颜色")" "$(gettext "恢复默认")" )
+    inquirer list_input_index "$(gettext "选择操作")" color_options color_options_index
 
     if [ "$color_options_index" -eq 1 ]
     then
@@ -13,17 +13,17 @@ ColorMenu()
         FilterFileLines "blue=" "$i18n_FILE"
         FilterFileLines "cyan=" "$i18n_FILE"
         FilterFileLines "white=" "$i18n_FILE"
-        Println "$info 颜色重置成功\n"
+        Println "$(eval_gettext "\$info 颜色重置成功")\n"
         exit 0
     fi
 
     echo
-    color_options=( "${red}默认红色文字${normal}" "${green}默认绿色文字${normal}" "${yellow}默认黄色文字${normal}"
-        "${blue}默认蓝色文字${normal}" "${cyan}默认青色文字${normal}" "${white}默认白色文字${normal}" '默认黑色背景' )
-    inquirer list_input_index "选择修改内容" color_options color_options_index
+    color_options=( "${red}$(gettext "默认红色文字")${normal}" "${green}$(gettext "默认绿色文字")${normal}" "${yellow}$(gettext "默认黄色文字")${normal}"
+        "${blue}$(gettext "默认蓝色文字")${normal}" "${cyan}$(gettext "默认青色文字")${normal}" "${white}$(gettext "默认白色文字")${normal}" "$(gettext "默认黑色背景")" )
+    inquirer list_input_index "$(gettext "选择修改内容")" color_options color_options_index
 
     echo
-    inquirer color_pick "设置 ${color_options[color_options_index]}" color_pick
+    inquirer color_pick "$(gettext "设置") ${color_options[color_options_index]}" color_pick
 
     if [ "$color_options_index" -eq 0 ]
     then
@@ -54,7 +54,7 @@ ColorMenu()
         printf "bg_black='%s'\n" "$color_pick" >> "$i18n_FILE"
     fi
 
-    Println "$info 颜色设置成功\n"
+    Println "$(eval_gettext "\$info 颜色设置成功")\n"
 
     exit 0
 }

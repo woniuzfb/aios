@@ -4,11 +4,11 @@ CloudflareDelUser()
 
     if [ "$cf_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
-    echo -e "选择用户"
+    echo -e "$(gettext "选择用户")"
     while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
@@ -32,5 +32,5 @@ CloudflareDelUser()
 
     jq_path='["users",'"$cf_users_index"']'
     JQ delete "$CF_CONFIG"
-    Println "$info 用户删除成功\n"
+    Println "$(eval_gettext "\$info 用户删除成功")\n"
 }

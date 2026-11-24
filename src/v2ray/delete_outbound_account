@@ -1,6 +1,6 @@
 V2rayDeleteOutboundAccount()
 {
-    ProxySelectBound "$V2_CONFIG" outbounds "选择要删除服务端/账号的出站" || return 1
+    ProxySelectBound "$V2_CONFIG" outbounds "$(gettext "选择要删除服务端/账号的出站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${outbounds_protocol[idx]}"
     local field="servers"
@@ -27,15 +27,15 @@ V2rayDeleteOutboundAccount()
 
     if [ "${#opts[@]}" -eq 0 ]
     then
-        Println "$error 该出站没有可删除的服务端/账号\n"
+        Println "$(eval_gettext "\$error 该出站没有可删除的服务端/账号")\n"
         return 1
     fi
 
     local srv_idx=0
     echo
-    inquirer list_input_index "选择要删除的服务端/账号" opts srv_idx
+    inquirer list_input_index "$(gettext "选择要删除的服务端/账号")" opts srv_idx
     jq_path='["outbounds",'"$idx"',"settings","'"$field"'",'"$srv_idx"']'
     JQ delete "$V2_CONFIG"
     ProxyRestartIfActive v2ray
-    Println "$info 已删除服务端 ${green}${opts[srv_idx]}${normal}\n"
+    Println "$(eval_gettext "\$info 已删除服务端") ${green}${opts[srv_idx]}${normal}\n"
 }

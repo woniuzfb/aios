@@ -2,7 +2,7 @@ NginxListDomains()
 {
     if [ ! -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 ! 输入 \$nginx_ctl 安装 \$nginx_name")\n"
         exit 1
     fi
 
@@ -23,10 +23,10 @@ NginxListDomains()
             if [ -f "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
                 domain_status=1
-                domain_status_text="${green} [开启] ${normal}"
+                domain_status_text="${green} [$(gettext "已开启")] ${normal}"
             else
                 domain_status=0
-                domain_status_text="${red} [关闭] ${normal}"
+                domain_status_text="${red} [$(gettext "已关闭")] ${normal}"
             fi
             if [ -f "$nginx_prefix/conf/sites_crt/$domain.crt" ] 
             then
@@ -51,6 +51,6 @@ NginxListDomains()
 
     if [ "$nginx_domains_count" -gt 0 ] 
     then
-        Println "${green}域名列表:${normal}\n\n$nginx_domains_list"
+        Println "${green}$(gettext "域名列表:")${normal}\n\n$nginx_domains_list"
     fi
 }

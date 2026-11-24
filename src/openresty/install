@@ -4,7 +4,7 @@ OpenrestyPackageInstall()
     DepInstall lsof
     if lsof -Pi :80 -sTCP:LISTEN -t &>/dev/null
     then
-        Println "$error 80 端口被占用, 请先关闭占用端口的程序\n"
+        Println "$(eval_gettext "\$error 80 端口被占用, 请先关闭占用端口的程序")\n"
         return 1
     fi
 
@@ -40,7 +40,8 @@ OpenrestyPackageInstall()
 
                 if ! AptRepoCheck "$or_repo_base" "$or_codename"
                 then
-                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    local or_codename_display="${or_codename:-unknown}"
+                    Println "$(eval_gettext "\$error OpenResty 官方源暂不支持当前系统 (\$or_codename_display), 未写入失效源")\n"
                     return 1
                 fi
 
@@ -71,7 +72,8 @@ OpenrestyPackageInstall()
 
                 if ! AptRepoCheck "$or_repo_base" "$or_codename"
                 then
-                    Println "$error OpenResty 官方源暂不支持当前系统 (${or_codename:-unknown}), 未写入失效源\n"
+                    local or_codename_display="${or_codename:-unknown}"
+                    Println "$(eval_gettext "\$error OpenResty 官方源暂不支持当前系统 (\$or_codename_display), 未写入失效源")\n"
                     return 1
                 fi
 
@@ -117,7 +119,7 @@ OpenrestyPackageInstall()
             sudo yum install -y openresty openresty-opm openresty-doc
         ;;
         *)
-            Println "$error 不支持的系统\n"
+            Println "$(eval_gettext "\$error 不支持的系统")\n"
             return 1
         ;;
     esac
@@ -143,12 +145,12 @@ OpenrestyPackageInstall()
 
     CrossplaneInstall
 
-    Println "$info $nginx_name 安装成功\n"
+    Println "$(eval_gettext "\$info \$nginx_name 安装成功")\n"
 }
 
 OpenrestySourceInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ]
     then
@@ -156,43 +158,43 @@ OpenrestySourceInstall()
         then
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v $nginx_name) ]]
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     DepsCheck
 
     echo
     pcre_options=( pcre pcre2 )
-    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+    inquirer list_input_index "$(gettext "选择 pcre 版本")" pcre_options pcre_options_index
 
-    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    Println "$(eval_gettext "\$tip 如果选择 openssl, \$nginx_name 将不支持 ssl_early_data (0-RTT)")"
     openssl_options=( openssl@1.1 quictls )
-    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+    inquirer list_input_index "$(gettext "选择 openssl 版本")" openssl_options openssl_options_index
 
     echo
-    inquirer list_input_index "额外添加编译选项" ny_options ny_index
+    inquirer list_input_index "$(gettext "额外添加编译选项")" ny_options ny_index
     install_options_selected=()
     if [ "$ny_index" -eq 1 ]
     then
         echo
         install_options=( --with-http_iconv_module --with-http_postgres_module --with-http_slice_module )
-        inquirer checkbox_input "选择编译选项" install_options install_options_selected
+        inquirer checkbox_input "$(gettext "选择编译选项")" install_options install_options_selected
     fi
 
     if [ "$dist" == "mac" ]
     then
-        Println "$tip 如果选择官方编译, $nginx_name 将缺少 nginx-http-flv-module 和 quictls 选择"
-        inquirer list_input_index "使用官方编译" yn_options yn_index
+        Println "$(eval_gettext "\$tip 如果选择官方编译, \$nginx_name 将缺少 nginx-http-flv-module 和 quictls 选择")"
+        inquirer list_input_index "$(gettext "使用官方编译")" yn_options yn_index
         if [ "$yn_index" -eq 0 ]
         then
             brew tap openresty/brew
             brew install openresty ${install_options_selected[@]+"${install_options_selected[@]}"}
             if [ ! -d "$nginx_prefix" ]
             then
-                Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
+                Println "$(eval_gettext "\$info 建立目录 \$nginx_prefix, 可能需要输入密码")\n"
                 sudo mkdir -p "$nginx_prefix"/html/localhost/
                 sudo chown "$USER" "$nginx_prefix"
                 ln -s "$HOMEBREW_PREFIX"/etc/openresty "$nginx_prefix"/conf
@@ -202,7 +204,7 @@ OpenrestySourceInstall()
         fi
         if [ ! -d "$nginx_prefix" ]
         then
-            Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
+            Println "$(eval_gettext "\$info 建立目录 \$nginx_prefix, 可能需要输入密码")\n"
             sudo mkdir "$nginx_prefix"
             sudo chown $USER "$nginx_prefix"
             sudo chown $USER "${nginx_prefix%/*}"
@@ -219,7 +221,7 @@ OpenrestySourceInstall()
 
     rm -rf nginx-http-flv-module-master
     curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
-    Println "$info 解压 nginx-http-flv-module ..."
+    Println "$(eval_gettext "\$info 解压 nginx-http-flv-module ...")"
     unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     #cd nginx-http-flv-module-master
@@ -242,7 +244,7 @@ OpenrestySourceInstall()
     done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
 
     curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
-    Println "$info 解压 $openresty_package_name ..."
+    Println "$(eval_gettext "\$info 解压 \$openresty_package_name ...")"
     tar xzf "$openresty_package_name.tar.gz"
 
     if [ "$dist" == "mac" ]
@@ -337,7 +339,7 @@ OpenrestySourceInstall()
         if [ ! -d $zlib_name ]
         then
             curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
-            Println "$info 解压 $zlib_name ..."
+            Println "$(eval_gettext "\$info 解压 \$zlib_name ...")"
             tar xzf $zlib_name.tar.gz
         fi
 
@@ -347,7 +349,7 @@ OpenrestySourceInstall()
             if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
-                Println "$info 解压 $pcre_name ..."
+                Println "$(eval_gettext "\$info 解压 \$pcre_name ...")"
                 unzip $pcre_name.zip > /dev/null 2>&1
             fi
         else
@@ -355,7 +357,7 @@ OpenrestySourceInstall()
             if [ ! -d $pcre_name ]
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
-                Println "$info 解压 $pcre_name ..."
+                Println "$(eval_gettext "\$info 解压 \$pcre_name ...")"
                 unzip $pcre_name.zip > /dev/null 2>&1
             fi
         fi
@@ -366,7 +368,7 @@ OpenrestySourceInstall()
 
         if [ -z "$openssl_pack_url" ]
         then
-            Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+            Println "$(eval_gettext "\$error 无法从 \$openssl_url 获取 OpenSSL 源码包地址")\n"
             return 1
         fi
 
@@ -385,16 +387,17 @@ OpenrestySourceInstall()
 
             if [ "$openssl_options_index" -eq 1 ]
             then
-                Println "$info 下载 ${openssl_name#*-} ..."
+                local openssl_short_name="${openssl_name#*-}"
+                Println "$(eval_gettext "\$info 下载 \$openssl_short_name ...")"
                 if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${openssl_name#*-}.tar.gz" -o "$openssl_name".tar.gz
                 then
                     curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
                 fi
-                Println "$info 解压 ${openssl_name#*-} ..."
+                Println "$(eval_gettext "\$info 解压 \$openssl_short_name ...")"
                 tar xzf ${openssl_name}.tar.gz
             else
                 curl -L "$openssl_pack_url" -o "$openssl_pack"
-                Println "$info 解压 $openssl_name ..."
+                Println "$(eval_gettext "\$info 解压 \$openssl_name ...")"
                 tar xzf "$openssl_pack"
             fi
 
@@ -485,26 +488,27 @@ OpenrestySourceInstall()
 
     CrossplaneInstall
 
-    Println "$info $nginx_name ${install}成功\n"
+    Println "$(eval_gettext "\$info \$nginx_name \${install}成功")\n"
 }
 
 OpenrestyInstall()
 {
     if [ -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 已经存在 \$nginx_prefix !")\n"
         return 1
     elif [[ -x $(command -v $nginx_name) ]]
     then
-        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        local nginx_cmd_path="$(command -v $nginx_name)"
+        Println "$(eval_gettext "\$error \$nginx_name 已经存在 \$nginx_cmd_path, 请先卸载!")\n"
         return 1
     fi
 
     if [ "$dist" != "mac" ]
     then
-        Println "$tip 选择快速安装将缺少 nginx-http-flv-module 和 quictls 选择"
-        openresty_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
-        inquirer list_input_index "选择安装方式" openresty_install_options openresty_install_options_index
+        Println "$(eval_gettext "\$tip 选择快速安装将缺少 nginx-http-flv-module 和 quictls 选择")"
+        openresty_install_options=( "$(eval_gettext "\${nginx_name}官方包 (快速安装)")" "$(gettext "编译安装")" )
+        inquirer list_input_index "$(gettext "选择安装方式")" openresty_install_options openresty_install_options_index
 
         if [ "$openresty_install_options_index" -eq 0 ]
         then
@@ -520,7 +524,7 @@ OpenrestyUninstall()
 {
     if [ ! -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 未安装 !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 !")\n"
         return 1
     fi
 
@@ -552,7 +556,7 @@ OpenrestyUninstall()
 
     rm -rf "${nginx_prefix%/*}"
 
-    Println "$info $nginx_name 卸载完成\n"
+    Println "$(eval_gettext "\$info \$nginx_name 卸载完成")\n"
 }
 
 OpenrestyUpdate()
@@ -561,7 +565,7 @@ OpenrestyUpdate()
 
     if [ ! -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 未安装 !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 !")\n"
         return 1
     fi
 

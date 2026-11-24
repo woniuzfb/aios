@@ -1,4 +1,4 @@
-[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+[ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请先安装 !")" && exit 1
 [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
 cmd=${2:-}

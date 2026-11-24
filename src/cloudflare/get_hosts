@@ -29,7 +29,7 @@ CloudflareGetHosts()
         zone_subdomains=${zone_subdomains%\"}
         cf_hosts_zone_subdomains+=("$zone_subdomains")
 
-        cf_hosts_list="$cf_hosts_list ${green}$cf_hosts_count.${normal}${indent_6}CFP: ${green}$name${normal}  host key: ${green}$key${normal}  域名数: ${green}$zones_count${normal}\n\n"
+        cf_hosts_list="$cf_hosts_list ${green}$cf_hosts_count.${normal}${indent_6}CFP: ${green}$name${normal}  host key: ${green}$key${normal}  $(gettext "域名数"): ${green}$zones_count${normal}\n\n"
     done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].always_use_https]|join("|")),([.zones[].ssl]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
     return 0
 }

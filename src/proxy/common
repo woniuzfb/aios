@@ -125,6 +125,60 @@ ProxyLoadOutboundsIndex()
     outbounds_count=${#outbounds_json_index[@]}
 }
 
+ProxyInitI18nJson()
+{
+    if [ -n "${PROXY_I18N_JSON:-}" ]
+    then
+        return 0
+    fi
+
+    PROXY_I18N_JSON=$($JQ_FILE -n \
+        --arg on "$(gettext "已开启")" \
+        --arg off "$(gettext "已关闭")" \
+        --arg yes "$(gettext "是")" \
+        --arg no "$(gettext "否")" \
+        --arg configured "$(gettext "已配置")" \
+        --arg enabled "$(gettext "已启用")" \
+        --arg sniffing "$(gettext "流量探测")" \
+        --arg metadata_only "$(gettext "仅元数据")" \
+        --arg dest_override "$(gettext "目标重置")" \
+        --arg route_only "$(gettext "仅路由")" \
+        --arg domains_excluded "$(gettext "排除域名")" \
+        --arg ips_excluded "$(gettext "排除IP")" \
+        --arg transport "$(gettext "传输方式")" \
+        --arg security "$(gettext "传输安全")" \
+        --arg cert "$(gettext "证书")" \
+        --arg user_count "$(gettext "用户数")" \
+        --arg account_count "$(gettext "账号数")" \
+        --arg target_addr "$(gettext "目标地址")" \
+        --arg target_port "$(gettext "目标端口")" \
+        --arg network "$(gettext "网络")" \
+        --arg port_map "$(gettext "端口映射")" \
+        --arg listen_addr "$(gettext "监听地址")" \
+        --arg listen_port "$(gettext "监听端口")" \
+        --arg protocol "$(gettext "传输协议")" \
+        --arg tag "$(gettext "标识")" \
+        --arg allocate "$(gettext "端口分配")" \
+        --arg server "$(gettext "服务端")" \
+        --arg send_through "$(gettext "发送地址")" \
+        --arg concurrency "$(gettext "并发")" \
+        --arg query_strategy "$(gettext "查询策略")" \
+        --arg disable_cache "$(gettext "禁用缓存")" \
+        --arg disable_fallback "$(gettext "禁用回退")" \
+        --arg disable_fallback_match "$(gettext "匹配不回退")" \
+        --arg serve_stale "$(gettext "过期缓存")" \
+        --arg parallel_query "$(gettext "并行查询")" \
+        --arg system_hosts "$(gettext "系统Hosts")" \
+        --arg dns_servers "$(gettext "DNS 服务器")" \
+        --arg domain "$(gettext "域名")" \
+        --arg domain_strategy "$(gettext "域名解析策略")" \
+        --arg routing_rules "$(gettext "路由规则")" \
+        --arg balancers "$(gettext "负载均衡")" \
+        --arg level_policy "$(gettext "用户等级策略")" \
+        --arg system_policy "$(gettext "系统策略")" \
+        '$ARGS.named')
+}
+
 ProxyRenderInbounds()
 {
     local config_file="$1"
@@ -136,6 +190,8 @@ ProxyRenderInbounds()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg filter "$filter_mode" \
@@ -144,10 +200,11 @@ ProxyRenderInbounds()
         --arg r "$red" \
         --arg n "$normal" \
         --arg ind "$indent_6" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
-    def bv($v): if $v == true then "\($g)开启\($n)" else "\($r)关闭\($n)" end;
-    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def bv($v): if $v == true then "\($g)\($i18n.on)\($n)" else "\($r)\($i18n.off)\($n)" end;
+    def yv($v): if $v == true then "\($g)\($i18n.yes)\($n)" else "\($r)\($i18n.no)\($n)" end;
     def arr($a): if ($a | type) == "array" then ($a | map(tostring) | join(", ")) else ($a // "" | tostring) end;
     def kv($obj): if ($obj | type) == "object" then ($obj | to_entries | map("\(.key) => \(.value | tostring)") | join(", ")) else "" end;
     def line($label; $val): if ($val // "" | tostring) != "" then "\($label): \(cv($val))" else empty end;
@@ -156,17 +213,17 @@ ProxyRenderInbounds()
     def render_sniffing($s):
         if ($s | type) != "object" then []
         else [
-            "流量探测: \(bv($s.enabled // false)) 仅元数据: \(yv($s.metadataOnly // false))"
-            + (if ($s.destOverride | type) == "array" and ($s.destOverride | length) > 0 then " 目标重置: \(cv(arr($s.destOverride)))" else "" end)
-            + (if $core == "xray" and ($s.routeOnly // false) == true then " 仅路由: \(yv(true))" else "" end),
-            (if $core == "xray" and ($s.domainsExcluded | type) == "array" and ($s.domainsExcluded | length) > 0 then "排除域名: \(cv(arr($s.domainsExcluded)))" else empty end),
-            (if $core == "xray" and ($s.ipsExcluded | type) == "array" and ($s.ipsExcluded | length) > 0 then "排除IP: \(cv(arr($s.ipsExcluded)))" else empty end)
+            "\($i18n.sniffing): \(bv($s.enabled // false)) \($i18n.metadata_only): \(yv($s.metadataOnly // false))"
+            + (if ($s.destOverride | type) == "array" and ($s.destOverride | length) > 0 then " \($i18n.dest_override): \(cv(arr($s.destOverride)))" else "" end)
+            + (if $core == "xray" and ($s.routeOnly // false) == true then " \($i18n.route_only): \(yv(true))" else "" end),
+            (if $core == "xray" and ($s.domainsExcluded | type) == "array" and ($s.domainsExcluded | length) > 0 then "\($i18n.domains_excluded): \(cv(arr($s.domainsExcluded)))" else empty end),
+            (if $core == "xray" and ($s.ipsExcluded | type) == "array" and ($s.ipsExcluded | length) > 0 then "\($i18n.ips_excluded): \(cv(arr($s.ipsExcluded)))" else empty end)
         ] end;
 
     def render_stream($st):
         if ($st | type) != "object" then []
         else [
-            "传输方式: \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) 传输安全: \(cv($st.security // "none"))",
+            "\($i18n.transport): \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
             (if ($st.tlsSettings | type) == "object" then
                 ($st.tlsSettings) as $t
                 | "TLS: " + ([
@@ -186,12 +243,12 @@ ProxyRenderInbounds()
                     line("pinnedPeerCertSha256"; $t.pinnedPeerCertSha256),
                     line("pinnedPeerCertificateChainSha256"; arr($t.pinnedPeerCertificateChainSha256 // [])),
                     line("curvePreferences"; arr($t.curvePreferences // [])),
-                    (if ($t.echServerKeys // "") != "" then "echServerKeys: \(cv("已配置"))" else empty end),
-                    (if ($t.echConfigList // "") != "" then "echConfigList: \(cv("已配置"))" else empty end)
+                    (if ($t.echServerKeys // "") != "" then "echServerKeys: \(cv($i18n.configured))" else empty end),
+                    (if ($t.echConfigList // "") != "" then "echConfigList: \(cv($i18n.configured))" else empty end)
                 ] | join(" ")),
                 ((if ($t.certificates | type) == "array" then $t.certificates else [] end) | to_entries[]
                     | select(.value | type == "object")
-                    | "  证书\(.key + 1): " + ([
+                    | "  \($i18n.cert)\(.key + 1): " + ([
                         line("usage"; .value.usage),
                         line("cert"; (.value.certificateFile // (if (.value.certificate | type) == "array" and (.value.certificate | length) > 0 then "<inline>" else null end))),
                         line("key"; (.value.keyFile // (if (.value.key | type) == "array" and (.value.key | length) > 0 then "<inline>" else null end))),
@@ -212,7 +269,7 @@ ProxyRenderInbounds()
                     line("minClientVer"; $rl.minClientVer),
                     line("maxClientVer"; $rl.maxClientVer),
                     line("maxTimeDiff"; $rl.maxTimeDiff),
-                    (if ($rl.mldsa65Seed // "") != "" then "mldsa65Seed: \(cv("已配置"))" else empty end),
+                    (if ($rl.mldsa65Seed // "") != "" then "mldsa65Seed: \(cv($i18n.configured))" else empty end),
                     (if ($rl.limitFallbackUpload | type) == "object" then "limitUpload: \(cv("\($rl.limitFallbackUpload.afterBytes // 0)/\($rl.limitFallbackUpload.bytesPerSec // 0)/\($rl.limitFallbackUpload.burstBytesPerSec // 0)"))" else empty end),
                     (if ($rl.limitFallbackDownload | type) == "object" then "limitDownload: \(cv("\($rl.limitFallbackDownload.afterBytes // 0)/\($rl.limitFallbackDownload.bytesPerSec // 0)/\($rl.limitFallbackDownload.burstBytesPerSec // 0)"))" else empty end)
                 ] | join(" "))
@@ -369,7 +426,7 @@ ProxyRenderInbounds()
                     bline("disableInsecureEncryption"; $s.disableInsecureEncryption),
                     line("detour"; (if ($s.detour | type) == "object" then $s.detour.to else null end)),
                     line("packetEncoding"; $s.packetEncoding),
-                    (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)
+                    (if ($us | length) > 0 then "\($i18n.user_count): \(cv($us | length))" else empty end)
                 ] | join(" "))
               ] + render_fallbacks($s.fallbacks)
         elif $p == "shadowsocks" then
@@ -382,19 +439,19 @@ ProxyRenderInbounds()
                     line("email"; $s.email),
                     bline("ivCheck"; $s.ivCheck),
                     line("packetEncoding"; $s.packetEncoding),
-                    (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)
+                    (if ($us | length) > 0 then "\($i18n.user_count): \(cv($us | length))" else empty end)
                 ] | join(" "))
             ]
         elif $p == "tunnel" or $p == "dokodemo-door" then
             [
                 ([
-                    line("目标地址"; ($s.rewriteAddress // $s.address)),
-                    line("目标端口"; ($s.rewritePort // $s.port)),
-                    line("网络"; ($s.allowedNetwork // $s.network // "tcp")),
+                    line($i18n.target_addr; ($s.rewriteAddress // $s.address)),
+                    line($i18n.target_port; ($s.rewritePort // $s.port)),
+                    line($i18n.network; ($s.allowedNetwork // $s.network // "tcp")),
                     line("timeout"; $s.timeout),
                     (if $s.followRedirect == true then "followRedirect: \(yv(true))" else empty end)
                 ] | join(" ")),
-                (if ($s.portMap | type) == "object" then "端口映射: \(cv(kv($s.portMap)))" else empty end)
+                (if ($s.portMap | type) == "object" then "\($i18n.port_map): \(cv(kv($s.portMap)))" else empty end)
             ]
         elif $p == "socks" or $p == "http" then
             ulist($s) as $us
@@ -406,7 +463,7 @@ ProxyRenderInbounds()
                     bline("allowTransparent"; $s.allowTransparent),
                     line("timeout"; $s.timeout),
                     line("packetEncoding"; $s.packetEncoding),
-                    (if ($us | length) > 0 then "账号数: \(cv($us | length))" else empty end)
+                    (if ($us | length) > 0 then "\($i18n.account_count): \(cv($us | length))" else empty end)
                 ] | join(" "))
             ]
         elif $p == "wireguard" then
@@ -421,12 +478,12 @@ ProxyRenderInbounds()
         elif $p == "masque" then
             ulist($s) as $us
             | [
-                ([line("address"; arr($s.address // [])), line("mtu"; $s.mtu), (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)] | join(" "))
+                ([line("address"; arr($s.address // [])), line("mtu"; $s.mtu), (if ($us | length) > 0 then "\($i18n.user_count): \(cv($us | length))" else empty end)] | join(" "))
             ]
         elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" then
             ulist($s) as $us
             | [
-                ([line("version"; $s.version), line("auth"; $s.auth), line("password"; $s.password), (if ($us | length) > 0 then "用户数: \(cv($us | length))" else empty end)] | join(" "))
+                ([line("version"; $s.version), line("auth"; $s.auth), line("password"; $s.password), (if ($us | length) > 0 then "\($i18n.user_count): \(cv($us | length))" else empty end)] | join(" "))
             ]
         else [] end;
 
@@ -444,13 +501,13 @@ ProxyRenderInbounds()
     | .value.value as $inb
     | (
         [
-            "监听地址: \(cv($inb.listen // "0.0.0.0")) 监听端口: \(cv($inb.port // ""))",
-            "传输协议: \(cv($inb.protocol // "")) 标识: \(cv($inb.tag // ""))"
+            "\($i18n.listen_addr): \(cv($inb.listen // "0.0.0.0")) \($i18n.listen_port): \(cv($inb.port // ""))",
+            "\($i18n.protocol): \(cv($inb.protocol // "")) \($i18n.tag): \(cv($inb.tag // ""))"
         ]
         + render_settings($inb.protocol // ""; $inb.settings)
         + render_stream($inb.streamSettings)
         + render_sniffing($inb.sniffing)
-        + (if $core == "v2ray" and ($inb.allocate | type) == "object" then ["端口分配: \(cv($inb.allocate.strategy // "always")) refresh: \(cv($inb.allocate.refresh // 5)) concurrency: \(cv($inb.allocate.concurrency // 3))"] else [] end)
+        + (if $core == "v2ray" and ($inb.allocate | type) == "object" then ["\($i18n.allocate): \(cv($inb.allocate.strategy // "always")) refresh: \(cv($inb.allocate.refresh // 5)) concurrency: \(cv($inb.allocate.concurrency // 3))"] else [] end)
       )
     | map(select(. != ""))
     | " \($g)\($num).\($n)\($ind)" + join("\n\($ind)") + "\n"
@@ -467,15 +524,18 @@ ProxyRenderOutbounds()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg g "$green" \
         --arg r "$red" \
         --arg n "$normal" \
         --arg ind "$indent_6" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
-    def bv($v): if $v == true then "\($g)开启\($n)" else "\($r)关闭\($n)" end;
+    def bv($v): if $v == true then "\($g)\($i18n.on)\($n)" else "\($r)\($i18n.off)\($n)" end;
     def arr($a): if ($a | type) == "array" then ($a | map(tostring) | join(", ")) else ($a // "" | tostring) end;
     def line($label; $val): if ($val // "" | tostring) != "" then "\($label): \(cv($val))" else empty end;
 
@@ -502,14 +562,14 @@ ProxyRenderOutbounds()
         elif $p == "vless" or $p == "vmess" then
             arr_objs($s.vnext) as $vn
             | if ($vn | length) > 0 then
-                [($vn | map("\(.address // ""):\(.port // "") (users: \(arr_objs(.users) | length))") | join("; ")) | "服务端: \(cv(.))"]
+                [($vn | map("\(.address // ""):\(.port // "") (users: \(arr_objs(.users) | length))") | join("; ")) | "\($i18n.server): \(cv(.))"]
             else
                 [([line("address"; $s.address), line("port"; $s.port), line("flow"; $s.flow), line("encryption"; ($s.encryption // $s.security))] | join(" "))]
             end
         elif $p == "trojan" or $p == "shadowsocks" or $p == "socks" or $p == "http" then
             arr_objs($s.servers) as $sv
             | if ($sv | length) > 0 then
-                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "服务端: \(cv(.))"]
+                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "\($i18n.server): \(cv(.))"]
             else
                 [([line("address"; $s.address), line("port"; $s.port), line("method"; $s.method)] | join(" "))]
             end
@@ -518,7 +578,7 @@ ProxyRenderOutbounds()
         elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" or $p == "masque" then
             arr_objs($s.servers) as $sv
             | if ($sv | length) > 0 then
-                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "服务端: \(cv(.))"]
+                [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "\($i18n.server): \(cv(.))"]
               else
                 [([line("address"; $s.address), line("port"; $s.port), line("version"; $s.version)] | join(" "))]
               end
@@ -531,12 +591,12 @@ ProxyRenderOutbounds()
     | .value as $out
     | (
         [
-            "发送地址: \(cv($out.sendThrough // "0.0.0.0")) 传输协议: \(cv($out.protocol // ""))",
-            "标识: \(cv($out.tag // ""))"
+            "\($i18n.send_through): \(cv($out.sendThrough // "0.0.0.0")) \($i18n.protocol): \(cv($out.protocol // ""))",
+            "\($i18n.tag): \(cv($out.tag // ""))"
             + (if $core == "xray" and ($out.targetStrategy // "") != "" then " targetStrategy: \(cv($out.targetStrategy))" else "" end),
             (if $core == "v2ray" and ($out.proxySettings | type) == "object" then "proxySettings: \(cv($out.proxySettings.tag // ""))" else empty end),
             (if ($out.mux | type) == "object" then
-                "Mux: \(bv($out.mux.enabled // false)) 并发: \(cv($out.mux.concurrency // 8))"
+                "Mux: \(bv($out.mux.enabled // false)) \($i18n.concurrency): \(cv($out.mux.concurrency // 8))"
                 + (if $core == "xray" and ($out.mux.xudpConcurrency // "") != "" then " xudpConcurrency: \(cv($out.mux.xudpConcurrency))" else "" end)
                 + (if $core == "xray" and ($out.mux.xudpProxyUDP443 // "") != "" then " xudpProxyUDP443: \(cv($out.mux.xudpProxyUDP443))" else "" end)
              else empty end)
@@ -545,14 +605,14 @@ ProxyRenderOutbounds()
         + (if ($out.streamSettings | type) == "object" then
             ($out.streamSettings) as $st
             | [
-                "传输方式: \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) 传输安全: \(cv($st.security // "none"))",
+                "\($i18n.transport): \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
                 (if ($st.tlsSettings | type) == "object" then
                     ($st.tlsSettings) as $t
                     | ([
                         line("serverName"; $t.serverName),
                         line("fingerprint"; $t.fingerprint),
                         line("ALPN"; arr($t.alpn // [])),
-                        (if $t.allowInsecure == true then "allowInsecure: \(cv("是"))" else empty end)
+                        (if $t.allowInsecure == true then "allowInsecure: \(cv($i18n.yes))" else empty end)
                       ] | join(" ")) as $tsum
                     | if $tsum != "" then "TLS: \($tsum)" else empty end
                  else empty end),
@@ -563,7 +623,7 @@ ProxyRenderOutbounds()
                         line("fingerprint"; $rl.fingerprint),
                         line("shortId"; $rl.shortId),
                         line("spiderX"; $rl.spiderX),
-                        (if ($rl.publicKey // $rl.password // "") != "" then "publicKey: \(cv("已配置"))" else empty end)
+                        (if ($rl.publicKey // $rl.password // "") != "" then "publicKey: \(cv($i18n.configured))" else empty end)
                       ] | join(" ")) as $rsum
                     | if $rsum != "" then "REALITY: \($rsum)" else empty end
                  else empty end),
@@ -907,7 +967,7 @@ ProxyPrintQrCode()
     fi
     if ! command -v convert > /dev/null 2>&1
     then
-        Println "$info 安装 ImageMagick"
+        Println "$(eval_gettext "\$info 安装 ImageMagick")"
         ImageMagickInstall
     fi
     DepInstall qrencode
@@ -965,15 +1025,18 @@ ProxyRenderDns()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg g "$green" \
         --arg r "$red" \
         --arg n "$normal" \
         --arg ind "$indent_6" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
-    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def yv($v): if $v == true then "\($g)\($i18n.yes)\($n)" else "\($r)\($i18n.no)\($n)" end;
     def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
 
     (if (.dns | type) == "object" then .dns else {} end) as $d
@@ -982,23 +1045,23 @@ ProxyRenderDns()
       else
         (
             [
-                "查询策略: \(cv($d.queryStrategy // "UseIP"))"
-                + (if ($d.tag // "" | tostring) != "" then " 标识: \(cv($d.tag))" else "" end)
+                "\($i18n.query_strategy): \(cv($d.queryStrategy // "UseIP"))"
+                + (if ($d.tag // "" | tostring) != "" then " \($i18n.tag): \(cv($d.tag))" else "" end)
                 + (if ($d.clientIp // $d.clientIP // "") != "" then " clientIp: \(cv($d.clientIp // $d.clientIP))" else "" end),
-                "禁用缓存: \(yv($d.disableCache // false)) 禁用回退: \(yv($d.disableFallback // false)) 匹配不回退: \(yv($d.disableFallbackIfMatch // false))"
+                "\($i18n.disable_cache): \(yv($d.disableCache // false)) \($i18n.disable_fallback): \(yv($d.disableFallback // false)) \($i18n.disable_fallback_match): \(yv($d.disableFallbackIfMatch // false))"
             ]
             + (if $core == "xray" then
                 [
-                    "过期缓存: \(yv($d.serveStale // false))"
+                    "\($i18n.serve_stale): \(yv($d.serveStale // false))"
                     + (if ($d.serveExpiredTTL // 0) != 0 then " TTL: \(cv($d.serveExpiredTTL))" else "" end)
-                    + " 并行查询: \(yv($d.enableParallelQuery // false)) 系统Hosts: \(yv($d.useSystemHosts // false))"
+                    + " \($i18n.parallel_query): \(yv($d.enableParallelQuery // false)) \($i18n.system_hosts): \(yv($d.useSystemHosts // false))"
                 ]
               else [] end)
             + (if ($d.hosts | type) == "object" and ($d.hosts | length) > 0 then
                 ["Hosts:"] + ($d.hosts | to_entries | map("  \(.key) => \(cv(arr(.value)))"))
               else [] end)
             + (if ($d.servers | type) == "array" and ($d.servers | length) > 0 then
-                ["DNS 服务器 (\($d.servers | length)):"]
+                ["\($i18n.dns_servers) (\($d.servers | length)):"]
                 + ($d.servers | to_entries | map(
                     (.key + 1) as $i
                     | .value as $s
@@ -1012,7 +1075,7 @@ ProxyRenderDns()
                         + (if ($s.clientIP // $s.clientIp // "" | tostring) != "" then " clientIP: \(cv($s.clientIP // $s.clientIp))" else "" end)
                         + (if $s.timeoutMs != null then " timeoutMs: \(cv($s.timeoutMs))" else "" end)
                         + (if $s.disableCache != null then " disableCache: \(yv($s.disableCache))" else "" end)
-                        + (if (arr($s.domains) | length) > 0 then " 域名: \(cv(arr($s.domains)))" else "" end)
+                        + (if (arr($s.domains) | length) > 0 then " \($i18n.domain): \(cv(arr($s.domains)))" else "" end)
                         + (if $core == "xray" and (arr($s.expectedIPs) | length) > 0 then " expectedIPs: \(cv(arr($s.expectedIPs)))" else "" end)
                         + (if $core == "xray" and (arr($s.unexpectedIPs) | length) > 0 then " unexpectedIPs: \(cv(arr($s.unexpectedIPs)))" else "" end)
                         + (if $core == "v2ray" and (arr($s.expectIPs) | length) > 0 then " expectIPs: \(cv(arr($s.expectIPs)))" else "" end)
@@ -1037,12 +1100,15 @@ ProxyRenderRouting()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg g "$green" \
         --arg r "$red" \
         --arg n "$normal" \
         --arg ind "$indent_6" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
     def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
@@ -1055,11 +1121,11 @@ ProxyRenderRouting()
       else
         (
             [
-                "域名解析策略: \(cv($rt.domainStrategy // "AsIs"))"
+                "\($i18n.domain_strategy): \(cv($rt.domainStrategy // "AsIs"))"
                 + (if $core == "v2ray" and ($rt.domainMatcher // "") != "" then " domainMatcher: \(cv($rt.domainMatcher))" else "" end)
             ]
             + (if ($rt.rules | type) == "array" and ($rt.rules | length) > 0 then
-                ["路由规则 (\($rt.rules | length)):"]
+                ["\($i18n.routing_rules) (\($rt.rules | length)):"]
                 + ($rt.rules | to_entries | map(
                     select(.value | type == "object")
                     | (.key + 1) as $i
@@ -1087,7 +1153,7 @@ ProxyRenderRouting()
                   ))
               else [] end)
             + (if ($rt.balancers | type) == "array" and ($rt.balancers | length) > 0 then
-                ["负载均衡 (\($rt.balancers | length)):"]
+                ["\($i18n.balancers) (\($rt.balancers | length)):"]
                 + ($rt.balancers | to_entries | map(
                     select(.value | type == "object")
                     | (.key + 1) as $i
@@ -1113,14 +1179,17 @@ ProxyRenderPolicy()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg g "$green" \
         --arg r "$red" \
         --arg n "$normal" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
-    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def yv($v): if $v == true then "\($g)\($i18n.yes)\($n)" else "\($r)\($i18n.no)\($n)" end;
 
     (if (.policy | type) == "object" then .policy else {} end) as $p
     | if ($p | length) == 0 then
@@ -1133,7 +1202,7 @@ ProxyRenderPolicy()
         | (if $core == "xray" then 1 else 5 end) as $def_down
         | (
             (if ($lvls | length) > 0 then
-                ["用户等级策略:"]
+                ["\($i18n.level_policy):"]
                 + ($lvls | to_entries | map(
                     select(.value | type == "object")
                     | "  Level \(cv(.key)): handshake=\(cv(.value.handshake // $def_hs)) connIdle=\(cv(.value.connIdle // 300)) uplinkOnly=\(cv(.value.uplinkOnly // $def_up)) downlinkOnly=\(cv(.value.downlinkOnly // $def_down)) bufferSize=\(cv(.value.bufferSize // "auto")) statsUp=\(yv(.value.statsUserUplink // false)) statsDown=\(yv(.value.statsUserDownlink // false))"
@@ -1142,7 +1211,7 @@ ProxyRenderPolicy()
               else [] end)
             + (if ($sys | length) > 0 then
                 [
-                    "系统策略: inboundUp=\(yv($sys.statsInboundUplink // false)) inboundDown=\(yv($sys.statsInboundDownlink // false)) outboundUp=\(yv($sys.statsOutboundUplink // false)) outboundDown=\(yv($sys.statsOutboundDownlink // false))"
+                    "\($i18n.system_policy): inboundUp=\(yv($sys.statsInboundUplink // false)) inboundDown=\(yv($sys.statsInboundDownlink // false)) outboundUp=\(yv($sys.statsOutboundUplink // false)) outboundDown=\(yv($sys.statsOutboundDownlink // false))"
                 ]
               else [] end)
         )
@@ -1192,14 +1261,17 @@ ProxyRenderOverview()
         return 1
     fi
 
+    ProxyInitI18nJson
+
     $JQ_FILE -r \
         --arg core "$core_type" \
         --arg g "$green" \
         --arg r "$red" \
         --arg n "$normal" \
+        --argjson i18n "$PROXY_I18N_JSON" \
     '
     def cv($v): "\($g)\($v)\($n)";
-    def yv($v): if $v == true then "\($g)是\($n)" else "\($r)否\($n)" end;
+    def yv($v): if $v == true then "\($g)\($i18n.yes)\($n)" else "\($r)\($i18n.no)\($n)" end;
     def arr($a): if ($a | type) == "array" then ($a | map(select(. != null) | tostring) | join(", ")) else ($a // "" | tostring) end;
 
     [
@@ -1215,7 +1287,7 @@ ProxyRenderOverview()
             + " services=\(cv(arr(.api.services // [])))"
         else empty end),
         (if (.stats | type) == "object" then
-            "Stats: \(cv("已启用"))"
+            "Stats: \(cv($i18n.enabled))"
         else empty end),
         (if (.env | type) == "object" and (.env | length) > 0 then
             "Env: \(cv(.env | to_entries | map("\(.key)=\(.value | tostring)") | join(", ")))"
@@ -1291,7 +1363,7 @@ ProxySelectBound()
         ProxyLoadInboundsIndex "$config_file"
         if [ "$inbounds_count" -eq 0 ]
         then
-            Println "$error 请先添加入站\n"
+            Println "$(eval_gettext "\$error 请先添加入站")\n"
             return 1
         fi
         for((i=0;i<inbounds_count;i++));
@@ -1306,7 +1378,7 @@ ProxySelectBound()
         ProxyLoadOutboundsIndex "$config_file"
         if [ "$outbounds_count" -eq 0 ]
         then
-            Println "$error 没有出站\n"
+            Println "$(eval_gettext "\$error 没有出站")\n"
             return 1
         fi
         for((i=0;i<outbounds_count;i++));
@@ -1327,7 +1399,7 @@ ProxyToggleService()
 
     if [ ! -e "$config_file" ]
     then
-        Println "$error $service_name 未安装...\n"
+        Println "$(eval_gettext "\$error \$service_name 未安装...")\n"
         exit 1
     fi
 
@@ -1335,21 +1407,21 @@ ProxyToggleService()
     local err_msg=""
     if ServiceControl is-active "$service_name"
     then
-        ExitOnList y "`eval_gettext \"\\\$service_name 正在运行, 是否关闭\"`"
+        ExitOnList y "$(eval_gettext "\$service_name 正在运行, 是否关闭")"
         if err_msg=$(ServiceControl stop "$service_name" 2>&1)
         then
-            Println "$info $service_name 已关闭\n"
+            Println "$(eval_gettext "\$info \$service_name 已关闭")\n"
         else
-            Println "$error $service_name 关闭失败: ${err_msg}\n"
+            Println "$(eval_gettext "\$error \$service_name 关闭失败: \${err_msg}")\n"
             return 1
         fi
     else
-        ExitOnList y "`eval_gettext \"\\\$service_name 未运行, 是否开启\"`"
+        ExitOnList y "$(eval_gettext "\$service_name 未运行, 是否开启")"
         if err_msg=$(ServiceControl start "$service_name" 2>&1)
         then
-            Println "$info $service_name 已开启\n"
+            Println "$(eval_gettext "\$info \$service_name 已开启")\n"
         else
-            Println "$error $service_name 开启失败: ${err_msg}\n"
+            Println "$(eval_gettext "\$error \$service_name 开启失败: \${err_msg}")\n"
             return 1
         fi
     fi
@@ -1362,16 +1434,16 @@ ProxyRestartService()
 
     if [ ! -e "$config_file" ]
     then
-        Println "$error $service_name 未安装...\n"
+        Println "$(eval_gettext "\$error \$service_name 未安装...")\n"
         exit 1
     fi
 
     local err_msg=""
     if err_msg=$(ServiceControl restart "$service_name" 2>&1)
     then
-        Println "$info $service_name 已重启\n"
+        Println "$(eval_gettext "\$info \$service_name 已重启")\n"
     else
-        Println "$error $service_name 重启失败: ${err_msg}\n"
+        Println "$(eval_gettext "\$error \$service_name 重启失败: \${err_msg}")\n"
         return 1
     fi
 }
@@ -1384,7 +1456,7 @@ ProxyRestartIfActive()
         local err_msg=""
         if ! err_msg=$(ServiceControl restart "$service_name" 2>&1)
         then
-            Println "$error $service_name 重启失败: ${err_msg}\n"
+            Println "$(eval_gettext "\$error \$service_name 重启失败: \${err_msg}")\n"
             return 1
         fi
     fi

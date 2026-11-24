@@ -45,5 +45,5 @@ NodejsInstall()
     trap - EXIT
 
     echo -n "...100%"
-    Println "$info nodejs 安装完成"
+    Println "$(eval_gettext "\$info nodejs 安装完成")"
 }

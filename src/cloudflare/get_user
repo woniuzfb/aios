@@ -16,7 +16,8 @@ CloudflareGetUser()
         then
             jq_path='["users",'"$cf_users_i"',"key"]'
             JQ update "$CF_CONFIG" "$cf_user_api_key"
-            Println "$info 用户 ${cf_users_email[cf_users_i]} API Key 添加成功\n"
+            local user_email="${cf_users_email[cf_users_i]}"
+            Println "$(eval_gettext "\$info 用户 \$user_email API Key 添加成功")\n"
         fi
 
         result=${result#\"}
@@ -24,17 +25,17 @@ CloudflareGetUser()
 
         if [ -z "$result" ] || [ "$result" == "error" ]
         then
-            Println "$error ${msg:-超时, 请重试}\n" && exit 1
+            Println "$error ${msg:-$(gettext "超时, 请重试")}\n" && exit 1
         fi
 
         if [ -z "$cf_user_key" ] 
         then
             if [ "$monitor" = true ] 
             then
-                MonitorLog "源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
+                MonitorLog "$(eval_gettext "源站 \$cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ...")"
             fi
 
-            Println "$error 源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
+            Println "$(eval_gettext "\$error 源站 \$cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ...")"
 
             if [ -z "${cf_user_pass:-}" ] 
             then
@@ -51,7 +52,7 @@ CloudflareGetUser()
 
             if [ -z "${cf_user_pass:-}" ] 
             then
-                Println "$error 请先添加账号 $cf_user_email\n"
+                Println "$(eval_gettext "\$error 请先添加账号 \$cf_user_email")\n"
                 exit 1
             fi
 
@@ -93,7 +94,7 @@ CloudflareGetUser()
 
             if [ -z "$result" ] || [ "$result" == "error" ]
             then
-                Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
+                Println "$error ${msg:-$(gettext "连接超时, 请查看是否已经完成")}\n"
             fi
         fi
     done

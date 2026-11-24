@@ -302,7 +302,7 @@ Uninstall()
         FilterFileLines "$LOGROTATE_CONFIG" "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
-        Println "$info 已停止 logrotate\n"
+        Println "$(eval_gettext "\$info 已停止 logrotate")\n"
     fi
 
     i18nGetMsg get_channel
@@ -398,7 +398,7 @@ IptvMigrateLegacyRoot()
 
     if [ ! -e "$IPTV_ROOT" ] && [ -d "$legacy_root" ] && [ "$legacy_root" != "$IPTV_ROOT" ]
     then
-        Println "$info 检测到旧版 v1 目录 ${yellow}$legacy_root${normal}, 正在迁移至 ${green}$IPTV_ROOT${normal} ..."
+        Println "$(eval_gettext "\$info 检测到旧版 v1 目录 \${yellow}\$legacy_root\${normal}, 正在迁移至 \${green}\$IPTV_ROOT\${normal} ...")"
         mkdir -p "$AIOS_ROOT"
         mv "$legacy_root" "$IPTV_ROOT"
 
@@ -440,7 +440,7 @@ IptvMigrateLegacyRoot()
         done
 
         rm -f "$LOCK_FILE"
-        Println "$info 旧版目录迁移完成\n"
+        Println "$(eval_gettext "\$info 旧版目录迁移完成")\n"
     fi
 }
 
@@ -489,13 +489,13 @@ then
             TsMenu "$@"
         ;;
         f|flv) 
-            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+            [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
             kind="flv"
             color="$blue"
             shift
         ;;
         v|vip) 
-            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+            [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
             vip=true
             shift
         ;;

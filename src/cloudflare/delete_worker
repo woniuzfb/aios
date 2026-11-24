@@ -4,11 +4,11 @@ CloudflareDelWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        Println "$error 请先添加 worker\n"
+        Println "$(eval_gettext "\$error 请先添加 worker")\n"
         exit 1
     fi
 
-    echo "选择 worker"
+    echo "$(gettext "选择 worker")"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
@@ -35,7 +35,7 @@ CloudflareDelWorker()
     if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
     then
         echo
-        inquirer list_input "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path" ny_options del_cf_worker_path
+        inquirer list_input "$(eval_gettext "是否删除 worker 目录 \$CF_WORKERS_ROOT/\$cf_worker_path")" ny_options del_cf_worker_path
 
         if [[ $del_cf_worker_path == "$i18n_yes" ]] 
         then
@@ -45,5 +45,5 @@ CloudflareDelWorker()
 
     jq_path='["workers",'"$cf_workers_index"']'
     JQ delete "$CF_CONFIG"
-    Println "$info worker: $cf_worker_name 删除成功\n"
+    Println "$(eval_gettext "\$info worker: \$cf_worker_name 删除成功")\n"
 }

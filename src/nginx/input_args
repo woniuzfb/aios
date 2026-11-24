@@ -3,8 +3,8 @@ NginxInputArgs()
     new_args=""
     while true 
     do
-        Println "$tip 空字符用 '' 表示"
-        inquirer text_input "输入单个指令值: " arg "$i18n_blank"
+        Println "$(eval_gettext "\$tip 空字符用 '' 表示")"
+        inquirer text_input "$(gettext "输入单个指令值: ")" arg "$i18n_blank"
 
         if [ -z "$arg" ] 
         then
@@ -24,7 +24,7 @@ NginxInputArgs()
         new_args="$new_args\"$arg\""
 
         echo
-        inquirer list_input "继续添加指令值" ny_options yn_option
+        inquirer list_input "$(gettext "继续添加指令值")" ny_options yn_option
         if [ "$yn_option" == "$i18n_no" ] 
         then
             break

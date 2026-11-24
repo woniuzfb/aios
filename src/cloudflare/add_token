@@ -2,7 +2,7 @@ CloudflareAddToken()
 {
     CloudflareListToken
 
-    echo -e "选择 Token"
+    echo -e "$(gettext "选择 Token")"
 
     while read -p "$i18n_default_cancel" tokens_num
     do
@@ -30,7 +30,7 @@ CloudflareAddToken()
     echo
     ExitOnList n "`gettext \"需要更新此 Token 后才能添加到脚本, 是否继续\"`"
 
-    Println "$info 更新 Token"
+    Println "$(eval_gettext "\$info 更新 Token")"
     cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
         -H "X-Auth-Email:$cf_user_email" \
         -H "X-Auth-Key:$cf_user_api_key" \
@@ -40,11 +40,11 @@ CloudflareAddToken()
 
     if [ -z "$cf_user_token_new" ] || [ "$cf_user_token_new" == null ]
     then
-        Println "$error 更新 Token 失败\n"
+        Println "$(eval_gettext "\$error 更新 Token 失败")\n"
     else
-        Println "$info Token 更新成功: $cf_user_token_new"
+        Println "$(eval_gettext "\$info Token 更新成功: \$cf_user_token_new")"
         jq_path='["users",'"$cf_users_index"',"token"]'
         JQ update "$CF_CONFIG" "$cf_user_token_new"
-        Println "$info 用户 Token 添加成功\n"
+        Println "$(eval_gettext "\$info 用户 Token 添加成功")\n"
     fi
 }

@@ -14,14 +14,14 @@ XrayGetBin()
 
 XrayAddInbound()
 {
-    local mode_options=( '直连 xray 入站' '本地 nginx 反代入站' )
+    local mode_options=( "$(gettext "直连 xray 入站")" "$(gettext "本地 nginx 反代入站")" )
     local mode_idx=0
     echo
-    inquirer list_input_index "选择入站模式" mode_options mode_idx
+    inquirer list_input_index "$(gettext "选择入站模式")" mode_options mode_idx
 
     local proto_options=( 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'tunnel' 'hysteria' 'wireguard' 'tun' 'masque' )
     local proto_idx=0
-    inquirer list_input_index "选择入站协议" proto_options proto_idx
+    inquirer list_input_index "$(gettext "选择入站协议")" proto_options proto_idx
     local protocol="${proto_options[$proto_idx]}"
 
     local default_listen="0.0.0.0"
@@ -33,8 +33,8 @@ XrayAddInbound()
     fi
 
     local listen port tag
-    inquirer text_input "输入监听地址" listen "$default_listen"
-    inquirer text_input "输入监听端口 (留空随机)" port ""
+    inquirer text_input "$(gettext "输入监听地址")" listen "$default_listen"
+    inquirer text_input "$(gettext "输入监听端口 (留空随机)")" port ""
     if [ -z "$port" ]
     then
         port=$(GetFreePort)
@@ -43,15 +43,15 @@ XrayAddInbound()
     then
         if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
         then
-            Println "$error 监听端口必须在 1-65535 之间\n"
+            Println "$(eval_gettext "\$error 监听端口必须在 1-65535 之间")\n"
             return 1
         fi
     elif [[ ! $port =~ ^[0-9]+-[0-9]+$ ]]
     then
-        Println "$error 监听端口格式无效 (应为端口或端口范围, 如 443 或 10000-20000)\n"
+        Println "$(eval_gettext "\$error 监听端口格式无效 (应为端口或端口范围, 如 443 或 10000-20000)")\n"
         return 1
     fi
-    inquirer text_input "输入入站标识 (留空随机)" tag ""
+    inquirer text_input "$(gettext "输入入站标识 (留空随机)")" tag ""
     if [ -z "$tag" ]
     then
         tag=$(ProxyGetFreeTag "$X_CONFIG" "$tag_prefix")
@@ -67,7 +67,7 @@ XrayAddInbound()
     case "$protocol" in
         vless)
             local uuid flow email decryption
-            inquirer text_input "输入用户 UUID (留空自动生成)" uuid ""
+            inquirer text_input "$(gettext "输入用户 UUID (留空自动生成)")" uuid ""
             if [ -z "$uuid" ]
             then
                 if [ -n "$xray_bin" ]
@@ -84,14 +84,14 @@ XrayAddInbound()
                 fi
                 if [ -z "$uuid" ]
                 then
-                    Println "$error 自动生成 UUID 失败, 请手动输入\n"
+                    Println "$(eval_gettext "\$error 自动生成 UUID 失败, 请手动输入")\n"
                     return 1
                 fi
-                Println "$info 已自动生成 UUID: ${green}${uuid}${normal}\n"
+                Println "$(eval_gettext "\$info 已自动生成 UUID: \${green}\${uuid}\${normal}")\n"
             fi
-            inquirer text_input "输入流控 flow (如 xtls-rprx-vision, 可留空)" flow ""
-            inquirer text_input "输入用户 email (可留空)" email ""
-            inquirer text_input "输入 decryption" decryption "none"
+            inquirer text_input "$(gettext "输入流控 flow (如 xtls-rprx-vision, 可留空)")" flow ""
+            inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
+            inquirer text_input "$(gettext "输入 decryption")" decryption "none"
             JQs build settings_json '{
                 "decryption": $decryption,
                 "users": [{"id": $id, "flow": $flow, "email": $email, "level": 0}]
@@ -99,7 +99,7 @@ XrayAddInbound()
         ;;
         vmess)
             local uuid email
-            inquirer text_input "输入用户 UUID (留空自动生成)" uuid ""
+            inquirer text_input "$(gettext "输入用户 UUID (留空自动生成)")" uuid ""
             if [ -z "$uuid" ]
             then
                 if [ -n "$xray_bin" ]
@@ -116,28 +116,28 @@ XrayAddInbound()
                 fi
                 if [ -z "$uuid" ]
                 then
-                    Println "$error 自动生成 UUID 失败, 请手动输入\n"
+                    Println "$(eval_gettext "\$error 自动生成 UUID 失败, 请手动输入")\n"
                     return 1
                 fi
-                Println "$info 已自动生成 UUID: ${green}${uuid}${normal}\n"
+                Println "$(eval_gettext "\$info 已自动生成 UUID: \${green}\${uuid}\${normal}")\n"
             fi
-            inquirer text_input "输入用户 email (可留空)" email ""
+            inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             JQs build settings_json '{
                 "users": [{"id": $id, "email": $email, "level": 0}]
             }' --arg id "$uuid" --arg email "$email"
         ;;
         trojan)
             local password email
-            inquirer text_input "输入密码" password ""
-            inquirer text_input "输入用户 email (可留空)" email ""
+            inquirer text_input "$(gettext "输入密码")" password ""
+            inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             JQs build settings_json '{
                 "users": [{"password": $password, "email": $email, "level": 0}]
             }' --arg password "$password" --arg email "$email"
         ;;
         shadowsocks)
             local method password network email
-            inquirer text_input "输入加密方式" method "2022-blake3-aes-256-gcm"
-            inquirer text_input "输入密钥 (SS2022 留空自动生成)" password ""
+            inquirer text_input "$(gettext "输入加密方式")" method "2022-blake3-aes-256-gcm"
+            inquirer text_input "$(gettext "输入密钥 (SS2022 留空自动生成)")" password ""
             if [ -z "$password" ] && [[ "$method" == 2022-* ]]
             then
                 local ss_bytes=32
@@ -148,13 +148,13 @@ XrayAddInbound()
                 password=$(openssl rand -base64 "$ss_bytes" 2> /dev/null | tr -d '\r\n')
                 if [ -z "$password" ]
                 then
-                    Println "$error 自动生成 SS2022 密钥失败, 请手动输入\n"
+                    Println "$(eval_gettext "\$error 自动生成 SS2022 密钥失败, 请手动输入")\n"
                     return 1
                 fi
-                Println "$info 已自动生成 SS2022 密钥: ${green}${password}${normal}\n"
+                Println "$(eval_gettext "\$info 已自动生成 SS2022 密钥: \${green}\${password}\${normal}")\n"
             fi
-            inquirer text_input "输入监听网络 (tcp/udp/tcp,udp)" network "tcp,udp"
-            inquirer text_input "输入用户 email (可留空)" email ""
+            inquirer text_input "$(gettext "输入监听网络 (tcp/udp/tcp,udp)")" network "tcp,udp"
+            inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             JQs build settings_json '{
                 "method": $method,
                 "password": $password,
@@ -165,13 +165,13 @@ XrayAddInbound()
         socks)
             local auth_opts=( 'noauth' 'password' )
             local auth="" udp_idx=1 user="" pass=""
-            local yn_opts=( '否' '是' )
-            inquirer list_input "选择认证方式 auth" auth_opts auth
-            inquirer list_input_index "开启 UDP 转发" yn_opts udp_idx
+            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            inquirer list_input "$(gettext "选择认证方式 auth")" auth_opts auth
+            inquirer list_input_index "$(gettext "开启 UDP 转发")" yn_opts udp_idx
             if [ "$auth" == "password" ]
             then
-                inquirer text_input "输入用户名" user ""
-                inquirer text_input "输入密码" pass ""
+                inquirer text_input "$(gettext "输入用户名")" user ""
+                inquirer text_input "$(gettext "输入密码")" pass ""
                 JQs build settings_json '{
                     "auth": $auth,
                     "udp": ($udp == "1"),
@@ -186,10 +186,10 @@ XrayAddInbound()
         ;;
         http)
             local user pass
-            inquirer text_input "输入用户名 (留空无认证)" user ""
+            inquirer text_input "$(gettext "输入用户名 (留空无认证)")" user ""
             if [ -n "$user" ]
             then
-                inquirer text_input "输入密码" pass ""
+                inquirer text_input "$(gettext "输入密码")" pass ""
                 JQs build settings_json '{
                     "users": [{"user": $user, "pass": $pass}]
                 }' --arg user "$user" --arg pass "$pass"
@@ -197,16 +197,16 @@ XrayAddInbound()
         ;;
         tunnel)
             local rw_addr rw_port allowed_net fr_idx=0
-            local yn_opts=( '否' '是' )
-            inquirer text_input "输入目标转发地址" rw_addr "127.0.0.1"
-            inquirer text_input "输入目标转发端口" rw_port "8080"
+            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            inquirer text_input "$(gettext "输入目标转发地址")" rw_addr "127.0.0.1"
+            inquirer text_input "$(gettext "输入目标转发端口")" rw_port "8080"
             if [[ ! $rw_port =~ ^[0-9]+$ ]] || [ "$rw_port" -lt 1 ] || [ "$rw_port" -gt 65535 ]
             then
-                Println "$error 目标转发端口必须为 1-65535 的整数\n"
+                Println "$(eval_gettext "\$error 目标转发端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "输入允许网络 (tcp/udp/tcp,udp)" allowed_net "tcp"
-            inquirer list_input_index "启用 followRedirect" yn_opts fr_idx
+            inquirer text_input "$(gettext "输入允许网络 (tcp/udp/tcp,udp)")" allowed_net "tcp"
+            inquirer list_input_index "$(gettext "启用 followRedirect")" yn_opts fr_idx
             JQs build settings_json '{
                 "rewriteAddress": $addr,
                 "rewritePort": ($port | tonumber),
@@ -216,8 +216,8 @@ XrayAddInbound()
         ;;
         hysteria)
             local auth email
-            inquirer text_input "输入认证密钥 auth" auth ""
-            inquirer text_input "输入用户 email (可留空)" email ""
+            inquirer text_input "$(gettext "输入认证密钥 auth")" auth ""
+            inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             JQs build settings_json '{
                 "version": 2,
                 "users": [{"auth": $auth, "email": $email, "level": 0}]
@@ -225,7 +225,7 @@ XrayAddInbound()
         ;;
         wireguard)
             local secret_key peer_pub allowed_ip mtu
-            inquirer text_input "输入服务端 secretKey (留空自动生成)" secret_key ""
+            inquirer text_input "$(gettext "输入服务端 secretKey (留空自动生成)")" secret_key ""
             if [ -z "$secret_key" ]
             then
                 if [ -n "$xray_bin" ]
@@ -236,25 +236,25 @@ XrayAddInbound()
                     wg_pub=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Public[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
                     if [ -n "$secret_key" ]
                     then
-                        Println "$info 已自动生成 WireGuard secretKey: ${green}${secret_key}${normal}\n"
+                        Println "$(eval_gettext "\$info 已自动生成 WireGuard secretKey: \${green}\${secret_key}\${normal}")\n"
                         if [ -n "$wg_pub" ]
                         then
-                            Println "$info 对应服务端 publicKey: ${green}${wg_pub}${normal}\n"
+                            Println "$(eval_gettext "\$info 对应服务端 publicKey: \${green}\${wg_pub}\${normal}")\n"
                         fi
                     fi
                 fi
                 if [ -z "$secret_key" ]
                 then
-                    Println "$error 自动生成 WireGuard secretKey 失败, 请手动输入\n"
+                    Println "$(eval_gettext "\$error 自动生成 WireGuard secretKey 失败, 请手动输入")\n"
                     return 1
                 fi
             fi
-            inquirer text_input "输入对端 publicKey" peer_pub ""
-            inquirer text_input "输入 allowedIPs (逗号分隔)" allowed_ip "10.0.0.2/32"
-            inquirer text_input "输入 MTU" mtu "1420"
+            inquirer text_input "$(gettext "输入对端 publicKey")" peer_pub ""
+            inquirer text_input "$(gettext "输入 allowedIPs (逗号分隔)")" allowed_ip "10.0.0.2/32"
+            inquirer text_input "$(gettext "输入 MTU")" mtu "1420"
             if [[ ! $mtu =~ ^[0-9]+$ ]]
             then
-                Println "$error MTU 必须为正整数\n"
+                Println "$(eval_gettext "\$error MTU 必须为正整数")\n"
                 return 1
             fi
             JQs build settings_json '{
@@ -265,15 +265,15 @@ XrayAddInbound()
         ;;
         tun)
             local tun_name tun_mtu tun_gw tun_dns
-            inquirer text_input "TUN 网卡名称" tun_name "xray0"
+            inquirer text_input "$(gettext "TUN 网卡名称")" tun_name "xray0"
             inquirer text_input "MTU" tun_mtu "1500"
             if [[ ! $tun_mtu =~ ^[0-9]+$ ]]
             then
-                Println "$error MTU 必须为正整数\n"
+                Println "$(eval_gettext "\$error MTU 必须为正整数")\n"
                 return 1
             fi
-            inquirer text_input "gateway (逗号分隔, 可留空)" tun_gw ""
-            inquirer text_input "dns (逗号分隔, 可留空)" tun_dns ""
+            inquirer text_input "$(gettext "gateway (逗号分隔, 可留空)")" tun_gw ""
+            inquirer text_input "$(gettext "dns (逗号分隔, 可留空)")" tun_dns ""
             JQs build settings_json '{
                 "name": $name,
                 "mtu": ($mtu | tonumber),
@@ -283,18 +283,18 @@ XrayAddInbound()
         ;;
         masque)
             local m_addr m_mtu m_pass m_email
-            inquirer text_input "MASQUE address (逗号分隔)" m_addr "10.0.0.1/24"
+            inquirer text_input "$(gettext "MASQUE address (逗号分隔)")" m_addr "10.0.0.1/24"
             inquirer text_input "MTU" m_mtu "1280"
             if [[ ! $m_mtu =~ ^[0-9]+$ ]]
             then
-                Println "$error MTU 必须为正整数\n"
+                Println "$(eval_gettext "\$error MTU 必须为正整数")\n"
                 return 1
             fi
-            inquirer text_input "用户 pass" m_pass ""
-            inquirer text_input "用户 email (必填, 不能包含 :)" m_email ""
+            inquirer text_input "$(gettext "用户 pass")" m_pass ""
+            inquirer text_input "$(gettext "用户 email (必填, 不能包含 :)")" m_email ""
             if [ -z "$m_email" ] || [[ "$m_email" == *:* ]]
             then
-                Println "$error MASQUE 用户 email 必填且不能包含 :\n"
+                Println "$(eval_gettext "\$error MASQUE 用户 email 必填且不能包含 :")\n"
                 return 1
             fi
             JQs build settings_json '{
@@ -317,7 +317,7 @@ XrayAddInbound()
     else
         local net_options=( 'raw' 'xhttp' 'ws' 'grpc' 'httpupgrade' 'kcp' 'hysteria' )
         local net_idx=0
-        inquirer list_input_index "选择传输方式" net_options net_idx
+        inquirer list_input_index "$(gettext "选择传输方式")" net_options net_idx
         network="${net_options[$net_idx]}"
 
         if [ "$network" == "hysteria" ]
@@ -327,19 +327,19 @@ XrayAddInbound()
         then
             local sec_options=( 'none' 'tls' 'reality' )
             local sec_idx=0
-            inquirer list_input_index "选择传输安全" sec_options sec_idx
+            inquirer list_input_index "$(gettext "选择传输安全")" sec_options sec_idx
             security="${sec_options[$sec_idx]}"
         else
             local sec_options=( 'none' 'tls' )
             local sec_idx=0
-            inquirer list_input_index "选择传输安全" sec_options sec_idx
+            inquirer list_input_index "$(gettext "选择传输安全")" sec_options sec_idx
             security="${sec_options[$sec_idx]}"
         fi
     fi
 
     if [ "$security" == "reality" ] && [ "$network" != "raw" ] && [ "$network" != "xhttp" ] && [ "$network" != "grpc" ]
     then
-        Println "$tip REALITY 仅支持 raw/xhttp/grpc, 已自动回退为 tls\n"
+        Println "$(eval_gettext "\$tip REALITY 仅支持 raw/xhttp/grpc, 已自动回退为 tls")\n"
         security="tls"
     fi
 
@@ -350,34 +350,34 @@ XrayAddInbound()
 
     case "$network" in
         xhttp)
-            inquirer text_input "XHTTP host (可留空)" xhttp_host ""
+            inquirer text_input "$(gettext "XHTTP host (可留空)")" xhttp_host ""
             inquirer text_input "XHTTP path" xhttp_path "/"
             local xm_opts=( 'auto' 'packet-up' 'stream-up' 'stream-one' )
-            inquirer list_input "选择 XHTTP mode" xm_opts xhttp_mode
+            inquirer list_input "$(gettext "选择 XHTTP mode")" xm_opts xhttp_mode
         ;;
         ws)
             inquirer text_input "WebSocket path" ws_path "/"
-            inquirer text_input "WebSocket host (可留空)" ws_host ""
+            inquirer text_input "$(gettext "WebSocket host (可留空)")" ws_host ""
         ;;
         grpc)
             inquirer text_input "gRPC serviceName" grpc_svc ""
         ;;
         httpupgrade)
             inquirer text_input "HTTPUpgrade path" hu_path "/"
-            inquirer text_input "HTTPUpgrade host (可留空)" hu_host ""
+            inquirer text_input "$(gettext "HTTPUpgrade host (可留空)")" hu_host ""
         ;;
     esac
 
     if [ "$security" == "tls" ]
     then
-        inquirer text_input "TLS serverName (可留空)" tls_sni ""
-        inquirer text_input "证书文件路径 certificateFile" tls_cert ""
-        inquirer text_input "私钥文件路径 keyFile" tls_key ""
+        inquirer text_input "$(gettext "TLS serverName (可留空)")" tls_sni ""
+        inquirer text_input "$(gettext "证书文件路径 certificateFile")" tls_cert ""
+        inquirer text_input "$(gettext "私钥文件路径 keyFile")" tls_key ""
     elif [ "$security" == "reality" ]
     then
-        inquirer text_input "REALITY target (如 www.example.com:443)" r_target ""
-        inquirer text_input "REALITY serverNames (逗号分隔)" r_sni ""
-        inquirer text_input "REALITY privateKey (留空自动生成)" r_pk ""
+        inquirer text_input "$(gettext "REALITY target (如 www.example.com:443)")" r_target ""
+        inquirer text_input "$(gettext "REALITY serverNames (逗号分隔)")" r_sni ""
+        inquirer text_input "$(gettext "REALITY privateKey (留空自动生成)")" r_pk ""
         if [ -z "$r_pk" ]
         then
             if [ -n "$xray_bin" ]
@@ -388,28 +388,28 @@ XrayAddInbound()
                 r_pub=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^(Password|Public[ ]?[Kk]ey):/ {print $2; exit}' | tr -d '\r\n ')
                 if [ -n "$r_pk" ]
                 then
-                    Println "$info 已自动生成 REALITY privateKey: ${green}${r_pk}${normal}\n"
+                    Println "$(eval_gettext "\$info 已自动生成 REALITY privateKey: \${green}\${r_pk}\${normal}")\n"
                     if [ -n "$r_pub" ]
                     then
-                        Println "$info 对应客户端公钥 (Password/PublicKey): ${green}${r_pub}${normal}\n"
+                        Println "$(eval_gettext "\$info 对应客户端公钥 (Password/PublicKey): \${green}\${r_pub}\${normal}")\n"
                     fi
                 fi
             fi
             if [ -z "$r_pk" ]
             then
-                Println "$error 自动生成 REALITY privateKey 失败, 请手动输入\n"
+                Println "$(eval_gettext "\$error 自动生成 REALITY privateKey 失败, 请手动输入")\n"
                 return 1
             fi
         fi
-        inquirer text_input "REALITY shortIds (逗号分隔, 留空默认为 [\"\"])" r_sid ""
+        inquirer text_input "$(gettext "REALITY shortIds (逗号分隔, 留空默认为 [\"\"])")" r_sid ""
     fi
 
-    local yn_opts=( '否' '是' )
+    local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
     local sniff_idx=1 route_only_idx=0
-    inquirer list_input_index "开启流量探测 sniffing" yn_opts sniff_idx
+    inquirer list_input_index "$(gettext "开启流量探测 sniffing")" yn_opts sniff_idx
     if [ "$sniff_idx" -eq 1 ]
     then
-        inquirer list_input_index "嗅探域名仅用于路由 routeOnly" yn_opts route_only_idx
+        inquirer list_input_index "$(gettext "嗅探域名仅用于路由 routeOnly")" yn_opts route_only_idx
     fi
 
     local inbound_json=""
@@ -490,9 +490,9 @@ XrayAddInbound()
 
     if ! ProxyAddBound "$X_CONFIG" inbounds "$inbound_json"
     then
-        Println "$error 添加 Xray 入站 ${tag} 失败\n"
+        Println "$(eval_gettext "\$error 添加 Xray 入站 \${tag} 失败")\n"
         return 1
     fi
     ProxyRestartIfActive xray
-    Println "$info 已添加 Xray 入站 ${green}${tag}${normal} (${protocol})\n"
+    Println "$(eval_gettext "\$info 已添加 Xray 入站 \${green}\${tag}\${normal} (\${protocol})")\n"
 }

@@ -1,3 +1,65 @@
+HlsCreatorAddExit()
+{
+    if [ "$live" = false ]
+    then
+        jq_path=[\"channels\"]
+        jq_path2=[\"status\"]
+        JQ update "$CHANNELS_FILE" pid "$pid" off
+        MonitorLog "$(eval_gettext "\$channel_name HLS 切片完成")"
+        exit 1
+    fi
+
+    jq_path=[\"channels\"]
+    jq_path2=[\"status\"]
+    JQ update "$CHANNELS_FILE" pid "$pid" off
+    MonitorLog "$(eval_gettext "\$channel_name HLS 关闭")"
+    chnl_pid=$pid
+    action="stop"
+    SyncFile
+
+    if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/"*.m3u8 > /dev/null 2>&1
+    then
+        for play_list in "$output_dir_root/"*.m3u8
+        do
+            echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
+        done
+        sleep "$seg_length"
+    fi
+
+    rm -rf "$output_dir_root"
+}
+
+HlsCreatorStartExit()
+{
+    if [ "$chnl_live" = false ]
+    then
+        jq_path=[\"channels\"]
+        jq_path2=[\"status\"]
+        JQ update "$CHANNELS_FILE" pid "$new_pid" off
+        MonitorLog "$(eval_gettext "\$chnl_channel_name HLS 切片完成")"
+        exit 1
+    fi
+
+    jq_path=[\"channels\"]
+    jq_path2=[\"status\"]
+    JQ update "$CHANNELS_FILE" pid "$new_pid" off
+    MonitorLog "$(eval_gettext "\$chnl_channel_name HLS 关闭")"
+    chnl_pid=$new_pid
+    action="stop"
+    SyncFile
+
+    if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
+    then
+        for play_list in "$chnl_output_dir_root/"*.m3u8
+        do
+            echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
+        done
+        sleep "$chnl_seg_length"
+    fi
+
+    rm -rf "$chnl_output_dir_root"
+}
+
 HlsStreamCreatorPlus()
 {
     trap '' HUP INT
@@ -37,33 +99,7 @@ HlsStreamCreatorPlus()
         case $from in
             "AddChannel")
                 FFmpegRegisterNewChannel hls
-
-                trap '
-                    if [ "$live" = false ]
-                    then
-                        jq_path=[\"channels\"]
-                        jq_path2=[\"status\"]
-                        JQ update "$CHANNELS_FILE" pid "$pid" off
-                        MonitorLog "$channel_name HLS 切片完成"
-                        exit 1
-                    fi
-                    jq_path=[\"channels\"]
-                    jq_path2=[\"status\"]
-                    JQ update "$CHANNELS_FILE" pid "$pid" off
-                    MonitorLog "`eval_gettext \"\\\$channel_name HLS 关闭\"`"
-                    chnl_pid=$pid
-                    action="stop"
-                    SyncFile
-                    if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/"*.m3u8 > /dev/null 2>&1
-                    then
-                        for play_list in "$output_dir_root/"*.m3u8
-                        do
-                            echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
-                        done
-                        sleep "$seg_length"
-                    fi
-                    rm -rf "$output_dir_root"
-                ' EXIT
+                trap HlsCreatorAddExit EXIT
             ;;
             "StartChannel")
                 jq_file=true
@@ -99,33 +135,7 @@ HlsStreamCreatorPlus()
 
                 action="start"
                 SyncFile
-
-                trap '
-                    if [ "$chnl_live" = false ]
-                    then
-                        jq_path=[\"channels\"]
-                        jq_path2=[\"status\"]
-                        JQ update "$CHANNELS_FILE" pid "$new_pid" off
-                        MonitorLog "$chnl_channel_name HLS 切片完成"
-                        exit 1
-                    fi
-                    jq_path=[\"channels\"]
-                    jq_path2=[\"status\"]
-                    JQ update "$CHANNELS_FILE" pid "$new_pid" off
-                    MonitorLog "`eval_gettext \"\\\$chnl_channel_name HLS 关闭\"`"
-                    chnl_pid=$new_pid
-                    action="stop"
-                    SyncFile
-                    if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
-                    then
-                        for play_list in "$chnl_output_dir_root/"*.m3u8
-                        do
-                            echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
-                        done
-                        sleep "$chnl_seg_length"
-                    fi
-                    rm -rf "$chnl_output_dir_root"
-                ' EXIT
+                trap HlsCreatorStartExit EXIT
             ;;
         esac
 

@@ -4,8 +4,8 @@ V2rayListRouting()
     out=$(ProxyRenderRouting "$V2_CONFIG" v2ray)
     if [ -z "$out" ]
     then
-        Println "$error 未配置路由\n"
+        Println "$(eval_gettext "\$error 未配置路由")\n"
         return 1
     fi
-    Println "\n=== V2Ray 路由配置 ===\n$out\n"
+    Println "\n=== $(gettext "V2Ray 路由配置") ===\n$out\n"
 }

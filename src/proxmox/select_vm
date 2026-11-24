@@ -1,6 +1,6 @@
 PveSelectVM()
 {
-    echo "选择 VM"
+    echo "$(gettext "选择 VM")"
     while read -p "$i18n_default_cancel" pve_vm_index
     do
         case "$pve_vm_index" in

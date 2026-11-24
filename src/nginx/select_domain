@@ -1,6 +1,6 @@
 NginxSelectDomain()
 {
-    echo "选择域名"
+    echo "$(gettext "选择域名")"
     while read -p "$i18n_default_cancel" nginx_domains_index
     do
         case "$nginx_domains_index" in

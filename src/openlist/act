@@ -4,7 +4,7 @@ OpenListAct()
 
     if [ "$openlists_count" -eq 0 ] 
     then
-        Println "$error 请先添加 OpenList\n"
+        Println "$(eval_gettext "\$error 请先添加 OpenList")\n"
         exit 1
     fi
 
@@ -20,17 +20,17 @@ OpenListAct()
             IFS="${delimiters[4]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
             openlist_accs_count=${#openlist_accs_username[@]}
         fi
-        openlists_txt="$openlists_txt\n${green}$((openlists_index+1)).${normal}${indent_6}名称: ${openlists_name[openlists_index]:-无}\n${indent_6}地址: ${openlists_url[openlists_index]}\n${indent_6}账号: ${openlist_accs_count}个\n"
+        openlists_txt="$openlists_txt\n${green}$((openlists_index+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[openlists_index]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[openlists_index]}\n${indent_6}$(gettext "账号"): $(eval_gettext "\${openlist_accs_count}个")\n"
     done
 
     Println "$openlists_txt\n"
 
     echo
-    inquirer list_input_index "选择 OpenList" openlists_options openlists_index
+    inquirer list_input_index "$(gettext "选择 OpenList")" openlists_options openlists_index
 
     if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
     then
-        Println "$error 请先添加账号\n"
+        Println "$(eval_gettext "\$error 请先添加账号")\n"
         exit 1
     fi
 
@@ -40,16 +40,16 @@ OpenListAct()
 
     openlist_accs_count=${#openlist_accs_username[@]}
 
-    openlist_txt="${green}账号:${normal}\n"
+    openlist_txt="${green}$(gettext "账号"):${normal}\n"
 
     for((i=0;i<openlist_accs_count;i++));
     do
-        openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n\n"
+        openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}$(gettext "用户名"): ${openlist_accs_username[i]}\n${indent_6}$(gettext "密码"): ${openlist_accs_password[i]:-$(gettext "无")}\n${indent_6}Token: ${openlist_accs_token[i]:-$(gettext "无")}\n\n"
     done
 
     Println "$openlist_txt"
 
-    inquirer list_input_index "选择账号" openlist_accs_username openlist_accs_index
+    inquirer list_input_index "$(gettext "选择账号")" openlist_accs_username openlist_accs_index
 
     openlist_acc_username="${openlist_accs_username[openlist_accs_index]}"
     openlist_acc_password="${openlist_accs_password[openlist_accs_index]}"
@@ -57,7 +57,7 @@ OpenListAct()
     if [ -n "${openlist_accs_token[openlist_accs_index]}" ] 
     then
         echo
-        inquirer list_input_index "是否重新登陆账号" ny_options ny_index
+        inquirer list_input_index "$(gettext "是否重新登录账号")" ny_options ny_index
 
         if [ "$ny_index" -eq 0 ] 
         then
@@ -70,7 +70,7 @@ OpenListAct()
     fi
 
     echo
-    inquirer text_input "输入访问路径" openlist_path "/" SetOpenListPathValidate "必须是 / 开始的路径"
+    inquirer text_input "$(gettext "输入访问路径")" openlist_path "/" SetOpenListPathValidate "$(gettext "必须是 / 开始的路径")"
 
     while true 
     do
@@ -78,7 +78,7 @@ OpenListAct()
 
         if ! OpenList.fs.list "$openlist_path" 
         then
-            Println "$error 发生错误: $fs_list_message\n"
+            Println "$(eval_gettext "\$error 发生错误: \$fs_list_message")\n"
             if [ "$openlist_path" == "/" ] 
             then
                 exit 1
@@ -90,7 +90,7 @@ OpenListAct()
 
             openlist_files_count=${#openlist_files_name[@]}
         else
-            Println "$error 没有文件\n"
+            Println "$(eval_gettext "\$error 没有文件")\n"
             if [ "$openlist_path" == "/" ] 
             then
                 exit 1
@@ -126,11 +126,11 @@ OpenListAct()
 
         if [ -n "${openlist_not_dir_indices:-}" ] || [ -n "${openlist_dir_indices:-}" ]
         then
-            openlist_files_options+=("${red}修改${normal}")
+            openlist_files_options+=("${red}$(gettext "修改")${normal}")
         fi
 
         echo
-        inquirer list_input_index "请选择" openlist_files_options openlist_files_index
+        inquirer list_input_index "$(gettext "请选择")" openlist_files_options openlist_files_index
 
         if [ "$openlist_files_root" = false ] && [ "$openlist_files_index" -eq 0 ]
         then
@@ -140,26 +140,26 @@ OpenListAct()
 
         if { [ "$openlist_files_root" = false ] && [ "$openlist_files_index" -eq $((openlist_files_count+1)) ]; } || { [ "$openlist_files_root" = true ] && [ "$openlist_files_index" -eq $((openlist_files_count)) ]; }
         then
-            openlist_files_options=("多选")
+            openlist_files_options=("$(gettext "多选")")
 
             if [ -n "${openlist_dir_indices:-}" ] 
             then
-                openlist_files_options+=("选择所有目录文件")
+                openlist_files_options+=("$(gettext "选择所有目录文件")")
             fi
             if [ -n "${openlist_not_dir_indices:-}" ] 
             then
-                openlist_files_options+=("选择所有非目录文件")
+                openlist_files_options+=("$(gettext "选择所有非目录文件")")
             fi
 
             echo
-            inquirer list_input_index "请选择" openlist_files_options openlist_files_options_index
+            inquirer list_input_index "$(gettext "请选择")" openlist_files_options openlist_files_options_index
 
             if [ "$openlist_files_options_index" -eq 0 ] 
             then
                 echo
                 openlist_files_indices=()
-                inquirer checkbox_input_indices "多选" openlist_checkbox_options openlist_files_indices 20
-            elif [ "${openlist_files_options[openlist_files_options_index]}" == "选择所有目录文件" ] 
+                inquirer checkbox_input_indices "$(gettext "多选")" openlist_checkbox_options openlist_files_indices 20
+            elif [ "${openlist_files_options[openlist_files_options_index]}" == "$(gettext "选择所有目录文件")" ] 
             then
                 openlist_files_indices=("${openlist_dir_indices[@]}")
             else
@@ -186,42 +186,42 @@ OpenListAct()
 
         if [ "$openlist_files_edit_count" -eq 1 ] 
         then
-            openlist_files_edit_options+=("重命名")
+            openlist_files_edit_options+=("$(gettext "重命名")")
         else
-            openlist_files_edit_options+=( '逐个重命名' '批量重命名')
+            openlist_files_edit_options+=( "$(gettext "逐个重命名")" "$(gettext "批量重命名")")
         fi
 
-        openlist_files_edit_options+=( '删除' )
+        openlist_files_edit_options+=( "$(gettext "删除")" )
 
         echo
-        inquirer list_input "选择操作" openlist_files_edit_options openlist_files_edit_option
+        inquirer list_input "$(gettext "选择操作")" openlist_files_edit_options openlist_files_edit_option
 
-        if [ "$openlist_files_edit_option" == "重命名" ] 
+        if [ "$openlist_files_edit_option" == "$(gettext "重命名")" ] 
         then
             echo
-            inquirer text_input "输入新的名称" openlist_file_name "$i18n_cancel"
+            inquirer text_input "$(gettext "输入新的名称")" openlist_file_name "$i18n_cancel"
             if [ "$openlist_file_name" == "$i18n_cancel" ] 
             then
                 continue
             fi
             OpenList.fs.rename
-        elif [ "$openlist_files_edit_option" == "逐个重命名" ] 
+        elif [ "$openlist_files_edit_option" == "$(gettext "逐个重命名")" ] 
         then
             for openlist_files_index in "${openlist_files_indices[@]}"
             do
                 echo
-                Println "$info 修改 ${openlist_files_name[openlist_files_index]}\n"
-                inquirer text_input "输入新的名称" openlist_file_name "$i18n_cancel"
+                Println "$info $(gettext "修改") ${openlist_files_name[openlist_files_index]}\n"
+                inquirer text_input "$(gettext "输入新的名称")" openlist_file_name "$i18n_cancel"
                 if [ "$openlist_file_name" == "$i18n_cancel" ] 
                 then
                     continue
                 fi
                 OpenList.fs.rename
             done
-        elif [ "$openlist_files_edit_option" == "批量重命名" ] 
+        elif [ "$openlist_files_edit_option" == "$(gettext "批量重命名")" ] 
         then
             echo
-            inquirer text_input "输入 sed 命令(-e)" openlist_files_edit_sed "$i18n_cancel"
+            inquirer text_input "$(gettext "输入 sed 命令(-e)")" openlist_files_edit_sed "$i18n_cancel"
             if [ "$openlist_file_name" == "$i18n_cancel" ] 
             then
                 continue
@@ -229,7 +229,7 @@ OpenListAct()
             for openlist_files_index in "${openlist_files_indices[@]}"
             do
                 openlist_file_name=$(echo "${openlist_files_name[openlist_files_index]}" | sed -e "$openlist_files_edit_sed")
-                Println "$info 修改 ${openlist_files_name[openlist_files_index]} => $openlist_file_name\n"
+                Println "$info $(gettext "修改") ${openlist_files_name[openlist_files_index]} => $openlist_file_name\n"
                 OpenList.fs.rename
             done
         else
@@ -244,7 +244,7 @@ OpenListAct()
             done
 
             Println "$openlist_files_txt\n"
-            inquirer list_input_index "确认删除以上文件" ny_options ny_index
+            inquirer list_input_index "$(gettext "确认删除以上文件")" ny_options ny_index
 
             if [ "$ny_index" -eq 1 ] 
             then
@@ -252,9 +252,9 @@ OpenListAct()
                 do
                     if OpenList.fs.remove
                     then
-                        Println "$info 文件 $openlist_file_delete_name 删除成功"
+                        Println "$(eval_gettext "\$info 文件 \$openlist_file_delete_name 删除成功")"
                     else
-                        Println "$error 文件 $openlist_file_delete_name 删除失败: $fs_remove_message"
+                        Println "$(eval_gettext "\$error 文件 \$openlist_file_delete_name 删除失败: \$fs_remove_message")"
                     fi
                 done
             fi

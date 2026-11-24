@@ -1,7 +1,7 @@
 VipDelHost()
 {
     VipListHosts
-    echo -e "选择 VIP 服务器"
+    echo -e "$(gettext "选择 VIP 服务器")"
     while read -p "$i18n_default_cancel" vip_hosts_num
     do
         case "$vip_hosts_num" in
@@ -28,5 +28,5 @@ VipDelHost()
     jq_path='["hosts",'"$vip_hosts_index"']'
     JQ delete "$VIP_FILE"
 
-    Println "服务器 ${green}[ $vip_host_ip ]${normal} 删除成功\n"
+    Println "$(eval_gettext "服务器 \${green}[ \$vip_host_ip ]\${normal} 删除成功")\n"
 }

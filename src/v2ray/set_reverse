@@ -1,25 +1,25 @@
 V2raySetReverse()
 {
-    local actions=( '添加 Bridge' '添加 Portal' '删除 Bridge' '删除 Portal' )
+    local actions=( "$(gettext "添加 Bridge")" "$(gettext "添加 Portal")" "$(gettext "删除 Bridge")" "$(gettext "删除 Portal")" )
     local action_idx=0
     echo
-    inquirer list_input_index "选择 V2Ray 反向代理操作" actions action_idx
+    inquirer list_input_index "$(gettext "选择 V2Ray 反向代理操作")" actions action_idx
 
     case "$action_idx" in
         0|1)
             local r_tag r_domain item_json=""
-            inquirer text_input "输入 tag" r_tag ""
-            inquirer text_input "输入 domain" r_domain ""
+            inquirer text_input "$(gettext "输入 tag")" r_tag ""
+            inquirer text_input "$(gettext "输入 domain")" r_domain ""
             JQs build item_json '{"tag": $t, "domain": $d}' --arg t "$r_tag" --arg d "$r_domain"
             if [ "$action_idx" -eq 0 ]
             then
                 jq_path='["reverse","bridges"]'
                 JQ add "$V2_CONFIG" "[$item_json]"
-                Println "$info 已添加 Bridge ${green}${r_tag}${normal}\n"
+                Println "$(eval_gettext "\$info 已添加 Bridge \${green}\${r_tag}\${normal}")\n"
             else
                 jq_path='["reverse","portals"]'
                 JQ add "$V2_CONFIG" "[$item_json]"
-                Println "$info 已添加 Portal ${green}${r_tag}${normal}\n"
+                Println "$(eval_gettext "\$info 已添加 Portal \${green}\${r_tag}\${normal}")\n"
             fi
         ;;
         2|3)
@@ -33,14 +33,14 @@ V2raySetReverse()
             done < <(JQs query "$V2_CONFIG" 'if (.reverse | type) == "object" and (.reverse[$k] | type) == "array" then (.reverse[$k] | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.tag // "") (\(.value.domain // ""))") else empty end' --arg k "$r_key")
             if [ "${#r_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的 ${r_key}\n"
+                Println "$(eval_gettext "\$error 没有可删除的 \${r_key}")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的 ${r_key}" r_opts del_idx
+            inquirer list_input_index "$(eval_gettext "选择要删除的 \${r_key}")" r_opts del_idx
             jq_path='["reverse","'"$r_key"'",'"$del_idx"']'
             JQ delete "$V2_CONFIG"
-            Println "$info 已删除 ${r_key}: ${green}${r_opts[$del_idx]}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除 \${r_key}:") ${green}${r_opts[$del_idx]}${normal}\n"
         ;;
     esac
 

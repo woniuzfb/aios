@@ -5,13 +5,13 @@ V2rayNginxDomainServerAddProxy()
 
     if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
     then
-        Println "$error 不能使用此入站\n"
+        Println "$(eval_gettext "\$error 不能使用此入站")\n"
         exit 1
     fi
 
     if [ -z "${inbounds_stream_path[inbounds_index]}" ] 
     then
-        Println "$error 此入站没有路径\n"
+        Println "$(eval_gettext "\$error 此入站没有路径")\n"
         exit 1
     fi
 
@@ -42,5 +42,5 @@ V2rayNginxDomainServerAddProxy()
 
     NginxBuildConf parse_out
 
-    Println "$info 代理添加成功\n"
+    Println "$(eval_gettext "\$info 代理添加成功")\n"
 }

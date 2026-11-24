@@ -17,7 +17,7 @@ CloudflareGetZone()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error ${msg:-超时, 请重试}\n" && exit 1
+        Println "$error ${msg:-$(gettext "超时, 请重试")}\n" && exit 1
     fi
 
     IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"

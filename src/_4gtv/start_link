@@ -2,7 +2,7 @@ Start4gtvLink()
 {
     if [[ $chnl_stream_link_url =~ \.m3u8$ ]]
     then
-        Println "$error 你的 IP 可能已被禁\n"
+        Println "$(eval_gettext "\$error 你的 IP 可能已被禁")\n"
         return 1
     fi
 
@@ -84,7 +84,7 @@ Start4gtvLink()
                     fi
                 done
 
-                Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
+                Println "$error ${chnl_stream_url_qualities[i]} $(gettext "不存在") !"
 
                 if [ "$monitor" = true ]
                 then
@@ -93,7 +93,7 @@ Start4gtvLink()
                 then
                     choose_asked=true
                     echo
-                    inquirer list_input_index "是否按分辨率自动选择" yn_options yn_index
+                    inquirer list_input_index "$(gettext "是否按分辨率自动选择")" yn_options yn_index
 
                     if [ "$yn_index" -eq 0 ]
                     then
@@ -104,7 +104,7 @@ Start4gtvLink()
                 fi
 
                 choose=1
-                Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                 break
             done
 
@@ -115,13 +115,13 @@ Start4gtvLink()
 
                 if [ "$chnl_stream_url_qualities_count" -eq 0 ]
                 then
-                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                    Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                     return 1
                 fi
             fi
         elif [ "$monitor" = true ]
         then
-            Println "$error 请重新选择 $chnl_channel_name 分辨率"
+            Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
             return 1
         else
             choose=1
@@ -132,16 +132,16 @@ Start4gtvLink()
             if [ -z "${kind:-}" ]
             then
                 chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
-                chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
+                chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
                 Println "$chnl_stream_urls_list"
-                echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+                echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
             else
                 chnl_stream_urls_select_all=""
                 Println "$chnl_stream_urls_list"
-                echo "选择分辨率"
+                echo "$(gettext "选择分辨率")"
             fi
 
-            while read -r -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num
+            while read -r -p "$(eval_gettext "(默认: \$chnl_stream_urls_count): ")" chnl_stream_urls_num
             do
                 chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
 
@@ -238,7 +238,7 @@ Start4gtvLink()
             chnl_stream_link="http://${chnl_stream_link#https://}"
         fi
     else
-        Println "$error 频道 [ $chnl_channel_name ] 不可用\n"
+        Println "$(eval_gettext "\$error 频道 [ \$chnl_channel_name ] 不可用")\n"
         return 1
     fi
 }

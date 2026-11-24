@@ -1,20 +1,20 @@
 NginxConfigBlockAliyun()
 {
     echo
-    inquirer list_input "是否屏蔽所有阿里云ip段" ny_options block_aliyun_yn
+    inquirer list_input "$(gettext "是否屏蔽所有阿里云ip段")" ny_options block_aliyun_yn
     if [ "$block_aliyun_yn" == "$i18n_yes" ] 
     then
-        Println "输入本机IP"
-        echo -e "$tip 多个IP用空格分隔\n"
+        Println "$(gettext "输入本机IP")"
+        echo -e "$(eval_gettext "\$tip 多个IP用空格分隔")\n"
 
-        while read -p "(默认: 自动检测): " server_ip
+        while read -p "$(gettext "(默认: 自动检测): ")" server_ip
         do
             server_ip=${server_ip:-$(GetServerIp)}
             if [ -z "$server_ip" ]
             then
-                Println "$error 无法获取本机IP, 请手动输入\n"
+                Println "$(eval_gettext "\$error 无法获取本机IP, 请手动输入")\n"
             else
-                Println "$info      本机IP: $server_ip\n"
+                Println "$(eval_gettext "\$info      本机IP: \$server_ip")\n"
                 break
             fi
         done

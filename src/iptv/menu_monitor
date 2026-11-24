@@ -5,12 +5,12 @@ Include src/iptv/monitor_daemon "$@"
 
 MonitorMenu()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请先安装 !")" && exit 1
     [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
     echo
-    monitor_options=( '查看' '开启' '关闭' )
-    inquirer list_input_index "选择操作" monitor_options monitor_options_index
+    monitor_options=( "$(gettext "查看")" "$(gettext "开启")" "$(gettext "关闭")" )
+    inquirer list_input_index "$(gettext "选择操作")" monitor_options monitor_options_index
 
     if [ "$monitor_options_index" -eq 0 ]
     then

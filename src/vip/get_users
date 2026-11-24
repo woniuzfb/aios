@@ -22,7 +22,7 @@ VipGetUsers()
         then
             expire_text=$(date +%c --date=@"$expire")
         else
-            expire_text="无"
+            expire_text="$(gettext "无")"
         fi
         if [ -n "${vip_public_host:-}" ] 
         then
@@ -30,7 +30,7 @@ VipGetUsers()
         else
             m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
         fi
-        vip_users_list="$vip_users_list ${green}$vip_users_count.${normal}${indent_6}用户名: ${green}$name${normal}  ip: ${green}$ip${normal}  到期日: ${green}$expire_text${normal}\n${indent_6}授权码: ${green}$license${normal}  认证方式: ${green}$sum${normal}\n${indent_6}m3u 播放链接: ${green}$m3u_link${normal}\n\n"
+        vip_users_list="$vip_users_list ${green}$vip_users_count.${normal}${indent_6}$(gettext "用户名"): ${green}$name${normal}  ip: ${green}$ip${normal}  $(gettext "到期日"): ${green}$expire_text${normal}\n${indent_6}$(gettext "授权码"): ${green}$license${normal}  $(gettext "认证方式"): ${green}$sum${normal}\n${indent_6}$(gettext "m3u 播放链接"): ${green}$m3u_link${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
     return 0
 }

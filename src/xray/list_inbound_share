@@ -12,7 +12,7 @@ XrayListInboundShare()
 
     if [ -n "$links" ]
     then
-        Println "\n=== Xray 分享链接 ===\n$links\n"
+        Println "\n$(gettext "=== Xray 分享链接 ===")\n$links\n"
         if [ "${3:-}" == "qr" ]
         then
             local first_link

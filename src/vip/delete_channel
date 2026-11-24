@@ -5,7 +5,7 @@ VipDelChannel()
     if [ -z "${vip_hosts_index:-}" ] 
     then
         echo
-        inquirer list_input_index "清空所有频道" ny_options ny_index
+        inquirer list_input_index "$(gettext "清空所有频道")" ny_options ny_index
 
         if [ "$ny_index" -eq 1 ] 
         then
@@ -16,7 +16,7 @@ VipDelChannel()
                 JQ update "$VIP_FILE" []
             done
 
-            Println "$info 频道清空成功\n"
+            Println "$(eval_gettext "\$info 频道清空成功")\n"
             return 0
         fi
 
@@ -24,9 +24,9 @@ VipDelChannel()
         exit 0
     fi
 
-    echo -e " ${green}$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
+    echo -e " ${green}$((vip_channels_count+1)).${normal}\r\033[7C$(gettext "全部删除")\n"
 
-    while read -p "请选择频道: " vip_channels_num
+    while read -p "$(gettext "选择频道"): " vip_channels_num
     do
         if [ "$vip_channels_num" == $((vip_channels_count+1)) ] 
         then
@@ -34,7 +34,7 @@ VipDelChannel()
             jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
             JQ update "$VIP_FILE" []
 
-            Println "$info 频道删除成功\n"
+            Println "$(eval_gettext "\$info 频道删除成功")\n"
             exit 0
         fi
         case "$vip_channels_num" in
@@ -61,5 +61,5 @@ VipDelChannel()
     jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"']'
     JQ delete "$VIP_FILE"
 
-    Println "频道 ${green}[ $vip_channel_name ]${normal} 删除成功\n"
+    Println "$(eval_gettext "频道 \${green}[ \$vip_channel_name ]\${normal} 删除成功")\n"
 }

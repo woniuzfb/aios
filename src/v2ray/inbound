@@ -24,7 +24,7 @@ V2rayInboundProxyProtocol()
         Dokodemo
         Trojan
     )
-    inquirer list_input_index "选择入站代理协议" inbound_proxy_protocol_options inbound_proxy_protocols_index
+    inquirer list_input_index "$(gettext "选择入站代理协议")" inbound_proxy_protocol_options inbound_proxy_protocols_index
     inbound_proxy_protocol="${inbound_proxy_protocols[$inbound_proxy_protocols_index]}"
 }
 
@@ -40,26 +40,26 @@ V2rayInboundPortValidator()
 
 V2rayInboundPort()
 {
-    Println "$tip 数值或范围,比如 1234、5-10"
-    inquirer text_input "输入入站端口" inbound_port "$i18n_random" V2rayInboundPortValidator
+    Println "$(eval_gettext "\$tip 数值或范围,比如 1234、5-10")"
+    inquirer text_input "$(gettext "输入入站端口")" inbound_port "$i18n_random" V2rayInboundPortValidator
 
     if [ "$inbound_port" == "$i18n_random" ] 
     then
         inbound_port=$(GetFreePort)
-        Println "  入站端口: ${green}$inbound_port${normal}"
+        Println "  $(gettext "入站端口"): ${green}$inbound_port${normal}"
     fi
 }
 
 V2rayInboundListen()
 {
-    Println "$tip 填写 Unix domain socket 时, 入站端口将被忽略"
-    inquirer text_input "输入入站监听地址" inbound_listen 0.0.0.0
+    Println "$(eval_gettext "\$tip 填写 Unix domain socket 时, 入站端口将被忽略")"
+    inquirer text_input "$(gettext "输入入站监听地址")" inbound_listen 0.0.0.0
 }
 
 V2rayInboundTag()
 {
     echo
-    inquirer text_input "输入入站标识" inbound_tag "$i18n_random"
+    inquirer text_input "$(gettext "输入入站标识")" inbound_tag "$i18n_random"
 
     if [ "$inbound_tag" == "$i18n_random" ] 
     then
@@ -73,14 +73,14 @@ V2rayInboundTag()
                 break
             fi
         done
-        Println "  入站标识: ${green}$inbound_tag${normal}"
+        Println "  $(gettext "入站标识"): ${green}$inbound_tag${normal}"
     fi
 }
 
 V2rayInboundSniffingEnabled()
 {
     echo
-    inquirer list_input_index "是否开启流量探测" ny_options ny_index
+    inquirer list_input_index "$(gettext "是否开启流量探测")" ny_options ny_index
 
     if [ "$ny_index" -eq 0 ] 
     then
@@ -94,8 +94,8 @@ V2rayInboundSniffingDestOverride()
 {
     inbound_sniffing_dest_override_options=( 'http' 'tls' 'quic' 'fakedns' 'fakedns+others' )
 
-    Println "$tip 当流量为指定类型时，按其中包括的目标地址重置当前连接的目标"
-    inquirer checkbox_input "指定流量类型: " inbound_sniffing_dest_override_options inbound_sniffing_dest_override_options_selected
+    Println "$(eval_gettext "\$tip 当流量为指定类型时, 按其中包括的目标地址重置当前连接的目标")"
+    inquirer checkbox_input "$(gettext "指定流量类型: ")" inbound_sniffing_dest_override_options inbound_sniffing_dest_override_options_selected
 
     inbound_sniffing_dest_override=$(JoinByChar , "${inbound_sniffing_dest_override_options_selected[@]}")
 }
@@ -103,7 +103,7 @@ V2rayInboundSniffingDestOverride()
 V2rayInboundSniffingMetadataOnly()
 {
     echo
-    inquirer list_input_index "仅使用元数据推断目标地址而不截取流量内容" ny_options ny_index
+    inquirer list_input_index "$(gettext "仅使用元数据推断目标地址而不截取流量内容")" ny_options ny_index
 
     if [ "$ny_index" -eq 0 ] 
     then
@@ -142,13 +142,13 @@ V2rayAllocateStrategy()
 {
     echo
     allocate_strategy_options=( 'always' 'random' )
-    inquirer list_input "端口分配策略" allocate_strategy_options allocate_strategy
+    inquirer list_input "$(gettext "端口分配策略")" allocate_strategy_options allocate_strategy
 }
 
 V2rayAllocateRefresh()
 {
-    Println "随机端口刷新间隔(分钟)"
-    while read -p "(默认: 5): " allocate_refresh
+    Println "$(gettext "随机端口刷新间隔(分钟)")"
+    while read -p "($(gettext "默认"): 5): " allocate_refresh
     do
         case "$allocate_refresh" in
             "")
@@ -168,13 +168,13 @@ V2rayAllocateRefresh()
             ;;
         esac
     done
-    Println "  刷新间隔: ${green} $allocate_refresh ${normal}"
+    Println "  $(gettext "刷新间隔"): ${green} $allocate_refresh ${normal}"
 }
 
 V2rayAllocateConcurrency()
 {
-    Println "随机端口数量, 最大值为端口范围的三分之一"
-    while read -p "(默认: 3): " allocate_concurrency
+    Println "$(gettext "随机端口数量, 最大值为端口范围的三分之一")"
+    while read -p "($(gettext "默认"): 3): " allocate_concurrency
     do
         case "$allocate_concurrency" in
             "")
@@ -194,7 +194,7 @@ V2rayAllocateConcurrency()
             ;;
         esac
     done
-    Println "  随机端口数量: ${green} $allocate_concurrency ${normal}"
+    Println "  $(gettext "随机端口数量"): ${green} $allocate_concurrency ${normal}"
 }
 
 V2rayInbound()
@@ -407,7 +407,7 @@ V2rayInbound()
     elif [ "$protocol" == "dokodemo-door" ] 
     then
         echo
-        inquirer list_input "是否用于 api 查询" ny_options yn_option
+        inquirer list_input "$(gettext "是否用于 api 查询")" ny_options yn_option
 
         if [ "$yn_option" == "$i18n_yes" ] 
         then
@@ -683,5 +683,5 @@ V2rayInbound()
     jq_path='["inbounds"]'
     JQ add "$V2_CONFIG" "[$new_inbound]"
 
-    Println "$info 入站 $tag 添加成功\n"
+    Println "$(eval_gettext "\$info 入站 \$tag 添加成功")\n"
 }

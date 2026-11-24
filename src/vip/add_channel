@@ -1,22 +1,22 @@
 VipAddChannel()
 {
     echo
-    add_vip_channel_options=( '选择频道' '手动输入频道' )
-    inquirer list_input_index "添加方式" add_vip_channel_options add_vip_channel_options_index
+    add_vip_channel_options=( "$(gettext "选择频道")" "$(gettext "手动输入频道")" )
+    inquirer list_input_index "$(gettext "添加方式")" add_vip_channel_options add_vip_channel_options_index
 
     if [ "$add_vip_channel_options_index" -eq 0 ] 
     then
         if [ ! -f "$IPTV_ROOT/VIP" ] 
         then
-            Println "$info 获取频道中..."
+            Println "$(eval_gettext "\$info 获取频道中...")"
             if ! curl -s -L "$VIP_CHANNELS_LINK" -o "${VIP_CHANNELS_FILE}_tmp"
             then
                 if [ ! -s "$VIP_CHANNELS_FILE" ] 
                 then
-                    Println "$error 暂时无法获取频道, 请稍后再试\n"
+                    Println "$(eval_gettext "\$error 暂时无法获取频道, 请稍后再试")\n"
                     exit 1
                 fi
-                Println "$error 更新频道失败, 使用原有频道\n"
+                Println "$(eval_gettext "\$error 更新频道失败, 使用原有频道")\n"
             else
                 mv "${VIP_CHANNELS_FILE}_tmp" "$VIP_CHANNELS_FILE"
             fi
@@ -40,7 +40,7 @@ VipAddChannel()
 
         if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$jq_name" ]
         then
-            Println "$error 没有找到频道\n"
+            Println "$(eval_gettext "\$error 没有找到频道")\n"
             exit 1
         fi
 
@@ -75,19 +75,19 @@ VipAddChannel()
                 vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
             else
                 flag=0
-                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\r\033[47C$(gettext "频道ID"): ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-$(gettext "无")}\n\n"
             fi
         done
 
         if [ "$flag" -eq 1 ] 
         then
-            vip_channels_list="$vip_channels_list\n\033[7C频道ID: ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\n\n"
+            vip_channels_list="$vip_channels_list\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\n\n"
         fi
 
         Println "$vip_channels_list"
 
-        echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
-        while read -p "请选择频道: " vip_channels_num
+        echo -e "$(eval_gettext "\$tip 多个频道用空格分隔, 比如 5 7 9-11")"
+        while read -p "$(gettext "选择频道"): " vip_channels_num
         do
             [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
             IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
@@ -173,7 +173,7 @@ VipAddChannel()
                         if [ "$vip_host_found" -eq 0 ] 
                         then
                             echo
-                            inquirer list_input "是否添加服务器 $vip_channel_host_ip:$vip_channel_host_port" yn_options add_vip_host_yn
+                            inquirer list_input "$(eval_gettext "是否添加服务器 \$vip_channel_host_ip:\$vip_channel_host_port")" yn_options add_vip_host_yn
                             if [ "$add_vip_host_yn" == "$i18n_yes" ] 
                             then
                                 vip_host_ip=$vip_channel_host_ip
@@ -203,7 +203,7 @@ VipAddChannel()
 
                                 jq_path='["hosts"]'
                                 JQ add "$VIP_FILE" "[$new_host]"
-                                Println "$info $vip_channel_host_ip:$vip_channel_host_port 服务器添加成功\n"
+                                Println "$(eval_gettext "\$info \$vip_channel_host_ip:\$vip_channel_host_port 服务器添加成功")\n"
                                 VipGetHosts
                                 i=$((vip_hosts_count-1))
                             else
@@ -229,7 +229,7 @@ VipAddChannel()
                         jq_path='["hosts",'"$i"',"channels"]'
                         JQ add "$VIP_FILE" "[$new_channel]"
 
-                        Println "$info $vip_channel_name 添加成功"
+                        Println "$(eval_gettext "\$info \$vip_channel_name 添加成功")"
                     done
                     break
                 ;;
@@ -239,7 +239,7 @@ VipAddChannel()
     fi
 
     VipListHosts
-    echo -e "选择 VIP 服务器"
+    echo -e "$(gettext "选择 VIP 服务器")"
     while read -p "$i18n_default_cancel" vip_hosts_num
     do
         case "$vip_hosts_num" in
@@ -265,11 +265,11 @@ VipAddChannel()
 
     # awk -v ORS=" " '$1 { print $0; } END { printf("\n"); }'
     echo
-    inquirer list_input "是否批量添加" ny_options vip_bulk_add
+    inquirer list_input "$(gettext "是否批量添加")" ny_options vip_bulk_add
 
     if [[ $vip_bulk_add == "$i18n_yes" ]] 
     then
-        Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
+        Println "$(gettext "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔")"
         read -p "$i18n_default_cancel" vip_channel
         IFS=" " read -r -a vip_channels <<< "$vip_channel"
         new_channels=""
@@ -287,7 +287,7 @@ VipAddChannel()
         done
         jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
         JQ add "$VIP_FILE" "[$new_channels]"
-        Println "$info 批量添加成功\n"
+        Println "$(eval_gettext "\$info 批量添加成功")\n"
     else
         VipSetChannelId
         VipSetChannelName
@@ -304,6 +304,6 @@ VipAddChannel()
 
         jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
         JQ add "$VIP_FILE" "[$new_channel]"
-        Println "$info 频道 $vip_channel_name 添加成功\n"
+        Println "$(eval_gettext "\$info 频道 \$vip_channel_name 添加成功")\n"
     fi
 }

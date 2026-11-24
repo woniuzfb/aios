@@ -8,8 +8,8 @@ Disable4gtvCron()
         FilterFileLines "$AIOS_PREFIX/bin/tv 4g -" "$cron_tmp"
         crontab "$cron_tmp" > /dev/null
         rm -f "$cron_tmp"
-        Println "$info 定时任务 (每5天注册账号) 关闭成功\n"
+        Println "$(eval_gettext "\$info 定时任务 (每5天注册账号) 关闭成功")\n"
     else
-        Println "$error 定时任务 (每5天注册账号) 未开启 !\n"
+        Println "$(eval_gettext "\$error 定时任务 (每5天注册账号) 未开启 !")\n"
     fi
 }

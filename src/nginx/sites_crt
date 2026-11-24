@@ -17,7 +17,7 @@ NginxSitesCrtInstall()
     if [ -e "$nginx_prefix/conf/sites_crt/$domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$domain.key" ]
     then
         echo
-        inquirer list_input "检测到证书已存在, 是否重新安装证书" ny_options reinstall_crt_yn
+        inquirer list_input "$(gettext "检测到证书已存在, 是否重新安装证书")" ny_options reinstall_crt_yn
         if [ "$reinstall_crt_yn" == "$i18n_no" ] 
         then
             return 0
@@ -26,11 +26,11 @@ NginxSitesCrtInstall()
 
     AcmeCheck
 
-    Println "$info 安装 $domain 证书..."
+    Println "$(eval_gettext "\$info 安装 \$domain 证书...")"
 
     NginxDomainUpdateCrt "$domain" 1
 
-    Println "$info $domain 证书安装成功\n"
+    Println "$(eval_gettext "\$info \$domain 证书安装成功")\n"
 }
 
 NginxSitesCrtSelfSignValid()
@@ -47,13 +47,13 @@ NginxSitesCrtManage()
 {
     if [ ! -d "$nginx_prefix"/conf/sites_crt ] 
     then
-        Println "$error 请先安装 $nginx_name\n"
+        Println "$(eval_gettext "\$error 请先安装 \$nginx_name")\n"
         return 1
     fi
 
     echo
-    crt_options=( '浏览证书' '安装自签名证书' '安装ACME证书' )
-    inquirer list_input_index "选择操作" crt_options crt_options_index
+    crt_options=( "$(gettext "浏览证书")" "$(gettext "安装自签名证书")" "$(gettext "安装ACME证书")" )
+    inquirer list_input_index "$(gettext "选择操作")" crt_options crt_options_index
 
     case $crt_options_index in
         0) ServiceBrowse "$nginx_prefix"/conf/sites_crt
@@ -65,7 +65,7 @@ NginxSitesCrtManage()
             then
                 if ! curl -Lm 20 -o "$nginx_prefix"/conf/sites_crt/openssl.cnf "$FFMPEG_MIRROR_LINK"/openssl.cnf 
                 then
-                    Println "$error 下载 openssl.cnf 失败, 请稍后再试\n"
+                    Println "$(eval_gettext "\$error 下载 openssl.cnf 失败, 请稍后再试")\n"
                     return 1
                 fi
             fi
@@ -73,11 +73,11 @@ NginxSitesCrtManage()
             if [ ! -f "$nginx_prefix"/conf/sites_crt/root.crt ] 
             then
                 echo
-                inquirer text_input "请输入你想设置的根证书公用名CN (Common Name)" root_cn root.yourdomain.com
+                inquirer text_input "$(gettext "请输入你想设置的根证书公用名CN (Common Name)")" root_cn root.yourdomain.com
                 openssl req -new -nodes -text -out root.csr -newkey rsa:4096 -keyout root.key -subj "/CN=$root_cn"
                 chmod og-rwx root.key
                 openssl x509 -req -in root.csr -text -days 3650 -extfile "$nginx_prefix"/conf/sites_crt/openssl.cnf -extensions v3_ca -signkey root.key -out root.crt
-                Println "$info "$nginx_prefix"/conf/root.crt 可以添加到用户端系统用来验证之后自签名的证书\n"
+                Println "$(eval_gettext "\$info \$nginx_prefix/conf/root.crt 可以添加到用户端系统用来验证之后自签名的证书")\n"
             fi
 
             cert_root="$nginx_prefix"/conf/sites_crt
@@ -85,14 +85,14 @@ NginxSitesCrtManage()
             mkdir -p newcerts
 
             echo
-            inquirer text_input "请输入自签名证书公用名CN (Common Name)" server_cn localhost NginxSitesCrtSelfSignValid "证书已存在"
+            inquirer text_input "$(gettext "请输入自签名证书公用名CN (Common Name)")" server_cn localhost NginxSitesCrtSelfSignValid "$(gettext "证书已存在")"
 
             ny_index=0
 
             if ! [[ "$server_cn" =~ \* ]] 
             then
                 echo
-                inquirer list_input_index "是否将子域名 *.$server_cn 加到 SAN" ny_options ny_index
+                inquirer list_input_index "$(eval_gettext "是否将子域名 *.\$server_cn 加到 SAN")" ny_options ny_index
             fi
 
             if [ "$ny_index" -eq 1 ] 
@@ -144,7 +144,7 @@ NginxSitesCrtManage()
                 mv "$cert_root/${server_cn}".pem.tmp "$cert_root/${server_cn}".pem
             fi
 
-            Println "$info 自签名证书安装成功\n"
+            Println "$(eval_gettext "\$info 自签名证书安装成功")\n"
         ;;
         2) NginxConfigDomain
         ;;

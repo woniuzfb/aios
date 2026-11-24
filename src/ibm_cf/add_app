@@ -6,7 +6,7 @@ IbmAddCfApp()
 
     IbmSetCfAppName
 
-    Println "$info 查询路由 ..."
+    Println "$(eval_gettext "\$info 查询路由 ...")"
 
     app_guid=$(ibmcloud cf app "$ibm_cf_app_name" --guid -q)
 
@@ -101,5 +101,5 @@ IbmAddCfApp()
     jq_path='["cf","apps"]'
     JQ add "$IBM_CONFIG" "[$ibm_cf_app]"
 
-    Println "$info APP 添加成功\n"
+    Println "$(eval_gettext "\$info APP 添加成功")\n"
 }

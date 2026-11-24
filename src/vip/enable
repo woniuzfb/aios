@@ -3,21 +3,21 @@ VipEnable()
     # deprecated
     if [ -s "/tmp/vip.pid" ] && kill -0 "$(< /tmp/vip.pid)" 2> /dev/null
     then
-        Println "$error VIP 已开启\n" && exit 1
+        Println "$(eval_gettext "\$error VIP 已开启")\n" && exit 1
     fi
 
     if [ -s "$IPTV_ROOT/vip.pid" ] && kill -0 "$(< $IPTV_ROOT/vip.pid)" 2> /dev/null
     then
-        Println "$error VIP 已开启\n" && exit 1
+        Println "$(eval_gettext "\$error VIP 已开启")\n" && exit 1
     fi
 
     if [ ! -s "$VIP_FILE" ] 
     then
-        Println "$error 请先添加 VIP 服务器\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加 VIP 服务器")\n" && exit 1
     fi
 
     echo
-    inquirer text_input "输入检测间隔(秒): " sleep_time 86400
+    inquirer text_input "$(gettext "输入检测间隔(秒)"): " sleep_time 86400
 
     VipGetHosts
 
@@ -29,7 +29,7 @@ VipEnable()
         then
             if [ ! -e "$MD5SUM_FILE" ] 
             then
-                Println "$info 安装 md5sum..."
+                Println "$(eval_gettext "\$info 安装 md5sum...")"
                 if [[ ! -x $(command -v gcc) ]] 
                 then
                     if [ "$dist" == "rpm" ] 
@@ -43,7 +43,7 @@ VipEnable()
                 wget --timeout=10 --tries=1 --no-check-certificate "$MD5SUM_LINK" -qO "$MD5SUM_FILE.c" \
                 || wget --timeout=10 --tries=3 --no-check-certificate "$MD5SUM_LINK_FALLBACK" -qO "$MD5SUM_FILE.c"
                 gcc -Wall -O3 -o "$MD5SUM_FILE" "$MD5SUM_FILE.c"
-                Println "$info md5sum 安装成功"
+                Println "$(eval_gettext "\$info md5sum 安装成功")"
             fi
             if [ -z "${vip_public_root:-}" ] 
             then
@@ -53,11 +53,11 @@ VipEnable()
 
             ( VipMonitor ) > /dev/null 2> /dev/null < /dev/null &
 
-            Println "$info VIP 开启成功\n"
+            Println "$(eval_gettext "\$info VIP 开启成功")\n"
         else
-            Println "$error 请先添加用户\n" && exit 1
+            Println "$(eval_gettext "\$error 请先添加用户")\n" && exit 1
         fi
     else
-        Println "$error 请先添加 VIP 服务器\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加 VIP 服务器")\n" && exit 1
     fi
 }

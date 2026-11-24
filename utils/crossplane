@@ -5,7 +5,7 @@ CrossplaneInstall()
         return 0
     fi
 
-    Println "$info 安装 crossplane ..."
+    Println "$(eval_gettext "\$info 安装 crossplane ...")"
 
     PythonInstall
     pip3 install crossplane

@@ -11,7 +11,7 @@ V2rayProxyVmessSettings()
             while true 
             do
                 echo
-                inquirer list_input_ny "是否继续添加Vmess用户" ft_options continue_yn
+                inquirer list_input_ny "$(gettext "是否继续添加Vmess用户")" ft_options continue_yn
 
                 if [ "$continue_yn" = false ] 
                 then
@@ -81,7 +81,7 @@ V2rayProxyVlessSettings()
             while true 
             do
                 echo
-                inquirer list_input_ny "是否继续添加Vless用户" ft_options continue_yn
+                inquirer list_input_ny "$(gettext "是否继续添加Vless用户")" ft_options continue_yn
 
                 if [ "$continue_yn" = false ] 
                 then

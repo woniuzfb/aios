@@ -2,7 +2,7 @@ Menu4gtv()
 {
     if [ ! -d "$IPTV_ROOT" ]
     then
-        Println "$error 请先安装脚本 !\n" && exit 1
+        Println "$(eval_gettext "\$error 请先安装脚本 !")\n" && exit 1
     fi
 
     user_agent="$USER_AGENT_BROWSER"
@@ -15,20 +15,20 @@ Menu4gtv()
 
     OpensslInstall
 
-    Println "  4gtv 面板
+    Println "  $(gettext "4gtv 面板")
 
-  ${green}1.${normal} 注册账号
-  ${green}2.${normal} 登录账号
-  ${green}3.${normal} 查看账号
-  ${green}4.${normal} 修改账号
-  ${green}5.${normal} 删除账号
-  ${green}6.${normal} 使用免费频道
-  ${green}7.${normal} 使用豪华频道
-  ${green}8.${normal} 开启计划任务
-  ${green}9.${normal} 关闭计划任务
+  ${green}1.${normal} $(gettext "注册账号")
+  ${green}2.${normal} $(gettext "登录账号")
+  ${green}3.${normal} $(gettext "查看账号")
+  ${green}4.${normal} $(gettext "修改账号")
+  ${green}5.${normal} $(gettext "删除账号")
+  ${green}6.${normal} $(gettext "使用免费频道")
+  ${green}7.${normal} $(gettext "使用豪华频道")
+  ${green}8.${normal} $(gettext "开启计划任务")
+  ${green}9.${normal} $(gettext "关闭计划任务")
 
 "
-    while read -r -p "(默认: 6): " _4gtv_menu_num
+    while read -r -p "($(gettext "默认"): 6): " _4gtv_menu_num
     do
         _4gtv_menu_num=${_4gtv_menu_num:-6}
         case "$_4gtv_menu_num" in
@@ -124,7 +124,7 @@ Menu4gtv()
         do
             if [[ $chnl =~ embed.4gtv.tv/HiNet ]] && [[ $chnl =~ asset_id=${hinet_4gtv[i]%:*}\& ]]
             then
-                hinet_4gtv_chnl_added=" ${green}[已添加]${normal}"
+                hinet_4gtv_chnl_added=" ${green}[$(gettext "已添加")]${normal}"
                 break
             fi
         done
@@ -133,7 +133,7 @@ Menu4gtv()
 
     cookies=""
 
-    Println "$info 获取频道 ..."
+    Println "$(eval_gettext "\$info 获取频道...")"
     IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(CurlFake -s -Lm 10 \
         -H "Referer: https://www.4gtv.tv/channel.html?channelSet_id=$_4gtv_set_id" \
         "https://api2.4gtv.tv/Channel/GetChannelBySetId/$_4gtv_set_id/pc/L" \
@@ -155,21 +155,21 @@ Menu4gtv()
             do
                 if [[ $chnl =~ 4gtv.tv/channel_sub.html ]] && [[ $chnl =~ asset_id=${_4gtv_chnls_aid[i]}\& ]]
                 then
-                    _4gtv_chnl_added=" ${green}[已添加]${normal}"
+                    _4gtv_chnl_added=" ${green}[$(gettext "已添加")]${normal}"
                     break
                 fi
             done
             _4gtv_list="$_4gtv_list ${green}$((i+hinet_4gtv_count+1)).${normal}${indent_6}${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
         done
-        chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
+        chnls_list="$(gettext "HiNet 4gtv 频道"):\n\n${hinet_4gtv_list}$(gettext "4gtv 官网频道"):\n\n$_4gtv_list"
     else
         _4gtv_chnls_count=0
-        chnls_list="HiNet 4gtv 频道:\n\n$hinet_4gtv_list"
+        chnls_list="$(gettext "HiNet 4gtv 频道"):\n\n$hinet_4gtv_list"
     fi
 
     chnls_count=$((hinet_4gtv_count+_4gtv_chnls_count))
     Println "$chnls_list"
-    echo "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
+    echo "$(gettext "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11")"
     while read -r -p "$i18n_default_cancel" chnls_num
     do
         [ -z "$chnls_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -192,8 +192,8 @@ Menu4gtv()
             hinet_4gtv_chnl_id=${hinet_4gtv[hinet_4gtv_chnl_index]%%:*}
             hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
             hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
-            Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
-            Println "$info 解析 [ $hinet_4gtv_chnl_name ] 链接 ..."
+            Println "$(eval_gettext "\$info 添加频道 [ \$hinet_4gtv_chnl_name ]")\n\n"
+            Println "$(eval_gettext "\$info 解析 [ \$hinet_4gtv_chnl_name ] 链接 ...")"
             stream_links=("https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html")
             headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
             stream_link_data=$(CurlFake -s -Lm 10 \
@@ -207,7 +207,7 @@ Menu4gtv()
 
                 if [ -z "$stream_link_data" ]
                 then
-                    Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
+                    Println "$(eval_gettext "\$error hinet 4gtv 或频道 [ \$hinet_4gtv_chnl_name ] 不可用!")\n"
                     continue
                 fi
 
@@ -224,7 +224,7 @@ Menu4gtv()
                 fi
 
                 echo
-                inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+                inquirer list_input "$(gettext "是否 添加/替换 现有频道直播源")" ny_options add_channel_yn
 
                 if [ "$add_channel_yn" == "$i18n_yes" ]
                 then
@@ -239,8 +239,8 @@ Menu4gtv()
                         ListChannel
 
                         echo
-                        change_options=( '添加' '替换' )
-                        inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+                        change_options=( "$(gettext "添加")" "$(gettext "替换")" )
+                        inquirer list_input_index "$(eval_gettext "如何修改频道 [ \$chnl_channel_name ]")" change_options change_options_index
 
                         if [ "$change_options_index" -eq 0 ]
                         then
@@ -249,7 +249,7 @@ Menu4gtv()
                             JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                         else
                             echo
-                            inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+                            inquirer list_input_index "$(gettext "选择替换的直播源")" chnl_stream_links chnl_stream_links_index
 
                             jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
                             JQ update "$CHANNELS_FILE" "${stream_links[0]}"
@@ -267,11 +267,11 @@ Menu4gtv()
                         jq_path='["channels",'"$chnls_index"',"cookies"]'
                         JQ update "$CHANNELS_FILE" "$cookies"
 
-                        Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                        Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 修改成功 !")\n"
                     done
                 else
                     echo
-                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                    inquirer list_input "$(gettext "是否推流 flv")" ny_options add_channel_flv_yn
 
                     if [ "$add_channel_flv_yn" == "$i18n_yes" ]
                     then
@@ -282,15 +282,15 @@ Menu4gtv()
                     AddChannel
                 fi
             else
-                Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
+                Println "$(eval_gettext "\$error hinet 4gtv 或频道 [ \$hinet_4gtv_chnl_name ] 不可用!")\n"
             fi
         else
             _4gtv_chnl_index=$((_4gtv_chnl_idx-hinet_4gtv_count))
             _4gtv_chnl_id=${_4gtv_chnls_id[_4gtv_chnl_index]}
             _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
             _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
-            Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
-            Println "$info 解析 [ $_4gtv_chnl_name ] 链接 ..."
+            Println "$(eval_gettext "\$info 添加频道 [ \$_4gtv_chnl_name ]")\n\n"
+            Println "$(eval_gettext "\$info 解析 [ \$_4gtv_chnl_name ] 链接 ...")"
             stream_links=("https://www.4gtv.tv/channel_sub.html?channelSet_id=$_4gtv_set_id&asset_id=$_4gtv_chnl_aid&channel_id=$_4gtv_chnl_id")
             headers="Referer: ${stream_links[0]}\r\n"
             key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
@@ -322,14 +322,14 @@ Menu4gtv()
 
             if [ -z "$stream_link_data" ]
             then
-                Println "$error 无法连接 4gtv !\n" && exit 1
+                Println "$(eval_gettext "\$error 无法连接 4gtv !")\n" && exit 1
             fi
 
             stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
 
             if [ "$stream_link_data" == null ]
             then
-                Println "$error 此服务器 ip 不支持或频道 [ $_4gtv_chnl_name ] 不可用!\n"
+                Println "$(eval_gettext "\$error 此服务器 ip 不支持或频道 [ \$_4gtv_chnl_name ] 不可用!")\n"
             else
                 stream_link="${stream_links[0]}"
                 stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
@@ -343,7 +343,7 @@ Menu4gtv()
                 fi
 
                 echo
-                inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+                inquirer list_input "$(gettext "是否 添加/替换 现有频道直播源")" ny_options add_channel_yn
 
                 if [ "$add_channel_yn" == "$i18n_yes" ]
                 then
@@ -358,8 +358,8 @@ Menu4gtv()
                         ListChannel
 
                         echo
-                        change_options=( '添加' '替换' )
-                        inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+                        change_options=( "$(gettext "添加")" "$(gettext "替换")" )
+                        inquirer list_input_index "$(eval_gettext "如何修改频道 [ \$chnl_channel_name ]")" change_options change_options_index
 
                         if [ "$change_options_index" -eq 0 ]
                         then
@@ -368,7 +368,7 @@ Menu4gtv()
                             JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                         else
                             echo
-                            inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+                            inquirer list_input_index "$(gettext "选择替换的直播源")" chnl_stream_links chnl_stream_links_index
 
                             jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
                             JQ update "$CHANNELS_FILE" "${stream_links[0]}"
@@ -386,10 +386,10 @@ Menu4gtv()
                         jq_path='["channels",'"$chnls_index"',"cookies"]'
                         JQ update "$CHANNELS_FILE" "$cookies"
 
-                        Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                        Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 修改成功 !")\n"
                     done
                 else
-                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                    inquirer list_input "$(gettext "是否推流 flv")" ny_options add_channel_flv_yn
 
                     if [ "$add_channel_flv_yn" == "$i18n_yes" ]
                     then

@@ -36,7 +36,7 @@ V2rayAddInbound()
         V2raySetListen
     else
         echo
-        inquirer list_input "是否通过此脚本配置的 nginx 连接" ny_options nginx_proxy_yn
+        inquirer list_input "$(gettext "是否通过此脚本配置的 nginx 连接")" ny_options nginx_proxy_yn
 
         if [[ $nginx_proxy_yn == "$i18n_yes" ]]
         then
@@ -214,13 +214,13 @@ V2rayAddInbound()
             if [ "$tls_disable_system_root" = false ] 
             then
                 echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                 if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
             fi
-            Println "$info 设置证书"
+            Println "$(eval_gettext "\$info 设置证书")"
             V2raySetCertificates
             merge=$(
             $JQ_FILE -n --argjson certificates "[$certificate]" \
@@ -235,7 +235,7 @@ V2rayAddInbound()
             if [ "$tls_disable_system_root" = true ] 
             then
                 echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                 if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
@@ -293,13 +293,13 @@ V2rayAddInbound()
             if [ "$tls_disable_system_root" = false ] 
             then
                 echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                 if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
             fi
-            Println "$info 设置证书"
+            Println "$(eval_gettext "\$info 设置证书")"
             V2raySetCertificates
             merge=$(
             $JQ_FILE -n --argjson certificates "[$certificate]" \
@@ -314,7 +314,7 @@ V2rayAddInbound()
             if [ "$tls_disable_system_root" = true ] 
             then
                 echo
-                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                 if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
@@ -499,7 +499,7 @@ V2rayAddInbound()
     elif [ "$protocol" == "dokodemo-door" ] 
     then
         echo
-        inquirer list_input "是否用于 api 查询" ny_options yn_option
+        inquirer list_input "$(gettext "是否用于 api 查询")" ny_options yn_option
 
         if [ "$yn_option" == "$i18n_yes" ] 
         then
@@ -775,5 +775,5 @@ V2rayAddInbound()
     jq_path='["inbounds"]'
     JQ add "$V2_CONFIG" "[$new_inbound]"
 
-    Println "$info 入站 $tag 添加成功\n"
+    Println "$(eval_gettext "\$info 入站 \$tag 添加成功")\n"
 }

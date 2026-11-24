@@ -31,7 +31,7 @@ CurlImpersonateInstall()
 
     if ! curl_impersonate_ver=$(curl -s -Lm 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
     then
-        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        Println "$(eval_gettext "\$error curl impersonate 下载出错, 无法连接 github ?")\n"
         return 1
     fi
 
@@ -47,17 +47,17 @@ CurlImpersonateInstall()
     then
         curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.aarch64-linux-gnu"
     else
-        Println "$error 系统不支持安装 curl impersonate\n"
+        Println "$(eval_gettext "\$error 系统不支持安装 curl impersonate")\n"
         return 1
     fi
 
-    Println "$info 下载 curl impersonate ..."
+    Println "$(eval_gettext "\$info 下载 curl impersonate ...")"
 
     mkdir -p "$DEPENDS_ROOT/curl-impersonate/"
 
     if ! curl -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
     then
-        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        Println "$(eval_gettext "\$error curl impersonate 下载出错, 无法连接 github ?")\n"
         return 1
     fi
 
@@ -69,7 +69,7 @@ CurlImpersonateInstall()
 
     chmod +x "$CURL_IMPERSONATE_FILE"
 
-    Println "$info curl impersonate 安装成功"
+    Println "$(eval_gettext "\$info curl impersonate 安装成功")"
 }
 
 CurlImpersonateValidateService()
@@ -87,7 +87,7 @@ CurlImpersonateUpdate()
     if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
     then
         echo
-        inquirer list_input_index "curl impersonate 已经存在, 是否重新安装" ny_options ny_index
+        inquirer list_input_index "$(gettext "curl impersonate 已经存在, 是否重新安装")" ny_options ny_index
         if [ "$ny_index" -eq 1 ] 
         then
             rm -f "$CURL_IMPERSONATE_FILE"
@@ -98,7 +98,7 @@ CurlImpersonateUpdate()
     fi
 
     echo
-    config_options=( '设置默认服务' )
+    config_options=( "$(gettext "设置默认服务")" )
 
     if ls -A "$CURL_IMPERSONATE_FILE"/-* > /dev/null 2>&1
     then
@@ -109,18 +109,18 @@ CurlImpersonateUpdate()
         done
     fi
 
-    config_options+=( '新增服务' )
+    config_options+=( "$(gettext "新增服务")" )
 
     config_options_count=${#config_options[@]}
 
-    inquirer list_input_index "选择操作" config_options config_options_index
+    inquirer list_input_index "$(gettext "选择操作")" config_options config_options_index
 
     impersonate_service_file="$CURL_IMPERSONATE_FILE"
 
     if [ "$config_options_index" -eq $((config_options_count-1)) ] 
     then
         echo
-        ExitOnText "输入服务名称" impersonate_service_name CurlImpersonateValidateService "请输入正确的服务名称(字母、数字、下划线组成)"
+        ExitOnText "$(gettext "输入服务名称")" impersonate_service_name CurlImpersonateValidateService "$(gettext "请输入正确的服务名称(字母、数字、下划线组成)")"
         impersonate_service_file="$impersonate_service_file-$impersonate_service_name"
     elif [ "$config_options_index" -gt 0 ] 
     then
@@ -135,7 +135,7 @@ CurlImpersonateUpdate()
     done
 
     echo
-    inquirer list_input "选择 curl impersonate" impersonate_options impersonate_option
+    inquirer list_input "$(gettext "选择 curl impersonate")" impersonate_options impersonate_option
 
     rm -f "$impersonate_service_file"
 
@@ -158,35 +158,36 @@ CurlImpersonateUpdate()
     if [ -n "${headers_name:-}" ] 
     then
         echo
-        inquirer checkbox_input_indices "选择修改的 header" headers_name headers_name_indices
+        inquirer checkbox_input_indices "$(gettext "选择修改的 header")" headers_name headers_name_indices
 
-        config_options=( '输入' '删除' )
+        config_options=( "$(gettext "输入")" "$(gettext "删除")" )
 
         for i in "${headers_name_indices[@]}"
         do
+            local header_name="${headers_name[i]}"
             echo
-            inquirer list_input_index "对 ${headers_name[i]} 选择操作" config_options config_options_index
+            inquirer list_input_index "$(eval_gettext "对 \$header_name 选择操作")" config_options config_options_index
             if [ "$config_options_index" -eq 0 ] 
             then
                 echo
-                inquirer text_input "输入 ${headers_name[i]} 值" header_val "${headers_val[i]}"
+                inquirer text_input "$(eval_gettext "输入 \$header_name 值")" header_val "${headers_val[i]}"
 
                 echo "$(awk '!x{x=sub(/-H '\'''"${headers_name[i]}"': .*'\'' \\/,"-H '\'''"${headers_name[i]}"': '"$header_val"''\'' \\")}1' "$impersonate_service_file")" > "$impersonate_service_file"
-                Println "$info ${headers_name[i]}  修改成功"
+                Println "$(eval_gettext "\$info \$header_name 修改成功")"
             else
                 sed -i "/^[[:blank:]]*-H '${headers_name[i]}:/d" "$impersonate_service_file"
-                Println "$info ${headers_name[i]}  删除成功"
+                Println "$(eval_gettext "\$info \$header_name 删除成功")"
             fi
         done
     fi
 
-    Println "$info curl impersonate 设置成功"
+    Println "$(eval_gettext "\$info curl impersonate 设置成功")"
 }
 
 CurlImpersonateCompile()
 {
     echo
-    inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
+    inquirer text_input "$(gettext "输入 curl-impersonate 安装目录")" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
 
     GitInstall
 
@@ -211,7 +212,7 @@ CurlImpersonateCompile()
         mkdir build && cd build
         ../configure --prefix="$curl_impersonate_prefix"
         gmake chrome-build
-        Println "$tip 可能需要输入密码建立安装路径 $curl_impersonate_prefix"
+        Println "$(eval_gettext "\$tip 可能需要输入密码建立安装路径 \$curl_impersonate_prefix")"
         sudo gmake chrome-install
     else
         if [ "$dist" == "rpm" ] 
@@ -234,7 +235,7 @@ CurlImpersonateCompile()
 
     if [ "$dist" == "mac" ] 
     then
-        Println "$tip 可能需要输入密码建立安装路径 ${curl_impersonate_prefix}/include/curl/"
+        Println "$(eval_gettext "\$tip 可能需要输入密码建立安装路径 \${curl_impersonate_prefix}/include/curl/")"
     fi
 
     sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
@@ -245,7 +246,7 @@ CurlImpersonateCompile()
     # rm -f "$AIOS_PREFIX"/bin/curl-config
     # sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config "$AIOS_PREFIX"/bin/curl-config
 
-    Println "$info curl impersonate 编译成功\n"
+    Println "$(eval_gettext "\$info curl impersonate 编译成功")\n"
 }
 
 NodeLibcurlImpersonateCompile()
@@ -253,11 +254,11 @@ NodeLibcurlImpersonateCompile()
     NodejsInstall
 
     echo
-    inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
+    inquirer text_input "$(gettext "输入编译安装好的 curl impersonate 路径")" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
 
     if [ ! -d "$curl_impersonate_prefix" ] 
     then
-        Println "$error curl impersonate 目录不存在, 请先编译安装\n"
+        Println "$(eval_gettext "\$error curl impersonate 目录不存在, 请先编译安装")\n"
         return 1
     fi
 
@@ -277,7 +278,7 @@ NodeLibcurlImpersonateCompile()
 
     if [ "$dist" == "mac" ] 
     then
-        Println "$tip 可能需要输入密码创建链接 ln -s ${curl_impersonate_prefix}/bin/curl-impersonate-chrome-config $AIOS_PREFIX/bin/curl-config"
+        Println "$(eval_gettext "\$tip 可能需要输入密码创建链接 ln -s \${curl_impersonate_prefix}/bin/curl-impersonate-chrome-config \$AIOS_PREFIX/bin/curl-config")"
         sudo ln -s "${curl_impersonate_prefix}"/lib/libcurl-impersonate-chrome.*.dylib "$AIOS_PREFIX"/curl-impersonate/lib/libcurl.dylib
     fi
 
@@ -287,5 +288,5 @@ NodeLibcurlImpersonateCompile()
     npm install --force --build-from-source --unsafe-perm
     npm run build:dist
 
-    Println "$info 查看 "$DEPENDS_ROOT"/node-libcurl-impersonate/lib/binding/node_libcurl-impersonate.node\n可以这样使用 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('$DEPENDS_ROOT/node-libcurl-impersonate/dist')\n详见 https://github.com/JCMais/node-libcurl/\n"
+    Println "$(eval_gettext "\$info 查看 \$DEPENDS_ROOT/node-libcurl-impersonate/lib/binding/node_libcurl-impersonate.node")\n$(eval_gettext "可以这样使用 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('\$DEPENDS_ROOT/node-libcurl-impersonate/dist')")\n$(gettext "详见 https://github.com/JCMais/node-libcurl/")\n"
 }

@@ -2,16 +2,17 @@ XrayListOutboundAccounts()
 {
     XrayListOutbounds || return 1
 
-    ProxySelectBound "$X_CONFIG" outbounds "选择查看账号/服务端明细的出站" || return 0
+    ProxySelectBound "$X_CONFIG" outbounds "$(gettext "选择查看账号/服务端明细的出站")" || return 0
     local idx="$selected_bound_index"
+    local bound_tag="${outbounds_tag[idx]}"
     local accounts_out
     accounts_out=$(ProxyRenderOutboundAccounts "$X_CONFIG" "$idx")
 
     if [ -z "$accounts_out" ]
     then
-        Println "$info 出站 ${green}${outbounds_tag[idx]}${normal} 没有账号/服务端明细\n"
+        Println "$(eval_gettext "\$info 出站 \${green}\${bound_tag}\${normal} 没有账号/服务端明细")\n"
         return 0
     fi
 
-    Println "\n=== 出站 ${green}${outbounds_tag[idx]}${normal} 账号/服务端明细 ===\n$accounts_out\n"
+    Println "\n$(eval_gettext "=== 出站 \${green}\${bound_tag}\${normal} 账号/服务端明细 ===")\n$accounts_out\n"
 }

@@ -2,7 +2,7 @@ XrayListInbounds()
 {
     XrayGetInbounds
 
-    local list_inbounds_options=( '全部入站' '本地 nginx 入站' '直连 xray 入站' )
+    local list_inbounds_options=( "$(gettext "全部入站")" "$(gettext "本地 nginx 入站")" "$(gettext "直连 xray 入站")" )
     local filter_mode="all"
     local count=0
 
@@ -18,7 +18,7 @@ XrayListInbounds()
         count=$inbounds_other_count
     else
         echo
-        inquirer list_input_index "选择显示的范围" list_inbounds_options list_inbounds_options_index
+        inquirer list_input_index "$(gettext "选择显示的范围")" list_inbounds_options list_inbounds_options_index
 
         if [ "$list_inbounds_options_index" -eq 0 ]
         then
@@ -34,18 +34,20 @@ XrayListInbounds()
         fi
     fi
 
+    local scope_label="${list_inbounds_options[list_inbounds_options_index]}"
+
     if [ "$count" -eq 0 ]
     then
         if [ "$list_inbounds_options_index" -eq 0 ]
         then
-            Println "$error 请先添加入站\n"
+            Println "$(eval_gettext "\$error 请先添加入站")\n"
         else
-            Println "$error 请先添加 ${list_inbounds_options[list_inbounds_options_index]}\n"
+            Println "$(eval_gettext "\$error 请先添加 \${scope_label}")\n"
         fi
         return 1
     fi
 
-    Println "\n=== ${list_inbounds_options[list_inbounds_options_index]}数 ${green} $count ${normal}"
+    Println "\n$(eval_gettext "=== \${scope_label}数 \${green} \$count \${normal}")"
     inbounds_list=$(ProxyRenderInbounds "$X_CONFIG" xray "$filter_mode")
     Println "$inbounds_list"
 }

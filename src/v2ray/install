@@ -2,7 +2,7 @@ V2rayInstall()
 {
     if [ -s "$V2_CONFIG" ]
     then
-        Println "$error v2ray 已存在...\n"
+        Println "$(eval_gettext "\$error v2ray 已存在...")\n"
         ExitOnList n "`gettext \"是否覆盖原安装\"`"
     fi
 
@@ -20,7 +20,7 @@ V2rayInstall()
         usermod -s /usr/sbin/nologin v2ray
     fi
 
-    Println "$info 安装 v2ray..."
+    Println "$(eval_gettext "\$info 安装 v2ray...")"
 
     { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
     | sed "s+nobody+v2ray+g" \
@@ -40,7 +40,7 @@ V2rayInstall()
 
     ServiceControl start v2ray
 
-    Println "$info v2ray 安装完成\n"
+    Println "$(eval_gettext "\$info v2ray 安装完成")\n"
 }
 
 V2rayUpdate()
@@ -78,5 +78,5 @@ V2rayUpdate()
 
     ServiceControl restart v2ray
 
-    Println "$info v2ray 升级完成\n"
+    Println "$(eval_gettext "\$info v2ray 升级完成")\n"
 }

@@ -39,7 +39,7 @@ ScheduleView()
         providers_list="$providers_list ${green}$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
     done
 
-    Println "节目表来源\n\n$providers_list"
+    Println "$(gettext "节目表来源")\n\n$providers_list"
 
     while read -p "$i18n_default_cancel" provider_num
     do
@@ -83,7 +83,7 @@ ScheduleView()
         do
             if [ "$cron_chnl" == "$chnl" ]
             then
-                using="${green}[已添加]${normal}"
+                using="${green}[$(gettext "已添加")]${normal}"
                 break
             fi
         done
@@ -132,15 +132,15 @@ ScheduleAddChannel()
         JQ add "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
         add_provider=0
     fi
-    Println "$info 频道 [ ${chnl##*:} ] 添加成功"
+    Println "$info $(gettext "频道") [ ${chnl##*:} ] $(gettext "添加成功")"
 }
 
 ScheduleAdd()
 {
     ScheduleView
-    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")"
 
-    Println "多个频道用空格分隔 比如: 5 7 9-11"
+    Println "$(gettext "多个频道用空格分隔 比如: 5 7 9-11")"
     while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ]
@@ -225,9 +225,9 @@ ScheduleViewCron()
 {
     GetCronChnls
 
-    [ -z "$cron_providers_list" ] && Println "$error 没有计划任务\n" && exit 1
+    [ -z "$cron_providers_list" ] && Println "$(eval_gettext "\$error 没有计划任务")\n" && exit 1
 
-    Println "计划任务节目表\n\n$cron_providers_list"
+    Println "$(gettext "计划任务节目表")\n\n$cron_providers_list"
 
     while read -p "$i18n_default_cancel" provider_num
     do
@@ -261,16 +261,16 @@ ScheduleViewCron()
         chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name\n\n"
     done
 
-    Println "计划任务频道\n\n$chnls_list"
+    Println "$(gettext "计划任务频道")\n\n$chnls_list"
 }
 
 ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")"
 
-    Println "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11"
+    Println "$(gettext "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11")"
     while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ]
@@ -342,7 +342,7 @@ ScheduleDel()
             ;;
         esac
     done
-    Println "$info 删除成功\n"
+    Println "$(eval_gettext "\$info 删除成功")\n"
 }
 
 ScheduleExec()
@@ -370,8 +370,8 @@ ScheduleExec()
 
                         if ! Schedule"$chnl_id_upper"
                         then
-                            Println "$error $chnl_name 再次尝试..."
-                            Schedule"$chnl_id_upper" || Println "$error $chnl_id_upper 失败"
+                            Println "$(eval_gettext "\$error \$chnl_name 再次尝试...")"
+                            Schedule"$chnl_id_upper" || Println "$(eval_gettext "\$error \$chnl_id_upper 失败")"
                         fi
                     done
                 else
@@ -388,8 +388,8 @@ ScheduleExec()
                             fi
                         done
 
-                        Println "$error $provider_name 再次尝试..."
-                        Schedule"$provider_id_upper" "$option" || Println "$error $provider_name 失败"
+                        Println "$(eval_gettext "\$error \$provider_name 再次尝试...")"
+                        Schedule"$provider_id_upper" "$option" || Println "$(eval_gettext "\$error \$provider_name 失败")"
                     fi
                 fi
             fi
@@ -399,7 +399,7 @@ ScheduleExec()
             printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
         fi
     else
-        Println "$error 计划任务为空, 请先添加频道 !\n"
+        Println "$(eval_gettext "\$error 计划任务为空, 请先添加频道 !")\n"
     fi
 }
 
@@ -407,11 +407,11 @@ ScheduleBackup()
 {
     if [ ! -s "$CRON_FILE" ]
     then
-        Println "$error 请先添加频道\n"
+        Println "$(eval_gettext "\$error 请先添加频道")\n"
         exit 1
     fi
     echo
-    inquirer text_input "输入备份名称: " backup_name "无"
+    inquirer text_input "$(gettext "输入备份名称: ")" backup_name "$(gettext "无")"
     backup_schedule=""
     while IFS="=" read -r provider chnls option
     do
@@ -426,7 +426,7 @@ ScheduleBackup()
     done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
     if [ -z "$backup_schedule" ]
     then
-        Println "$error 请先添加频道\n"
+        Println "$(eval_gettext "\$error 请先添加频道")\n"
         exit 1
     fi
     new_backup=$(
@@ -439,7 +439,7 @@ ScheduleBackup()
     )
     jq_path='["schedule_backup"]'
     JQ add "$CRON_FILE" "[$new_backup]"
-    Println "$info 任务备份成功\n"
+    Println "$(eval_gettext "\$info 任务备份成功")\n"
 }
 
 ScheduleListBackup()
@@ -456,12 +456,12 @@ ScheduleListBackup()
         schedule_backup_dates+=("$backup_date")
         schedule_backup_schedules+=("$backup_schedule")
         printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
-        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: ${green}$backup_name${normal} 备份日期: ${green}$date${normal}\n\n"
+        schedule_backup_list="$schedule_backup_list $schedule_backup_count. $(gettext "备份名称"): ${green}$backup_name${normal} $(gettext "备份日期"): ${green}$date${normal}\n\n"
     done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
 
     if [ "$schedule_backup_count" -eq 0 ]
     then
-        Println "$error 没有备份\n"
+        Println "$(eval_gettext "\$error 没有备份")\n"
         exit 1
     fi
 
@@ -553,11 +553,11 @@ ScheduleEditBackup()
     done
 
     echo
-    inquirer text_input "输入新的备份名称: " backup_name "$backup_name_old"
+    inquirer text_input "$(gettext "输入新的备份名称: ")" backup_name "$backup_name_old"
 
     jq_path='["schedule_backup",'"$backup_index"',"name"]'
     JQ update "$CRON_FILE" "$backup_name"
-    Println "$info 备份修改成功\n"
+    Println "$(eval_gettext "\$info 备份修改成功")\n"
 }
 
 ScheduleDelBackup()
@@ -588,7 +588,7 @@ ScheduleDelBackup()
 
     jq_path='["schedule_backup",'"$backup_index"']'
     JQ delete "$CRON_FILE"
-    Println "$info 备份 $backup_name 删除成功\n"
+    Println "$(eval_gettext "\$info 备份 \$backup_name 删除成功")\n"
 }
 
 ScheduleRestoreBackup()
@@ -641,20 +641,20 @@ ScheduleRestoreBackup()
     jq_json=true
     jq_path='["schedule"]'
     JQ update "$CRON_FILE" "[$schedules_list]"
-    Println "$info 备份 $backup_name 恢复成功\n"
+    Println "$(eval_gettext "\$info 备份 \$backup_name 恢复成功")\n"
 }
 
 ScheduleEnableCron()
 {
     if crontab -l | grep -q "$AIOS_PREFIX/bin/tv s" 2> /dev/null
     then
-        Println "$error 计划任务已开启 !\n"
+        Println "$(eval_gettext "\$error 计划任务已开启 !")\n"
     else
         crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
         printf '%s\n' "0 0 * * * $AIOS_PREFIX/bin/tv s -" >> "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
-        Println "$info 计划任务开启成功 !\n"
+        Println "$(eval_gettext "\$info 计划任务开启成功 !")\n"
     fi
 }
 
@@ -666,8 +666,8 @@ ScheduleDisableCron()
         FilterFileLines "$AIOS_PREFIX/bin/tv s" "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
-        Println "$info 计划任务已关闭\n"
+        Println "$(eval_gettext "\$info 计划任务已关闭")\n"
     else
-        Println "$error 计划任务未开启 !\n"
+        Println "$(eval_gettext "\$error 计划任务未开启 !")\n"
     fi
 }

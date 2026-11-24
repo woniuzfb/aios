@@ -7,7 +7,7 @@ Select4gtvAcc()
         exit 1
     fi
 
-    echo -e "选择账号"
+    echo -e "$(gettext "选择账号")"
     while read -r -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in

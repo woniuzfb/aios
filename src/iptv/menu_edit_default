@@ -49,7 +49,7 @@ EditDefaultMenu()
     GetDefault
 
     echo
-    inquirer checkbox_input_indices "选择修改内容" edit_options edit_options_indices
+    inquirer checkbox_input_indices "$(gettext "选择修改内容")" edit_options edit_options_indices
 
     for edit_options_index in "${edit_options_indices[@]}"
     do

@@ -2,7 +2,7 @@ V2rayNginxListDomain()
 {
     if [ "$v2ray_nginx_domains_count" -eq 0 ]
     then
-        Println "$error 请先使用 $nginx_name 管理面板添加域名\n"
+        Println "$(eval_gettext "\$error 请先使用 \$nginx_name 管理面板添加域名")\n"
         exit 1
     fi
 
@@ -12,9 +12,10 @@ V2rayNginxListDomain()
     NginxParseConfig ${v2ray_nginx_domains[v2ray_nginx_domains_index]}
     NginxGetConfig
 
+    local cur_domain="${v2ray_nginx_domains[v2ray_nginx_domains_index]}"
     if [ "$level_3_d1_count" -eq 0 ]
     then
-        Println "$error 请先添加 ${v2ray_nginx_domains[v2ray_nginx_domains_index]} 配置\n"
+        Println "$(eval_gettext "\$error 请先添加 \$cur_domain 配置")\n"
         exit 1
     fi
 
@@ -99,7 +100,7 @@ V2rayNginxListDomain()
                                     if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://127.0.0.1:(.+) ]]
                                     then
                                         v2ray_nginx_domain_server_proxies="$v2ray_nginx_domain_server_proxies$level_3_index|$level_4_index|${BASH_REMATCH[1]}|$v2ray_nginx_domain_server_proxy_path "
-                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}路径: ${green}$v2ray_nginx_domain_server_proxy_path${normal} => ${v2ray_name:-v2ray} 端口: ${green}${BASH_REMATCH[1]}${normal}\n"
+                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}$(gettext "路径"): ${green}$v2ray_nginx_domain_server_proxy_path${normal} => ${v2ray_name:-v2ray} $(gettext "端口"): ${green}${BASH_REMATCH[1]}${normal}\n"
                                     fi
                                     break
                                 fi
@@ -111,15 +112,15 @@ V2rayNginxListDomain()
 
             if [ -z "$v2ray_nginx_domain_server_proxies_list" ]
             then
-                v2ray_nginx_domain_server_proxies_list="${red}未配置${normal}"
+                v2ray_nginx_domain_server_proxies_list="${red}$(gettext "未配置")${normal}"
             fi
 
             v2ray_nginx_domain_servers_name+=("${v2ray_nginx_domain_server_name_list//, /,}")
             v2ray_nginx_domain_servers_proxy+=("$v2ray_nginx_domain_server_proxies")
 
-            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}域名: ${green}${v2ray_nginx_domain_server_name_list:-未设置}${normal}\n${indent_6}端口: ${green}${v2ray_nginx_domain_server_listen_list:-未设置}${normal}\n${indent_6}代理: $v2ray_nginx_domain_server_proxies_list\n\n"
+            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}$(gettext "域名"): ${green}${v2ray_nginx_domain_server_name_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "端口"): ${green}${v2ray_nginx_domain_server_listen_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "代理"): $v2ray_nginx_domain_server_proxies_list\n\n"
         fi
     done
 
-    Println "域名 ${green}${v2ray_nginx_domains[v2ray_nginx_domains_index]}${normal} 配置:\n\n$v2ray_nginx_domain_servers_list"
+    Println "$(eval_gettext "域名 \${green}\$cur_domain\${normal} 配置:")\n\n$v2ray_nginx_domain_servers_list"
 }

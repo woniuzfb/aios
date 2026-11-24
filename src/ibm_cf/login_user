@@ -4,11 +4,11 @@ IbmLoginUser()
 
     if [ "$ibm_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
-    echo -e "选择用户"
+    echo -e "$(gettext "选择用户")"
     while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
@@ -36,7 +36,7 @@ IbmLoginUser()
         esac
     done
 
-    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    Println "$(eval_gettext "\$info 登录账号: \$ibm_user_email [ \$ibm_user_region ]")"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 }

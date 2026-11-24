@@ -4,11 +4,11 @@ CloudflareEditWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        Println "$error 请先添加 worker\n"
+        Println "$(eval_gettext "\$error 请先添加 worker")\n"
         exit 1
     fi
 
-    echo "选择 worker"
+    echo "$(gettext "选择 worker")"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
@@ -32,14 +32,14 @@ CloudflareEditWorker()
     done
 
     echo
-    edit_worker_options=( '修改 worker 名称' '修改 worker 路径' '修改 worker 项目名称')
+    edit_worker_options=( "$(gettext "修改 worker 名称")" "$(gettext "修改 worker 路径")" "$(gettext "修改 worker 项目名称")")
 
     if [ "${cf_workers_path[cf_workers_index]}" == "stream_proxy" ] 
     then
-        edit_worker_options+=("修改 worker 源站")
+        edit_worker_options+=("$(gettext "修改 worker 源站")")
     fi
 
-    inquirer list_input_index "选择操作" edit_worker_options edit_worker_options_index
+    inquirer list_input_index "$(gettext "选择操作")" edit_worker_options edit_worker_options_index
 
     if [ "$edit_worker_options_index" -eq 0 ] 
     then
@@ -48,7 +48,7 @@ CloudflareEditWorker()
         JQ update "$CF_CONFIG" "$cf_worker_name"
     elif [ "$edit_worker_options_index" -eq 1 ] 
     then
-        Println "请输入 cloudflare worker 路径名称"
+        Println "$(gettext "请输入 cloudflare worker 路径名称")"
         while read -p "$i18n_default_cancel" cf_worker_path
         do
             case $cf_worker_path in
@@ -56,7 +56,7 @@ CloudflareEditWorker()
                     Println "$i18n_canceled...\n" && exit 1
                 ;;
                 *[!0-9A-Za-z_-]*) 
-                    Println "$error 路径格式错误\n"
+                    Println "$(eval_gettext "\$error 路径格式错误")\n"
                 ;;
                 *) 
                     if [ "$cf_worker_path" == "${cf_workers_path[cf_workers_index]}" ] 
@@ -65,7 +65,7 @@ CloudflareEditWorker()
                     elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
                     then
                         echo
-                        inquirer list_input "路径已经存在, 是否仍要修改" ny_options force_edit_yn
+                        inquirer list_input "$(gettext "路径已经存在, 是否仍要修改")" ny_options force_edit_yn
 
                         if [[ $force_edit_yn == "$i18n_no" ]] 
                         then
@@ -75,7 +75,7 @@ CloudflareEditWorker()
                         if [ -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}" ] 
                         then
                             echo
-                            inquirer list_input_index "是否删除原路径目录" yn_options yn_index
+                            inquirer list_input_index "$(gettext "是否删除原路径目录")" yn_options yn_index
 
                             if [ "$yn_index" -eq 0 ] 
                             then
@@ -95,7 +95,7 @@ CloudflareEditWorker()
                 ;;
             esac
         done
-        Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
+        Println "$(eval_gettext "  worker 路径: \${green} \$cf_worker_path \${normal}")\n"
         jq_path='["workers",'"$cf_workers_index"',"path"]'
         JQ update "$CF_CONFIG" "$cf_worker_path"
     elif [ "$edit_worker_options_index" -eq 2 ] 
@@ -109,5 +109,5 @@ CloudflareEditWorker()
         JQ update "$CF_CONFIG" "$cf_worker_upstream"
     fi
 
-    Println "$info worker 修改成功\n"
+    Println "$(eval_gettext "\$info worker 修改成功")\n"
 }

@@ -29,7 +29,8 @@ NginxPackageInstall()
                     echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
                     AptUpdate force
                 else
-                    Println "$tip Nginx 官方源暂不支持当前系统 (${nginx_codename:-unknown}), 改用系统默认源安装"
+                    local nginx_codename_display="${nginx_codename:-unknown}"
+                    Println "$(eval_gettext "\$tip Nginx 官方源暂不支持当前系统 (\$nginx_codename_display), 改用系统默认源安装")"
                 fi
             fi
 
@@ -58,7 +59,8 @@ NginxPackageInstall()
                     echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
                     AptUpdate force
                 else
-                    Println "$tip Nginx 官方源暂不支持当前系统 (${nginx_codename:-unknown}), 改用系统默认源安装"
+                    local nginx_codename_display="${nginx_codename:-unknown}"
+                    Println "$(eval_gettext "\$tip Nginx 官方源暂不支持当前系统 (\$nginx_codename_display), 改用系统默认源安装")"
                 fi
             fi
 
@@ -67,7 +69,7 @@ NginxPackageInstall()
         rpm)
             if [ "${VERSION_ID%%.*}" -eq 7 ]
             then
-                Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
+                Println "$(eval_gettext "\$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3.")"
             fi
 
             DepInstall yum-utils
@@ -119,7 +121,7 @@ module_hotfixes=true
 priority=9
 EOF
                     else
-                        Println "$error 不支持的系统\n"
+                        Println "$(eval_gettext "\$error 不支持的系统")\n"
                         return 1
                     fi
                 else
@@ -161,7 +163,7 @@ EOF
         sles)
             if [ "${VERSION_ID%%.*}" -eq 12 ]
             then
-                Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
+                Println "$(eval_gettext "\$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3.")"
             fi
             sudo zypper install curl ca-certificates gpg2
             sudo zypper addrepo --gpgcheck --type yum --refresh --check 'http://nginx.org/packages/mainline/sles/$releasever_major' nginx-mainline
@@ -170,7 +172,7 @@ EOF
             sudo zypper install nginx
         ;;
         *)
-            Println "$error 不支持的系统\n"
+            Println "$(eval_gettext "\$error 不支持的系统")\n"
             return 1
         ;;
     esac
@@ -222,12 +224,12 @@ EOF
 
     CrossplaneInstall
 
-    Println "$info $nginx_name 安装成功\n"
+    Println "$(eval_gettext "\$info \$nginx_name 安装成功")\n"
 }
 
 NginxSourceInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ]
     then
@@ -235,25 +237,25 @@ NginxSourceInstall()
         then
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v $nginx_name) ]]
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     DepsCheck
 
     echo
     pcre_options=( pcre pcre2 )
-    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+    inquirer list_input_index "$(gettext "选择 pcre 版本")" pcre_options pcre_options_index
 
-    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    Println "$(eval_gettext "\$tip 如果选择 openssl, \$nginx_name 将不支持 ssl_early_data (0-RTT)")"
     openssl_options=( openssl@1.1 openssl@3 quictls )
-    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+    inquirer list_input_index "$(gettext "选择 openssl 版本")" openssl_options openssl_options_index
 
     if [ "$dist" == "mac" ] && [ ! -d "$nginx_prefix" ]
     then
-        Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
+        Println "$(eval_gettext "\$info 建立目录 \$nginx_prefix, 可能需要输入密码")\n"
         sudo mkdir "$nginx_prefix"
         sudo chown $USER "$nginx_prefix"
     fi
@@ -263,7 +265,7 @@ NginxSourceInstall()
 
     rm -rf nginx-http-flv-module-master
     curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
-    Println "$info 解压 nginx-http-flv-module ..."
+    Println "$(eval_gettext "\$info 解压 nginx-http-flv-module ...")"
     unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     #cd nginx-http-flv-module-master
@@ -284,7 +286,7 @@ NginxSourceInstall()
     if [ ! -d "./$nginx_package_name" ]
     then
         curl -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
-        Println "$info 解压 $nginx_package_name ..."
+        Println "$(eval_gettext "\$info 解压 \$nginx_package_name ...")"
         tar xzf "$nginx_package_name.tar.gz"
     fi
 
@@ -359,7 +361,7 @@ NginxSourceInstall()
         if [ ! -d $zlib_name ]
         then
             curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
-            Println "$info 解压 $zlib_name ..."
+            Println "$(eval_gettext "\$info 解压 \$zlib_name ...")"
             tar xzf $zlib_name.tar.gz
         fi
 
@@ -369,7 +371,7 @@ NginxSourceInstall()
             if [ ! -d $pcre_name ]
             then
                 curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
-                Println "$info 解压 $pcre_name ..."
+                Println "$(eval_gettext "\$info 解压 \$pcre_name ...")"
                 unzip $pcre_name.zip >/dev/null 2>&1
             fi
         else
@@ -377,7 +379,7 @@ NginxSourceInstall()
             if [ ! -d $pcre_name ]
             then
                 curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
-                Println "$info 解压 $pcre_name ..."
+                Println "$(eval_gettext "\$info 解压 \$pcre_name ...")"
                 unzip $pcre_name.zip >/dev/null 2>&1
             fi
         fi
@@ -385,12 +387,13 @@ NginxSourceInstall()
         if [ "$openssl_options_index" -eq 2 ]
         then
             openssl_name="openssl-${QUICTLS_TAG}"
-            Println "$info 下载 ${openssl_name#*-} ..."
+            local openssl_short_name="${openssl_name#*-}"
+            Println "$(eval_gettext "\$info 下载 \$openssl_short_name ...")"
             if ! curl -Lm 30 "${QUICTLS_REPO_LINK}/${openssl_name#*-}.tar.gz" -o "$openssl_name".tar.gz
             then
                 curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
             fi
-            Println "$info 解压 ${openssl_name#*-} ..."
+            Println "$(eval_gettext "\$info 解压 \$openssl_short_name ...")"
             tar xzf "$openssl_name".tar.gz
         else
             local openssl_pack_url=""
@@ -405,7 +408,7 @@ NginxSourceInstall()
 
             if [ -z "$openssl_pack_url" ]
             then
-                Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+                Println "$(eval_gettext "\$error 无法从 \$openssl_url 获取 OpenSSL 源码包地址")\n"
                 return 1
             fi
 
@@ -415,7 +418,7 @@ NginxSourceInstall()
             if [ ! -d "./$openssl_name" ]
             then
                 curl -L "$openssl_pack_url" -o "$openssl_pack"
-                Println "$info 解压 $openssl_name ..."
+                Println "$(eval_gettext "\$info 解压 \$openssl_name ...")"
                 tar xzf "$openssl_pack"
             fi
         fi
@@ -488,26 +491,27 @@ NginxSourceInstall()
 
     CrossplaneInstall
 
-    Println "$info $nginx_name ${install}成功\n"
+    Println "$(eval_gettext "\$info \$nginx_name \${install}成功")\n"
 }
 
 NginxInstall()
 {
     if [ -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 已经存在 \$nginx_prefix !")\n"
         return 1
     elif [[ -x $(command -v $nginx_name) ]]
     then
-        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        local nginx_cmd_path="$(command -v $nginx_name)"
+        Println "$(eval_gettext "\$error \$nginx_name 已经存在 \$nginx_cmd_path, 请先卸载!")\n"
         return 1
     fi
 
     if [ "$dist" != "mac" ]
     then
-        Println "$tip 选择快速安装将缺少 nginx-http-flv-module 以及 quictls 选择"
-        nginx_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
-        inquirer list_input_index "选择安装方式" nginx_install_options nginx_install_options_index
+        Println "$(eval_gettext "\$tip 选择快速安装将缺少 nginx-http-flv-module 以及 quictls 选择")"
+        nginx_install_options=( "$(eval_gettext "\${nginx_name}官方包 (快速安装)")" "$(gettext "编译安装")" )
+        inquirer list_input_index "$(gettext "选择安装方式")" nginx_install_options nginx_install_options_index
 
         if [ "$nginx_install_options_index" -eq 0 ]
         then
@@ -523,7 +527,7 @@ NginxUninstall()
 {
     if [ ! -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 未安装 !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 !")\n"
         return 1
     fi
 
@@ -546,12 +550,12 @@ NginxUninstall()
     elif [ "$dist" == "mac" ]
     then
         brew uninstall "$nginx_name"
-        Println "$info 可能需要输入密码删除目录 "$nginx_prefix"\n"
+        Println "$(eval_gettext "\$info 可能需要输入密码删除目录 \$nginx_prefix")\n"
     fi
 
     sudo rm -rf "$nginx_prefix"
 
-    Println "$info $nginx_name 卸载完成\n"
+    Println "$(eval_gettext "\$info \$nginx_name 卸载完成")\n"
 }
 
 NginxUpdate()
@@ -560,7 +564,7 @@ NginxUpdate()
 
     if [ ! -d "$nginx_prefix" ]
     then
-        Println "$error $nginx_name 未安装 !\n"
+        Println "$(eval_gettext "\$error \$nginx_name 未安装 !")\n"
         return 1
     fi
 

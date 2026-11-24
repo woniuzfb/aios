@@ -4,7 +4,7 @@ IbmCfAppCronExec()
     app_name=${app_name#\"}
     path=${path%\"}
 
-    [ -z "$app_name" ] && Println "$error 请先设置定时重启任务\n" && exit 1
+    [ -z "$app_name" ] && Println "$(eval_gettext "\$error 请先设置定时重启任务")\n" && exit 1
 
     IbmUpdateCfCli
 
@@ -26,7 +26,7 @@ IbmCfAppCronExec()
                 ibm_user_org=${ibm_users_org[j]}
                 ibm_user_space=${ibm_users_space[j]}
 
-                Println "$info 登录账号: ${apps_user_email[i]} [ $ibm_user_region ]"
+                Println "$info $(gettext "登录账号"): ${apps_user_email[i]} [ $ibm_user_region ]"
                 ibmcloud login -u "${apps_user_email[i]}" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
                 ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
@@ -111,6 +111,6 @@ EOF
                 continue 2
             fi
         done
-        Println "$error APP ${apps_name[i]} 没有找到用户 ${apps_user_email[i]}"
+        Println "$error APP ${apps_name[i]} $(gettext "没有找到用户") ${apps_user_email[i]}"
     done
 }

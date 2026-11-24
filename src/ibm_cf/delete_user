@@ -2,7 +2,7 @@ IbmDelUser()
 {
     IbmListUsers
 
-    echo -e "选择用户"
+    echo -e "$(gettext "选择用户")"
     while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
@@ -28,5 +28,5 @@ IbmDelUser()
     jq_path='["users",'"$ibm_users_index"']'
     JQ delete "$IBM_CONFIG"
 
-    Println "$info 用户 $ibm_user_email 删除成功"
+    Println "$(eval_gettext "\$info 用户 \$ibm_user_email 删除成功")"
 }

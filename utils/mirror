@@ -34,7 +34,7 @@ then
     mv "$FFMPEG_MIRROR_ROOT/index.html_tmp" "$FFMPEG_MIRROR_ROOT/index.html"
     curl -s -L "https://www.johnvansickle.com/ffmpeg/style.css" -o "$FFMPEG_MIRROR_ROOT/style.css"
 else
-    Println "$error FFmpeg 查询新版本出错, 无法连接 johnvansickle.com ?"
+    Println "$(eval_gettext "\$error FFmpeg 查询新版本出错, 无法连接 johnvansickle.com ?")"
 fi
 
 if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ]
@@ -65,12 +65,12 @@ then
                 build_file_name=${git_link##*/}
                 if [ "$git_version_new" != "$git_version_old" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}" ]
                 then
-                    Println "$info 下载 $build_file_name ..."
+                    Println "$(eval_gettext "\$info 下载 \$build_file_name ...")"
                     if curl -s -L "$git_link" -o "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
                     then
                         mv "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}"
                     else
-                        Println "$error FFmpeg git build 下载出错, 无法连接 github ?"
+                        Println "$(eval_gettext "\$error FFmpeg git build 下载出错, 无法连接 github ?")"
                     fi
                 fi
             else
@@ -81,12 +81,12 @@ then
                     release_file_name=${release_link##*/}
                     if [ "$release_version_new" != "$release_version_old" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}" ]
                     then
-                        Println "$info 下载 $release_file_name ..."
+                        Println "$(eval_gettext "\$info 下载 \$release_file_name ...")"
                         if curl -s -L "$release_link" -o "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
                         then
                             mv "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}"
                         else
-                            Println "$error FFmpeg release build 下载出错, 无法连接 github ?"
+                            Println "$(eval_gettext "\$error FFmpeg release build 下载出错, 无法连接 github ?")"
                         fi
                     fi
                 fi
@@ -111,13 +111,13 @@ do
         poppler_name="poppler-${POPPLER_VER}"
         if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz" ]
         then
-            Println "$info 下载 poppler ..."
+            Println "$(eval_gettext "\$info 下载 poppler ...")"
             rm -f "$FFMPEG_MIRROR_ROOT/poppler-"*.tar.xz
             if curl -s -L "https://poppler.freedesktop.org/$poppler_name.tar.xz" -o "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
             else
-                Println "$error poppler 下载出错"
+                Println "$(eval_gettext "\$error poppler 下载出错")"
             fi
         fi
     elif [[ $line == *"poppler encoding data"* ]]
@@ -126,13 +126,13 @@ do
         poppler_data_name=${line%%.tar.gz*}
         if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz" ]
         then
-            Println "$info 下载 poppler-data ..."
+            Println "$(eval_gettext "\$info 下载 poppler-data ...")"
             rm -f "$FFMPEG_MIRROR_ROOT/poppler-data-"*.tar.gz
             if curl -s -L "https://poppler.freedesktop.org/$poppler_data_name.tar.gz" -o "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz"
             else
-                Println "$error poppler-data 下载出错"
+                Println "$(eval_gettext "\$error poppler-data 下载出错")"
             fi
         fi
         break
@@ -143,7 +143,7 @@ if jq_ver=$(curl -s -Lm 20 "$JQ_API_LINK" | $JQ_FILE -r '.tag_name')
 then
     if [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32" ]
     then
-        Println "$info 下载 jq ..."
+        Println "$(eval_gettext "\$info 下载 jq ...")"
         rm -rf "$FFMPEG_MIRROR_ROOT/jq-"*
         mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
         if curl -s -L "${JQ_REPO_LINK}/releases/download/$jq_ver/jq-linux64" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" && curl -s -L "${JQ_REPO_LINK}/releases/download/$jq_ver/jq-linux32" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
@@ -151,11 +151,11 @@ then
             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
         else
-            Println "$error jq 下载出错, 无法连接 github ?"
+            Println "$(eval_gettext "\$error jq 下载出错, 无法连接 github ?")"
         fi
     fi
 else
-    Println "$error jq 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error jq 下载出错, 无法连接 github ?")"
 fi
 
 archs=( 32 64 arm32-v5 arm32-v6 arm32-v7a arm64-v8a s390x)
@@ -167,19 +167,19 @@ then
     do
         if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip" ]
         then
-            Println "$info 下载 v2ray-linux-$arch $v2ray_ver ..."
+            Println "$(eval_gettext "\$info 下载 v2ray-linux-\$arch \$v2ray_ver ...")"
             if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" \
             && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip"
                 mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst"
             else
-                Println "$error v2ray-linux-$arch $v2ray_ver 下载出错, 无法连接 github ?"
+                Println "$(eval_gettext "\$error v2ray-linux-\$arch \$v2ray_ver 下载出错, 无法连接 github ?")"
             fi
         fi
     done
 else
-    Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error v2ray \$v2ray_ver 下载出错, 无法连接 github ?")"
 fi
 
 if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name')
@@ -189,68 +189,69 @@ then
     do
         if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip" ]
         then
-            Println "$info 下载 Xray-linux-$arch $xray_ver ..."
+            Println "$(eval_gettext "\$info 下载 Xray-linux-\$arch \$xray_ver ...")"
             if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" \
             && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip"
                 mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst"
             else
-                Println "$error Xray-linux-$arch $xray_ver 下载出错, 无法连接 github ?"
+                Println "$(eval_gettext "\$error Xray-linux-\$arch \$xray_ver 下载出错, 无法连接 github ?")"
             fi
         fi
     done
 else
-    Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error xray \$xray_ver 下载出错, 无法连接 github ?")"
 fi
 
-if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/woniuzfb/openwrt-xray/releases/latest" | $JQ_FILE -r '.tag_name')
+if openwrt_aios_assets=$(curl -fsSL -m 30 "https://api.github.com/repos/${OPENWRT_AIOS_LINK#https://github.com/}/releases/latest" | $JQ_FILE -r '.assets[]? | select((.name | test("^aios-(xray|v2ray)[_-].*[_-](x86_64|aarch64_generic|aarch64_cortex-a53)\\.(ipk|apk)$")) or (.name | test("^aios-geodata[_-].*[_-]all\\.(ipk|apk)$"))) | "\(.name)\t\(.browser_download_url)"') && [ -n "$openwrt_aios_assets" ]
 then
-    xray_ver=${xray_ver#*v}
-    if [[ ! $xray_ver =~ - ]]
-    then
-        xray_package_ver="${xray_ver}-1"
-    else
-        xray_package_ver="$xray_ver"
-    fi
-    xray_archs=( 'x86_64' 'aarch64_generic' 'aarch64_cortex-a53' )
-    for arch in "${xray_archs[@]}"
+    while IFS=$'\t' read -r asset_name asset_url
     do
-        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ]
+        if [ -z "$asset_name" ] || [ -z "$asset_url" ]
         then
-            Println "$info 下载 xray_${xray_package_ver}_$arch.ipk ..."
-            if curl -s -L "https://github.com/woniuzfb/openwrt-xray/releases/download/v$xray_ver/xray_${xray_package_ver}_$arch.ipk" -o "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk_tmp"
+            continue
+        fi
+
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/$asset_name" ]
+        then
+            Println "$(eval_gettext "\$info 下载 \$asset_name ...")"
+            if curl -fsSL "$asset_url" -o "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp"
             then
-                mv "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk_tmp" "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk"
+                mv "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp" "$FFMPEG_MIRROR_ROOT/$asset_name"
             else
-                Println "$error xray_${xray_package_ver}_$arch.ipk 下载出错, 无法连接 github ?"
+                rm -f "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp"
+                Println "$(eval_gettext "\$error \$asset_name 下载出错, 无法连接 github ?")"
             fi
         fi
-    done
+    done <<< "$openwrt_aios_assets"
 else
-    Println "$error openwrt-xray 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error openwrt-aios 下载出错, 无法连接 github ?")"
 fi
 
-IFS=" " read -r luci_app_xray_ver xray_i18n_name < <(curl -s -m 30 "https://api.github.com/repos/woniuzfb/luci-app-xray/releases/latest" | $JQ_FILE -r '[.tag_name,.assets[1].name]|join(" ")')
-if [ -n "${luci_app_xray_ver:-}" ]
+if luci_app_aios_assets=$(curl -fsSL -m 30 "https://api.github.com/repos/${LUCI_APP_AIOS_LINK#https://github.com/}/releases/latest" | $JQ_FILE -r '.assets[]? | select(.name | test("^luci-app-aios[_-].*\\.(ipk|apk)$")) | "\(.name)\t\(.browser_download_url)"') && [ -n "$luci_app_aios_assets" ]
 then
-    luci_app_xray_ver=${luci_app_xray_ver#*v}
-    Println "$info 下载 luci-app-v2ray_${luci_app_xray_ver}_all.ipk ..."
-    if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/luci-app-v2ray_${luci_app_xray_ver%-*}_all.ipk" -o "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk_tmp"
-    then
-        mv "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk_tmp" "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk"
-    else
-        Println "$error luci-app-v2ray_${luci_app_xray_ver}_all.ipk 下载出错, 无法连接 github ?"
-    fi
-    Println "$info 下载 $xray_i18n_name ..."
-    if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/$xray_i18n_name" -o "$FFMPEG_MIRROR_ROOT/${xray_i18n_name}_tmp"
-    then
-        mv "$FFMPEG_MIRROR_ROOT/${xray_i18n_name}_tmp" "$FFMPEG_MIRROR_ROOT/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk"
-    else
-        Println "$error $xray_i18n_name 下载出错, 无法连接 github ?"
-    fi
+    while IFS=$'\t' read -r asset_name asset_url
+    do
+        if [ -z "$asset_name" ] || [ -z "$asset_url" ]
+        then
+            continue
+        fi
+
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/$asset_name" ]
+        then
+            Println "$(eval_gettext "\$info 下载 \$asset_name ...")"
+            if curl -fsSL "$asset_url" -o "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp" "$FFMPEG_MIRROR_ROOT/$asset_name"
+            else
+                rm -f "$FFMPEG_MIRROR_ROOT/${asset_name}_tmp"
+                Println "$(eval_gettext "\$error \$asset_name 下载出错, 无法连接 github ?")"
+            fi
+        fi
+    done <<< "$luci_app_aios_assets"
 else
-    Println "$error luci-app-xray 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error luci-app-aios 下载出错, 无法连接 github ?")"
 fi
 
 if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name')
@@ -261,105 +262,105 @@ then
     do
         if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz" ]
         then
-            Println "$info 下载 dnscrypt proxy $arch ..."
+            Println "$(eval_gettext "\$info 下载 dnscrypt proxy \$arch ...")"
             mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
             if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz"
             else
-                Println "$error dnscrypt $arch 下载出错, 无法连接 github ?"
+                Println "$(eval_gettext "\$error dnscrypt \$arch 下载出错, 无法连接 github ?")"
             fi
         fi
     done
 else
-    Println "$error dnscrypt 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error dnscrypt 下载出错, 无法连接 github ?")"
 fi
 
-Println "$info 下载 nginx-http-flv-module ..."
+Println "$(eval_gettext "\$info 下载 nginx-http-flv-module ...")"
 if curl -s -L "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp" "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
 else
-    Println "$error nginx-http-flv-module 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error nginx-http-flv-module 下载出错, 无法连接 github ?")"
 fi
 
-Println "$info 下载 imgcat ..."
+Println "$(eval_gettext "\$info 下载 imgcat ...")"
 if curl -s -L "https://github.com/eddieantonio/imgcat/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp" "$FFMPEG_MIRROR_ROOT/imgcat.zip"
 else
-    Println "$error imgcat 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error imgcat 下载出错, 无法连接 github ?")"
 fi
 
-Println "$info 下载 CImg ..."
+Println "$(eval_gettext "\$info 下载 CImg ...")"
 if curl -s -L "https://github.com/dtschump/CImg/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/CImg.zip_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/CImg.zip_tmp" "$FFMPEG_MIRROR_ROOT/CImg.zip"
 else
-    Println "$error CImg 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error CImg 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "$JQ_API_LINK" -o "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/jq.json_tmp" "$FFMPEG_MIRROR_ROOT/jq.json"
 else
-    Println "$error jq.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error jq.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://api.github.com/repos/OpenListTeam/OpenList/releases/latest" -o "$FFMPEG_MIRROR_ROOT/openlist.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/openlist.json_tmp" "$FFMPEG_MIRROR_ROOT/openlist.json"
 else
-    Println "$error openlist.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error openlist.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
 else
-    Println "$error v2ray.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error v2ray.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/xray.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/xray.json_tmp" "$FFMPEG_MIRROR_ROOT/xray.json"
 else
-    Println "$error xray.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error xray.json 下载出错, 无法连接 github ?")"
 fi
 
-if curl -s -L "https://api.github.com/repos/woniuzfb/openwrt-xray/releases/latest" -o "$FFMPEG_MIRROR_ROOT/openwrt-xray.json_tmp"
+if curl -s -L "https://api.github.com/repos/${OPENWRT_AIOS_LINK#https://github.com/}/releases/latest" -o "$FFMPEG_MIRROR_ROOT/openwrt-aios.json_tmp"
 then
-    mv "$FFMPEG_MIRROR_ROOT/openwrt-xray.json_tmp" "$FFMPEG_MIRROR_ROOT/openwrt-xray.json"
+    mv "$FFMPEG_MIRROR_ROOT/openwrt-aios.json_tmp" "$FFMPEG_MIRROR_ROOT/openwrt-aios.json"
 else
-    Println "$error openwrt-xray.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error openwrt-aios.json 下载出错, 无法连接 github ?")"
 fi
 
-if curl -s -L "https://api.github.com/repos/woniuzfb/luci-app-xray/releases/latest" -o "$FFMPEG_MIRROR_ROOT/luci-app-xray.json_tmp"
+if curl -s -L "https://api.github.com/repos/${LUCI_APP_AIOS_LINK#https://github.com/}/releases/latest" -o "$FFMPEG_MIRROR_ROOT/luci-app-aios.json_tmp"
 then
-    mv "$FFMPEG_MIRROR_ROOT/luci-app-xray.json_tmp" "$FFMPEG_MIRROR_ROOT/luci-app-xray.json"
+    mv "$FFMPEG_MIRROR_ROOT/luci-app-aios.json_tmp" "$FFMPEG_MIRROR_ROOT/luci-app-aios.json"
 else
-    Println "$error luci-app-xray.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error luci-app-aios.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" -o "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt.json"
 else
-    Println "$error dnscrypt.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error dnscrypt.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest" -o "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp" "$FFMPEG_MIRROR_ROOT/pcre2.json"
 else
-    Println "$error pcre2.json 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error pcre2.json 下载出错, 无法连接 github ?")"
 fi
 
 if curl -s -L "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim" -o "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp" "$FFMPEG_MIRROR_ROOT/vim-plug.vim"
 else
-    Println "$error vim-plug.vim 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error vim-plug.vim 下载出错, 无法连接 github ?")"
 fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}" ]
@@ -368,7 +369,7 @@ then
     then
         mv "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}_tmp" "$FFMPEG_MIRROR_ROOT/${OPENRESTY_OPENSSL_PATCH}"
     else
-        Println "$error openssl patch 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error openssl patch 下载出错, 无法连接 github ?")"
     fi
 fi
 
@@ -378,7 +379,7 @@ then
     then
         mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
     else
-        Println "$error Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch 下载出错, 无法连接 github ?")"
     fi
 fi
 
@@ -386,7 +387,7 @@ if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/scripts/fix_
 then
     mv "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp" "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch"
 else
-    Println "$error fix_ngx_lua_resp_get_headers_key_whitespace.patch 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error fix_ngx_lua_resp_get_headers_key_whitespace.patch 下载出错, 无法连接 github ?")"
 fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz" ]
@@ -395,57 +396,57 @@ then
     then
         mv "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-${FONTFORGE_VER}.tar.gz"
     else
-        Println "$error fontforge 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error fontforge 下载出错, 无法连接 github ?")"
     fi
 fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip" ]
 then
-    Println "$info 下载 pdf2htmlEX ..."
+    Println "$(eval_gettext "\$info 下载 pdf2htmlEX ...")"
     if curl -s -L "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v${PDF2HTMLEX_VER}.zip" -o "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip_tmp"
     then
         mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-${PDF2HTMLEX_VER}.zip"
     else
-        Println "$error pdf2htmlEX 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error pdf2htmlEX 下载出错, 无法连接 github ?")"
     fi
 fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/nbfc.zip" ]
 then
-    Println "$info 下载 nbfc ..."
+    Println "$(eval_gettext "\$info 下载 nbfc ...")"
     if curl -s -L "https://github.com/hirschmann/nbfc/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nbfc.zip_tmp"
     then
         mv "$FFMPEG_MIRROR_ROOT/nbfc.zip_tmp" "$FFMPEG_MIRROR_ROOT/nbfc.zip"
     else
-        Println "$error nbfc 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error nbfc 下载出错, 无法连接 github ?")"
     fi
 fi
 
 if [ ! -e "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz" ]
 then
-    Println "$info 下载 ${QUICTLS_TAG} ..."
+    Println "$(eval_gettext "\$info 下载 \${QUICTLS_TAG} ...")"
     if curl -s -L "${QUICTLS_REPO_LINK}/${QUICTLS_TAG}.tar.gz" -o "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz_tmp"
     then
         mv "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/${QUICTLS_TAG}.tar.gz"
     else
-        Println "$error ${QUICTLS_TAG} 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error \${QUICTLS_TAG} 下载出错, 无法连接 github ?")"
     fi
 fi
 
-Println "$info 下载 v2ray install-release.sh ..."
+Println "$(eval_gettext "\$info 下载 v2ray install-release.sh ...")"
 if curl -s -L "$V2_LINK" -o "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp" "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh"
 else
-    Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error v2ray install-release.sh 下载出错, 无法连接 github ?")"
 fi
 
-Println "$info 下载 acme.sh ..."
+Println "$(eval_gettext "\$info 下载 acme.sh ...")"
 if curl -s -L https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/acme.sh_tmp" "$FFMPEG_MIRROR_ROOT/acme.sh"
 else
-    Println "$error acme.sh 下载出错, 无法连接 github ?"
+    Println "$(eval_gettext "\$error acme.sh 下载出错, 无法连接 github ?")"
 fi
 
 locale_options=( en )
@@ -453,12 +454,12 @@ mkdir -p "$FFMPEG_MIRROR_ROOT/locale/po/"
 
 for locale in "${locale_options[@]}"
 do
-    Println "$info 下载 $locale 语言文件 ..."
+    Println "$(eval_gettext "\$info 下载 \$locale 语言文件 ...")"
     if curl -s -L "https://raw.githubusercontent.com/woniuzfb/aios/main/i18n/po/${TEXTDOMAIN}.sh-$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo_tmp"
     then
         mv "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/${TEXTDOMAIN}.sh-$locale.mo"
     else
-        Println "$error ${TEXTDOMAIN}.sh-$locale.mo 下载出错, 无法连接 github ?"
+        Println "$(eval_gettext "\$error \${TEXTDOMAIN}.sh-\$locale.mo 下载出错, 无法连接 github ?")"
     fi
 done
 

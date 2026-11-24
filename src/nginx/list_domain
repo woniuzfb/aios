@@ -6,7 +6,7 @@ NginxListDomain()
 
     if [ "$nginx_domains_count" -eq 0 ]
     then
-        Println "$error 没有域名\n"
+        Println "$(eval_gettext "\$error 没有域名")\n"
         exit 1
     fi
 
@@ -16,7 +16,8 @@ NginxListDomain()
 
     if [ "$level_3_d1_count" -eq 0 ]
     then
-        Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
+        local current_domain="${nginx_domains[nginx_domains_index]}"
+        Println "$(eval_gettext "\$error 请先添加 \$current_domain 配置")\n"
         exit 1
     fi
 
@@ -66,8 +67,8 @@ NginxListDomain()
             nginx_domain_servers_indices+=("$level_2_index")
             nginx_domain_server_listen_list=""
             nginx_domain_server_name_list=""
-            nginx_domain_server_flv_status="${red}未配置${normal}"
-            nginx_domain_server_nodejs_status="${red}未配置${normal}"
+            nginx_domain_server_flv_status="${red}$(gettext "未配置")${normal}"
+            nginx_domain_server_nodejs_status="${red}$(gettext "未配置")${normal}"
             skip_find_nodejs=0
             server_root=""
 
@@ -88,7 +89,7 @@ NginxListDomain()
                 then
                     if [ "${level_3_args}" == "/flv" ]
                     then
-                        nginx_domain_server_flv_status="${green}已配置${normal}"
+                        nginx_domain_server_flv_status="${green}$(gettext "已配置")${normal}"
                     elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                     then
                         level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
@@ -104,7 +105,7 @@ NginxListDomain()
                                 then
                                     if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
                                     then
-                                        nginx_domain_server_nodejs_status="${green}已配置${normal}"
+                                        nginx_domain_server_nodejs_status="${green}$(gettext "已配置")${normal}"
                                         skip_find_nodejs=1
                                     fi
                                     break
@@ -140,15 +141,17 @@ NginxListDomain()
 
             nginx_domain_servers_name+=("${nginx_domain_server_name_list//, /,}")
             nginx_domain_servers_root+=("$server_root")
-            nginx_domain_servers_list="$nginx_domain_servers_list $nginx_domain_servers_count.${indent_6}域名: ${green}${nginx_domain_server_name_list:-未设置}${normal}\n${indent_6}端口: ${green}${nginx_domain_server_listen_list:-未设置}${normal}\n${indent_6}flv: $nginx_domain_server_flv_status\n${indent_6}nodejs: $nginx_domain_server_nodejs_status\n\n"
+            nginx_domain_servers_list="$nginx_domain_servers_list $nginx_domain_servers_count.${indent_6}$(gettext "域名"): ${green}${nginx_domain_server_name_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "端口"): ${green}${nginx_domain_server_listen_list:-$(gettext "未设置")}${normal}\n${indent_6}flv: $nginx_domain_server_flv_status\n${indent_6}nodejs: $nginx_domain_server_nodejs_status\n\n"
         fi
     done
 
     if [ "$nginx_domain_servers_count" -eq 0 ]
     then
-        Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
+        local current_domain="${nginx_domains[nginx_domains_index]}"
+        Println "$(eval_gettext "\$error 请先添加 \$current_domain 配置")\n"
         exit 1
     fi
 
-    Println "域名 ${green}${nginx_domains[nginx_domains_index]}${normal} 配置:\n\n$nginx_domain_servers_list"
+    local current_domain="${nginx_domains[nginx_domains_index]}"
+    Println "$(eval_gettext "域名 \${green}\$current_domain\${normal} 配置:")\n\n$nginx_domain_servers_list"
 }

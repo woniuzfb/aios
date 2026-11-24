@@ -3,16 +3,16 @@ DelChannelSchedule()
     jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"']'
     JQ delete "$CHANNELS_FILE"
 
-    Println "$info 频道 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1)) 删除成功\n"
+    Println "$info $(gettext "频道") [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] $(gettext "计划") $((chnl_schedules_index+1)) $(gettext "删除成功")\n"
 }
 
 DelChannelSchedules()
 {
     ListChannelSchedules
 
-    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}全部\n\n"
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
 
-    echo "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)"
+    echo "$(gettext "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnl_schedules_num
     do
         if [ -z "$chnl_schedules_num" ] 
@@ -101,13 +101,13 @@ DelChannelsSchedule()
 
     if [ -z "$chnls_schedule_list" ] 
     then
-        Println "$error 请先添加频道计划\n"
+        Println "$(eval_gettext "\$error 请先添加频道计划")\n"
         exit 1
     fi
 
-    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
 
-    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    echo "$(gettext "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ] 

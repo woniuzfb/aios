@@ -11,16 +11,16 @@ ListChannel()
 
     if [ "$chnl_sync" = false ]
     then
-        chnl_sync_text="${red}$i18n_disabled${normal}"
+        chnl_sync_text="${red}$i18n_stopped${normal}"
     else
-        chnl_sync_text="${green}$i18n_enabled${normal}"
+        chnl_sync_text="${green}$i18n_running${normal}"
     fi
 
     if [ "$chnl_status" == "on" ]
     then
-        chnl_status_text="${green}$i18n_enabled${normal}"
+        chnl_status_text="${green}$i18n_running${normal}"
     else
-        chnl_status_text="${red}$i18n_disabled${normal}"
+        chnl_status_text="${red}$i18n_stopped${normal}"
     fi
 
     if [ -n "$chnl_seg_dir_name" ] 
@@ -95,7 +95,7 @@ ListChannel()
 
     for((chnl_i=0;chnl_i<chnl_variants_count;chnl_i++));
     do
-        chnl_video_quality_text="${chnl_video_quality_text} 输出$((chnl_i+1)): ${indent_20}"
+        chnl_video_quality_text="${chnl_video_quality_text} $(gettext "输出")$((chnl_i+1)): ${indent_20}"
 
         if [ -n "${chnl_qualities[chnl_i]:-}" ] 
         then
@@ -152,9 +152,9 @@ ListChannel()
 
     if [ "$chnl_flv_status" == "on" ]
     then
-        chnl_flv_status_text="${green}$i18n_enabled${normal}"
+        chnl_flv_status_text="${green}$i18n_running${normal}"
     else
-        chnl_flv_status_text="${red}$i18n_disabled${normal}"
+        chnl_flv_status_text="${red}$i18n_stopped${normal}"
     fi
 
     if [ "$chnl_sync" = true ]

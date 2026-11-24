@@ -7,9 +7,9 @@ Include utils/yq "$@"
 
 DepInstall sudo
 
-docker_options=( '服务' '管理证书' '安装/更新 docker' '安装/更新 postgresql' '安装/更新 yq' )
+docker_options=( "$(gettext "服务")" "$(gettext "管理证书")" "$(gettext "安装/更新 docker")" "$(gettext "安装/更新 postgresql")" "$(gettext "安装/更新 yq")" )
 echo
-inquirer list_input_index "请选择" docker_options docker_options_index
+inquirer list_input_index "$(gettext "请选择")" docker_options docker_options_index
 
 case $docker_options_index in
     0) DockerService

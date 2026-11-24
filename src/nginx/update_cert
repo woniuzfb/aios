@@ -2,7 +2,7 @@ NginxDomainUpdateCrt()
 {
     local domain=$1 quiet=${2:-0}
 
-    [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
+    [ "$quiet" -eq 0 ] && Println "$(eval_gettext "\$info 更新 \$domain 证书...")"
 
     if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
     then
@@ -28,7 +28,7 @@ NginxDomainUpdateCrt()
         then
             if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]]
             then
-                Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+                Println "$(eval_gettext "\$error 请使用非 \$nginx_name 监听端口连接 ssh 后重试")\n"
                 exit 1
             fi
             systemctl stop $nginx_name
@@ -55,7 +55,7 @@ NginxDomainUpdateCrt()
         cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "$AIOS_PREFIX/share/xray/$domain.key"
     fi
 
-    [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"
+    [ "$quiet" -eq 0 ] && Println "$(eval_gettext "\$info \$domain 证书更新成功")\n"
 
     return 0
 }
@@ -69,7 +69,7 @@ NginxDomainServerUpdateCrt()
         IFS="," read -r -a domains <<< "$nginx_domain_server_name"
 
         echo
-        inquirer checkbox_input "选择域名: " domains domains_selected
+        inquirer checkbox_input "$(gettext "选择域名"): " domains domains_selected
 
         for domain in "${domains_selected[@]}"
         do

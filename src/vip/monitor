@@ -11,7 +11,7 @@ VipMonitor()
     {
         flock -x 205
         {
-            MonitorLog "启动 VIP  PID $vip_pid !"
+            MonitorLog "$(eval_gettext "启动 VIP PID \$vip_pid !")"
             printf -v now '%(%s)T' -1
             never=$((now+86400*720))
 

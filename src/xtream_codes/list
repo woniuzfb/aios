@@ -5,7 +5,7 @@ XtreamCodesList()
         printf '%s' "" > "$XTREAM_CODES"
     elif [ ! -s "$XTREAM_CODES" ] 
     then
-        Println "$error 没有账号 !\n"
+        Println "$(eval_gettext "\$error 没有账号")\n"
         exit 1
     fi
 
@@ -195,11 +195,11 @@ XtreamCodesList()
                 then
                     ips_mac+=("$i")
                     ips_mac_count=$((ips_mac_count+1))
-                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} mac 地址个数: ${green}$macs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $(gettext "域名"): ${green}${new_domains[i]//|/, }${normal} $(gettext "mac 地址个数"): ${green}$macs_num${normal}\n\n"
                 else
                     ips_acc+=("$i")
                     ips_acc_count=$((ips_acc_count+1))
-                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} 账号个数: ${green}$accs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $(gettext "域名"): ${green}${new_domains[i]//|/, }${normal} $(gettext "账号个数"): ${green}$accs_num${normal}\n\n"
                 fi
             fi
         done
@@ -212,11 +212,11 @@ XtreamCodesList()
 
         if [ "${1:-}" == "mac" ] && [ "$ips_mac_count" -eq 0 ]
         then
-            Println "$error 请先添加 mac 地址!\n" && exit 1
+            Println "$(eval_gettext "\$error 请先添加 mac 地址!")\n" && exit 1
         else
             Println "$xtream_codes_list"
         fi
     else
-        Println "$error 没有账号!\n" && exit 1
+        Println "$(eval_gettext "\$error 没有账号")\n" && exit 1
     fi
 }

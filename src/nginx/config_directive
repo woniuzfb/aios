@@ -29,13 +29,13 @@ NginxConfigDirective()
                     level_1_options+=("$level_1_option")
                 done
 
-                level_1_options+=("添加指令" "$i18n_cancel")
+                level_1_options+=("$(gettext "添加指令")" "$i18n_cancel")
                 level_1_options_count=${#level_1_options[@]}
 
                 while true
                 do
                     echo
-                    inquirer list_input_index "选择指令" level_1_options level_1_index
+                    inquirer list_input_index "$(gettext "选择指令")" level_1_options level_1_index
 
                     if [ "$level_1_index" -eq "$((level_1_options_count-1))" ]
                     then
@@ -46,35 +46,37 @@ NginxConfigDirective()
                         NginxAddDirective level_1
                         continue 2
                     else
-                        level_1_actions=("修改二级指令" "修改指令" "删除指令" "返回选择")
+                        level_1_actions=("$(gettext "修改二级指令")" "$(gettext "修改指令")" "$(gettext "删除指令")" "$(gettext "返回选择")")
 
                         echo
-                        inquirer list_input "选择操作" level_1_actions level_1_action
+                        inquirer list_input "$(gettext "选择操作")" level_1_actions level_1_action
 
-                        if [ "$level_1_action" == "修改二级指令" ]
+                        if [ "$level_1_action" == "$(gettext "修改二级指令")" ]
                         then
                             from_level_1=1
                             NginxConfigDirective level_2
                             unset from_level_1
-                        elif [ "$level_1_action" == "修改指令" ]
+                        elif [ "$level_1_action" == "$(gettext "修改指令")" ]
                         then
                             NginxInputArgs
                             jq_path='["config",0,"parsed",'"$level_1_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
-                            Println "$info ${level_1_directive_arr[level_1_index]} 指令修改成功\n"
+                            local directive_name="${level_1_directive_arr[level_1_index]}"
+                            Println "$(eval_gettext "\$info \$directive_name 指令修改成功")\n"
                             NginxGetConfig
                             continue 2
-                        elif [ "$level_1_action" == "删除指令" ]
+                        elif [ "$level_1_action" == "$(gettext "删除指令")" ]
                         then
                             echo
-                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            inquirer list_input "$(gettext "确认删除, 此操作不可恢复")" ny_options yn_option
                             if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed"]'
                                 JQs delete parse_out "$level_1_index"
                                 NginxBuildConf parse_out
-                                Println "$info 已删除指令 ${level_1_directive_arr[level_1_index]}\n"
+                                local directive_name="${level_1_directive_arr[level_1_index]}"
+                                Println "$(eval_gettext "\$info 已删除指令 \$directive_name")\n"
                                 NginxGetConfig
                                 continue 2
                             fi
@@ -127,11 +129,11 @@ NginxConfigDirective()
                     done
                 fi
 
-                level_2_options+=("添加指令")
+                level_2_options+=("$(gettext "添加指令")")
 
                 if [ "${from_level_1:-0}" -eq 1 ]
                 then
-                    level_2_options+=("返回一级指令")
+                    level_2_options+=("$(gettext "返回一级指令")")
                 else
                     level_2_options+=("$i18n_cancel")
                 fi
@@ -141,7 +143,7 @@ NginxConfigDirective()
                 while true
                 do
                     echo
-                    inquirer list_input_index "选择指令" level_2_options level_2_index
+                    inquirer list_input_index "$(gettext "选择指令")" level_2_options level_2_index
 
                     if [ "$level_2_index" -eq "$((level_2_options_count-1))" ]
                     then
@@ -155,36 +157,38 @@ NginxConfigDirective()
                         NginxAddDirective level_2
                         continue 2
                     else
-                        level_2_actions=("修改三级指令" "修改指令" "删除指令" "返回选择")
+                        level_2_actions=("$(gettext "修改三级指令")" "$(gettext "修改指令")" "$(gettext "删除指令")" "$(gettext "返回选择")")
 
                         echo
-                        inquirer list_input "选择操作" level_2_actions level_2_action
+                        inquirer list_input "$(gettext "选择操作")" level_2_actions level_2_action
 
-                        if [ "$level_2_action" == "修改三级指令" ]
+                        if [ "$level_2_action" == "$(gettext "修改三级指令")" ]
                         then
                             from_level_2=1
                             NginxConfigDirective level_3
                             unset from_level_2
-                        elif [ "$level_2_action" == "修改指令" ]
+                        elif [ "$level_2_action" == "$(gettext "修改指令")" ]
                         then
                             NginxInputArgs
                             jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
                             NginxGetConfig
-                            Println "$info ${level_2_directive_d1_arr[level_2_index]} 指令修改成功\n"
+                            local directive_name="${level_2_directive_d1_arr[level_2_index]}"
+                            Println "$(eval_gettext "\$info \$directive_name 指令修改成功")\n"
                             continue 2
-                        elif [ "$level_2_action" == "删除指令" ]
+                        elif [ "$level_2_action" == "$(gettext "删除指令")" ]
                         then
                             echo
-                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            inquirer list_input "$(gettext "确认删除, 此操作不可恢复")" ny_options yn_option
                             if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
                                 JQs delete parse_out "$level_2_index"
                                 NginxBuildConf parse_out
                                 NginxGetConfig
-                                Println "$info 已删除指令 ${level_2_directive_d1_arr[level_2_index]}\n"
+                                local directive_name="${level_2_directive_d1_arr[level_2_index]}"
+                                Println "$(eval_gettext "\$info 已删除指令 \$directive_name")\n"
                                 continue 2
                             fi
                         fi
@@ -250,11 +254,11 @@ NginxConfigDirective()
                     fi
                 fi
 
-                level_3_options+=("添加指令")
+                level_3_options+=("$(gettext "添加指令")")
 
                 if [ "${from_level_2:-0}" -eq 1 ]
                 then
-                    level_3_options+=("返回二级指令")
+                    level_3_options+=("$(gettext "返回二级指令")")
                 else
                     level_3_options+=("$i18n_cancel")
                 fi
@@ -264,7 +268,7 @@ NginxConfigDirective()
                 while true
                 do
                     echo
-                    inquirer list_input_index "选择指令" level_3_options level_3_index
+                    inquirer list_input_index "$(gettext "选择指令")" level_3_options level_3_index
 
                     if [ "$level_3_index" -eq "$((level_3_options_count-1))" ]
                     then
@@ -278,36 +282,38 @@ NginxConfigDirective()
                         NginxAddDirective level_3
                         continue 2
                     else
-                        level_3_actions=("修改四级指令" "修改指令" "删除指令" "返回选择")
+                        level_3_actions=("$(gettext "修改四级指令")" "$(gettext "修改指令")" "$(gettext "删除指令")" "$(gettext "返回选择")")
 
                         echo
-                        inquirer list_input "选择操作" level_3_actions level_3_action
+                        inquirer list_input "$(gettext "选择操作")" level_3_actions level_3_action
 
-                        if [ "$level_3_action" == "修改四级指令" ]
+                        if [ "$level_3_action" == "$(gettext "修改四级指令")" ]
                         then
                             from_level_3=1
                             NginxConfigDirective level_4
                             unset from_level_3
-                        elif [ "$level_3_action" == "修改指令" ]
+                        elif [ "$level_3_action" == "$(gettext "修改指令")" ]
                         then
                             NginxInputArgs
                             jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
                             NginxGetConfig
-                            Println "$info ${level_3_directive_d2_arr[level_3_index]} 指令修改成功\n"
+                            local directive_name="${level_3_directive_d2_arr[level_3_index]}"
+                            Println "$(eval_gettext "\$info \$directive_name 指令修改成功")\n"
                             continue 2
-                        elif [ "$level_3_action" == "删除指令" ]
+                        elif [ "$level_3_action" == "$(gettext "删除指令")" ]
                         then
                             echo
-                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            inquirer list_input "$(gettext "确认删除, 此操作不可恢复")" ny_options yn_option
                             if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
                                 JQs delete parse_out "$level_3_index"
                                 NginxBuildConf parse_out
                                 NginxGetConfig
-                                Println "$info 已删除指令 ${level_3_directive_d2_arr[level_3_index]}\n"
+                                local directive_name="${level_3_directive_d2_arr[level_3_index]}"
+                                Println "$(eval_gettext "\$info 已删除指令 \$directive_name")\n"
                                 continue 2
                             fi
                         fi
@@ -387,11 +393,11 @@ NginxConfigDirective()
                     fi
                 fi
 
-                level_4_options+=("添加指令")
+                level_4_options+=("$(gettext "添加指令")")
 
                 if [ "${from_level_3:-0}" -eq 1 ]
                 then
-                    level_4_options+=("返回三级指令")
+                    level_4_options+=("$(gettext "返回三级指令")")
                 else
                     level_4_options+=("$i18n_cancel")
                 fi
@@ -401,7 +407,7 @@ NginxConfigDirective()
                 while true
                 do
                     echo
-                    inquirer list_input_index "选择指令" level_4_options level_4_index
+                    inquirer list_input_index "$(gettext "选择指令")" level_4_options level_4_index
 
                     if [ "$level_4_index" -eq "$((level_4_options_count-1))" ]
                     then
@@ -415,36 +421,38 @@ NginxConfigDirective()
                         NginxAddDirective level_4
                         continue 2
                     else
-                        level_4_actions=("修改五级指令" "修改指令" "删除指令" "返回选择")
+                        level_4_actions=("$(gettext "修改五级指令")" "$(gettext "修改指令")" "$(gettext "删除指令")" "$(gettext "返回选择")")
 
                         echo
-                        inquirer list_input "选择操作" level_4_actions level_4_action
+                        inquirer list_input "$(gettext "选择操作")" level_4_actions level_4_action
 
-                        if [ "$level_4_action" == "修改五级指令" ]
+                        if [ "$level_4_action" == "$(gettext "修改五级指令")" ]
                         then
                             from_level_4=1
                             NginxConfigDirective level_5
                             unset from_level_4
-                        elif [ "$level_4_action" == "修改指令" ]
+                        elif [ "$level_4_action" == "$(gettext "修改指令")" ]
                         then
                             NginxInputArgs
                             jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
                             NginxGetConfig
-                            Println "$info ${level_4_directive_d3_arr[level_4_index]} 指令修改成功\n"
+                            local directive_name="${level_4_directive_d3_arr[level_4_index]}"
+                            Println "$(eval_gettext "\$info \$directive_name 指令修改成功")\n"
                             continue 2
-                        elif [ "$level_4_action" == "删除指令" ]
+                        elif [ "$level_4_action" == "$(gettext "删除指令")" ]
                         then
                             echo
-                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            inquirer list_input "$(gettext "确认删除, 此操作不可恢复")" ny_options yn_option
                             if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
                                 JQs delete parse_out "$level_4_index"
                                 NginxBuildConf parse_out
                                 NginxGetConfig
-                                Println "$info 已删除指令 ${level_4_directive_d3_arr[level_4_index]}\n"
+                                local directive_name="${level_4_directive_d3_arr[level_4_index]}"
+                                Println "$(eval_gettext "\$info 已删除指令 \$directive_name")\n"
                                 continue 2
                             fi
                         fi
@@ -510,11 +518,11 @@ NginxConfigDirective()
                     fi
                 fi
 
-                level_5_options+=("添加指令")
+                level_5_options+=("$(gettext "添加指令")")
 
                 if [ "${from_level_4:-0}" -eq 1 ]
                 then
-                    level_5_options+=("返回四级指令")
+                    level_5_options+=("$(gettext "返回四级指令")")
                 else
                     level_5_options+=("$i18n_cancel")
                 fi
@@ -524,7 +532,7 @@ NginxConfigDirective()
                 while true
                 do
                     echo
-                    inquirer list_input_index "选择指令" level_5_options level_5_index
+                    inquirer list_input_index "$(gettext "选择指令")" level_5_options level_5_index
 
                     if [ "$level_5_index" -eq "$((level_5_options_count-1))" ]
                     then
@@ -538,31 +546,33 @@ NginxConfigDirective()
                         NginxAddDirective level_5
                         continue 2
                     else
-                        level_5_actions=("修改指令" "删除指令" "返回选择")
+                        level_5_actions=("$(gettext "修改指令")" "$(gettext "删除指令")" "$(gettext "返回选择")")
 
                         echo
-                        inquirer list_input "选择操作" level_5_actions level_5_action
+                        inquirer list_input "$(gettext "选择操作")" level_5_actions level_5_action
 
-                        if [ "$level_5_action" == "修改指令" ]
+                        if [ "$level_5_action" == "$(gettext "修改指令")" ]
                         then
                             NginxInputArgs
                             jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block",'"$level_5_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
                             NginxGetConfig
-                            Println "$info ${level_5_directive_d4_arr[level_5_index]} 指令修改成功\n"
+                            local directive_name="${level_5_directive_d4_arr[level_5_index]}"
+                            Println "$(eval_gettext "\$info \$directive_name 指令修改成功")\n"
                             continue 2
-                        elif [ "$level_5_action" == "删除指令" ]
+                        elif [ "$level_5_action" == "$(gettext "删除指令")" ]
                         then
                             echo
-                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            inquirer list_input "$(gettext "确认删除, 此操作不可恢复")" ny_options yn_option
                             if [ "$yn_option" == "$i18n_yes" ]
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
                                 JQs delete parse_out "$level_5_index"
                                 NginxBuildConf parse_out
                                 NginxGetConfig
-                                Println "$info 已删除指令 ${level_5_directive_d4_arr[level_5_index]}\n"
+                                local directive_name="${level_5_directive_d4_arr[level_5_index]}"
+                                Println "$(eval_gettext "\$info 已删除指令 \$directive_name")\n"
                                 continue 2
                             fi
                         fi

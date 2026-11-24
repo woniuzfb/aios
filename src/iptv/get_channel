@@ -22,7 +22,7 @@ GetChannel()
     if [ -z "$jq_payload" ] 
     then
         Println "$error $i18n_channel_try_again\n"
-        MonitorErr "获取频道信息 $select_json"
+        MonitorErr "$(eval_gettext "获取频道信息 \$select_json")"
         return 1
     fi
 

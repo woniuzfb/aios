@@ -28,7 +28,7 @@ ZlibInstall()
         mkdir -p "$DEPENDS_ROOT"
         cd "$DEPENDS_ROOT"
         curl -L "https://www.zlib.net/$zlib_name.tar.gz" -o "$zlib_name".tar.gz
-        Println "$info 解压 $zlib_name ..."
+        Println "$(eval_gettext "\$info 解压 \$zlib_name ...")"
         tar xzf "$zlib_name".tar.gz
         cd "$zlib_name"
         ./configure --prefix="$DEPENDS_ROOT/$zlib_name/$build_dir" ${args[@]+"${args[@]}"}

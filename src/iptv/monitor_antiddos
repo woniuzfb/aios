@@ -89,7 +89,7 @@ AntiDDoSSet()
 
         if ufw show added | grep -q "None"
         then
-            Println "$info 添加常用 ufw 规则"
+            Println "$(eval_gettext "\$info 添加常用 ufw 规则")"
             ufw allow ssh > /dev/null 2>&1
             ufw allow http > /dev/null 2>&1
             ufw allow https > /dev/null 2>&1
@@ -102,7 +102,7 @@ AntiDDoSSet()
                 then
                     ufw allow "$current_port" > /dev/null 2>&1
                 fi
-                Println "$info 开启 ufw"
+                Println "$(eval_gettext "\$info 开启 ufw")"
                 ufw --force enable > /dev/null 2>&1
             fi
         fi
@@ -126,7 +126,7 @@ AntiDDoSSet()
                 [ ! -s "$IPTV_CONFIG" ] && printf '{}\n' > "$IPTV_CONFIG"
                 JQ mutate "$IPTV_CONFIG" '. * $u' --argjson u "$update"
             fi
-            Println "不启动 AntiDDoS ...\n" && exit 0
+            Println "$(gettext "不启动 AntiDDoS ...")\n" && exit 0
         else
             anti_ddos_ports=${anti_ddos_port:-$d_anti_ddos_port}
             anti_ddos_ports=${anti_ddos_ports%% *}
@@ -182,7 +182,7 @@ AntiDDoS()
 
             AntiDDoSCleanExpiredIps "$d_anti_ddos_port" true true
 
-            MonitorLog "AntiDDoS 启动成功 PID $self_pid !"
+            MonitorLog "$(eval_gettext "AntiDDoS 启动成功 PID \$self_pid !")"
 
             current_ip=${SSH_CLIENT%% *}
             [ -n "${anti_ddos_level:-}" ] && anti_ddos_level=$((anti_ddos_level+1))
@@ -228,7 +228,7 @@ AntiDDoS()
                                     printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                     ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
                                     date_now=$(date '+%m-%d %H:%M:%S')
-                                    printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
+                                    printf '%s\n' "$(eval_gettext "\$date_now \$ip 已被禁")" >> "$IP_LOG"
                                     ips+=("$ip")
                                     break 1
                                 fi
@@ -324,7 +324,7 @@ AntiDDoS()
                                         printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                         ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
                                         date_now=$(date '+%m-%d %H:%M:%S')
-                                        printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
+                                        printf '%s\n' "$(eval_gettext "\$date_now \$ip 已被禁")" >> "$IP_LOG"
                                         ips+=("$ip")
                                         break 1
                                     fi

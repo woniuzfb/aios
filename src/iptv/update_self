@@ -12,7 +12,7 @@ UpdateSelfRollback()
     then
         rm -f "$IPTV_CONFIG"
     fi
-    Println "$error 配置迁移失败, 已从备份回滚 !\n"
+    Println "$(eval_gettext "\$error 配置迁移失败, 已从备份回滚 !")\n"
 }
 
 if [ ! -x "$JQ_FILE" ]
@@ -72,14 +72,14 @@ if [ "$has_legacy_default" = true ] || [ ! -s "$IPTV_CONFIG" ] || VersionLt "$cu
 then
     if VersionLt "$cur_ver" "1.35.0" && [ "$cur_ver" != "0.0.0" ]
     then
-        Println "$info 需要先关闭所有频道, 请稍等...\n"
+        Println "$(eval_gettext "\$info 需要先关闭所有频道, 请稍等...")\n"
         StopChannelsForce
         rm -rf "/tmp/flv.lockdir/"
         rm -rf "/tmp/monitor.lockdir"
         rm -f "$FFMPEG_LOG_ROOT/"*.lock
     fi
 
-    Println "$info 更新中, 请稍等...\n"
+    Println "$(eval_gettext "\$info 更新中, 请稍等...")\n"
     update_date=$(date '+%m-%d-%H:%M:%S')
     channels_backup=""
     config_backup=""
@@ -89,7 +89,7 @@ then
     then
         if ! $JQ_FILE empty "$CHANNELS_FILE" > /dev/null 2>&1
         then
-            Println "$error $CHANNELS_FILE JSON 格式错误, 取消迁移 !\n"
+            Println "$(eval_gettext "\$error \$CHANNELS_FILE JSON 格式错误, 取消迁移 !")\n"
             exit 1
         fi
         orig_chnls_count=$($JQ_FILE '(.channels // []) | length' "$CHANNELS_FILE" 2> /dev/null || printf '-1')
@@ -101,7 +101,7 @@ then
     then
         if ! $JQ_FILE empty "$IPTV_CONFIG" > /dev/null 2>&1
         then
-            Println "$error $IPTV_CONFIG JSON 格式错误, 取消迁移 !\n"
+            Println "$(eval_gettext "\$error \$IPTV_CONFIG JSON 格式错误, 取消迁移 !")\n"
             exit 1
         fi
         config_backup="${IPTV_CONFIG}_$update_date"

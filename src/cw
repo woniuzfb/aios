@@ -7,9 +7,9 @@ Include src/service/browse "$@"
 Include utils/python "$@"
 Include utils/imagemagick "$@"
 
-calibre_options=( 'kcc' '安装/更新 calibre' '开启 Calibre Web' '关闭 Calibre Web' '重启 Calibre Web' '查看 Calibre Web' '安装/更新 Calibre Web' 'Patch Calibre Web' )
+calibre_options=( 'kcc' "$(gettext "安装/更新 calibre")" "$(gettext "开启 Calibre Web")" "$(gettext "关闭 Calibre Web")" "$(gettext "重启 Calibre Web")" "$(gettext "查看 Calibre Web")" "$(gettext "安装/更新 Calibre Web")" 'Patch Calibre Web' )
 echo
-inquirer list_input_index "请选择" calibre_options calibre_options_index
+inquirer list_input_index "$(gettext "请选择")" calibre_options calibre_options_index
 
 case $calibre_options_index in
     0) KccMenu

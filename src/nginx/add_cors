@@ -1,6 +1,6 @@
 NginxAddCorsHost()
 {
-    Println "$info 配置 cors..."
+    Println "$(eval_gettext "\$info 配置 cors...")"
 
     cors_domains=()
 

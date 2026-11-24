@@ -37,9 +37,9 @@ OpenList.auth.login()
     then
         jq_path='["openlist",'"$openlists_index"',"accs",'"$openlist_accs_index"',"token"]'
         JQ update "$SERVICES_CONFIG" "$openlist_acc_token"
-        Println "$info 账号 $openlist_acc_username 登陆成功\n"
+        Println "$(eval_gettext "\$info 账号 \$openlist_acc_username 登录成功")\n"
     else
-        Println "$error 账号 $openlist_acc_username 登陆失败: $auth_login_message\n"
+        Println "$(eval_gettext "\$error 账号 \$openlist_acc_username 登录失败: \$auth_login_message")\n"
         return 1
     fi
 }
@@ -314,9 +314,9 @@ OpenList.fs.rename()
 
     if [ "$fs_rename_code" -eq 200 ] 
     then
-        Println "$info 文件名修改成功"
+        Println "$(eval_gettext "\$info 文件名修改成功")"
     else
-        Println "$error 文件名修改失败: $fs_rename_message"
+        Println "$(eval_gettext "\$error 文件名修改失败: \$fs_rename_message")"
     fi
 
     return 0

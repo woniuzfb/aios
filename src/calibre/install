@@ -30,7 +30,7 @@ CalibreInstall()
         sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin install_dir="$CALIBRE_ROOT"/bin version=7.16.0
     fi
 
-    Println "$info calibre 安装/更新成功\n"
+    Println "$(eval_gettext "\$info calibre 安装/更新成功")\n"
 }
 
 CalibrePluginInstall()
@@ -54,10 +54,10 @@ CalibrePluginInstall()
         mkdir -p "$CALIBRE_ROOT"/plugins
         if ! curl -L -o "${CALIBRE_ROOT}/plugins/${plugin_name}.zip" "$FFMPEG_MIRROR_LINK/calibre/plugins/${plugin_name}.zip"
         then
-            Println "$error $plugin_name 插件不存在\n"
+            Println "$(eval_gettext "\$error \$plugin_name 插件不存在")\n"
             return 1
         fi
         "$CALIBRE_BIN_ROOT"/calibre-customize -a "${CALIBRE_ROOT}/plugins/${plugin_name}.zip"
-        Println "$info $plugin_name 插件安装成功\n"
+        Println "$(eval_gettext "\$info \$plugin_name 插件安装成功")\n"
     fi
 }

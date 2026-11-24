@@ -2,7 +2,7 @@ CloudflareAddZone()
 {
     CloudflareListHosts
 
-    echo -e "选择 CFP"
+    echo -e "$(gettext "选择 CFP")"
     while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -32,11 +32,11 @@ CloudflareAddZone()
 
     if [ "$cf_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
-    echo -e "选择用户"
+    echo -e "$(gettext "选择用户")"
     while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
@@ -60,7 +60,7 @@ CloudflareAddZone()
         esac
     done
 
-    Println "$info 稍等..."
+    Println "$(eval_gettext "\$info 稍等...")"
     result=""
     until [ "$result" == "success" ] 
     do
@@ -83,8 +83,8 @@ CloudflareAddZone()
         fi
     done
 
-    Println "请输入根域名"
-    echo -e "$tip 如果域名已经由 cloudflare 解析, 请先到官方 cloudflare 面板中删除\n"
+    Println "$(gettext "请输入根域名")"
+    echo -e "$(eval_gettext "\$tip 如果域名已经由 cloudflare 解析, 请先到官方 cloudflare 面板中删除")\n"
     while read -p "$i18n_default_cancel" cf_zone_name
     do
         if [ -z "$cf_zone_name" ] 
@@ -93,10 +93,10 @@ CloudflareAddZone()
             exit 1
         elif [[ $cf_zone_name =~ ^([a-zA-Z0-9][\-a-zA-Z0-9]*\.)+[\-a-zA-Z0-9]{2,20}$ ]] 
         then
-            Println "  域名: ${green} $cf_zone_name ${normal}\n"
+            Println "$(eval_gettext "  域名: \${green} \$cf_zone_name \${normal}")\n"
             break
         else
-            Println "$error 输入错误, 请输入根域名, 不能是二级域名"
+            Println "$(eval_gettext "\$error 输入错误, 请输入根域名, 不能是二级域名")"
         fi
     done
 
@@ -104,7 +104,7 @@ CloudflareAddZone()
     do
         if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
         then
-            Println "$error 域名已经存在\n"
+            Println "$(eval_gettext "\$error 域名已经存在")\n"
             exit 1
         fi
     done
@@ -129,5 +129,5 @@ CloudflareAddZone()
 
     jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
     JQ add "$CF_CONFIG" "[$new_zone]"
-    Println "$info 源站添加成功\n"
+    Println "$(eval_gettext "\$info 源站添加成功")\n"
 }

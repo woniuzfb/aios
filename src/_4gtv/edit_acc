@@ -16,9 +16,9 @@ Edit4gtvAcc()
 
     if JQ update "$SERVICES_CONFIG" "$new_acc"
     then
-        Println "$info 账号修改成功\n"
+        Println "$(eval_gettext "\$info 账号修改成功")\n"
     else
-        Println "$error 账号修改失败\n"
+        Println "$(eval_gettext "\$error 账号修改失败")\n"
         return 1
     fi
 }

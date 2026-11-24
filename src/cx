@@ -1,4 +1,4 @@
-[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+[ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
 
 Include src/xtream_codes/domain_filter "$@"
 
@@ -24,17 +24,17 @@ Include src/xtream_codes/list_channels "$@"
 
 Include src/xtream_codes/add_mac "$@"
 
-Println "  Xtream Codes 面板 ${normal}
+Println "  $(gettext "Xtream Codes 面板") ${normal}
 
-${green}1.${normal} 查看账号
-${green}2.${normal} 添加账号
-${green}3.${normal} 批量检测
-${green}4.${normal} 测试账号
-${green}5.${normal} 获取账号
+${green}1.${normal} $(gettext "查看账号")
+${green}2.${normal} $(gettext "添加账号")
+${green}3.${normal} $(gettext "批量检测")
+${green}4.${normal} $(gettext "测试账号")
+${green}5.${normal} $(gettext "获取账号")
 ————————————
-${green}6.${normal} 查看 mac 地址
-${green}7.${normal} 添加 mac 地址
-${green}8.${normal} 浏览频道
+${green}6.${normal} $(gettext "查看 mac 地址")
+${green}7.${normal} $(gettext "添加 mac 地址")
+${green}8.${normal} $(gettext "浏览频道")
 
 "
 read -p "`gettext \"输入序号\"` [1-8]: " xtream_codes_num
@@ -48,12 +48,12 @@ case $xtream_codes_num in
         XtreamCodesList
     ;;
     3) 
-        [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
+        [ ! -s "$XTREAM_CODES" ] && Println "$(eval_gettext "\$error 没有账号")\n" && exit 1
 
         echo
         ExitOnList n "`gettext \"耗时可能很长, 是否继续\"`"
 
-        Println "$info 检测中..."
+        Println "$(eval_gettext "\$info 检测中...")"
         printf -v now '%(%m-%d-%H:%M:%S)T' -1
 
         cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
@@ -85,13 +85,13 @@ case $xtream_codes_num in
 
         XtreamCodesList
 
-        Println "$info 账号检测完成\n"
+        Println "$(eval_gettext "\$info 账号检测完成")\n"
     ;;
     4) 
         XtreamCodesTestAcc
     ;;
     5) 
-        Println "$info 稍等...\n"
+        Println "$(eval_gettext "\$info 稍等...")\n"
 
         if [ -s "$XTREAM_CODES" ] 
         then
@@ -124,12 +124,12 @@ case $xtream_codes_num in
             done
         done
 
-        [ -z "$result" ] && Println "$error 暂时无法连接, 请稍后再试...\n" && exit 1
+        [ -z "$result" ] && Println "$(eval_gettext "\$error 暂时无法连接, 请稍后再试...")\n" && exit 1
 
         echo -e "$result" >> "$XTREAM_CODES_EXAM"
 
         echo && echo
-        inquirer list_input_index "验证 mac" ny_options ny_index
+        inquirer list_input_index "$(gettext "验证 mac")" ny_options ny_index
 
         if [ "$ny_index" -eq 1 ] 
         then
@@ -138,7 +138,7 @@ case $xtream_codes_num in
 
         XtreamCodesList
 
-        Println "$info 账号添加成功\n"
+        Println "$(eval_gettext "\$info 账号添加成功")\n"
     ;;
     6) 
         XtreamCodesListMac
@@ -148,7 +148,7 @@ case $xtream_codes_num in
         if [ "$add_mac_success" = true ] 
         then
             XtreamCodesList mac
-            Println "$info mac 添加成功!\n"
+            Println "$(eval_gettext "\$info mac 添加成功!")\n"
         fi
     ;;
     8) 

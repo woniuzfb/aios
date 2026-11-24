@@ -32,9 +32,9 @@ ScheduleNowtv()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name nowtv [$chnl_id] 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name nowtv [\$chnl_id] 节目表更新成功")"
         else
-            Println "$error $chnl_name nowtv [$chnl_id] 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name nowtv [\$chnl_id] 节目表更新失败")"
         fi
     done
 }
@@ -102,14 +102,14 @@ ScheduleNiotv()
 
         if [ "$empty" -eq 1 ]
         then
-            Println "$error $chnl_name niotv [$chnl_id] 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name niotv [\$chnl_id] 节目表更新失败")"
             continue
         fi
 
         jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
-        Println "$info $chnl_name niotv [$chnl_id] 节目表更新成功"
+        Println "$(eval_gettext "\$info \$chnl_name niotv [\$chnl_id] 节目表更新成功")"
     done
 }
 
@@ -198,9 +198,9 @@ ScheduleIcable()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] i-cable 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] i-cable 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] i-cable 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] i-cable 节目表更新失败")"
         fi
     done
 }
@@ -257,7 +257,7 @@ ScheduleJiushi()
 
             if [ -z "$schedule" ]
             then
-                Println "$error $chnl_name [$chnl_id] 就是节目表更新失败"
+                Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] 就是节目表更新失败")"
                 continue
             fi
         fi
@@ -265,7 +265,7 @@ ScheduleJiushi()
         jq_json=true
         jq_path='["'"$chnl_id"'"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
-        Println "$info $chnl_name [$chnl_id] 就是节目表更新成功"
+        Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] 就是节目表更新成功")"
     done
 }
 
@@ -302,9 +302,9 @@ ScheduleTvbhk()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "$schedule"
-            Println "$info $chnl_name [$chnl_id] tvbhk 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] tvbhk 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] tvbhk 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] tvbhk 节目表更新失败")"
         fi
     done
 }
@@ -709,9 +709,9 @@ ScheduleTvbhd()
         jq_json=true
         jq_path='["tvbhd"]'
         JQ update "$SCHEDULE_JSON" "[$schedule]"
-        Println "$info tvbhd [$chnl_id] 节目表更新成功"
+        Println "$(eval_gettext "\$info tvbhd [\$chnl_id] 节目表更新成功")"
     else
-        Println "$error tvbhd [$chnl_id] 节目表更新失败"
+        Println "$(eval_gettext "\$error tvbhd [\$chnl_id] 节目表更新失败")"
     fi
 }
 
@@ -729,7 +729,7 @@ ScheduleSingteltv()
 
     if [ "${singteltv_status:-0}" -eq 0 ]
     then
-        Println "$info 解析 singteltv ..."
+        Println "$(eval_gettext "\$info 解析 singteltv ...")"
         singteltv_status=0
         while IFS= read -r line
         do
@@ -748,7 +748,7 @@ ScheduleSingteltv()
 
     if [ "$singteltv_status" -eq 0 ]
     then
-        Println "$error 无法连接 singteltv ?"
+        Println "$(eval_gettext "\$error 无法连接 singteltv ?")"
         singteltv_status=2
         return 0
     fi
@@ -818,9 +818,9 @@ ScheduleSingteltv()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] singteltv 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] singteltv 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] singteltv 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] singteltv 节目表更新失败")"
         fi
     done
 }
@@ -857,9 +857,9 @@ ScheduleCntv()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] cntv 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] cntv 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] cntv 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] cntv 节目表更新失败")"
         fi
     done
 }
@@ -902,9 +902,9 @@ ScheduleTvbs()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] tvbs 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] tvbs 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] tvbs 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] tvbs 节目表更新失败")"
         fi
     done
 }
@@ -955,9 +955,9 @@ Schedule_4gtv()
             jq_json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] 4gtv 节目表更新成功"
+            Println "$(eval_gettext "\$info \$chnl_name [\$chnl_id] 4gtv 节目表更新成功")"
         else
-            Println "$error $chnl_name [$chnl_id] 4gtv 节目表更新失败"
+            Println "$(eval_gettext "\$error \$chnl_name [\$chnl_id] 4gtv 节目表更新失败")"
         fi
     done
 }

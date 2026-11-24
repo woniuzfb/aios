@@ -9,39 +9,39 @@ GoInstall
 
 if [[ ! -x $(command -v go-mmproxy) ]] 
 then
-    Println "$info 安装 go-mmproxy"
+    Println "$(eval_gettext "\$info 安装 go-mmproxy")"
     go install github.com/path-network/go-mmproxy@latest
 fi
 
 echo
-mmproxy_opotions=( '用于 acme.sh' '用于 ssh' '手动配置' )
-inquirer list_input_index "选择操作" mmproxy_opotions mmproxy_opotions_index
+mmproxy_opotions=( "$(gettext "用于 acme.sh")" "$(gettext "用于 ssh")" "$(gettext "手动配置")" )
+inquirer list_input_index "$(gettext "选择操作")" mmproxy_opotions mmproxy_opotions_index
 
 if [ "$mmproxy_opotions_index" -eq 0 ] 
 then
     mmproxy_name="acme"
-    acme_tip="(acme 监听端口)"
+    acme_tip="$(gettext "(acme 监听端口)")"
 elif [ "$mmproxy_opotions_index" -eq 1 ] 
 then
     mmproxy_name="ssh"
-    ssh_tip="(ssh 监听端口)"
+    ssh_tip="$(gettext "(ssh 监听端口)")"
 else
     echo
-    ExitOnText "输入 mmproxy 配置名称(英文)" mmproxy_name
+    ExitOnText "$(gettext "输入 mmproxy 配置名称(英文)")" mmproxy_name
 
     if [ "$mmproxy_name" == "acme" ] || [ "$mmproxy_name" == "ssh" ]
     then
-        Println "$error 保留名称, 请重新输入\n"
+        Println "$(eval_gettext "\$error 保留名称, 请重新输入")\n"
         exit 1
     elif [ -f /etc/systemd/system/mmproxy-$mmproxy_name.service ] 
     then
-        Println "$error 名称已经存在\n"
+        Println "$(eval_gettext "\$error 名称已经存在")\n"
         exit 1
     fi
 fi
 
-Println "$tip 比如 nginx 分流后端: 127.0.0.1:1234"
-inquirer text_input "输入 mmproxy 监听 地址+端口: " mmproxy_listen "$i18n_random"
+Println "$(eval_gettext "\$tip 比如 nginx 分流后端: 127.0.0.1:1234")"
+inquirer text_input "$(gettext "输入 mmproxy 监听 地址+端口: ")" mmproxy_listen "$i18n_random"
 
 if [ "$mmproxy_listen" == "$i18n_random" ] 
 then
@@ -50,17 +50,17 @@ fi
 
 if [ "$mmproxy_name" == "ssh" ] 
 then
-    Println "$tip 请之后将 nginx 分流 ssh 协议至 $mmproxy_listen, 并将 ssh 监听改为下面输入的地址和端口"
+    Println "$(eval_gettext "\$tip 请之后将 nginx 分流 ssh 协议至 \$mmproxy_listen, 并将 ssh 监听改为下面输入的地址和端口")"
 elif [ "$mmproxy_name" == "acme" ] 
 then
-    Println "$tip 请之后将 nginx 分流 acme 协议至 $mmproxy_listen"
+    Println "$(eval_gettext "\$tip 请之后将 nginx 分流 acme 协议至 \$mmproxy_listen")"
 fi
 
-Println "$tip 比如: 127.0.0.1:2222"
-ExitOnText "输入 ipv4 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4
+Println "$(eval_gettext "\$tip 比如: 127.0.0.1:2222")"
+ExitOnText "$(gettext "输入 ipv4 分流目标 地址+端口")${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4
 
 echo
-inquirer text_input "输入 ipv6 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v6 "[::1]:${mmproxy_target_v4#*:}"
+inquirer text_input "$(gettext "输入 ipv6 分流目标 地址+端口")${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v6 "[::1]:${mmproxy_target_v4#*:}"
 
 if [ -e "/etc/systemd/system/mmproxy-$mmproxy_name.service" ] 
 then
@@ -129,4 +129,4 @@ then
     systemctl restart rc-local || true
 fi
 
-Println "$info mmproxy-$mmproxy_name 设置成功\n"
+Println "$(eval_gettext "\$info mmproxy-\$mmproxy_name 设置成功")\n"

@@ -2,7 +2,7 @@ XrayInstall()
 {
     if [ -s "$X_CONFIG" ]
     then
-        Println "$error xray 已存在...\n"
+        Println "$(eval_gettext "\$error xray 已存在...")\n"
         ExitOnList n "`gettext \"是否覆盖原安装\"`"
     fi
 
@@ -20,7 +20,7 @@ XrayInstall()
         usermod -s /usr/sbin/nologin xray
     fi
 
-    Println "$info 安装 xray..."
+    Println "$(eval_gettext "\$info 安装 xray...")"
 
     { curl -s -m 10 "$X_LINK" || curl -s -m 30 "$X_LINK_FALLBACK"; } \
     | sed "s+nobody+xray+g" \
@@ -40,7 +40,7 @@ XrayInstall()
 
     ServiceControl start xray
 
-    Println "$info xray 安装完成\n"
+    Println "$(eval_gettext "\$info xray 安装完成")\n"
 }
 
 XrayUpdate()
@@ -78,5 +78,5 @@ XrayUpdate()
 
     ServiceControl restart xray
 
-    Println "$info xray 升级完成\n"
+    Println "$(eval_gettext "\$info xray 升级完成")\n"
 }

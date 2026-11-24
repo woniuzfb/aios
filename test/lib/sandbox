@@ -15,6 +15,7 @@ E2eSandboxInit()
     done
 
     ln -sf "$(command -v jq)" "$E2E_SANDBOX_DIR/bin/jq"
+    printf 'sh_locale=zh_CN\nexport LANG=zh_CN.UTF-8\nlocale_fix=0\n' > "$E2E_SANDBOX_DIR/bin/tv-i18n"
 
     # Mock xray binary
     cat > "$E2E_SANDBOX_DIR/bin/xray" <<'MOCKX'
@@ -107,6 +108,8 @@ E2eRunPty()
 
     PATH="$E2E_SANDBOX_DIR/bin:$PATH" \
     AIOS_PREFIX="$E2E_SANDBOX_DIR" \
+    LANG=zh_CN.UTF-8 \
+    LANGUAGE=zh_CN \
         bash "$REPO_ROOT/test/lib/pty_driver" \
         --cmd "$E2E_SANDBOX_DIR/bin/$cmd_name" \
         --timeout 3 \

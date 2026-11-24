@@ -8,9 +8,9 @@ Login4gtvAcc()
     List4gtvAccs
 
     _4gtv_input_acc_num=$((_4gtv_accs_count+1))
-    echo -e " ${green}$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
+    echo -e " ${green}$_4gtv_input_acc_num.${normal}${indent_6}$(gettext "手动输入")\n"
 
-    echo -e "选择账号"
+    echo -e "$(gettext "选择账号")"
     while read -r -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
@@ -41,9 +41,9 @@ Login4gtvAcc()
 
                 if JQ add "$SERVICES_CONFIG" "[$new_acc]"
                 then
-                    Println "$info 账号添加成功\n"
+                    Println "$(eval_gettext "\$info 账号添加成功")\n"
                 else
-                    Println "$error 账号保存失败\n"
+                    Println "$(eval_gettext "\$error 账号保存失败")\n"
                     return 1
                 fi
                 break
@@ -74,7 +74,7 @@ Login4gtvAcc()
             "https://www.4gtv.tv/validatecode?t=$(DateMs)" -o "$img_file" || [ ! -s "$img_file" ]
         then
             rm -f "$img_file"
-            Println "$error 获取验证码图片失败, 请重试\n"
+            Println "$(eval_gettext "\$error 获取验证码图片失败, 请重试")\n"
             exit 1
         fi
 
@@ -85,14 +85,14 @@ Login4gtvAcc()
             if ! "$IMGCAT_FILE" --half-height "$img_file"
             then
                 rm -f "$img_file"
-                Println "$error 显示验证码图片失败, 请重试\n"
+                Println "$(eval_gettext "\$error 显示验证码图片失败, 请重试")\n"
                 exit 1
             fi
         fi
 
         rm -f "$img_file"
-        Println "$info 输入图片验证码: "
-        read -r -p "(默认: 刷新验证码, 输入 q 退出): " validatecode
+        Println "$(eval_gettext "\$info 输入图片验证码: ")"
+        read -r -p "$(gettext "(默认: 刷新验证码, 输入 q 退出): ")" validatecode
 
         if [ "$validatecode" == "q" ] || [ "$validatecode" == "Q" ]
         then
@@ -101,7 +101,7 @@ Login4gtvAcc()
         fi
         [ -z "$validatecode" ] && continue
 
-        Println "$info 登录账号..."
+        Println "$(eval_gettext "\$info 登录账号...")"
         IFS="^" read -r result msg token < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel.html' \
@@ -116,7 +116,7 @@ Login4gtvAcc()
         then
             break
         else
-            Println "$error 账号登录失败, 请重试\n\n$msg\n"
+            Println "$(eval_gettext "\$error 账号登录失败, 请重试")\n\n$msg\n"
         fi
     done
 
@@ -124,11 +124,11 @@ Login4gtvAcc()
 
     if ! JQ update "$SERVICES_CONFIG" "$token"
     then
-        Println "$error 保存登录令牌失败\n"
+        Println "$(eval_gettext "\$error 保存登录令牌失败")\n"
         return 1
     fi
-    Println "$info 账号登录成功"
-    Println "$info 验证账号..."
+    Println "$(eval_gettext "\$info 账号登录成功")"
+    Println "$(eval_gettext "\$info 验证账号...")"
 
     local i
     result=""
@@ -156,13 +156,13 @@ Login4gtvAcc()
 
     if [ "$result" = true ]
     then
-        Println "$info 账号验证成功"
+        Println "$(eval_gettext "\$info 账号验证成功")"
     else
-        Println "$error 账号验证失败, 请重试\n"
+        Println "$(eval_gettext "\$error 账号验证失败, 请重试")\n"
         return 1
     fi
 
-    Println "$info 开启 30 天豪华套餐"
+    Println "$(eval_gettext "\$info 开启 30 天豪华套餐")"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -174,8 +174,8 @@ Login4gtvAcc()
 
     if [ "$result" = true ]
     then
-        Println "$info 30 天豪华套餐开启成功\n"
+        Println "$(eval_gettext "\$info 30 天豪华套餐开启成功")\n"
     else
-        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$(eval_gettext "\$error 开启 30 天豪华套餐发生错误, 请重试")\n\n$msg\n"
     fi
 }

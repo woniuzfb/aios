@@ -2,7 +2,7 @@ IbmAddCfAppRoute()
 {
     IbmListCfApp
 
-    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    Println "$(eval_gettext "\$info 登录账号: \$ibm_user_email [ \$ibm_user_region ]")"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
@@ -14,7 +14,7 @@ IbmAddCfAppRoute()
     do
         if [ "${ibm_cf_app_routes_domain[i]}" == "$ibm_cf_app_route_domain" ] && [ "${ibm_cf_app_routes_hostname[i]}" == "$ibm_cf_app_route_hostname" ] && [ "${ibm_cf_app_routes_path[i]}" == "$ibm_cf_app_route_path" ]
         then
-            Println "$error 此路由已经存在\n"
+            Println "$(eval_gettext "\$error 此路由已经存在")\n"
             exit 1
         fi
     done
@@ -59,5 +59,5 @@ IbmAddCfAppRoute()
     jq_path='["cf","apps",'"$ibm_cf_apps_index"',"routes"]'
     JQ add "$IBM_CONFIG" "[$ibm_cf_app_route]"
 
-    Println "$info 路由添加成功"
+    Println "$(eval_gettext "\$info 路由添加成功")"
 }

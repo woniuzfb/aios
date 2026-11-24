@@ -4,8 +4,8 @@ XrayListDns()
     out=$(ProxyRenderDns "$X_CONFIG" xray)
     if [ -z "$out" ]
     then
-        Println "$error 未配置 DNS\n"
+        Println "$(eval_gettext "\$error 未配置 DNS")\n"
         return 1
     fi
-    Println "\n=== Xray DNS 配置 ===\n$out\n"
+    Println "\n$(gettext "=== Xray DNS 配置 ===")\n$out\n"
 }

@@ -2,8 +2,8 @@ NginxAddDomain()
 {
     NginxListDomains
 
-    Println "$tip 多个域名用空格分隔"
-    ExitOnText "输入指向本机的IP或域名" domains
+    Println "$(eval_gettext "\$tip 多个域名用空格分隔")"
+    ExitOnText "$(gettext "输入指向本机的IP或域名")" domains
 
     NginxCheckLocalhost
     NginxAddHttp
@@ -15,7 +15,7 @@ NginxAddDomain()
     do
         if [ -e "$nginx_prefix/conf/sites_available/$server_domain.conf" ] 
         then
-            Println "$error $server_domain 已存在"
+            Println "$(eval_gettext "\$error \$server_domain 已存在")"
             continue
         fi
 
@@ -24,14 +24,14 @@ NginxAddDomain()
             domain_options_index=0
         else
             echo
-            inquirer list_input_index "选择网站 $server_domain 类型" domain_options domain_options_index
+            inquirer list_input_index "$(eval_gettext "选择网站 \$server_domain 类型")" domain_options domain_options_index
         fi
 
         case $domain_options_index in
             0) 
                 NginxConfigServerHttpPort
                 echo
-                inquirer list_input "是否设置跳转到其它网址" ny_options http_redirect_yn
+                inquirer list_input "$(gettext "是否设置跳转到其他网址")" ny_options http_redirect_yn
 
                 if [ "$http_redirect_yn" == "$i18n_yes" ] 
                 then
@@ -47,22 +47,22 @@ NginxAddDomain()
                 [ "$updated" -eq 1 ] && NginxBuildConf parse_out
 
                 NginxEnableDomain
-                Println "$info $server_domain 配置成功\n"
+                Println "$(eval_gettext "\$info \$server_domain 配置成功")\n"
             ;;
             1) 
                 NginxSitesCrtInstall "$server_domain"
-                inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
+                inquirer list_input "$(gettext "是否设置 http 跳转 https")" yn_options http_to_https_yn
 
                 if [ "$http_to_https_yn" == "$i18n_yes" ] 
                 then
-                    Println "$info 设置 $server_domain http 配置"
+                    Println "$(eval_gettext "\$info 设置 \$server_domain http 配置")"
                     NginxConfigServerHttpPort
                     NginxAppendHttpRedirectToHttpsConf
                 fi
 
                 NginxConfigServerHttpsPort
                 echo
-                inquirer list_input "是否设置 https 跳转到其它网址" ny_options https_redirect_yn
+                inquirer list_input "$(gettext "是否设置 https 跳转到其他网址")" ny_options https_redirect_yn
 
                 if [ "$https_redirect_yn" == "$i18n_yes" ] 
                 then
@@ -78,18 +78,18 @@ NginxAddDomain()
                 [ "$updated" -eq 1 ] && NginxBuildConf parse_out
 
                 NginxEnableDomain
-                Println "$info $server_domain 配置成功\n"
+                Println "$(eval_gettext "\$info \$server_domain 配置成功")\n"
             ;;
             2) 
                 NginxSitesCrtInstall "$server_domain"
-                inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
+                inquirer list_input "$(gettext "http 和 https 是否使用相同的目录")" yn_options http_https_same_dir_yn
 
                 if [ "$http_https_same_dir_yn" == "$i18n_yes" ] 
                 then
                     NginxConfigServerHttpPort
                     NginxConfigServerHttpsPort
                     echo
-                    inquirer list_input "是否设置跳转到其它网址" ny_options http_https_redirect_yn
+                    inquirer list_input "$(gettext "是否设置跳转到其他网址")" ny_options http_https_redirect_yn
                     if [ "$http_https_redirect_yn" == "$i18n_yes" ] 
                     then
                         NginxAppendHttpHttpsRedirectConf
@@ -101,14 +101,14 @@ NginxAddDomain()
                 else
                     NginxConfigServerHttpPort
                     echo
-                    inquirer list_input "是否设置 http 跳转到其它网址" ny_options http_redirect_yn
+                    inquirer list_input "$(gettext "是否设置 http 跳转到其他网址")" ny_options http_redirect_yn
                     if [ "$http_redirect_yn" == "$i18n_yes" ] 
                     then
                         NginxAppendHttpRedirectConf
                         NginxConfigServerHttpsPort
 
                         echo
-                        inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+                        inquirer list_input "$(gettext "是否设置 https 跳转到其他网址")" yn_options https_redirect_yn
 
                         if [ "$https_redirect_yn" == "$i18n_yes" ] 
                         then
@@ -129,7 +129,7 @@ NginxAddDomain()
                         NginxConfigServerHttpsPort
 
                         echo
-                        inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+                        inquirer list_input "$(gettext "是否设置 https 跳转到其他网址")" yn_options https_redirect_yn
 
                         if [ "$https_redirect_yn" == "$i18n_yes" ] 
                         then
@@ -162,7 +162,7 @@ NginxAddDomain()
                 [ "$updated" -eq 1 ] && NginxBuildConf parse_out
 
                 NginxEnableDomain
-                Println "$info $server_domain 配置成功\n"
+                Println "$(eval_gettext "\$info \$server_domain 配置成功")\n"
             ;;
         esac
     done

@@ -187,12 +187,12 @@ AptFixBrokenRepos()
                         action_types+=("pg_archive")
                         action_files+=("$list_file")
                         action_urls+=("$url")
-                        action_descs+=("切换 PostgreSQL 归档源: $list_file (apt.postgresql.org -> apt-archive.postgresql.org)")
+                        action_descs+=("$(eval_gettext "切换 PostgreSQL 归档源: \$list_file (apt.postgresql.org -> apt-archive.postgresql.org)")")
                     else
                         action_types+=("disable_file")
                         action_files+=("$list_file")
                         action_urls+=("$url")
-                        action_descs+=("禁用失效源: $list_file -> ${list_file}.disabled ($url)")
+                        action_descs+=("$(eval_gettext "禁用失效源: \$list_file -> \${list_file}.disabled (\$url)")")
                     fi
                 fi
             done
@@ -203,7 +203,7 @@ AptFixBrokenRepos()
             action_types+=("comment_line")
             action_files+=("$sources_file")
             action_urls+=("$url")
-            action_descs+=("在 $sources_file 中注释失效源: $url")
+            action_descs+=("$(eval_gettext "在 \$sources_file 中注释失效源: \$url")")
         fi
     done
 
@@ -212,7 +212,7 @@ AptFixBrokenRepos()
         return 1
     fi
 
-    Println "\n$tip 检测到以下失效 APT 软件源导致 apt-get update 失败:"
+    Println "\n$(eval_gettext "\$tip 检测到以下失效 APT 软件源导致 apt-get update 失败:")"
 
     local idx
     for((idx=0;idx<${#action_descs[@]};idx++));
@@ -224,18 +224,18 @@ AptFixBrokenRepos()
     then
         if [ -t 0 ]
         then
-            local fix_opts=( '否' '是' )
+            local fix_opts=( "$(gettext "否")" "$(gettext "是")" )
             local fix_idx=0
             echo
-            inquirer list_input_index "是否允许按上述方案修改 APT 软件源并重试?" fix_opts fix_idx
+            inquirer list_input_index "$(gettext "是否允许按上述方案修改 APT 软件源并重试?")" fix_opts fix_idx
 
             if [ "$fix_idx" -ne 1 ]
             then
-                Println "$info 已取消修改 APT 软件源, 请手动处理后重试\n"
+                Println "$(eval_gettext "\$info 已取消修改 APT 软件源, 请手动处理后重试")\n"
                 return 1
             fi
         else
-            Println "$info 非交互模式不会自动修改 APT 软件源, 请手动处理上述失效源后重试\n"
+            Println "$(eval_gettext "\$info 非交互模式不会自动修改 APT 软件源, 请手动处理上述失效源后重试")\n"
             return 1
         fi
     fi
@@ -252,11 +252,11 @@ AptFixBrokenRepos()
                 tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
                 sed 's|apt\.postgresql\.org/pub/repos/apt|apt-archive.postgresql.org/pub/repos/apt|g' "$act_file" > "$tmp_f"
                 mv "$tmp_f" "$act_file"
-                Println "$info 已切换至 apt-archive.postgresql.org: ${green}$act_file${normal}"
+                Println "$(eval_gettext "\$info 已切换至 apt-archive.postgresql.org: \${green}\$act_file\${normal}")"
             ;;
             disable_file)
                 mv "$act_file" "${act_file}.disabled"
-                Println "$info 已禁用失效源: ${yellow}${act_file} -> ${act_file}.disabled${normal}"
+                Println "$(eval_gettext "\$info 已禁用失效源: \${yellow}\${act_file} -> \${act_file}.disabled\${normal}")"
             ;;
             comment_line)
                 tmp_f=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
@@ -265,7 +265,7 @@ AptFixBrokenRepos()
                     { print }
                 ' "$act_file" > "$tmp_f"
                 mv "$tmp_f" "$act_file"
-                Println "$info 已在 $act_file 中注释失效源: ${yellow}$act_url${normal}"
+                Println "$(eval_gettext "\$info 已在 \$act_file 中注释失效源: \${yellow}\$act_url\${normal}")"
             ;;
         esac
     done
@@ -362,7 +362,7 @@ AptUpdate()
         return 0
     fi
 
-    Println "$info 更新软件包列表..."
+    Println "$(eval_gettext "\$info 更新软件包列表...")"
 
     local apt_err_file attempt=0 max_attempts=3 rc=0
     apt_err_file=$(mktemp "${TMPDIR:-/tmp}/aios-apt-update.XXXXXX")
@@ -394,7 +394,7 @@ AptUpdate()
         break
     done
 
-    Println "$error apt-get update 失败:\n$(cat "$apt_err_file")\n"
+    Println "$(eval_gettext "\$error apt-get update 失败:")\n$(cat "$apt_err_file")\n"
     rm -f "$apt_err_file"
     return "$rc"
 }
@@ -420,7 +420,7 @@ AptInstall()
 
     if grep -Eq 'Unable to fetch some archives|404[[:space:]]+Not Found|Failed to fetch' "$inst_err"
     then
-        Println "$tip 软件包索引可能已过期, 正在强制刷新软件源 (No-Cache) 并重试安装..."
+        Println "$(eval_gettext "\$tip 软件包索引可能已过期, 正在强制刷新软件源 (No-Cache) 并重试安装...")"
 
         if AptUpdate force
         then
@@ -439,17 +439,18 @@ AptInstall()
             local codename
             codename=$(AptGetCodename)
 
-            Println "\n$tip 刷新软件源后仍有软件包返回 404 (可能是老版本 Debian/Ubuntu 安全源已归档或镜像同步异常):"
+            Println "\n$(eval_gettext "\$tip 刷新软件源后仍有软件包返回 404 (可能是老版本 Debian/Ubuntu 安全源已归档或镜像同步异常):")"
             grep -E '^(Err:|E: Failed to fetch)' "$inst_err" | head -n 6
 
+            local codename_text="${codename:-stable}"
             local retry_opts=(
-                "不修改源，尝试从发行版主源 (-t ${codename:-stable}) 安装"
-                "将 /etc/apt/sources.list 中的 security.debian.org 切换至 archive.debian.org 并重试"
-                "放弃安装，自行手动处理"
+                "$(eval_gettext "不修改源, 尝试从发行版主源 (-t \$codename_text) 安装")"
+                "$(gettext "将 /etc/apt/sources.list 中的 security.debian.org 切换至 archive.debian.org 并重试")"
+                "$(gettext "放弃安装, 自行手动处理")"
             )
             local retry_idx=2
             echo
-            inquirer list_input_index "请选择处理方式" retry_opts retry_idx
+            inquirer list_input_index "$(gettext "请选择处理方式")" retry_opts retry_idx
 
             if [ "$retry_idx" -eq 0 ] && [ -n "$codename" ]
             then
@@ -471,7 +472,7 @@ AptInstall()
                     tmp_arc=$(mktemp "${TMPDIR:-/tmp}/aios-apt.XXXXXX")
                     sed 's|security\.debian\.org|archive.debian.org|g' "$sources_file" > "$tmp_arc"
                     mv "$tmp_arc" "$sources_file"
-                    Println "$info 已将 $sources_file 中的 security.debian.org 切换至 archive.debian.org\n"
+                    Println "$(eval_gettext "\$info 已将 \$sources_file 中的 security.debian.org 切换至 archive.debian.org")\n"
 
                     if AptUpdate force
                     then
@@ -489,7 +490,8 @@ AptInstall()
         fi
     fi
 
-    Println "$error 软件包安装失败 ($*):\n$(cat "$inst_err")\n"
+    local inst_pkgs="$*"
+    Println "$(eval_gettext "\$error 软件包安装失败 (\$inst_pkgs):")\n$(cat "$inst_err")\n"
     rm -f "$inst_err"
     return "$rc"
 }
@@ -499,10 +501,10 @@ BrewInstall()
     if [[ ! -x $(command -v brew) ]]
     then
         export NONINTERACTIVE=1
-        Println "${green}[info]${normal} 安装 Homebrew ...\n"
+        Println "$(eval_gettext "\${green}[info]\${normal} 安装 Homebrew ...")\n"
         if ! curl -s -S -Lm 20 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
         then
-            Println "${green}[info]${normal} 尝试更换国内源 ...\n"
+            Println "$(eval_gettext "\${green}[info]\${normal} 尝试更换国内源 ...")\n"
 
             export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.ustc.edu.cn/brew.git"
             export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.ustc.edu.cn/homebrew-core.git"
@@ -511,7 +513,7 @@ BrewInstall()
 
             if ! curl -s -S -Lm 20 https://mirrors.ustc.edu.cn/misc/brew-install.sh | bash
             then
-                Println "${green}[ERROR]${normal} 无法安装 Homebrew\n"
+                Println "$(eval_gettext "\${green}[ERROR]\${normal} 无法安装 Homebrew")\n"
                 return 1
             fi
         fi

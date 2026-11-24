@@ -46,7 +46,7 @@ NODE_ROOT="$AIOS_ROOT"/nodes
 NODE_SCRIPTS_LINK=https://raw.githubusercontent.com/woniuzfb/aios/main/scripts
 NODE_TOUTIAO_VER=1.0.0
 FFMPEG_LOG_ROOT="$FFMPEG_ROOT"/log
-FFMPEG_MIRROR_LINK=http://pngquant.com/ffmpeg
+FFMPEG_MIRROR_LINK=https://pngquant.com/ffmpeg
 FFMPEG_MIRROR_ROOT="$AIOS_ROOT"/mirror
 IPTV_ROOT="$AIOS_ROOT"/iptv
 LOCK_FILE="$IPTV_ROOT"/lock
@@ -114,6 +114,8 @@ SERVICES_CONFIG="$SERVICES_ROOT"/config.json
 # depends
 DEPENDS_ROOT="$SERVICES_ROOT"/depends
 AIOS_LINK=https://github.com/woniuzfb/aios
+OPENWRT_AIOS_LINK=https://github.com/woniuzfb/openwrt-aios
+LUCI_APP_AIOS_LINK=https://github.com/woniuzfb/luci-app-aios
 
 # OpenList
 OPENLIST_FILE="$AIOS_PREFIX"/bin/ali

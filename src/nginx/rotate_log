@@ -2,12 +2,12 @@ NginxLogRotate()
 {
     if [ ! -d "$IPTV_ROOT" ] 
     then
-        Println "$error 请先安装脚本 !\n" && exit 1
+        Println "$(eval_gettext "\$error 请先安装脚本 !")\n" && exit 1
     fi
 
     if ! ls -A $nginx_prefix/logs/*.log > /dev/null 2>&1
     then
-        Println "$error 没有日志 !\n" && exit 1
+        Println "$(eval_gettext "\$error 没有日志 !")\n" && exit 1
     fi
 
     if [ -d "$nginx_prefix" ] 
@@ -20,7 +20,7 @@ NginxLogRotate()
     then
         if grep -q "$nginx_prefix" < "$LOGROTATE_CONFIG"
         then
-            Println "$error 日志切割定时任务已存在 !\n"
+            Println "$(eval_gettext "\$error 日志切割定时任务已存在 !")\n"
         else
             logrotate='
 '"$nginx_prefix"'/logs/*.log {
@@ -38,14 +38,14 @@ NginxLogRotate()
 }
 '
             printf '%s\n' "$logrotate" >> "$LOGROTATE_CONFIG"
-            Println "$error 日志切割定时任务设置成功 !\n"
+            Println "$(eval_gettext "\$error 日志切割定时任务设置成功 !")\n"
         fi
     else
         LOGROTATE_FILE=$(command -v logrotate) || LOGROTATE_FILE=""
 
         if [ ! -x "$LOGROTATE_FILE" ] 
         then
-            Println "$error 请先安装 logrotate !\n" && exit 1
+            Println "$(eval_gettext "\$error 请先安装 logrotate !")\n" && exit 1
         fi
 
         logrotate=""
@@ -86,6 +86,6 @@ $IPTV_ROOT/*.log {
         printf '%s\n' "0 0 * * * $LOGROTATE_FILE $LOGROTATE_CONFIG" >> "$IPTV_ROOT/cron_tmp"
         crontab "$IPTV_ROOT/cron_tmp" > /dev/null
         rm -f "$IPTV_ROOT/cron_tmp"
-        Println "$info 日志切割定时任务开启成功 !\n"
+        Println "$(eval_gettext "\$info 日志切割定时任务开启成功 !")\n"
     fi
 }

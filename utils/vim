@@ -26,8 +26,8 @@ autocmd BufRead,BufNewFile *.conf setfiletype conf
 filetype indent off
 EOF
         GitInstall
-        Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
+        Println "$(eval_gettext "\$info vimrc 设置完成, 请在 vim 下执行 PlugInstall")\n"
     else
-        Println "$error 无法连接服务器, 请稍后再试\n"
+        Println "$(eval_gettext "\$error 无法连接服务器, 请稍后再试")\n"
     fi
 }

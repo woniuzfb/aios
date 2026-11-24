@@ -12,7 +12,7 @@ SortChannelSchedules()
 
     if [ "$chnl_schedules_count" -eq 1 ] 
     then
-        Println "$error 频道 [ ${chnls_channel_name[chnls_index]} ] 计划只有一个"
+        Println "$error $(gettext "频道") [ ${chnls_channel_name[chnls_index]} ] $(gettext "计划只有一个")"
         return 0
     fi
 
@@ -26,48 +26,48 @@ SortChannelSchedules()
     do
         if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
         then
-            chnl_schedule_status_list="${green}等待${normal}"
+            chnl_schedule_status_list="${green}$(gettext "等待")${normal}"
         elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
         then
-            chnl_schedule_status_list="${blue}进行${normal}"
+            chnl_schedule_status_list="${blue}$(gettext "进行")${normal}"
         else
-            chnl_schedule_status_list="${red}结束${normal}"
+            chnl_schedule_status_list="${red}$(gettext "结束")${normal}"
         fi
         if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
         then
-            chnl_schedule_hls_change_list="${green}一次${normal}"
+            chnl_schedule_hls_change_list="${green}$(gettext "一次")${normal}"
         elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
-            chnl_schedule_hls_change_list="${green}是${normal}"
+            chnl_schedule_hls_change_list="${green}$(gettext "是")${normal}"
         else
-            chnl_schedule_hls_change_list="${red}否${normal}"
+            chnl_schedule_hls_change_list="${red}$(gettext "否")${normal}"
         fi
         if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
         then
-            chnl_schedule_loop_list="${green}是${normal}"
+            chnl_schedule_loop_list="${green}$(gettext "是")${normal}"
         else
-            chnl_schedule_loop_list="${red}否${normal}"
+            chnl_schedule_loop_list="${red}$(gettext "否")${normal}"
         fi
         if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
         then
-            chnl_schedule_auto_remove_list="${green}是${normal}"
+            chnl_schedule_auto_remove_list="${green}$(gettext "是")${normal}"
         else
-            chnl_schedule_auto_remove_list="${red}否${normal}"
+            chnl_schedule_auto_remove_list="${red}$(gettext "否")${normal}"
         fi
         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
         then
-            chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
+            chnl_schedule_channel_name_list="${indent_6}$(gettext "频道名称"): ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
         else
             chnl_schedule_channel_name_list=""
         fi
-        chnl_schedules_options+=("计划$((chnl_schedules_index+1))")
-        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}结束时间: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
+        chnl_schedules_options+=("$(gettext "计划")$((chnl_schedules_index+1))")
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}$(gettext "状态"): $chnl_schedule_status_list${indent_20}$(gettext "防盗链"): $chnl_schedule_hls_change_list\n${indent_6}$(gettext "循环"): $chnl_schedule_loop_list${indent_20}$(gettext "自动清除"): $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}$(gettext "开始时间"): $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}$(gettext "结束时间"): $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
     done
 
     Println "$chnl_schedules_list"
 
     echo
-    inquirer sort_input_indices "排序计划" chnl_schedules_options chnl_schedules_indices
+    inquirer sort_input_indices "$(gettext "排序计划")" chnl_schedules_options chnl_schedules_indices
 
     new_schedules=()
 
@@ -101,7 +101,7 @@ SortChannelSchedules()
     jq_path='["channels",'"$chnls_index"',"schedule"]'
     JQ update "$CHANNELS_FILE" new_schedules
 
-    Println "$info 频道 [ ${chnls_channel_name[chnls_index]} ] 计划排序成功\n"
+    Println "$info $(gettext "频道") [ ${chnls_channel_name[chnls_index]} ] $(gettext "计划排序成功")\n"
 }
 
 SortChannelsSchedule()
@@ -110,13 +110,13 @@ SortChannelsSchedule()
 
     if [ -z "$chnls_schedule_list" ] 
     then
-        Println "$error 请先添加频道计划\n"
+        Println "$(eval_gettext "\$error 请先添加频道计划")\n"
         exit 1
     fi
 
-    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
 
-    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    echo "$(gettext "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ] 

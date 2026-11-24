@@ -29,7 +29,7 @@ V2rayGetStats()
 
     if [ "$routing_rules_count" -eq 0 ]
     then
-        Println "$error 请先添加一个路由: 入站协议为 dokodemo-door (需要创建此协议的入站), 出站标签是 $api_tag (不用创建出站)\n"
+        Println "$(eval_gettext "\$error 请先添加一个路由: 入站协议为 dokodemo-door (需要创建此协议的入站), 出站标签是 \$api_tag (不用创建出站)")\n"
         exit 1
     fi
 
@@ -48,7 +48,7 @@ V2rayGetStats()
 
     if [ "$routing_rule_found" -eq 0 ] || [ -z "${api_inbound_tag:-}" ]
     then
-        Println "$error 请先添加协议为 dokodemo-door 的入站路由到标签是 $api_tag 的出站\n"
+        Println "$(eval_gettext "\$error 请先添加协议为 dokodemo-door 的入站路由到标签是 \$api_tag 的出站")\n"
         exit 1
     fi
 
@@ -74,7 +74,7 @@ V2rayGetStats()
 
     if [ -z "${api_inbound_listen:-}" ]
     then
-        Println "$error 标签为 $api_inbound_tag 的入站不存在?\n"
+        Println "$(eval_gettext "\$error 标签为 \$api_inbound_tag 的入站不存在?")\n"
         exit 1
     fi
 }

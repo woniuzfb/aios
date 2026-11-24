@@ -4,18 +4,18 @@ OpenListAccAdd()
 
     if [ "$openlists_count" -eq 0 ] 
     then
-        Println "$error 请先添加 OpenList\n"
+        Println "$(eval_gettext "\$error 请先添加 OpenList")\n"
         exit 1
     fi
 
     openlists_options=()
     for((i=0;i<openlists_count;i++));
     do
-        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+        openlists_options+=("$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")} $(gettext "地址"): ${openlists_url[i]}")
     done
 
     echo
-    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+    inquirer checkbox_input_indices "$(gettext "选择 OpenList")" openlists_options openlists_indices
 
     for openlists_index in "${openlists_indices[@]}"
     do
@@ -32,17 +32,17 @@ OpenListAccAdd()
             openlist_accs_txt=""
             for((i=0;i<openlist_accs_count;i++));
             do
-                openlist_accs_txt="$openlist_accs_txt\n${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n"
+                openlist_accs_txt="$openlist_accs_txt\n${green}$((i+1)).${normal}${indent_6}$(gettext "用户名"): ${openlist_accs_username[i]}\n${indent_6}$(gettext "密码"): ${openlist_accs_password[i]:-$(gettext "无")}\n${indent_6}Token: ${openlist_accs_token[i]:-$(gettext "无")}\n"
             done
 
             Println "$openlist_accs_txt\n"
         fi
 
         echo
-        ExitOnText "输入登录名" openlist_acc_username
+        ExitOnText "$(gettext "输入登录名")" openlist_acc_username
 
         echo
-        inquirer text_input "输入密码" openlist_acc_password "$i18n_blank"
+        inquirer text_input "$(gettext "输入密码")" openlist_acc_password "$i18n_blank"
 
         new_acc=$(
         $JQ_FILE -n --arg username "$openlist_acc_username" --arg password "$openlist_acc_password" \
@@ -55,7 +55,7 @@ OpenListAccAdd()
         jq_path='["openlist",'"$openlists_index"',"accs"]'
         JQ add "$SERVICES_CONFIG" "[$new_acc]"
 
-        Println "$info 账号添加成功\n"
+        Println "$(eval_gettext "\$info 账号添加成功")\n"
     done
 
     return 0
@@ -69,26 +69,26 @@ OpenListAccLogin()
 
     if [ "$openlists_count" -eq 0 ] 
     then
-        Println "$error 请先添加 OpenList\n"
+        Println "$(eval_gettext "\$error 请先添加 OpenList")\n"
         exit 1
     fi
 
     openlists_options=()
     for((i=0;i<openlists_count;i++));
     do
-        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+        openlists_options+=("$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")} $(gettext "地址"): ${openlists_url[i]}")
     done
 
     echo
-    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+    inquirer checkbox_input_indices "$(gettext "选择 OpenList")" openlists_options openlists_indices
 
     for openlists_index in "${openlists_indices[@]}"
     do
-        openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
+        openlist_txt="${green}$(gettext "名称"):${normal}${indent_6}${openlists_name[openlists_index]:-$(gettext "无")}\n${green}$(gettext "地址"):${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
         if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
-            openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n"
+            openlist_txt="$openlist_txt${green}$(gettext "账号"):${normal}${indent_6}${red}$(gettext "无")${normal}\n"
 
             Println "$openlist_txt\n"
 
@@ -101,18 +101,18 @@ OpenListAccLogin()
 
         openlist_accs_count=${#openlist_accs_username[@]}
 
-        openlist_txt="$openlist_txt${green}账号:${normal}\n"
+        openlist_txt="$openlist_txt${green}$(gettext "账号"):${normal}\n"
         openlist_accs_options=()
 
         for((i=0;i<openlist_accs_count;i++));
         do
-            openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n\n"
-            openlist_accs_options+=("账号$((i+1))")
+            openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}$(gettext "用户名"): ${openlist_accs_username[i]}\n${indent_6}$(gettext "密码"): ${openlist_accs_password[i]:-$(gettext "无")}\n${indent_6}Token: ${openlist_accs_token[i]:-$(gettext "无")}\n\n"
+            openlist_accs_options+=("$(gettext "账号")$((i+1))")
         done
 
         Println "$openlist_txt"
 
-        inquirer checkbox_input_indices "选择登陆的账号" openlist_accs_options openlist_accs_indices
+        inquirer checkbox_input_indices "$(gettext "选择登录的账号")" openlist_accs_options openlist_accs_indices
 
         for openlist_accs_index in $openlist_accs_indices
         do
@@ -132,26 +132,26 @@ OpenListAccView()
 
     if [ "$openlists_count" -eq 0 ] 
     then
-        Println "$error 请先添加 OpenList\n"
+        Println "$(eval_gettext "\$error 请先添加 OpenList")\n"
         exit 1
     fi
 
     openlists_options=()
     for((i=0;i<openlists_count;i++));
     do
-        openlists_options+=("名称: ${openlists_name[i]:-无} 地址: ${openlists_url[i]}")
+        openlists_options+=("$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")} $(gettext "地址"): ${openlists_url[i]}")
     done
 
     echo
-    inquirer checkbox_input_indices "选择 OpenList" openlists_options openlists_indices
+    inquirer checkbox_input_indices "$(gettext "选择 OpenList")" openlists_options openlists_indices
 
     for openlists_index in "${openlists_indices[@]}"
     do
-        openlist_txt="${green}名称:${normal}${indent_6}${openlists_name[openlists_index]:-无}\n${green}地址:${normal}${indent_6}${openlists_url[openlists_index]}\n"
+        openlist_txt="${green}$(gettext "名称"):${normal}${indent_6}${openlists_name[openlists_index]:-$(gettext "无")}\n${green}$(gettext "地址"):${normal}${indent_6}${openlists_url[openlists_index]}\n"
 
         if [ -z "${openlists_acc_username[openlists_index]:-}" ] 
         then
-            openlist_txt="$openlist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
+            openlist_txt="$openlist_txt${green}$(gettext "账号"):${normal}${indent_6}${red}$(gettext "无")${normal}\n\n"
         else
             IFS="${delimiters[4]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
             IFS="${delimiters[4]}" read -ra openlist_accs_password <<< "${openlists_acc_password[openlists_index]}"
@@ -159,11 +159,11 @@ OpenListAccView()
 
             openlist_accs_count=${#openlist_accs_username[@]}
 
-            openlist_txt="$openlist_txt${green}账号:${normal}\n"
+            openlist_txt="$openlist_txt${green}$(gettext "账号"):${normal}\n"
 
             for((i=0;i<openlist_accs_count;i++));
             do
-                openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${openlist_accs_username[i]}\n${indent_6}密码: ${openlist_accs_password[i]:-无}\n${indent_6}Token: ${openlist_accs_token[i]:-无}\n\n"
+                openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}$(gettext "用户名"): ${openlist_accs_username[i]}\n${indent_6}$(gettext "密码"): ${openlist_accs_password[i]:-$(gettext "无")}\n${indent_6}Token: ${openlist_accs_token[i]:-$(gettext "无")}\n\n"
             done
         fi
 
@@ -172,4 +172,3 @@ OpenListAccView()
 
     return 0
 }
-

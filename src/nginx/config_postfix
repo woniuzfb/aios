@@ -1,22 +1,22 @@
 if [[ ! -x $(command -v postfix) ]] 
 then
-    Spinner "安装 postfix" PostfixInstall
+    Spinner "$(gettext "安装 postfix")" PostfixInstall
 else
     echo
     ExitOnList y "`gettext \"postfix 已存在, 是否重新设置 smtp\"`"
 fi
 
 echo
-ExitOnText "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address
+ExitOnText "$(gettext "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : ")" smtp_address
 
 echo
-ExitOnText "请输入 smtp 端口 (比如 465) : " smtp_port
+ExitOnText "$(gettext "请输入 smtp 端口 (比如 465) : ")" smtp_port
 
 echo
-ExitOnText "请输入 smtp 邮箱 : " smtp_email
+ExitOnText "$(gettext "请输入 smtp 邮箱 : ")" smtp_email
 
 echo
-ExitOnText "请输入 smtp 密码 : " smtp_pass
+ExitOnText "$(gettext "请输入 smtp 密码 : ")" smtp_pass
 
 hostname=$(hostname -f)
 echo "$(awk '!x{x=sub(/.*myhostname = .*/,"myhostname = '"$hostname"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
@@ -29,7 +29,7 @@ options=(
     smtp_sasl_password_maps=hash:/etc/postfix/sasl_passwd
     smtp_generic_maps=hash:/etc/postfix/generic
 )
-Println "$info 设置 postfix ..."
+Println "$(eval_gettext "\$info 设置 postfix ...")"
 echo "[$smtp_address]:$smtp_port $smtp_email:$smtp_pass" > /etc/postfix/sasl_passwd
 postmap /etc/postfix/sasl_passwd
 echo "$USER@$hostname $smtp_email" > /etc/postfix/generic
@@ -57,4 +57,4 @@ then
 else
     service postfix restart
 fi
-Println "$info smtp 设置成功\n"
+Println "$(eval_gettext "\$info smtp 设置成功")\n"

@@ -55,8 +55,8 @@ NginxListLocalhost()
                     nginx_localhost_server_count=$((nginx_localhost_server_count+1))
                     nginx_localhost_server_indices+=("$level_2_index")
                     nginx_localhost_listen=""
-                    nginx_localhost_flv_status="${red}未配置${normal}"
-                    nginx_localhost_nodejs_status="${red}未配置${normal}"
+                    nginx_localhost_flv_status="${red}$(gettext "未配置")${normal}"
+                    nginx_localhost_nodejs_status="${red}$(gettext "未配置")${normal}"
                     skip_find_nodejs=0
                     server_root=""
 
@@ -73,7 +73,7 @@ NginxListLocalhost()
                         then
                             if [ "${level_3_args}" == "/flv" ]
                             then
-                                nginx_localhost_flv_status="${green}已配置${normal}"
+                                nginx_localhost_flv_status="${green}$(gettext "已配置")${normal}"
                             elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                             then
                                 level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
@@ -89,7 +89,7 @@ NginxListLocalhost()
                                         then
                                             if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
                                             then
-                                                nginx_localhost_nodejs_status="${green}已配置${normal}"
+                                                nginx_localhost_nodejs_status="${green}$(gettext "已配置")${normal}"
                                                 skip_find_nodejs=1
                                             fi
                                             break
@@ -124,7 +124,7 @@ NginxListLocalhost()
                     done
 
                     nginx_localhost_server_root+=("$server_root")
-                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}端口: ${green}${nginx_localhost_listen:-未设置}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
+                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}$(gettext "端口"): ${green}${nginx_localhost_listen:-$(gettext "未设置")}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
                 fi
             done
             break
@@ -133,9 +133,9 @@ NginxListLocalhost()
 
     if [ "$nginx_localhost_server_count" -eq 0 ]
     then
-        Println "$error 请先添加本地配置\n"
+        Println "$(eval_gettext "\$error 请先添加本地配置")\n"
         exit 1
     fi
 
-    Println "本地配置:\n\n$nginx_localhost_list"
+    Println "$(gettext "本地配置:")\n\n$nginx_localhost_list"
 }

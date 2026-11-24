@@ -2,7 +2,7 @@ TesseractInstall()
 {
     if [[ -x $(command -v tesseract) ]] 
     then
-        Println "$error tesseract 已存在!\n"
+        Println "$(eval_gettext "\$error tesseract 已存在!")\n"
         return 0
     fi
 
@@ -15,8 +15,8 @@ TesseractInstall()
         AptInstall tesseract
     elif [ "$dist" == "deb" ] 
     then
-        Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
+        Println "$(eval_gettext "\$info 参考 https://notesalexp.org/tesseract-ocr/ ...")\n"
     else
-        Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
+        Println "$(eval_gettext "\$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...")\n"
     fi
 }

@@ -1,6 +1,6 @@
 case $* in
     "e")
-        [ ! -e "$X_CONFIG" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -e "$X_CONFIG" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
         editor "$X_CONFIG" && exit 0
     ;;
     "qr")
@@ -13,48 +13,48 @@ esac
 
 ProxyDetectNginx
 
-Println "  xray 管理面板 ${normal}${red}[v$sh_ver]${normal}
+Println "  $(gettext "xray 管理面板") ${normal}${red}[v$sh_ver]${normal}
 
-  ${green}1.${normal} 安装
-  ${green}2.${normal} 升级
-  ${green}3.${normal} 配置域名
-  ${green}4.${normal} 查看状态
+  ${green}1.${normal} $(gettext "安装")
+  ${green}2.${normal} $(gettext "升级")
+  ${green}3.${normal} $(gettext "配置域名")
+  ${green}4.${normal} $(gettext "查看状态")
 ————————————
-  ${green}5.${normal} 查看入站
-  ${green}6.${normal} 添加入站
-  ${green}7.${normal} 添加入站账号
+  ${green}5.${normal} $(gettext "查看入站")
+  ${green}6.${normal} $(gettext "添加入站")
+  ${green}7.${normal} $(gettext "添加入站账号")
 ————————————
-  ${green}8.${normal} 查看出站
-  ${green}9.${normal} 添加出站
- ${green}10.${normal} 添加出站账号
+  ${green}8.${normal} $(gettext "查看出站")
+  ${green}9.${normal} $(gettext "添加出站")
+ ${green}10.${normal} $(gettext "添加出站账号")
 ————————————
- ${green}11.${normal} 查看DNS
- ${green}12.${normal} 设置DNS
+ ${green}11.${normal} $(gettext "查看DNS")
+ ${green}12.${normal} $(gettext "设置DNS")
 ————————————
- ${green}13.${normal} 查看路由
- ${green}14.${normal} 设置路由
+ ${green}13.${normal} $(gettext "查看路由")
+ ${green}14.${normal} $(gettext "设置路由")
 ————————————
- ${green}15.${normal} 查看策略
- ${green}16.${normal} 设置策略
+ ${green}15.${normal} $(gettext "查看策略")
+ ${green}16.${normal} $(gettext "设置策略")
 ————————————
- ${green}17.${normal} 查看流量
- ${green}18.${normal} 重置流量
+ ${green}17.${normal} $(gettext "查看流量")
+ ${green}18.${normal} $(gettext "重置流量")
 ————————————
- ${green}19.${normal} 查看反向代理
- ${green}20.${normal} 设置反向代理
+ ${green}19.${normal} $(gettext "查看反向代理")
+ ${green}20.${normal} $(gettext "设置反向代理")
 ————————————
- ${green}21.${normal} 删除入站
- ${green}22.${normal} 删除入站账号
- ${green}23.${normal} 删除出站
- ${green}24.${normal} 删除出站账号
+ ${green}21.${normal} $(gettext "删除入站")
+ ${green}22.${normal} $(gettext "删除入站账号")
+ ${green}23.${normal} $(gettext "删除出站")
+ ${green}24.${normal} $(gettext "删除出站账号")
 ————————————
- ${green}25.${normal} 开关
- ${green}26.${normal} 重启
- ${green}27.${normal} 查看入站二维码
+ ${green}25.${normal} $(gettext "开关")
+ ${green}26.${normal} $(gettext "重启")
+ ${green}27.${normal} $(gettext "查看入站二维码")
 
- ${tip} 输入: x 打开面板 (x qr 查看分享二维码)
+ $(eval_gettext "\${tip} 输入: x 打开面板 (x qr 查看分享二维码)")
 "
-read -p "`gettext \"输入序号\"` [1-27]: " xray_num
+read -p "$(gettext "输入序号") [1-27]: " xray_num
 case $xray_num in
     1)
         XrayInstall

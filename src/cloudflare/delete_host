@@ -2,7 +2,7 @@ CloudflareDelHost()
 {
     CloudflareListHosts
 
-    echo -e "选择 CFP"
+    echo -e "$(gettext "选择 CFP")"
     while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -56,13 +56,14 @@ CloudflareDelHost()
 
             if [ -z "$result" ] || [ "$result" == "error" ]
             then
-                Println "$error 删除 $cf_zone_name 发送错误: ${msg:-超时, 请重试}\n" && exit 1
+                local err_msg="${msg:-$(gettext "超时, 请重试")}"
+                Println "$(eval_gettext "\$error 删除 \$cf_zone_name 发送错误: \$err_msg")\n" && exit 1
             fi
 
             jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$i"']'
             JQ delete "$CF_CONFIG"
 
-            Println "$info $cf_zone_name 删除成功\n"
+            Println "$(eval_gettext "\$info \$cf_zone_name 删除成功")\n"
         done
     fi
 }

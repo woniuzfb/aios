@@ -2,7 +2,7 @@ CloudflareAddSubdomain()
 {
     CloudflareListZones
 
-    echo -e "选择源站"
+    echo -e "$(gettext "选择源站")"
     while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
@@ -37,17 +37,17 @@ CloudflareAddSubdomain()
 
     CloudflareGetUser
 
-    Println "请输入子域名前缀, 比如 www, 多个前缀用空格分隔"
+    Println "$(gettext "请输入子域名前缀, 比如 www, 多个前缀用空格分隔")"
     read -p "$i18n_default_cancel" cf_zone_subdomains_prefix_input
     [ -z "$cf_zone_subdomains_prefix_input" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  子域名: ${green} $cf_zone_subdomains_prefix_input ${normal}\n"
+    Println "$(eval_gettext "  子域名: \${green} \$cf_zone_subdomains_prefix_input \${normal}")\n"
 
     IFS=" " read -r -a cf_zone_subdomains_prefix <<< "$cf_zone_subdomains_prefix_input"
     cf_zone_subdomains_resolve_to=()
     for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
     do
-        Println "请输入子域名 $cf_zone_subdomain_prefix.$cf_zone_name 经 cloudflare 中转后解析地址"
-        read -p "(默认: $cf_zone_resolve_to): " cf_zone_subdomain_resolve_to
+        Println "$(eval_gettext "请输入子域名 \$cf_zone_subdomain_prefix.\$cf_zone_name 经 cloudflare 中转后解析地址")"
+        read -p "$(eval_gettext "(默认: \$cf_zone_resolve_to): ")" cf_zone_subdomain_resolve_to
         cf_zone_subdomain_resolve_to=${cf_zone_subdomain_resolve_to:-$cf_zone_resolve_to}
         cf_zone_subdomains_resolve_to+=("$cf_zone_subdomain_resolve_to")
     done
@@ -107,7 +107,7 @@ CloudflareAddSubdomain()
     jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
     JQ update "$CF_CONFIG" "$new_zone"
 
-    Println "$info 稍等..."
+    Println "$(eval_gettext "\$info 稍等...")"
     IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_set' \
         -d "host_key=$cf_host_key" \
@@ -127,7 +127,7 @@ CloudflareAddSubdomain()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+        Println "$error ${msg:-$(gettext "连接超时, 请查看是否已经完成")}\n" && exit 1
     fi
 
     IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
@@ -169,7 +169,7 @@ CloudflareAddSubdomain()
         if [ "$zone_found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
         then
             cf_zone_name_resolve_to="$cf_zone_name.${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-            msg="请添加域名 ${green}$cf_zone_name${normal} CNAME 记录到 ${green}$cf_zone_name_resolve_to${normal}\n\n"
+            msg="$(eval_gettext "请添加域名 \${green}\$cf_zone_name\${normal} CNAME 记录到 \${green}\$cf_zone_name_resolve_to\${normal}")\n\n"
         fi
     fi
 
@@ -179,12 +179,13 @@ CloudflareAddSubdomain()
         do
             if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
             then
-                msg="$msg请添加域名 ${green}${cf_hosted_cnames[i]}${normal} CNAME 记录到 ${green}${cf_forward_tos[i]}${normal}\n\n"
+                local hosted_cname="${cf_hosted_cnames[i]}" forward_to="${cf_forward_tos[i]}"
+                msg="$msg$(eval_gettext "请添加域名 \${green}\$hosted_cname\${normal} CNAME 记录到 \${green}\$forward_to\${normal}")\n\n"
                 break
             fi
         done
     done
 
     Println "$msg"
-    Println "$info 子域名添加成功\n"
+    Println "$(eval_gettext "\$info 子域名添加成功")\n"
 }

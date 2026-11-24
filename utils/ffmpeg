@@ -69,21 +69,22 @@ FFmpegInstall()
 
                 if "$bin" -hide_banner -filters 2> /dev/null | grep -qE '[[:space:]]drawtext[[:space:]]'
                 then
-                    drawtext_tag="含 drawtext"
+                    drawtext_tag="$(gettext "含 drawtext")"
                 else
-                    drawtext_tag="无 drawtext"
+                    drawtext_tag="$(gettext "无 drawtext")"
                 fi
-                menu_options+=("切换至已安装: ${formula} (${ver:-unknown}, ${drawtext_tag}) [${bin}]")
+                local ver_text="${ver:-unknown}"
+                menu_options+=("$(eval_gettext "切换至已安装: \${formula} (\${ver_text}, \${drawtext_tag}) [\${bin}]")")
                 menu_actions+=("use:${bin}")
             fi
         done
 
         menu_options+=(
-            "安装 ffmpeg-full (含 drawtext 水印滤镜，推荐)"
-            "安装 ffmpeg (9.x 最新主线)"
-            "安装 ffmpeg@8"
-            "安装 ffmpeg@7"
-            "安装 ffmpeg@6"
+            "$(gettext "安装 ffmpeg-full (含 drawtext 水印滤镜, 推荐)")"
+            "$(gettext "安装 ffmpeg (9.x 最新主线)")"
+            "$(gettext "安装 ffmpeg@8")"
+            "$(gettext "安装 ffmpeg@7")"
+            "$(gettext "安装 ffmpeg@6")"
         )
         menu_actions+=(
             "install:ffmpeg-full"
@@ -94,7 +95,7 @@ FFmpegInstall()
         )
 
         echo
-        inquirer list_input_index "选择或切换 macOS FFmpeg 版本" menu_options ffmpeg_mac_index
+        inquirer list_input_index "$(gettext "选择或切换 macOS FFmpeg 版本")" menu_options ffmpeg_mac_index
 
         local selected_action="${menu_actions[$ffmpeg_mac_index]}"
         if [[ $selected_action == use:* ]]
@@ -151,10 +152,10 @@ FFmpegInstall()
         "8.x"
         "9.x / latest"
         "git-master"
-        "系统包管理器"
+        "$(gettext "系统包管理器")"
     )
     echo
-    inquirer list_input_index "选择 Linux FFmpeg 版本" linux_ver_options ffmpeg_linux_index
+    inquirer list_input_index "$(gettext "选择 Linux FFmpeg 版本")" linux_ver_options ffmpeg_linux_index
 
     if [ "$ffmpeg_linux_index" -eq 5 ]
     then
@@ -208,7 +209,7 @@ FFmpegInstall()
     then
         jvs_arch="$arch"
     else
-        Println "$error FFmpeg 不支持当前系统\n"
+        Println "$(eval_gettext "\$error FFmpeg 不支持当前系统")\n"
         exit 1
     fi
 

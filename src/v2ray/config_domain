@@ -7,13 +7,13 @@ V2rayConfigDomain()
     then
         echo
         v2ray_config_domain_options=( "$v2ray_name" nginx openresty )
-        inquirer list_input "选择修改的配置" v2ray_config_domain_options v2ray_config_domain_option
+        inquirer list_input "$(gettext "选择修改的配置")" v2ray_config_domain_options v2ray_config_domain_option
 
         if [ "$v2ray_config_domain_option" != "$v2ray_name" ] 
         then
             if [ ! -d "/usr/local/$v2ray_config_domain_option" ] 
             then
-                Println "$error 请先安装 $v2ray_config_domain_option\n"
+                Println "$(eval_gettext "\$error 请先安装 \$v2ray_config_domain_option")\n"
                 exit 1
             fi
 
@@ -58,7 +58,7 @@ V2rayConfigDomain()
                         v2ray_nginx_domain_server_proxy_indices+=("${BASH_REMATCH[2]}")
                         v2ray_nginx_domain_server_proxies_port+=("${BASH_REMATCH[3]}")
                         v2ray_nginx_domain_server_proxies_path+=("${BASH_REMATCH[4]}")
-                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $((i+1)).${indent_6}路径: ${green}${BASH_REMATCH[4]}${normal} => 端口: ${green}${BASH_REMATCH[3]}${normal}\n\n"
+                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $((i+1)).${indent_6}$(gettext "路径"): ${green}${BASH_REMATCH[4]}${normal} => $(gettext "端口"): ${green}${BASH_REMATCH[3]}${normal}\n\n"
                     fi
                 done
 
@@ -67,10 +67,10 @@ V2rayConfigDomain()
 
             v2ray_nginx_domain_server_update_crt_number=$((v2ray_nginx_domain_server_proxies_count+1))
             v2ray_nginx_domain_server_add_proxy_number=$((v2ray_nginx_domain_server_proxies_count+2))
-            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_update_crt_number.${indent_6}${green}更新证书${normal}\n\n"
-            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_add_proxy_number.${indent_6}${green}添加代理${normal}\n"
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_update_crt_number.${indent_6}${green}$(gettext "更新证书")${normal}\n\n"
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_add_proxy_number.${indent_6}${green}$(gettext "添加代理")${normal}\n"
 
-            Println "代理配置:\n\n$v2ray_nginx_domain_server_proxies_list"
+            Println "$(gettext "代理配置:")\n\n$v2ray_nginx_domain_server_proxies_list"
 
             V2rayNginxSelectDomainServerProxy
 
@@ -80,32 +80,32 @@ V2rayConfigDomain()
             v2ray_nginx_domain_server_proxy_path=${v2ray_nginx_domain_server_proxies_path[v2ray_nginx_domain_server_proxies_index]}
 
             echo
-            v2ray_nginx_domain_server_proxy_options=( '修改代理路径' '修改代理端口' '删除此代理' )
-            inquirer list_input_index "选择操作" v2ray_nginx_domain_server_proxy_options v2ray_nginx_domain_server_proxy_options_index
+            v2ray_nginx_domain_server_proxy_options=( "$(gettext "修改代理路径")" "$(gettext "修改代理端口")" "$(gettext "删除此代理")" )
+            inquirer list_input_index "$(gettext "选择操作")" v2ray_nginx_domain_server_proxy_options v2ray_nginx_domain_server_proxy_options_index
 
             if [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 0 ] 
             then
                 echo
-                inquirer text_input "输入新的代理路径: " new_path "$v2ray_nginx_domain_server_proxy_path"
+                inquirer text_input "$(gettext "输入新的代理路径: ")" new_path "$v2ray_nginx_domain_server_proxy_path"
                 jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block",'"$v2ray_nginx_domain_server_location_index"',"args"]'
                 JQs replace parse_out "$new_path"
             elif [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 1 ] 
             then
                 echo
-                new_proxy_port_options=( '输入新的代理端口' '浏览并选择端口' )
-                inquirer list_input_index "选择操作" new_proxy_port_options new_proxy_port_options_index
+                new_proxy_port_options=( "$(gettext "输入新的代理端口")" "$(gettext "浏览并选择端口")" )
+                inquirer list_input_index "$(gettext "选择操作")" new_proxy_port_options new_proxy_port_options_index
 
                 if [ "$new_proxy_port_options_index" -eq 0 ] 
                 then
                     echo
-                    inquirer text_input "输入新的代理端口: " new_proxy_port "$v2ray_nginx_domain_server_proxy_port"
+                    inquirer text_input "$(gettext "输入新的代理端口"): " new_proxy_port "$v2ray_nginx_domain_server_proxy_port"
                 else
                     V2rayListInbounds nginx
                     V2raySelectInbound
 
                     if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
                     then
-                        Println "$error 选择错误\n"
+                        Println "$(eval_gettext "\$error 选择错误")\n"
                         exit 1
                     fi
 
@@ -121,7 +121,7 @@ V2rayConfigDomain()
 
             NginxBuildConf parse_out
 
-            Println "$info 操作成功\n"
+            Println "$(eval_gettext "\$info 操作成功")\n"
             exit 0
         fi
     fi
@@ -132,11 +132,11 @@ V2rayConfigDomain()
 
     if [ -z "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
     then
-        Println "$error 没有证书\n"
+        Println "$(eval_gettext "\$error 没有证书")\n"
         exit 1
     fi
 
-    certificates_list="${green}证书:${normal}\n${indent_6}"
+    certificates_list="${green}$(gettext "证书"):${normal}\n${indent_6}"
     certificates_indices=()
 
     IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
@@ -155,32 +155,32 @@ V2rayConfigDomain()
 
         if [ "${usages[certificate_i]}" == "encipherment" ] 
         then
-            certificate_usage="$tls_name 认证和加密"
+            certificate_usage="$(eval_gettext "\$tls_name 认证和加密")"
         elif [ "${usages[certificate_i]}" == "verify" ] 
         then
-            certificate_usage="验证远端 $tls_name"
+            certificate_usage="$(eval_gettext "验证远端 \$tls_name")"
         elif [ "${usages[certificate_i]}" == "issue" ] 
         then
-            certificate_usage="签发其它证书"
+            certificate_usage="$(gettext "签发其他证书")"
         else
-            certificate_usage="验证客户端身份"
+            certificate_usage="$(gettext "验证客户端身份")"
         fi
 
         if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
         then
-            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage [自签名]${normal}\n"
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}$(gettext "用途"): ${green}$certificate_usage [$(gettext "自签名")]${normal}\n"
         else
-            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage${normal}\n"
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}$(gettext "用途"): ${green}$certificate_usage${normal}\n"
         fi
 
-        certificates_list="${certificates_list}${indent_6}证书路径: ${green}${certificate_files[certificate_i]}${normal}\n"
+        certificates_list="${certificates_list}${indent_6}$(gettext "证书路径"): ${green}${certificate_files[certificate_i]}${normal}\n"
 
-        certificates_list="${certificates_list}${indent_6}密钥路径: ${green}${key_files[certificate_i]}${normal}\n\n"
+        certificates_list="${certificates_list}${indent_6}$(gettext "密钥路径"): ${green}${key_files[certificate_i]}${normal}\n\n"
     done
 
     if [ -z "$certificates_list" ] 
     then
-        Println "$error 没有可管理证书\n"
+        Println "$(eval_gettext "\$error 没有可管理证书")\n"
         exit 1
     fi
 
@@ -188,7 +188,7 @@ V2rayConfigDomain()
 
     certificates_count=${#certificates_indices[@]}
 
-    echo "选择证书"
+    echo "$(gettext "选择证书")"
     while read -p "$i18n_default_cancel" certificates_num
     do
         case "$certificates_num" in
@@ -214,8 +214,8 @@ V2rayConfigDomain()
     tls_settings_name=$(tr '[:upper:]' '[:lower:]' <<< "$tls_name")"Settings"
 
     echo
-    certificates_options=( '更新证书' '修改证书路径' '修改密钥路径' )
-    inquirer list_input_index "选择操作" certificates_options certificates_options_index
+    certificates_options=( "$(gettext "更新证书")" "$(gettext "修改证书路径")" "$(gettext "修改密钥路径")" )
+    inquirer list_input_index "$(gettext "选择操作")" certificates_options certificates_options_index
 
     if [ "$certificates_options_index" -eq 0 ] 
     then
@@ -227,7 +227,7 @@ V2rayConfigDomain()
             elif [ "${usages[certificates_index]}" == "encipherment" ]
             then
                 echo
-                inquirer list_input "是否是 CA 证书" yn_options ca_yn
+                inquirer list_input "$(gettext "是否是 CA 证书")" yn_options ca_yn
                 if [ "$ca_yn" == "$i18n_yes" ]
                 then
                     if [ -x "${V2CTL_FILE:-}" ]
@@ -259,7 +259,7 @@ V2rayConfigDomain()
             jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"']'
             JQ update "$V2_CONFIG" "$certificate"
 
-            Println "$info 证书更新成功\n"
+            Println "$(eval_gettext "\$info 证书更新成功")\n"
         else
             if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
             then
@@ -270,11 +270,11 @@ V2rayConfigDomain()
             fi
 
             echo
-            inquirer text_input "请输入证书域名: " certificate_domain "$certificate_name"
+            inquirer text_input "$(gettext "请输入证书域名: ")" certificate_domain "$certificate_name"
 
             AcmeCheck
 
-            Println "$info 更新 $certificate_domain 证书..."
+            Println "$(eval_gettext "\$info 更新 \$certificate_domain 证书...")"
 
             V2rayDomainUpdateCert "$certificate_domain"
 
@@ -286,7 +286,7 @@ V2rayConfigDomain()
             jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"']'
             JQ update "$V2_CONFIG" "$cert_patch"
 
-            Println "$info $certificate_domain 证书更新成功\n"
+            Println "$(eval_gettext "\$info \$certificate_domain 证书更新成功")\n"
         fi
     elif [ "$certificates_options_index" -eq 1 ] 
     then
@@ -295,13 +295,13 @@ V2rayConfigDomain()
         jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
         JQ update "$V2_CONFIG" "$certificate_file"
 
-        Println "$info 证书路径修改成功\n"
+        Println "$(eval_gettext "\$info 证书路径修改成功")\n"
     else
         V2raySetKeyFile
 
         jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
         JQ update "$V2_CONFIG" "$key_file"
 
-        Println "$info 密钥路径修改成功\n"
+        Println "$(eval_gettext "\$info 密钥路径修改成功")\n"
     fi
 }

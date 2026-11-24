@@ -8,9 +8,9 @@ Include utils/zlib "$@"
 
 DepInstall sudo
 
-haproxy_options=( '安装' '更新' '卸载' )
+haproxy_options=( "$(gettext "安装")" "$(gettext "更新")" "$(gettext "卸载")" )
 echo
-inquirer list_input_index "请选择" haproxy_options haproxy_options_index
+inquirer list_input_index "$(gettext "请选择")" haproxy_options haproxy_options_index
 
 case $haproxy_options_index in
     0) HAProxyInstall

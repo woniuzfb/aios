@@ -4,8 +4,8 @@ V2rayListDns()
     out=$(ProxyRenderDns "$V2_CONFIG" v2ray)
     if [ -z "$out" ]
     then
-        Println "$error 未配置 DNS\n"
+        Println "$(eval_gettext "\$error 未配置 DNS")\n"
         return 1
     fi
-    Println "\n=== V2Ray DNS 配置 ===\n$out\n"
+    Println "\n=== $(gettext "V2Ray DNS 配置") ===\n$out\n"
 }

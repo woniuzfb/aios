@@ -1,6 +1,6 @@
 V2rayDeleteInboundAccount()
 {
-    ProxySelectBound "$V2_CONFIG" inbounds "选择要删除账号的入站" || return 1
+    ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择要删除账号的入站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${inbounds_protocol[idx]}"
     local field="clients"
@@ -27,15 +27,15 @@ V2rayDeleteInboundAccount()
 
     if [ "${#opts[@]}" -eq 0 ]
     then
-        Println "$error 该入站没有可删除的账号\n"
+        Println "$(eval_gettext "\$error 该入站没有可删除的账号")\n"
         return 1
     fi
 
     local acc_idx=0
     echo
-    inquirer list_input_index "选择要删除的账号" opts acc_idx
+    inquirer list_input_index "$(gettext "选择要删除的账号")" opts acc_idx
     jq_path='["inbounds",'"$idx"',"settings","'"$field"'",'"$acc_idx"']'
     JQ delete "$V2_CONFIG"
     ProxyRestartIfActive v2ray
-    Println "$info 已删除账号 ${green}${opts[acc_idx]}${normal}\n"
+    Println "$(eval_gettext "\$info 已删除账号") ${green}${opts[acc_idx]}${normal}\n"
 }

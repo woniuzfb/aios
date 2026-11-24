@@ -1,82 +1,82 @@
 V2raySetRouting()
 {
     local actions=(
-        '添加路由规则'
-        '添加负载均衡器'
-        '设置 domainStrategy/domainMatcher'
-        '删除路由规则'
-        '删除负载均衡器'
-        '设置规则级 domainMatcher'
+        "$(gettext "添加路由规则")"
+        "$(gettext "添加负载均衡器")"
+        "$(gettext "设置 domainStrategy/domainMatcher")"
+        "$(gettext "删除路由规则")"
+        "$(gettext "删除负载均衡器")"
+        "$(gettext "设置规则级 domainMatcher")"
     )
     local action_idx=0
     echo
-    inquirer list_input_index "选择 V2Ray 路由操作" actions action_idx
+    inquirer list_input_index "$(gettext "选择 V2Ray 路由操作")" actions action_idx
 
     case "$action_idx" in
         0)
-            local mode_opts=( '快捷路由 (选择入站 -> 出站)' '自定义路由规则' )
+            local mode_opts=( "$(gettext "快捷路由 (选择入站 -> 出站)")" "$(gettext "自定义路由规则")" )
             local mode_idx=0
-            inquirer list_input_index "选择添加路由方式" mode_opts mode_idx
+            inquirer list_input_index "$(gettext "选择添加路由方式")" mode_opts mode_idx
 
             if [ "$mode_idx" -eq 0 ]
             then
-                ProxySelectBound "$V2_CONFIG" inbounds "选择匹配的入站" || return 1
+                ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择匹配的入站")" || return 1
                 local in_tag="${inbounds_tag[selected_bound_index]}"
                 if [ -z "$in_tag" ]
                 then
-                    Println "$error 此入站没有标签\n"
+                    Println "$(eval_gettext "\$error 此入站没有标签")\n"
                     return 1
                 fi
-                ProxySelectBound "$V2_CONFIG" outbounds "选择转发目标出站" || return 1
+                ProxySelectBound "$V2_CONFIG" outbounds "$(gettext "选择转发目标出站")" || return 1
                 local out_tag="${outbounds_tag[selected_bound_index]}"
                 if [ -z "$out_tag" ]
                 then
-                    Println "$error 此出站没有标签\n"
+                    Println "$(eval_gettext "\$error 此出站没有标签")\n"
                     return 1
                 fi
                 local rule_json=""
                 JQs build rule_json '{"type": "field", "inboundTag": [$it], "outboundTag": $ot}' --arg it "$in_tag" --arg ot "$out_tag"
                 jq_path='["routing","rules"]'
                 JQ add "$V2_CONFIG" "[$rule_json]"
-                Println "$info 快捷路由添加成功: ${green}${in_tag} => ${out_tag}${normal}\n"
+                Println "$(eval_gettext "\$info 快捷路由添加成功: \${green}\${in_tag} => \${out_tag}\${normal}")\n"
             else
-                local net_opts=( 'tcp,udp' 'tcp' 'udp' '不限' )
+                local net_opts=( 'tcp,udp' 'tcp' 'udp' "$(gettext "不限")" )
                 local net_choice=""
-                inquirer list_input "选择匹配的连接方式 network" net_opts net_choice
-                [ "$net_choice" == "不限" ] && net_choice=""
+                inquirer list_input "$(gettext "选择匹配的连接方式 network")" net_opts net_choice
+                [ "$net_choice" == "$(gettext "不限")" ] && net_choice=""
 
                 local domains ips port src_port source users attrs inb_tag out_tag bal_tag
-                inquirer text_input "匹配 domains (逗号分隔, 可留空)" domains ""
-                inquirer text_input "匹配 ip (逗号分隔, 可留空)" ips ""
-                inquirer text_input "匹配目标 port (可留空)" port ""
-                inquirer text_input "匹配来源 sourcePort (可留空)" src_port ""
-                inquirer text_input "匹配来源 source (逗号分隔, 可留空)" source ""
-                inquirer text_input "匹配用户 user (逗号分隔, 可留空)" users ""
+                inquirer text_input "$(gettext "匹配 domains (逗号分隔, 可留空)")" domains ""
+                inquirer text_input "$(gettext "匹配 ip (逗号分隔, 可留空)")" ips ""
+                inquirer text_input "$(gettext "匹配目标 port (可留空)")" port ""
+                inquirer text_input "$(gettext "匹配来源 sourcePort (可留空)")" src_port ""
+                inquirer text_input "$(gettext "匹配来源 source (逗号分隔, 可留空)")" source ""
+                inquirer text_input "$(gettext "匹配用户 user (逗号分隔, 可留空)")" users ""
 
                 local proto_opts=( 'http' 'tls' 'bittorrent' )
                 local proto_sel=()
-                inquirer checkbox_input "选择匹配的流量协议 protocol (可留空)" proto_opts proto_sel
+                inquirer checkbox_input "$(gettext "选择匹配的流量协议 protocol (可留空)")" proto_opts proto_sel
                 local proto_csv=""
                 if [ "${#proto_sel[@]}" -gt 0 ] && [ -n "${proto_sel[0]:-}" ]
                 then
                     proto_csv=$(JoinByChar , "${proto_sel[@]}")
                 fi
 
-                inquirer text_input "匹配属性 attrs (可留空)" attrs ""
-                inquirer text_input "匹配 inboundTag (逗号分隔, 可留空)" inb_tag ""
-                inquirer text_input "目标 outboundTag (与 balancerTag 二选一)" out_tag ""
-                inquirer text_input "目标 balancerTag (可留空)" bal_tag ""
+                inquirer text_input "$(gettext "匹配属性 attrs (可留空)")" attrs ""
+                inquirer text_input "$(gettext "匹配 inboundTag (逗号分隔, 可留空)")" inb_tag ""
+                inquirer text_input "$(gettext "目标 outboundTag (与 balancerTag 二选一)")" out_tag ""
+                inquirer text_input "$(gettext "目标 balancerTag (可留空)")" bal_tag ""
 
                 if [ -z "$out_tag" ] && [ -z "$bal_tag" ]
                 then
-                    Println "$error outboundTag 与 balancerTag 不能同时为空\n"
+                    Println "$(eval_gettext "\$error outboundTag 与 balancerTag 不能同时为空")\n"
                     return 1
                 fi
 
                 local rule_dm="${rule_domain_matcher:-}"
                 if [ -n "$rule_dm" ] && [ "$rule_dm" != "linear" ] && [ "$rule_dm" != "mph" ]
                 then
-                    Println "$error 规则级 domainMatcher 仅支持 linear 或 mph: ${rule_dm}\n"
+                    Println "$(eval_gettext "\$error 规则级 domainMatcher 仅支持 linear 或 mph: \${rule_dm}")\n"
                     return 1
                 fi
 
@@ -105,15 +105,15 @@ V2raySetRouting()
 
                 jq_path='["routing","rules"]'
                 JQ add "$V2_CONFIG" "[$rule_json]"
-                Println "$info 已添加 V2Ray 路由规则\n"
+                Println "$(eval_gettext "\$info 已添加 V2Ray 路由规则")\n"
             fi
         ;;
         1)
             local strat_opts=( 'random' 'leastPing' )
             local b_tag b_sel b_strat
             inquirer text_input "Balancer tag" b_tag ""
-            inquirer text_input "selector (逗号分隔)" b_sel ""
-            inquirer list_input "选择策略 strategy.type" strat_opts b_strat
+            inquirer text_input "$(gettext "selector (逗号分隔)")" b_sel ""
+            inquirer list_input "$(gettext "选择策略 strategy.type")" strat_opts b_strat
 
             local bal_json=""
             JQs build bal_json '
@@ -126,19 +126,19 @@ V2raySetRouting()
 
             jq_path='["routing","balancers"]'
             JQ add "$V2_CONFIG" "[$bal_json]"
-            Println "$info 已添加 V2Ray 负载均衡 ${green}${b_tag}${normal}\n"
+            Println "$(eval_gettext "\$info 已添加 V2Ray 负载均衡 \${green}\${b_tag}\${normal}")\n"
         ;;
         2)
             local ds_opts=( 'AsIs' 'IPIfNonMatch' 'IPOnDemand' )
             local dm_opts=( 'linear' 'mph' )
             local ds="" dm="" strat_json=""
-            inquirer list_input "选择域名解析策略 domainStrategy" ds_opts ds
-            inquirer list_input "选择域名匹配算法 domainMatcher" dm_opts dm
+            inquirer list_input "$(gettext "选择域名解析策略 domainStrategy")" ds_opts ds
+            inquirer list_input "$(gettext "选择域名匹配算法 domainMatcher")" dm_opts dm
             JQs build strat_json '{"domainStrategy": $ds, "domainMatcher": $dm}' --arg ds "$ds" --arg dm "$dm"
             jq_merge=true
             jq_path='["routing"]'
             JQ update "$V2_CONFIG" "$strat_json"
-            Println "$info 已更新 V2Ray 路由策略\n"
+            Println "$(eval_gettext "\$info 已更新 V2Ray 路由策略")\n"
         ;;
         3)
             local rule_opts=()
@@ -149,14 +149,14 @@ V2raySetRouting()
             done < <(JQs query "$V2_CONFIG" 'if (.routing | type) == "object" and (.routing.rules | type) == "array" then (.routing.rules | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.outboundTag // .value.balancerTag // "rule")") else empty end')
             if [ "${#rule_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的路由规则\n"
+                Println "$(eval_gettext "\$error 没有可删除的路由规则")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的路由规则" rule_opts del_idx
+            inquirer list_input_index "$(gettext "选择要删除的路由规则")" rule_opts del_idx
             jq_path='["routing","rules",'"$del_idx"']'
             JQ delete "$V2_CONFIG"
-            Println "$info 已删除路由规则: ${green}${rule_opts[$del_idx]}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除路由规则:") ${green}${rule_opts[$del_idx]}${normal}\n"
         ;;
         4)
             local bal_opts=()
@@ -167,14 +167,14 @@ V2raySetRouting()
             done < <(JQs query "$V2_CONFIG" 'if (.routing | type) == "object" and (.routing.balancers | type) == "array" then (.routing.balancers | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.tag // "balancer")") else empty end')
             if [ "${#bal_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的负载均衡器\n"
+                Println "$(eval_gettext "\$error 没有可删除的负载均衡器")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的负载均衡器" bal_opts del_idx
+            inquirer list_input_index "$(gettext "选择要删除的负载均衡器")" bal_opts del_idx
             jq_path='["routing","balancers",'"$del_idx"']'
             JQ delete "$V2_CONFIG"
-            Println "$info 已删除负载均衡器: ${green}${bal_opts[$del_idx]}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除负载均衡器:") ${green}${bal_opts[$del_idx]}${normal}\n"
         ;;
         5)
             local rule_opts=()
@@ -185,21 +185,21 @@ V2raySetRouting()
             done < <(JQs query "$V2_CONFIG" 'if (.routing | type) == "object" and (.routing.rules | type) == "array" then (.routing.rules | to_entries[] | select(.value | type == "object") | "\(.key + 1). \(.value.outboundTag // .value.balancerTag // "rule")") else empty end')
             if [ "${#rule_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可设置的路由规则\n"
+                Println "$(eval_gettext "\$error 没有可设置的路由规则")\n"
                 return 1
             fi
             local rule_idx=0
-            inquirer list_input_index "选择要设置 domainMatcher 的路由规则" rule_opts rule_idx
-            local rdm_opts=( 'linear' 'mph' '清除' )
+            inquirer list_input_index "$(gettext "选择要设置 domainMatcher 的路由规则")" rule_opts rule_idx
+            local rdm_opts=( 'linear' 'mph' "$(gettext "清除")" )
             local rdm_choice=""
-            inquirer list_input "选择规则级 domainMatcher" rdm_opts rdm_choice
-            if [ "$rdm_choice" == "清除" ]
+            inquirer list_input "$(gettext "选择规则级 domainMatcher")" rdm_opts rdm_choice
+            if [ "$rdm_choice" == "$(gettext "清除")" ]
             then
                 JQ mutate "$V2_CONFIG" 'del(.routing.rules[$i].domainMatcher)' --argjson i "$rule_idx"
             else
                 JQ mutate "$V2_CONFIG" '.routing.rules[$i].domainMatcher = $dm' --argjson i "$rule_idx" --arg dm "$rdm_choice"
             fi
-            Println "$info 已更新规则级 domainMatcher: ${green}${rdm_choice}${normal}\n"
+            Println "$(eval_gettext "\$info 已更新规则级 domainMatcher: \${green}\${rdm_choice}\${normal}")\n"
         ;;
     esac
 

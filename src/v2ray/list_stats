@@ -6,18 +6,18 @@ V2rayListStats()
 
     for((i=0;i<inbounds_count;i++));
     do
-        stats_list="$stats_list入站标签: ${green}${inbounds_tag[i]}${normal} "
+        stats_list="${stats_list}$(gettext "入站标签"): ${green}${inbounds_tag[i]}${normal} "
         if [ "$policy_system_stats_inbound_uplink" = true ] 
         then
-            stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
+            stats_list="${stats_list}$(gettext "上行流量"): ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
         else
-            stats_list="$stats_list上行流量: ${red}关闭${normal} "
+            stats_list="${stats_list}$(gettext "上行流量"): ${red}$(gettext "已关闭")${normal} "
         fi
         if [ "$policy_system_stats_inbound_downlink" = true ] 
         then
-            stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
+            stats_list="${stats_list}$(gettext "下行流量"): ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
         else
-            stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
+            stats_list="${stats_list}$(gettext "下行流量"): ${red}$(gettext "已关闭")${normal}\n\n"
         fi
     done
 
@@ -26,18 +26,18 @@ V2rayListStats()
     do
         if [ -n "${outbounds_tag[i]}" ] 
         then
-            stats_list="$stats_list出站标签: ${green}${outbounds_tag[i]}${normal} "
+            stats_list="${stats_list}$(gettext "出站标签"): ${green}${outbounds_tag[i]}${normal} "
             if [ "$policy_system_stats_outbound_uplink" = true ] 
             then
-                stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
+                stats_list="${stats_list}$(gettext "上行流量"): ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
             else
-                stats_list="$stats_list上行流量: ${red}关闭${normal} "
+                stats_list="${stats_list}$(gettext "上行流量"): ${red}$(gettext "已关闭")${normal} "
             fi
             if [ "$policy_system_stats_outbound_downlink" = true ] 
             then
-                stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
+                stats_list="${stats_list}$(gettext "下行流量"): ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
             else
-                stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
+                stats_list="${stats_list}$(gettext "下行流量"): ${red}$(gettext "已关闭")${normal}\n\n"
             fi
         fi
     done
@@ -45,7 +45,7 @@ V2rayListStats()
     Println "$stats_list"
 
     echo
-    inquirer list_input "查看特定用户的流量" ny_options continue_yn
+    inquirer list_input "$(gettext "查看特定用户的流量")" ny_options continue_yn
     if [ "$continue_yn" == "$i18n_no" ] 
     then
         echo
@@ -54,7 +54,7 @@ V2rayListStats()
 
         if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            Println "$error 用户没有邮箱, 不会开启统计\n"
+            Println "$(eval_gettext "\$error 用户没有邮箱, 不会开启统计")\n"
             exit 1
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
@@ -64,15 +64,15 @@ V2rayListStats()
                 then
                     if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
                     then
-                        Println "上行流量: ${red}关闭${normal}"
+                        Println "$(gettext "上行流量"): ${red}$(gettext "已关闭")${normal}"
                     else
-                        Println "上行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
+                        Println "$(gettext "上行流量"): ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
                     fi
                     if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
                     then
-                        Println "下行流量: ${red}关闭${normal}\n"
+                        Println "$(gettext "下行流量"): ${red}$(gettext "已关闭")${normal}\n"
                     else
-                        Println "下行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} downlink)${normal}\n"
+                        Println "$(gettext "下行流量"): ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} downlink)${normal}\n"
                     fi
                     break
                 fi
@@ -88,15 +88,15 @@ V2rayListStats()
             then
                 if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
                 then
-                    Println "上行流量: ${red}关闭${normal}"
+                    Println "$(gettext "上行流量"): ${red}$(gettext "已关闭")${normal}"
                 else
-                    Println "上行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
+                    Println "$(gettext "上行流量"): ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
                 fi
                 if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
                 then
-                    Println "下行流量: ${red}关闭${normal}\n"
+                    Println "$(gettext "下行流量"): ${red}$(gettext "已关闭")${normal}\n"
                 else
-                    Println "下行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} downlink)${normal}\n"
+                    Println "$(gettext "下行流量"): ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} downlink)${normal}\n"
                 fi
                 break
             fi

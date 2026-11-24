@@ -2,17 +2,18 @@ V2rayListInboundAccounts()
 {
     V2rayListInbounds "${1:-}" || return 1
 
-    ProxySelectBound "$V2_CONFIG" inbounds "选择查看账号明细的入站" || return 0
+    ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择查看账号明细的入站")" || return 0
     local idx="$selected_bound_index"
     inbounds_index="$idx"
     local accounts_out
     accounts_out=$(ProxyRenderInboundAccounts "$V2_CONFIG" "$idx")
 
+    local target_tag="${inbounds_tag[idx]}"
     if [ -z "$accounts_out" ]
     then
-        Println "$info 入站 ${green}${inbounds_tag[idx]}${normal} 没有多账号配置\n"
+        Println "$(eval_gettext "\$info 入站 \${green}\$target_tag\${normal} 没有多账号配置")\n"
         return 0
     fi
 
-    Println "\n=== 入站 ${green}${inbounds_tag[idx]}${normal} 账号明细 ===\n$accounts_out\n"
+    Println "\n=== $(eval_gettext "入站 \${green}\$target_tag\${normal} 账号明细") ===\n$accounts_out\n"
 }

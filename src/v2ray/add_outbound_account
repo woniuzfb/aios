@@ -1,6 +1,6 @@
 V2rayAddOutboundAccount()
 {
-    ProxySelectBound "$V2_CONFIG" outbounds "选择要添加服务端/用户的出站" || return 1
+    ProxySelectBound "$V2_CONFIG" outbounds "$(gettext "选择要添加服务端/用户的出站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${outbounds_protocol[idx]}"
     local item_json=""
@@ -8,11 +8,11 @@ V2rayAddOutboundAccount()
     case "$protocol" in
         vmess)
             local addr port uuid alter_id sec
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
-            inquirer text_input "用户 UUID" uuid ""
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
+            inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "alterId" alter_id "0"
-            inquirer text_input "加密方式 security" sec "auto"
+            inquirer text_input "$(gettext "加密方式 security")" sec "auto"
             JQs build item_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -23,9 +23,9 @@ V2rayAddOutboundAccount()
         ;;
         vless)
             local addr port uuid enc
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
-            inquirer text_input "用户 UUID" uuid ""
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
+            inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "encryption" enc "none"
             JQs build item_json '{
                 "address": $addr,
@@ -37,10 +37,10 @@ V2rayAddOutboundAccount()
         ;;
         trojan)
             local addr port pw email
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "443"
-            inquirer text_input "密码 password" pw ""
-            inquirer text_input "email (可留空)" email ""
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "443"
+            inquirer text_input "$(gettext "密码 password")" pw ""
+            inquirer text_input "$(gettext "email (可留空)")" email ""
             JQs build item_json '{"address": $addr, "port": ($port | tonumber), "password": $pw, "email": $email}' \
                 --arg addr "$addr" --arg port "$port" --arg pw "$pw" --arg email "$email"
             jq_path='["outbounds",'"$idx"',"settings","servers"]'
@@ -48,14 +48,14 @@ V2rayAddOutboundAccount()
         ;;
         shadowsocks)
             local addr port method pw email
-            local iv_opts=( '默认(不设置)' '关闭' '开启' )
+            local iv_opts=( "$(gettext "默认(不设置)")" "$(gettext "关闭")" "$(gettext "开启")" )
             local iv_idx=0
-            inquirer text_input "服务端地址 address" addr ""
-            inquirer text_input "服务端端口 port" port "8388"
-            inquirer text_input "加密方式 method" method "aes-256-gcm"
-            inquirer text_input "密码 password" pw ""
-            inquirer text_input "email (可留空)" email ""
-            inquirer list_input_index "启用 IV 检查 ivCheck (可选)" iv_opts iv_idx
+            inquirer text_input "$(gettext "服务端地址 address")" addr ""
+            inquirer text_input "$(gettext "服务端端口 port")" port "8388"
+            inquirer text_input "$(gettext "加密方式 method")" method "aes-256-gcm"
+            inquirer text_input "$(gettext "密码 password")" pw ""
+            inquirer text_input "$(gettext "email (可留空)")" email ""
+            inquirer list_input_index "$(gettext "启用 IV 检查 ivCheck (可选)")" iv_opts iv_idx
             JQs build item_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -68,11 +68,12 @@ V2rayAddOutboundAccount()
             JQ add "$V2_CONFIG" "[$item_json]"
         ;;
         *)
-            Println "$error 出站协议 ${protocol} 不支持添加服务端账号\n"
+            Println "$(eval_gettext "\$error 出站协议 \${protocol} 不支持添加服务端账号")\n"
             return 1
         ;;
     esac
 
     ProxyRestartIfActive v2ray
-    Println "$info 已向出站 ${green}${outbounds_tag[idx]}${normal} 添加服务端/账号\n"
+    local target_tag="${outbounds_tag[idx]}"
+    Println "$(eval_gettext "\$info 已向出站 \${green}\$target_tag\${normal} 添加服务端/账号")\n"
 }

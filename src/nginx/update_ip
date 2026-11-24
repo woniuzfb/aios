@@ -2,7 +2,7 @@ NginxUpdateIp()
 {
     if [ ! -f $nginx_prefix/conf/nginx.conf ] 
     then
-        Println "$error 请先安装 $nginx_name\n"
+        Println "$(eval_gettext "\$error 请先安装 \$nginx_name")\n"
         exit 1
     fi
 
@@ -10,10 +10,10 @@ NginxUpdateIp()
     then
         sed -i '/http {/a\    include cloudflare_ip.conf;' $nginx_prefix/conf/nginx.conf
     else
-        Println "$error $nginx_name 配置已经存在\n"
+        Println "$(eval_gettext "\$error \$nginx_name 配置已经存在")\n"
     fi
 
-    Println "$info 更新 ip ..."
+    Println "$(eval_gettext "\$info 更新 ip ...")"
 
 cat > "$HOME"/update_cf_ibm_ip.sh <<EOF
 #!/bin/bash
@@ -55,5 +55,5 @@ EOF
 
     bash ~/update_cf_ibm_ip.sh
 
-    Println "$info IP 更新成功\n"
+    Println "$(eval_gettext "\$info IP 更新成功")\n"
 }

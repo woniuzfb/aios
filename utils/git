@@ -5,7 +5,7 @@ GitInstall()
         return 0
     fi
 
-    Println "$info 安装 git"
+    Println "$(eval_gettext "\$info 安装 git")"
 
     case $dist in
         mac) brew install git
@@ -21,5 +21,5 @@ GitInstall()
         ;;
     esac
 
-    Println "$info git 安装成功\n"
+    Println "$(eval_gettext "\$info git 安装成功")\n"
 }

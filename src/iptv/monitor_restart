@@ -40,7 +40,7 @@ MonitorHlsRestartSuccess()
         hls_recheck_time=("${hls_recheck_time[@]}")
     fi
 
-    MonitorLog "$chnl_channel_name 重启成功"
+    MonitorLog "$(eval_gettext "\$chnl_channel_name 重启成功")"
 }
 
 MonitorHlsRestartFail()
@@ -72,7 +72,7 @@ MonitorHlsRestartFail()
 
     unset new_array
 
-    MonitorLog "$chnl_channel_name 重启失败"
+    MonitorLog "$(eval_gettext "\$chnl_channel_name 重启失败")"
 }
 
 MonitorFlvRestartSuccess()
@@ -110,7 +110,7 @@ MonitorFlvRestartSuccess()
         unset new_array
     fi
 
-    MonitorLog "$chnl_channel_name 重启成功"
+    MonitorLog "$(eval_gettext "\$chnl_channel_name 重启成功")"
 }
 
 MonitorFlvRestartFail()
@@ -142,7 +142,7 @@ MonitorFlvRestartFail()
 
     unset new_array
 
-    MonitorLog "$chnl_channel_name FLV 重启超过${flv_restart_nums:-20}次关闭"
+    MonitorLog "$chnl_channel_name $(gettext "FLV 重启超过")${flv_restart_nums:-20}$(gettext "次关闭")"
 }
 
 MonitorApplyAntiLeech()
@@ -526,7 +526,7 @@ MonitorRestartChannel()
                 break
             elif [ "$probe_rc" -eq 1 ]
             then
-                MonitorErr "频道 [ $chnl_channel_name ] audio $audio, video $video, bitrate $video_bitrate"
+                MonitorErr "$(eval_gettext "频道 [ \$chnl_channel_name ] audio \$audio, video \$video, bitrate \$video_bitrate")"
             fi
         else
             sleep 15
@@ -625,7 +625,7 @@ MonitorTryAccountActivate()
         if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
         then
             try_success=1
-            MonitorLog "$chnl_channel_name 重启成功"
+            MonitorLog "$(eval_gettext "\$chnl_channel_name 重启成功")"
             return 0
         fi
     else
@@ -635,7 +635,7 @@ MonitorTryAccountActivate()
         if MonitorProbeHlsSegment false
         then
             try_success=1
-            MonitorLog "$chnl_channel_name 重启成功"
+            MonitorLog "$(eval_gettext "\$chnl_channel_name 重启成功")"
             return 0
         fi
     fi
@@ -696,7 +696,7 @@ MonitorTryAccounts()
             do
                 if [ "$monitor" = false ]
                 then
-                    printf '%b' "\r$macs_i/$macs_count 检测中..."
+                    printf '%b' "\r$(eval_gettext "\$macs_i/\$macs_count 检测中...")"
                 fi
                 mac_address=${macs[macs_i]}
 
@@ -751,7 +751,7 @@ MonitorTryAccounts()
         do
             if [ "$monitor" = false ]
             then
-                printf '%b' "\r$accounts_i/$accounts_count 检测中..."
+                printf '%b' "\r$(eval_gettext "\$accounts_i/\$accounts_count 检测中...")"
             fi
             account=${accounts[accounts_i]}
 

@@ -1,10 +1,10 @@
 CloudflareConfigWorkerRoute()
 {
-    Println "$info 搜索路由 ..."
+    Println "$(eval_gettext "\$info 搜索路由 ...")"
 
     CloudflareListWorkersRoutes
 
-    echo -e "选择域名"
+    echo -e "$(gettext "选择域名")"
     while read -p "$i18n_default_cancel" cf_zones_num
     do
         case $cf_zones_num in
@@ -40,7 +40,7 @@ CloudflareConfigWorkerRoute()
                         curl_header_auth_key=""
                         curl_header_auth_token="Authorization: Bearer $cf_users_zone_account_token"
                     else
-                        Println "$error 请添加账号 $cf_users_zone_account_email Token 或 Key\n"
+                        Println "$(eval_gettext "\$error 请添加账号 \$cf_users_zone_account_email Token 或 Key")\n"
                         exit 1
                     fi
                     break
@@ -64,7 +64,7 @@ CloudflareConfigWorkerRoute()
         done
 
         cf_users_zone_route_add_num=$((cf_users_zone_routes_count+1))
-        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}${green}添加路由${normal}\n"
+        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}${green}$(gettext "添加路由")${normal}\n"
         Println "$cf_users_zone_routes_list"
 
         while read -p "$i18n_default_cancel" cf_users_zone_routes_num
@@ -88,7 +88,7 @@ CloudflareConfigWorkerRoute()
                         cf_users_zone_route_id=${cf_users_zone_routes_id[cf_users_zone_routes_index]}
                         cf_users_zone_route_script=${cf_users_zone_routes_script[cf_users_zone_routes_index]}
                         cf_users_zone_route_pattern=${cf_users_zone_routes_pattern[cf_users_zone_routes_index]}
-                        Println " ${green}$cf_users_zone_route_pattern${normal} => ${green}$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}更改路由\n ${green}2.${normal}${indent_6}删除路由\n"
+                        Println " ${green}$cf_users_zone_route_pattern${normal} => ${green}$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}$(gettext "更改路由")\n ${green}2.${normal}${indent_6}$(gettext "删除路由")\n"
                         read -p "$i18n_default_cancel" cf_users_zone_route_num
                         case $cf_users_zone_route_num in
                             "") 
@@ -96,12 +96,12 @@ CloudflareConfigWorkerRoute()
                                 exit 1
                             ;;
                             1) 
-                                Println "$info 输入已经存在的 worker 项目名称"
-                                echo -e "$tip 输入的是项目名称, 不是序号\n"
-                                read -p "(默认: $cf_users_zone_route_script): " script
+                                Println "$(eval_gettext "\$info 输入已经存在的 worker 项目名称")"
+                                echo -e "$(eval_gettext "\$tip 输入的是项目名称, 不是序号")\n"
+                                read -p "$(eval_gettext "(默认: \$cf_users_zone_route_script): ")" script
                                 script=${script:-$cf_users_zone_route_script}
-                                Println "$info 输入路由, 比如 abc.domain.com/*"
-                                read -p "(默认: $cf_users_zone_route_pattern): " pattern
+                                Println "$(eval_gettext "\$info 输入路由, 比如 abc.domain.com/*")"
+                                read -p "$(eval_gettext "(默认: \$cf_users_zone_route_pattern): ")" pattern
                                 pattern=${pattern:-$cf_users_zone_route_pattern}
                                 if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
                                     -H ''"$curl_header_auth_email"'' \
@@ -111,9 +111,9 @@ CloudflareConfigWorkerRoute()
                                     --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
                                     | $JQ_FILE -r '.success' ) = true ]]
                                 then
-                                    Println "$info 路由更改成功\n"
+                                    Println "$(eval_gettext "\$info 路由更改成功")\n"
                                 else
-                                    Println "$error 路由更改失败\n"
+                                    Println "$(eval_gettext "\$error 路由更改失败")\n"
                                 fi
                             ;;
                             2) 
@@ -124,9 +124,9 @@ CloudflareConfigWorkerRoute()
                                     -H "Content-Type: application/json" \
                                     | $JQ_FILE -r '.success' ) = true ]] 
                                 then
-                                    Println "$info 路由删除成功\n"
+                                    Println "$(eval_gettext "\$info 路由删除成功")\n"
                                 else
-                                    Println "$info 路由删除成功\n"
+                                    Println "$(eval_gettext "\$info 路由删除成功")\n"
                                 fi
                             ;;
                             *[!0-9]*)
@@ -147,22 +147,23 @@ CloudflareConfigWorkerRoute()
 
     CloudflareListWorkers
 
-    Println "$info 输入已经存在的 worker 项目名称"
-    echo -e "$tip 输入的是项目名称, 不是序号\n"
+    Println "$(eval_gettext "\$info 输入已经存在的 worker 项目名称")"
+    echo -e "$(eval_gettext "\$tip 输入的是项目名称, 不是序号")\n"
     read -p "$i18n_default_cancel" script
     [ -z "$script" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ $script =~ ^[0-9]+$ ]] && [ "$script" -le "$cf_workers_count" ] && [ "$script" -gt 0 ]
     then
         cf_workers_index=$((script-1))
         echo
-        inquirer list_input_index "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options yn_index
+        local project_name="${cf_workers_project_name[cf_workers_index]}"
+        inquirer list_input_index "$(eval_gettext "是想要输入 \$project_name")" yn_options yn_index
 
         if [ "$yn_index" -eq 0 ] 
         then
             script=${cf_workers_project_name[cf_workers_index]}
         fi
     fi
-    Println "$info 输入路由,比如 abc.domain.com/*"
+    Println "$(eval_gettext "\$info 输入路由, 比如 abc.domain.com/*")"
     read -p "$i18n_default_cancel" pattern
     [ -z "$pattern" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ $(curl -s "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
@@ -173,8 +174,8 @@ CloudflareConfigWorkerRoute()
         --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
         | $JQ_FILE -r '.success' ) = true ]]
     then
-        Println "$info 路由添加成功\n"
+        Println "$(eval_gettext "\$info 路由添加成功")\n"
     else
-        Println "$error 路由添加失败\n"
+        Println "$(eval_gettext "\$error 路由添加失败")\n"
     fi
 }

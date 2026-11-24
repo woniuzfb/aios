@@ -1,6 +1,6 @@
 YqInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ] 
     then
@@ -8,10 +8,10 @@ YqInstall()
         then
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v yq) ]] 
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     DepsCheck
@@ -20,11 +20,11 @@ YqInstall()
     if [ "$dist" == "mac" ] 
     then
         echo
-        inquirer list_input_index "是否编译(brew安装可能会很慢)" ny_options ny_index
+        inquirer list_input_index "$(gettext "是否编译(brew安装可能会很慢)")" ny_options ny_index
         if [ "$ny_index" -eq 1 ] 
         then
             brew install yq
-            Println "$info yq ${install}成功\n"
+            Println "$(eval_gettext "\$info yq \${install}成功")\n"
             return 0
         fi
         if [ "$arch" == "x86_64" ] 
@@ -43,7 +43,7 @@ YqInstall()
             ;;
             arm*) yq_name=yq_linux_arm
             ;;
-            *) Println "不支持的架构: $arch"; return 1
+            *) Println "$(eval_gettext "不支持的架构: \$arch")"; return 1
             ;;
         esac
     fi
@@ -58,7 +58,7 @@ YqInstall()
         return 1
     fi
 
-    Println "$info yq ${install}成功\n"
+    Println "$(eval_gettext "\$info yq \${install}成功")\n"
 }
 
 YQ()

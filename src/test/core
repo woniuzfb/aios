@@ -28,7 +28,7 @@ TestCore()
     )
 
     echo
-    inquirer checkbox_input_indices "选择测试项目" test_core_options test_core_options_indices
+    inquirer checkbox_input_indices "$(gettext "选择测试项目")" test_core_options test_core_options_indices
 
     for test_core_options_index in "${test_core_options_indices[@]}"
     do

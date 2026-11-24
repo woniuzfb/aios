@@ -1,16 +1,16 @@
 NodejsMenu()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 请先输入 tv 安装 !")\n" && exit 1
 
     echo
-    nodejs_options=( '安装' '升级' '运行 iptv node' )
-    inquirer list_input_index "选择操作" nodejs_options nodejs_options_index
+    nodejs_options=( "$(gettext "安装")" "$(gettext "升级")" "$(gettext "运行 iptv node")" )
+    inquirer list_input_index "$(gettext "选择操作")" nodejs_options nodejs_options_index
 
     if [ "$nodejs_options_index" -eq 0 ] 
     then
         if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
         then
-            Println "$error nodejs 已存在\n"
+            Println "$(eval_gettext "\$error nodejs 已存在")\n"
             exit 1
         fi
 
@@ -19,7 +19,7 @@ NodejsMenu()
     then
         if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
         then
-            Println "$error 请先安装 nodejs\n"
+            Println "$(eval_gettext "\$error 请先安装 nodejs")\n"
             exit 1
         fi
 
@@ -27,19 +27,19 @@ NodejsMenu()
     else
         if [ -f "$NODE_ROOT/index.js" ] 
         then
-            Println "$error iptv node 已存在\n"
+            Println "$(eval_gettext "\$error iptv node 已存在")\n"
             exit 1
         fi
 
         if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
         then
-            Println "$error 请先安装 nodejs\n"
+            Println "$(eval_gettext "\$error 请先安装 nodejs")\n"
             exit 1
         fi
 
         if [[ ! -x $(command -v mongod) ]] 
         then
-            Println "$error 请先安装 mongodb\n"
+            Println "$(eval_gettext "\$error 请先安装 mongodb")\n"
             exit 1
         fi
 

@@ -1,18 +1,18 @@
 HAProxyInstall()
 {
-    local install="更新"
+    local install="$(gettext "更新")"
 
     if [ -z "${1:-}" ] 
     then
         if [[ -x $(command -v haproxy) ]] 
         then
-            Println "$error haproxy 已安装 !\n"
+            Println "$(eval_gettext "\$error haproxy 已安装 !")\n"
             return 0
         fi
-        install="安装"
+        install="$(gettext "安装")"
     elif [[ ! -x $(command -v haproxy) ]] 
     then
-        install="安装"
+        install="$(gettext "安装")"
     fi
 
     DepsCheck
@@ -24,7 +24,7 @@ HAProxyInstall()
     then
         if [ -d "$DEPENDS_ROOT"/haproxy ] 
         then
-            Println "$info 已经存在 $DEPENDS_ROOT/haproxy !\n"
+            Println "$(eval_gettext "\$info 已经存在 \$DEPENDS_ROOT/haproxy !")\n"
             return 1
         fi
 
@@ -35,7 +35,7 @@ HAProxyInstall()
         fi
     else
         echo
-        inquirer list_input_index "开启 USE_GETADDRINFO" yn_options yn_index
+        inquirer list_input_index "$(gettext "开启 USE_GETADDRINFO")" yn_options yn_index
 
         if [ "$yn_index" -eq 0 ] 
         then
@@ -45,13 +45,13 @@ HAProxyInstall()
 
     echo
     pcre_options=( pcre pcre2 )
-    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+    inquirer list_input_index "$(gettext "选择 pcre 版本")" pcre_options pcre_options_index
 
     if [ "$pcre_options_index" -eq 0 ] 
     then
         pcre_args=( USE_STATIC_PCRE USE_PCRE )
         echo
-        inquirer list_input_index "开启 USE_PCRE_JIT" yn_options yn_index
+        inquirer list_input_index "$(gettext "开启 USE_PCRE_JIT")" yn_options yn_index
         if [ "$yn_index" -eq 0 ] 
         then
             args+=( USE_PCRE_JIT=1 )
@@ -59,7 +59,7 @@ HAProxyInstall()
     else
         pcre_args=( USE_STATIC_PCRE2 USE_PCRE2 )
         echo
-        inquirer list_input_index "开启 USE_PCRE2_JIT" yn_options yn_index
+        inquirer list_input_index "$(gettext "开启 USE_PCRE2_JIT")" yn_options yn_index
         if [ "$yn_index" -eq 0 ] 
         then
             args+=( USE_PCRE2_JIT=1 )
@@ -67,7 +67,8 @@ HAProxyInstall()
     fi
 
     echo
-    inquirer list_input_index "选择 ${pcre_options[pcre_options_index]} 编译选项" pcre_args pcre_args_index
+    local pcre_opt="${pcre_options[pcre_options_index]}"
+    inquirer list_input_index "$(eval_gettext "选择 \$pcre_opt 编译选项")" pcre_args pcre_args_index
     args+=( "${pcre_args[pcre_args_index]}=1" )
 
     if [ "$pcre_args_index" -eq 0 ] 
@@ -77,9 +78,9 @@ HAProxyInstall()
         static_pcre=false
     fi
 
-    Println "$tip 如果选择 openssl, haproxy 将不支持 QUIC 0-RTT"
+    Println "$(eval_gettext "\$tip 如果选择 openssl, haproxy 将不支持 QUIC 0-RTT")"
     openssl_options=( openssl@1.1 openssl@3 quictls )
-    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+    inquirer list_input_index "$(gettext "选择 openssl 版本")" openssl_options openssl_options_index
 
     args+=( USE_OPENSSL=1 )
 
@@ -89,7 +90,7 @@ HAProxyInstall()
     fi
 
     echo
-    inquirer list_input_index "开启硬件加密加速 USE_ENGINE" yn_options yn_index
+    inquirer list_input_index "$(gettext "开启硬件加密加速 USE_ENGINE")" yn_options yn_index
 
     if [ "$yn_index" -eq 0 ] 
     then
@@ -99,7 +100,7 @@ HAProxyInstall()
     if [ "$openssl_options_index" -eq 1 ] 
     then
         echo
-        inquirer list_input_index "开启 USE_PTHREAD_EMULATION" yn_options yn_index
+        inquirer list_input_index "$(gettext "开启 USE_PTHREAD_EMULATION")" yn_options yn_index
 
         if [ "$yn_index" -eq 0 ] 
         then
@@ -108,7 +109,8 @@ HAProxyInstall()
     fi
 
     echo
-    inquirer list_input_index "静态链接 ${openssl_options[openssl_options_index]}" yn_options yn_index
+    local openssl_opt="${openssl_options[openssl_options_index]}"
+    inquirer list_input_index "$(eval_gettext "静态链接 \$openssl_opt")" yn_options yn_index
 
     if [ "$yn_index" -eq 0 ] 
     then
@@ -120,7 +122,7 @@ HAProxyInstall()
     fi
 
     echo
-    inquirer list_input_index "静态链接 zlib" yn_options yn_index
+    inquirer list_input_index "$(gettext "静态链接 zlib")" yn_options yn_index
 
     if [ "$yn_index" -eq 0 ] 
     then
@@ -133,7 +135,7 @@ HAProxyInstall()
     fi
 
     echo
-    inquirer list_input_index "静态链接 Lua" yn_options yn_index
+    inquirer list_input_index "$(gettext "静态链接 Lua")" yn_options yn_index
 
     if [ "$yn_index" -eq 0 ] 
     then
@@ -193,7 +195,7 @@ HAProxyInstall()
         then
             curl -Lm 30 "$FFMPEG_MIRROR_LINK/haproxy/haproxy-${haproxy_ver}.tar.gz" -o haproxy-"${haproxy_ver}".tar.gz
         fi
-        Println "$info 解压 haproxy-${haproxy_ver} ..."
+        Println "$(eval_gettext "\$info 解压 haproxy-\${haproxy_ver} ...")"
         tar xzf haproxy-"${haproxy_ver}".tar.gz
     fi
 
@@ -246,14 +248,14 @@ HAProxyInstall()
         make TARGET=linux-glibc ${args[@]+"${args[@]}"}
     fi
 
-    Println "$info haproxy ${install}成功\n"
+    Println "$(eval_gettext "\$info haproxy \${install}成功")\n"
 }
 
 HAProxyUninstall()
 {
 
 
-    Println "$info haproxy 卸载完成\n"
+    Println "$(eval_gettext "\$info haproxy 卸载完成")\n"
 }
 
 HAProxyUpdate()

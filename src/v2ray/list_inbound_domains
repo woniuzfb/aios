@@ -13,9 +13,9 @@ V2rayListInboundDomains()
             domain=${domain%.conf}
             if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
-                v2ray_status_text="${green}开启${normal}"
+                v2ray_status_text="${green}$(gettext "已开启")${normal}"
             else
-                v2ray_status_text="${red}关闭${normal}"
+                v2ray_status_text="${red}$(gettext "已关闭")${normal}"
             fi
             if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]}" < "$nginx_prefix/conf/sites_available/$domain.conf" 
             then
@@ -46,7 +46,7 @@ V2rayListInboundDomains()
                                 v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
                                 v2ray_domains_inbound+=("$domain")
                                 v2ray_domains_inbound_https_port+=("$server_ports")
-                                v2ray_domains_inbound_list="$v2ray_domains_inbound_list${green}$v2ray_domains_inbound_count.${normal}${indent_6}域名: ${green}$domain${normal} nginx 端口: ${green}$server_ports${normal} nginx 路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
+                                v2ray_domains_inbound_list="$v2ray_domains_inbound_list${green}$v2ray_domains_inbound_count.${normal}${indent_6}$(gettext "域名"): ${green}$domain${normal} $(gettext "nginx 端口"): ${green}$server_ports${normal} $(gettext "nginx 路径"): ${green}${inbounds_stream_path[inbounds_index]}${normal} $(gettext "状态"): $v2ray_status_text\n\n"
                             fi
                         fi
                     fi
@@ -70,5 +70,5 @@ V2rayListInboundDomains()
             fi
         done
     fi
-    Println "绑定的${green}域名列表:${normal}\n\n${v2ray_domains_inbound_list:-无}\n"
+    Println "$(eval_gettext "绑定的\${green}域名列表:\${normal}")\n\n${v2ray_domains_inbound_list:-$(gettext "无")}\n"
 }

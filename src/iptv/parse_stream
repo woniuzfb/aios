@@ -12,7 +12,7 @@ ParseStream()
 
             echo
             youtube_options=( youtube-dl yt-dlp )
-            inquirer list_input "选择解析工具" youtube_options youtube_option
+            inquirer list_input "$(gettext "选择解析工具")" youtube_options youtube_option
 
             for((s_i=0;s_i<stream_links_count;s_i++));
             do
@@ -25,7 +25,7 @@ ParseStream()
 
                     if [ -z "${formats_indices:-}" ] 
                     then
-                        Println "$error 无法解析 youtube 链接 $link"
+                        Println "$(eval_gettext "\$error 无法解析 youtube 链接 \$link")"
                         exit 1
                     fi
 
@@ -118,7 +118,7 @@ ParseStream()
             #stream_link_md5="$stream_link?ts=$ts&token=$token"
         elif [[ $stream_link =~ ^https?://news\.tvb\.com ]] 
         then
-            Println "$info 解析 tvb 链接 ..."
+            Println "$(eval_gettext "\$info 解析 tvb 链接 ...")"
 
             if [ "${stream_link:0:5}" == "http:" ] 
             then
@@ -154,7 +154,7 @@ ParseStream()
 
             if [ -z "$token_url" ] 
             then
-                Println "$error 无法解析 tvb: token url\n"
+                Println "$(eval_gettext "\$error 无法解析 tvb: token url")\n"
                 return 0
             fi
 
@@ -170,7 +170,7 @@ ParseStream()
 
             if [ "$stream_link" == null ] 
             then
-                Println "$error 无法解析 tvb: url\n"
+                Println "$(eval_gettext "\$error 无法解析 tvb: url")\n"
                 return 0
             fi
 
@@ -343,13 +343,13 @@ ParseStream()
             cookies="${cookies:-}"
         fi
 
-        Println "$info 使用输入源 ${stream_links[0]}"
-        inquirer list_input_index "自动检测" yn_options yn_index
+        Println "$info $(gettext "使用输入源") ${stream_links[0]}"
+        inquirer list_input_index "$(gettext "自动检测")" yn_options yn_index
     fi
 
     if [ "${stream_link_parsed:-false}" = true ] || [ "$yn_index" -eq 0 ] 
     then
-        Println "$info 检测中..."
+        Println "$(eval_gettext "\$info 检测中...")"
 
         FFmpegInstall
 
@@ -414,8 +414,8 @@ ParseStream()
                 then
                     is_hls=true
 
-                    Println "$tip 输入源是多级索引列表的情况下可以选择是"
-                    inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_index
+                    Println "$(eval_gettext "\$tip 输入源是多级索引列表的情况下可以选择是")"
+                    inquirer list_input_index "$(gettext "解析 hls 一级索引列表")" ny_options ny_index
 
                     if [ "$ny_index" -eq 1 ] 
                     then
@@ -452,7 +452,7 @@ ParseStream()
                         format_tags_list="$format_tags_list${format_tag//${delimiters[3]}/: }\n"
                     done
 
-                    Println "格式标签:\n$format_tags_list"
+                    Println "$(gettext "格式标签"):\n$format_tags_list"
                 fi
 
                 streams_program_id=()
@@ -493,7 +493,7 @@ ParseStream()
 
                     for((programs_i=0;programs_i<programs_count;programs_i++));
                     do
-                        programs_list="$programs_list节目${programs_program_id[programs_i]} (${programs_program_num[programs_i]})\n${programs_tags_list[programs_i]:-}\n"
+                        programs_list="$programs_list$(gettext "节目")${programs_program_id[programs_i]} (${programs_program_num[programs_i]})\n${programs_tags_list[programs_i]:-}\n"
                         program_streams_count="${programs_streams_count[programs_i]}"
 
                         if [ "$program_streams_count" -eq 0 ] 
@@ -552,12 +552,12 @@ ParseStream()
                 do
                     if [ -n "${streams_tags_list[streams_i]:-}" ] 
                     then
-                        streams_tags_list[streams_i]="流#$streams_i 标签:\n${streams_tags_list[streams_i]}\n"
+                        streams_tags_list[streams_i]="$(gettext "流")#$streams_i $(gettext "标签"):\n${streams_tags_list[streams_i]}\n"
                     fi
                     if [ -n "${streams_program_id[streams_i]:-}" ] 
                     then
                         streams_program_id[streams_i]="${streams_program_id[streams_i]//,,/,}"
-                        stream_program_id=" 节目${streams_program_id[streams_i]:1:-1}"
+                        stream_program_id=" $(gettext "节目")${streams_program_id[streams_i]:1:-1}"
                     else
                         stream_program_id=""
                     fi
@@ -566,7 +566,7 @@ ParseStream()
                         video_stream_indices+=("$streams_i")
                         if [ "${streams_closed_captions[streams_i]:-0}" == "1" ]
                         then
-                            closed_captions=" 硬字幕"
+                            closed_captions=" $(gettext "硬字幕")"
                         else
                             closed_captions=""
                         fi
@@ -580,7 +580,7 @@ ParseStream()
                         else
                             stream_bit_rate=""
                         fi
-                        audio_options+=("#$streams_i ${streams_codec_name[streams_i]} ${streams_channels[streams_i]}声道 ${streams_channel_layout[streams_i]}$stream_bit_rate$stream_program_id")
+                        audio_options+=("#$streams_i ${streams_codec_name[streams_i]} ${streams_channels[streams_i]}$(gettext "声道") ${streams_channel_layout[streams_i]}$stream_bit_rate$stream_program_id")
                     elif [ "${streams_codec_type[streams_i]}" == "subtitle" ] 
                     then
                         subtitle_stream_indices+=("$streams_i")
@@ -600,9 +600,9 @@ ParseStream()
                 if [ -n "${video_options:-}" ] 
                 then
                     video_options_count="${#video_options[@]}"
-                    video_options+=("不选择")
+                    video_options+=("$(gettext "不选择")")
                     echo
-                    inquirer checkbox_input_indices "选择视频流" video_options video_options_indices
+                    inquirer checkbox_input_indices "$(gettext "选择视频流")" video_options video_options_indices
 
                     for video_options_index in "${video_options_indices[@]}"
                     do
@@ -620,9 +620,9 @@ ParseStream()
                 if [ -n "${audio_options:-}" ] 
                 then
                     audio_options_count="${#audio_options[@]}"
-                    audio_options+=("不选择")
+                    audio_options+=("$(gettext "不选择")")
                     echo
-                    inquirer checkbox_input_indices "选择音频流" audio_options audio_options_indices
+                    inquirer checkbox_input_indices "$(gettext "选择音频流")" audio_options audio_options_indices
 
                     for audio_options_index in "${audio_options_indices[@]}"
                     do
@@ -640,9 +640,9 @@ ParseStream()
                 if [ -n "${subtitle_options:-}" ] 
                 then
                     subtitle_options_count="${#subtitle_options[@]}"
-                    subtitle_options+=("不选择")
+                    subtitle_options+=("$(gettext "不选择")")
                     echo
-                    inquirer checkbox_input_indices "选择字幕流" subtitle_options subtitle_options_indices
+                    inquirer checkbox_input_indices "$(gettext "选择字幕流")" subtitle_options subtitle_options_indices
 
                     for subtitle_options_index in "${subtitle_options_indices[@]}"
                     do
@@ -680,15 +680,15 @@ ParseStream()
             return 1
         fi
 
-        Println "$error 无法检测输入源, 请手动设置以下选项"
+        Println "$(eval_gettext "\$error 无法检测输入源, 请手动设置以下选项")"
     fi
 
     SetIsHls
 
     if [ "$is_hls" = true ] 
     then
-        Println "$tip 输入源是多级索引列表的情况下可以选择是"
-        inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_index
+        Println "$(eval_gettext "\$tip 输入源是多级索引列表的情况下可以选择是")"
+        inquirer list_input_index "$(gettext "解析 hls 一级索引列表")" ny_options ny_index
 
         if [ "$ny_index" -eq 1 ] 
         then

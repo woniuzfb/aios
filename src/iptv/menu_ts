@@ -2,7 +2,7 @@ TsGetToken()
 {
     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
     then
-        Println "$error 无法连接服务器, 请重试"
+        Println "$(eval_gettext "\$error 无法连接服务器, 请重试")"
         return 1
     fi
 
@@ -11,17 +11,17 @@ TsGetToken()
     if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
     then
         echo "$res"
-        Println "$error 获取 token 错误, 请重试"
+        Println "$(eval_gettext "\$error 获取 token 错误, 请重试")"
         return 2
     fi
 
-    Println "$info 请等待 $refresh_time 秒..."
+    Println "$(eval_gettext "\$info 请等待 \$refresh_time 秒...")"
 
     sleep $refresh_time
 
     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
     then
-        Println "$error 无法连接服务器, 请重试"
+        Println "$(eval_gettext "\$error 无法连接服务器, 请重试")"
         return 3
     fi
 
@@ -30,7 +30,7 @@ TsGetToken()
     if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
     then
         echo "$res"
-        Println "$error 获取 token 错误, 请重试"
+        Println "$(eval_gettext "\$error 获取 token 错误, 请重试")"
         return 4
     fi
 
@@ -71,7 +71,7 @@ TsValidatePhoneNumber()
 
 TsMenu()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
 
     GetDefault
     ShFallback
@@ -82,15 +82,15 @@ TsMenu()
         ts_options+=($d_sync_file)
     fi
 
-    ts_options+=("手动输入")
+    ts_options+=("$(gettext "手动输入")")
 
     echo
-    inquirer list_input_index "选择使用的频道文件" ts_options ts_options_index
+    inquirer list_input_index "$(gettext "选择使用的频道文件")" ts_options ts_options_index
 
     if [ "$ts_options_index" -eq $((${#ts_options[@]}-1)) ]
     then
         echo
-        ExitOnText "请输入使用的频道文件链接或本地路径" ts_option
+        ExitOnText "$(gettext "请输入使用的频道文件链接或本地路径")" ts_option
     else
         ts_option="${ts_options[ts_options_index]}"
     fi
@@ -99,13 +99,13 @@ TsMenu()
     then
         if ! ts_source=$(curl -s -Lm 10 "$ts_option") 
         then
-            Println "$error 无法连接 $ts_option\n"
+            Println "$(eval_gettext "\$error 无法连接 \$ts_option")\n"
             exit 1
         fi
     else
         if [ ! -f "$ts_option" ] 
         then
-            Println "$error $ts_option 不存在\n"
+            Println "$(eval_gettext "\$error \$ts_option 不存在")\n"
             exit 1
         fi
         ts_source=$(< "$ts_option")
@@ -156,7 +156,7 @@ TsMenu()
 
     if [ -z "${jq_data_name:-}" ]
     then
-        Println "$error 没有找到频道\n"
+        Println "$(eval_gettext "\$error 没有找到频道")\n"
         exit 1
     fi
 
@@ -197,13 +197,13 @@ TsMenu()
         unset phone_number
 
         echo
-        inquirer list_input_index "选择直播源" ts_name ts_index
+        inquirer list_input_index "$(gettext "选择直播源")" ts_name ts_index
 
         if [ "${ts_id[ts_index]}" == "jxtvnet" ] 
         then
-            lan_options=( '不选择' '电信' '联通' )
-            Println "$tip 部分地区不选择线路可能无法连接"
-            inquirer list_input_index "选择线路" lan_options lan_options_index
+            lan_options=( "$(gettext "不选择")" "$(gettext "电信")" "$(gettext "联通")" )
+            Println "$(eval_gettext "\$tip 部分地区不选择线路可能无法连接")"
+            inquirer list_input_index "$(gettext "选择线路")" lan_options lan_options_index
 
             FilterFileLines ".jxtvnet.tv" /etc/hosts
 
@@ -259,15 +259,15 @@ TsMenu()
             fi
         done
 
-        accs_options+=( '添加账号' '注册账号' )
+        accs_options+=( "$(gettext "添加账号")" "$(gettext "注册账号")" )
 
         echo
-        inquirer list_input_index "选择账号" accs_options accs_options_index
+        inquirer list_input_index "$(gettext "选择账号")" accs_options accs_options_index
 
         if [ "$accs_options_index" -eq "$ts_accs_count" ] 
         then
             echo
-            ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+            ExitOnText "$(gettext "输入用户名或手机号")" login TsValidateLogin "$(gettext "用户名以字母开头, 4到14位字母、数字、下划线组成")"
 
             if [[ $login =~ ^[0-9]{11}$ ]] 
             then
@@ -278,7 +278,7 @@ TsMenu()
             fi
 
             echo
-            ExitOnText "输入密码" password
+            ExitOnText "$(gettext "输入密码")" password
 
             device_no=$(GenUuid)
             str=$(printf '%s' "$device_no" | Md5Hex)
@@ -304,7 +304,7 @@ TsMenu()
                 if [ -z "$img_url" ] 
                 then
                     echo
-                    ExitOnText "输入用户名" login TsValidateUserName "用户名以字母开头, 4到14位字母、数字、下划线组成"
+                    ExitOnText "$(gettext "输入用户名")" login TsValidateUserName "$(gettext "用户名以字母开头, 4到14位字母、数字、下划线组成")"
 
                     user_name="$login"
                     reg_acc_type=1
@@ -312,12 +312,12 @@ TsMenu()
                     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                     then
                         echo "$res"
-                        Println "$error 账号已经存在, 请登陆或重新输入!"
+                        Println "$(eval_gettext "\$error 账号已经存在, 请登录或重新输入!")"
                         continue
                     fi
                 else
                     echo
-                    ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+                    ExitOnText "$(gettext "输入用户名或手机号")" login TsValidateLogin "$(gettext "用户名以字母开头, 4到14位字母、数字、下划线组成")"
 
                     if [ -z "$third_token_url" ] 
                     then
@@ -342,7 +342,7 @@ TsMenu()
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                             then
                                 echo "$res"
-                                Println "$error 账号已经存在, 请登陆或重新输入!"
+                                Println "$(eval_gettext "\$error 账号已经存在, 请登录或重新输入!")"
                                 unset phone_number
                                 continue
                             fi
@@ -356,13 +356,13 @@ TsMenu()
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                             then
                                 echo "$res"
-                                Println "$error 账号已经存在, 请登陆或重新输入!"
+                                Println "$(eval_gettext "\$error 账号已经存在, 请登录或重新输入!")"
                                 continue
                             fi
                         fi
 
                         echo
-                        ExitOnText "输入绑定的手机号" phone_number TsValidatePhoneNumber "请输入正确的手机号"
+                        ExitOnText "$(gettext "输入绑定的手机号")" phone_number TsValidatePhoneNumber "$(gettext "请输入正确的手机号")"
                     fi
                 fi
 
@@ -370,7 +370,7 @@ TsMenu()
             done
 
             echo
-            ExitOnText "输入密码" password
+            ExitOnText "$(gettext "输入密码")" password
 
             device_no=$(GenUuid)
             str=$(printf '%s' "$device_no" | Md5Hex)
@@ -391,11 +391,11 @@ TsMenu()
                 if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$reg_url?username=$user_name&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=$reg_type&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                 then
                     echo "$res"
-                    Println "$error 注册失败, 请重试"
+                    Println "$(eval_gettext "\$error 注册失败, 请重试")"
                     continue
                 fi
 
-                Println "$info 注册成功, 请稍等..."
+                Println "$(eval_gettext "\$info 注册成功, 请稍等...")"
                 sleep 3
             else
                 if [ ! -e "$IMGCAT_FILE" ] 
@@ -416,7 +416,7 @@ TsMenu()
 
                         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
                         then
-                            Println "$error 无法获取 token, 请重试"
+                            Println "$(eval_gettext "\$error 无法获取 token, 请重试")"
                             continue 2
                         fi
 
@@ -424,7 +424,7 @@ TsMenu()
                     else
                         if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
                         then
-                            Println "$error 无法获取 token, 请重试"
+                            Println "$(eval_gettext "\$error 无法获取 token, 请重试")"
                             continue 2
                         fi
 
@@ -434,7 +434,7 @@ TsMenu()
                     if [ "$ret" != 0 ] || [ -z "$third_token" ]
                     then
                         echo "$res"
-                        Println "$error 无法获取 token, 请重试"
+                        Println "$(eval_gettext "\$error 无法获取 token, 请重试")"
                         continue 2
                     fi
 
@@ -445,7 +445,7 @@ TsMenu()
 
                     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$img_url?accesstoken=$third_token") 
                     then
-                        Println "$error 无法获取图形验证码, 请重试"
+                        Println "$(eval_gettext "\$error 无法获取图形验证码, 请重试")"
                         continue 2
                     fi
 
@@ -454,7 +454,7 @@ TsMenu()
                     if [ "$ret" != 0 ] || [ -z "$picid" ] || [ -z "$image" ]
                     then
                         echo "$res"
-                        Println "$error 无法获取图形验证码, 请重试"
+                        Println "$(eval_gettext "\$error 无法获取图形验证码, 请重试")"
                         continue 2
                     fi
 
@@ -479,16 +479,16 @@ TsMenu()
                     trap 'rm -rf "$cookie_jar_dir"' EXIT
 
                     echo
-                    inquirer text_input "输入图片验证码" pincode "刷新"
+                    inquirer text_input "$(gettext "输入图片验证码")" pincode "$(gettext "刷新")"
 
-                    if [ "$pincode" != "刷新" ] 
+                    if [ "$pincode" != "$(gettext "刷新")" ] 
                     then
                         while true 
                         do
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$sms_url?pincode=$pincode&picid=$picid&verifytype=$verify_type&account=$phone_number&accounttype=$verify_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                             then
                                 echo "$res"
-                                Println "$error 无法获取短信验证码, 请重试"
+                                Println "$(eval_gettext "\$error 无法获取短信验证码, 请重试")"
                                 continue 2
                             fi
 
@@ -496,16 +496,16 @@ TsMenu()
                             next=$((now+120))
 
                             echo
-                            inquirer text_input "输入短信验证码" smscode "再次发送"
+                            inquirer text_input "$(gettext "输入短信验证码")" smscode "$(gettext "再次发送")"
 
-                            if [ "$smscode" == "再次发送" ] 
+                            if [ "$smscode" == "$(gettext "再次发送")" ] 
                             then
                                 now=$(DateEpoch)
                                 if [ "$now" -lt "$next" ] 
                                 then
                                     for((secs=next-now;secs>0;secs--));
                                     do
-                                        echo -en "\r$secs 秒后重试"
+                                        echo -en "\r$(eval_gettext "\$secs 秒后重试")"
                                         sleep 1
                                     done
                                 fi
@@ -514,7 +514,7 @@ TsMenu()
 
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$verify_url?verifycode=$smscode&verifytype=$verify_type&username=$user_name&account=$phone_number") 
                             then
-                                Println "$error 无法连接服务器, 请重试"
+                                Println "$(eval_gettext "\$error 无法连接服务器, 请重试")"
                                 continue 3
                             fi
 
@@ -523,7 +523,7 @@ TsMenu()
                             if [ "$ret" != 0 ] || [ -z "$code" ]
                             then
                                 echo "$res"
-                                Println "$error 短信验证码错误, 请重试"
+                                Println "$(eval_gettext "\$error 短信验证码错误, 请重试")"
                                 continue 2
                             fi
 
@@ -538,11 +538,11 @@ TsMenu()
                             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
                             then
                                 echo "$res"
-                                Println "$error 注册失败, 请重试"
+                                Println "$(eval_gettext "\$error 注册失败, 请重试")"
                                 continue 3
                             fi
 
-                            Println "$info 注册成功, 请稍等..."
+                            Println "$(eval_gettext "\$info 注册成功, 请稍等...")"
                             sleep 3
                             break 2
                         done
@@ -551,14 +551,14 @@ TsMenu()
             fi
         else
             echo
-            acc_options=( '登陆' '删除' )
-            inquirer list_input_index "选择操作" acc_options acc_options_index
+            acc_options=( "$(gettext "登录")" "$(gettext "删除")" )
+            inquirer list_input_index "$(gettext "选择操作")" acc_options acc_options_index
 
             if [ "$acc_options_index" -eq 1 ] 
             then
                 jq_path='["'"$id"'","accounts",'"$accs_options_index"']'
                 JQ delete "$SERVICES_CONFIG"
-                Println "$info 账号删除成功"
+                Println "$(eval_gettext "\$info 账号删除成功")"
                 continue
             fi
 
@@ -610,7 +610,7 @@ TsMenu()
             login_acc_type=2
             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$login_url?deviceno=$device_no&devicetype=3&accounttype=$login_acc_type&accesstoken=(null)&account=$user_name&pwd=$md5_password&isforce=1&businessplatform=1")
             then
-                Println "$error 无法登陆直播源, 请重试"
+                Println "$(eval_gettext "\$error 无法登录直播源, 请重试")"
                 continue
             fi
         else
@@ -632,7 +632,7 @@ TsMenu()
 
             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
             then
-                Println "$error 无法登陆直播源, 请重试"
+                Println "$(eval_gettext "\$error 无法登录直播源, 请重试")"
                 continue
             fi
         fi
@@ -642,7 +642,7 @@ TsMenu()
         if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$device_id" ] || [ -z "$user_name" ]
         then
             echo "$res"
-            Println "$error 登陆错误, 请重试"
+            Println "$(eval_gettext "\$error 登录错误, 请重试")"
             continue
         fi
 
@@ -669,7 +669,7 @@ TsMenu()
                 then
                     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$user_info_url?accesstoken=$access_token")
                     then
-                        Println "$error 无法获取用户信息, 请重试"
+                        Println "$(eval_gettext "\$error 无法获取用户信息, 请重试")"
                         continue
                     fi
 
@@ -677,7 +677,7 @@ TsMenu()
 
                     if [ -z "$phone_number" ] 
                     then
-                        Println "$error 无法获取用户手机号, 请重新注册"
+                        Println "$(eval_gettext "\$error 无法获取用户手机号, 请重新注册")"
                         continue
                     fi
                 fi
@@ -728,12 +728,12 @@ TsMenu()
         break
     done
 
-    Println "$info 获取频道..."
+    Println "$(eval_gettext "\$info 获取频道...")"
 
     if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$list_url?pageidx=1&pagenum=500&accesstoken=$access_token") 
     then
         echo "$res"
-        Println "$error 无法获取频道\n"
+        Println "$(eval_gettext "\$error 无法获取频道")\n"
         exit 1
     fi
 
@@ -742,12 +742,12 @@ TsMenu()
     if [ "$ret" != 0 ] 
     then
         echo "$res"
-        Println "$error 无法获取频道\n"
+        Println "$(eval_gettext "\$error 无法获取频道")\n"
         exit 1
     elif [ "$total" -eq 0 ] 
     then
         echo "$res"
-        Println "$error 没有频道\n"
+        Println "$(eval_gettext "\$error 没有频道")\n"
         exit 1
     fi
 
@@ -813,7 +813,7 @@ TsMenu()
     IFS="${delimiters[2]}" read -ra livetv_url <<< "$jq_chnl_list_livetv_url"
 
     echo
-    inquirer checkbox_input_indices "选择添加的频道" chnl_name chnl_indices
+    inquirer checkbox_input_indices "$(gettext "选择添加的频道")" chnl_name chnl_indices
 
     FFmpegInstall
 
@@ -825,7 +825,7 @@ TsMenu()
         IFS="${delimiters[3]}" read -ra rates <<< "${rate_list[chnl_index]}"
 
         echo
-        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
+        inquirer list_input "$(gettext "选择频道") ${chnl_name[chnl_index]} $(gettext "分辨率")" rates rate
 
         chnl_play_url="$play_url"
 
@@ -834,12 +834,12 @@ TsMenu()
             IFS="${delimiters[3]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
 
             echo
-            inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls chnl_play_url
+            inquirer list_input "$(gettext "选择频道") ${chnl_name[chnl_index]} $(gettext "地址")" play_urls chnl_play_url
         fi
 
         echo
         protocol_options=( http hls )
-        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 协议" protocol_options protocol
+        inquirer list_input "$(gettext "选择频道") ${chnl_name[chnl_index]} $(gettext "协议")" protocol_options protocol
 
         if [ -z "$auth_info_url" ] 
         then
@@ -847,7 +847,7 @@ TsMenu()
         else
             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_info_url?accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&verifycode=$device_id") 
             then
-                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                Println "$error $(gettext "无法验证") ${chnl_name[chnl_index]}"
                 continue
             fi
 
@@ -856,7 +856,7 @@ TsMenu()
             if [ "$ret" != 0 ] || [ -z "$auth_random_sn" ] || [ -z "$play_token" ]
             then
                 echo "$res"
-                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                Println "$error $(gettext "无法验证") ${chnl_name[chnl_index]}"
                 continue
             fi
 
@@ -866,7 +866,7 @@ TsMenu()
 
             if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_verify_url?programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&accesstoken=$access_token&verifycode=$device_id&authtoken=$authtoken") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
             then
-                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                Println "$error $(gettext "无法验证") ${chnl_name[chnl_index]}"
                 continue
             fi
 
@@ -878,19 +878,19 @@ TsMenu()
 
         if ! ParseStream
         then
-            Println "$error 无法连接 ${chnl_name[chnl_index]}"
+            Println "$error $(gettext "无法连接") ${chnl_name[chnl_index]}"
             continue
         fi
 
         echo
-        inquirer list_input_index "添加频道 ${chnl_name[chnl_index]}" yn_options yn_index
+        inquirer list_input_index "$(gettext "添加频道") ${chnl_name[chnl_index]}" yn_options yn_index
 
         if [ "$yn_index" -eq 0 ] 
         then
             stream_links=("$stream_link|$id|$user_name")
 
             echo
-            inquirer list_input_index "是否 添加/替换 现有频道直播源" ny_options ny_index
+            inquirer list_input_index "$(gettext "是否 添加/替换 现有频道直播源")" ny_options ny_index
 
             if [ "$ny_index" -eq 1 ] 
             then
@@ -905,8 +905,8 @@ TsMenu()
                     ListChannel
 
                     echo
-                    change_options=( '添加' '替换' )
-                    inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+                    change_options=( "$(gettext "添加")" "$(gettext "替换")" )
+                    inquirer list_input_index "$(eval_gettext "如何修改频道 [ \$chnl_channel_name ]")" change_options change_options_index
 
                     if [ "$change_options_index" -eq 0 ] 
                     then
@@ -915,17 +915,17 @@ TsMenu()
                         JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                     else
                         echo
-                        inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+                        inquirer list_input_index "$(gettext "选择替换的直播源")" chnl_stream_links chnl_stream_links_index
 
                         jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
                         JQ update "$CHANNELS_FILE" "${stream_links[0]}"
                     fi
 
-                    Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                    Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 修改成功 !")\n"
                 done
             else
                 echo
-                inquirer list_input_index "是否推流 flv" ny_options ny_index
+                inquirer list_input_index "$(gettext "是否推流 flv")" ny_options ny_index
 
                 if [ "$ny_index" -eq 1 ] 
                 then

@@ -1,21 +1,22 @@
 EditDefault()
 {
+    local key="$1"
     jq_path='["'"$1"'"]'
 
     if [ -n "${2:-}" ]
     then
         if ! JQ update "$IPTV_CONFIG" "$2"
         then
-            Println "$error $1 修改失败\n"
+            Println "$(eval_gettext "\$error \$key 修改失败")\n"
             return 1
         fi
     else
         if ! JQ update "$IPTV_CONFIG" "${!1}"
         then
-            Println "$error $1 修改失败\n"
+            Println "$(eval_gettext "\$error \$key 修改失败")\n"
             return 1
         fi
     fi
 
-    Println "$info $1 修改成功\n"
+    Println "$(eval_gettext "\$info \$key 修改成功")\n"
 }

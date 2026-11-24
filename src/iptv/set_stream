@@ -1,6 +1,6 @@
 SetStreamLink()
 {
-    if [ "${stream_link_parsed:-false}" = false ] 
+    if [ "${stream_link_parsed:-false}" = false ]
     then
         Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
         ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
@@ -15,8 +15,8 @@ SetStreamLink()
 
 SetIsHls()
 {
-    Println "$tip 如果直播源重定向至 .m3u8 地址, 请选择 是"
-    inquirer list_input_index "是否是 HLS 链接" ny_options ny_index
+    Println "$(eval_gettext "\$tip 如果直播源重定向至 .m3u8 地址, 请选择 是")"
+    inquirer list_input_index "$(gettext "是否是 HLS 链接")" ny_options ny_index
 
     if [ "$ny_index" -eq 0 ]
     then
@@ -28,7 +28,7 @@ SetIsHls()
 
 SetMapValidate()
 {
-    if [ -z "${1:-}" ] 
+    if [ -z "${1:-}" ]
     then
         indices_input=""
         return 0
@@ -39,10 +39,10 @@ SetMapValidate()
     for map in "${maps[@]}"
     do
         case "$map" in
-            *[!0-9]*) 
+            *[!0-9]*)
                 return 1
             ;;
-            *) 
+            *)
                 if [ "${map:0:1}" -eq 0 ] && [ "${#map}" -gt 1 ]
                 then
                     return 1
@@ -54,10 +54,10 @@ SetMapValidate()
 
 SetVideoMap()
 {
-    Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的视频流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
+    Println "$(eval_gettext "\$tip 多个流用空格分隔")"
+    inquirer text_input "$(gettext "输入使用的视频流序号")" indices_input "$i18n_blank" SetMapValidate "$(gettext "必须是大于等于0的数字")"
 
-    if [ -n "${indices_input:-}" ] 
+    if [ -n "${indices_input:-}" ]
     then
         IFS=" " read -r -a video_indices <<< "$indices_input"
     else
@@ -67,10 +67,10 @@ SetVideoMap()
 
 SetAudioMap()
 {
-    Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的音频流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
+    Println "$(eval_gettext "\$tip 多个流用空格分隔")"
+    inquirer text_input "$(gettext "输入使用的音频流序号")" indices_input "$i18n_blank" SetMapValidate "$(gettext "必须是大于等于0的数字")"
 
-    if [ -n "${indices_input:-}" ] 
+    if [ -n "${indices_input:-}" ]
     then
         IFS=" " read -r -a audio_indices <<< "$indices_input"
     else
@@ -80,10 +80,10 @@ SetAudioMap()
 
 SetSubtitleMap()
 {
-    Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的字幕流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
+    Println "$(eval_gettext "\$tip 多个流用空格分隔")"
+    inquirer text_input "$(gettext "输入使用的字幕流序号")" indices_input "$i18n_blank" SetMapValidate "$(gettext "必须是大于等于0的数字")"
 
-    if [ -n "${indices_input:-}" ] 
+    if [ -n "${indices_input:-}" ]
     then
         IFS=" " read -r -a subtitle_indices <<< "$indices_input"
     else
@@ -96,27 +96,27 @@ SetSubtitle()
     subtitle="[]"
     subtitle_default=false
 
-    while true 
+    while true
     do
-        Println "$tip 比如 简体中文"
-        inquirer text_input "新增字幕语言名称" subtitle_name "$i18n_blank"
+        Println "$(eval_gettext "\$tip 比如 简体中文")"
+        inquirer text_input "$(gettext "新增字幕语言名称")" subtitle_name "$i18n_blank"
 
-        if [ -z "$subtitle_name" ] 
+        if [ -z "$subtitle_name" ]
         then
             break
         fi
 
-        Println "$tip 比如 chi"
-        inquirer text_input "设置字幕语言标识" subtitle_language "$i18n_blank"
+        Println "$(eval_gettext "\$tip 比如 chi")"
+        inquirer text_input "$(gettext "设置字幕语言标识")" subtitle_language "$i18n_blank"
 
-        if [ "$subtitle_default" = true ] 
+        if [ "$subtitle_default" = true ]
         then
             subtitle_default=false
 
             echo
-            inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_index
+            inquirer list_input_index "$(eval_gettext "自动选择字幕 \$subtitle_name")" yn_options yn_index
 
-            if [ "$yn_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ]
             then
                 subtitle_auto_select=true
             else
@@ -124,9 +124,9 @@ SetSubtitle()
             fi
         else
             echo
-            inquirer list_input_index "默认并自动选择字幕 $subtitle_name" ny_options ny_index
+            inquirer list_input_index "$(eval_gettext "默认并自动选择字幕 \$subtitle_name")" ny_options ny_index
 
-            if [ "$ny_index" -eq 1 ] 
+            if [ "$ny_index" -eq 1 ]
             then
                 subtitle_default=true
                 subtitle_auto_select=true
@@ -134,9 +134,9 @@ SetSubtitle()
                 subtitle_default=false
 
                 echo
-                inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_index
+                inquirer list_input_index "$(eval_gettext "自动选择字幕 \$subtitle_name")" yn_options yn_index
 
-                if [ "$yn_index" -eq 0 ] 
+                if [ "$yn_index" -eq 0 ]
                 then
                     subtitle_auto_select=true
                 else
@@ -145,11 +145,11 @@ SetSubtitle()
             fi
         fi
 
-        Println "$tip 比如 1 将自动添加命令 -map 0:s:1"
+        Println "$(eval_gettext "\$tip 比如 1 将自动添加命令 -map 0:s:1")"
 
-        while true 
+        while true
         do
-            inquirer text_input "输入字幕轨道序号" subtitle_map 0
+            inquirer text_input "$(gettext "输入字幕轨道序号")" subtitle_map 0
 
             case "$subtitle_map" in
                 *[!0-9]*)
@@ -161,7 +161,7 @@ SetSubtitle()
             esac
         done
 
-        Println "$info 已添加字幕 $subtitle_name"
+        Println "$(eval_gettext "\$info 已添加字幕 \$subtitle_name")"
 
         subtitle=$(
             $JQ_FILE --arg name "$subtitle_name" --arg language "$subtitle_language" \
@@ -182,8 +182,8 @@ SetSubtitle()
 
 SetDrawtext()
 {
-    Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=yourdomain.com"
-    inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=yourdomain.com")"
+    inquirer text_input "$(gettext "输入 drawtext 水印 : ")" draw_text "${d_draw_text:-$i18n_blank}"
     if [ "$draw_text" == "omit" ]
     then
         draw_text=""
@@ -192,14 +192,14 @@ SetDrawtext()
 
 SetLive()
 {
-    if [ -z "${kind:-}" ] 
+    if [ -z "${kind:-}" ]
     then
-        Println "$tip 选择 否 则无法设置切割的分片数且无法监控"
+        Println "$(eval_gettext "\$tip 选择 否 则无法设置切割的分片数且无法监控")"
     else
-        Println "$tip 选择 否 则无法监控"
+        Println "$(eval_gettext "\$tip 选择 否 则无法监控")"
     fi
 
-    inquirer list_input_index "是否是无限时长直播源" yn_options yn_index
+    inquirer list_input_index "$(gettext "是否是无限时长直播源")" yn_options yn_index
 
     if [ "$yn_index" -eq 0 ]
     then
@@ -214,12 +214,12 @@ SetProxy()
     if [ "${stream_link_parsed:-false}" = true ] && [ -n "${_4gtv_proxy:-}" ]
     then
         proxy="$_4gtv_proxy"
-        Println "  FFmpeg 代理: ${green} $_4gtv_proxy ${normal}\n"
+        Println "  $(gettext "FFmpeg 代理"): ${green} $_4gtv_proxy ${normal}\n"
         return 0
     fi
 
-    Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555 : " proxy "${d_proxy:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg 代理, 比如 http://username:password@127.0.0.1:5555 : ")" proxy "${d_proxy:-$i18n_blank}"
 
     if [ "$proxy" == "omit" ]
     then
@@ -232,12 +232,12 @@ SetXtreamCodesProxy()
     if [ "${stream_link_parsed:-false}" = true ] && [ -n "${xtream_codes_proxy:-}" ]
     then
         xc_proxy="$xtream_codes_proxy"
-        Println "  xtream codes 代理: ${green} $xc_proxy ${normal}\n"
+        Println "  $(gettext "xtream codes 代理"): ${green} $xc_proxy ${normal}\n"
         return 0
     fi
 
-    Println "$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 xtream codes 代理: " xc_proxy "${d_xc_proxy:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 xtream codes 代理: ")" xc_proxy "${d_xc_proxy:-$i18n_blank}"
 
     if [ "$xc_proxy" == "omit" ]
     then
@@ -247,14 +247,14 @@ SetXtreamCodesProxy()
 
 SetUserAgent()
 {
-    if [ "${stream_link_parsed:-false}" = true ] 
+    if [ "${stream_link_parsed:-false}" = true ]
     then
         Println "  FFmpeg UA: ${green} ${user_agent:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
-    Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 的 user agent: " user_agent "${d_user_agent:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg 的 user agent: ")" user_agent "${d_user_agent:-$i18n_blank}"
 
     if [ "$user_agent" == "omit" ]
     then
@@ -264,14 +264,14 @@ SetUserAgent()
 
 SetHeaders()
 {
-    if [ "${stream_link_parsed:-false}" = true ] 
+    if [ "${stream_link_parsed:-false}" = true ]
     then
         Println "  FFmpeg headers: ${green} ${headers:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
-    Println "$tip 多个 header 用 \\\r\\\n 分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg headers: " headers "${d_headers:-$i18n_blank}"
+    Println "$tip $(gettext "多个 header 用") \\\r\\\n $(gettext "分隔, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg headers: ")" headers "${d_headers:-$i18n_blank}"
 
     if [ "$headers" == "omit" ]
     then
@@ -291,14 +291,14 @@ SetHeaders()
 
 SetCookies()
 {
-    if [ "${stream_link_parsed:-false}" = true ] 
+    if [ "${stream_link_parsed:-false}" = true ]
     then
         Println "  FFmpeg cookies: ${green} ${cookies:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
-    Println "$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg cookies: " cookies "${d_cookies:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg cookies: ")" cookies "${d_cookies:-$i18n_blank}"
 
     if [ "$cookies" == "omit" ]
     then
@@ -309,26 +309,26 @@ SetCookies()
 SetOutputDirName()
 {
     echo
-    while true 
+    while true
     do
-        inquirer text_input "请输入频道输出目录名称: " output_dir_name "$i18n_random"
+        inquirer text_input "$(gettext "请输入频道输出目录名称: ")" output_dir_name "$i18n_random"
 
-        if [ "$output_dir_name" == "$i18n_random" ] 
+        if [ "$output_dir_name" == "$i18n_random" ]
         then
             while :;do
                 output_dir_name=$(RandOutputDirName)
 
-                if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]] 
+                if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
                 then
-                    Println "  目录名称: ${green} $output_dir_name ${normal}\n"
+                    Println "  $(gettext "目录名称"): ${green} $output_dir_name ${normal}\n"
                     break 2
                 fi
             done
-        elif [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]  
+        elif [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
         then
             break
         else
-            Println "$error 目录已存在!\n"
+            Println "$(eval_gettext "\$error 目录已存在!")\n"
         fi
     done
 }
@@ -336,19 +336,19 @@ SetOutputDirName()
 SetPlaylistName()
 {
     echo
-    inquirer text_input "请输入 m3u8 名称(前缀) : " playlist_name "${d_playlist_name:-$i18n_random}"
+    inquirer text_input "$(gettext "请输入 m3u8 名称(前缀) : ")" playlist_name "${d_playlist_name:-$i18n_random}"
 
     if [ "$playlist_name" == "$i18n_random" ]
     then
         playlist_name=${d_playlist_name:-$(RandPlaylistName)}
-        Println "  m3u8 名称: ${green} $playlist_name ${normal}\n"
+        Println "  $(gettext "m3u8 名称"): ${green} $playlist_name ${normal}\n"
     fi
 }
 
 SetSegDirName()
 {
-    Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "${d_seg_dir_name:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入分片所在子目录名称: ")" seg_dir_name "${d_seg_dir_name:-$i18n_blank}"
 
     if [ "$seg_dir_name" == "omit" ]
     then
@@ -362,22 +362,22 @@ SetSegName()
     same_as_playlist_name=$(gettext "跟m3u8名称相同")
     d_seg_name=${d_seg_name:-$same_as_playlist_name}
     d_seg_name=${chnl_playlist_name:-$d_seg_name}
-    inquirer text_input "请输入分片名称: " seg_name "${playlist_name:-$d_seg_name}"
+    inquirer text_input "$(gettext "请输入分片名称: ")" seg_name "${playlist_name:-$d_seg_name}"
 
     if [ "$seg_name" == "$same_as_playlist_name" ]
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
         seg_name="$playlist_name"
-        Println "  分片名称: ${green} $seg_name ${normal}\n"
+        Println "  $(gettext "分片名称"): ${green} $seg_name ${normal}\n"
     fi
 }
 
 SetSegLength()
 {
-    while true 
+    while true
     do
         echo
-        inquirer text_input "请输入分片时长(单位: s): " seg_length "$d_seg_length"
+        inquirer text_input "$(gettext "请输入分片时长(单位: s): ")" seg_length "$d_seg_length"
         case "$seg_length" in
             "")
                 seg_length="$d_seg_length"
@@ -400,16 +400,16 @@ SetSegLength()
 
 SetHlsEndList()
 {
-    Println "$tip 如果添加此字段, 关闭频道会延迟一个分片时长的时间"
+    Println "$(eval_gettext "\$tip 如果添加此字段, 关闭频道会延迟一个分片时长的时间")"
 
-    if [ "$d_hls_end_list" = true ] 
+    if [ "$d_hls_end_list" = true ]
     then
-        inquirer list_input "添加 EXT-X-ENDLIST 字段" yn_options hls_end_list_yn
+        inquirer list_input "$(gettext "添加 EXT-X-ENDLIST 字段")" yn_options hls_end_list_yn
     else
-        inquirer list_input "添加 EXT-X-ENDLIST 字段" ny_options hls_end_list_yn
+        inquirer list_input "$(gettext "添加 EXT-X-ENDLIST 字段")" ny_options hls_end_list_yn
     fi
 
-    if [ "$hls_end_list_yn" == "$i18n_yes" ] 
+    if [ "$hls_end_list_yn" == "$i18n_yes" ]
     then
         hls_end_list=true
     else
@@ -419,10 +419,10 @@ SetHlsEndList()
 
 SetSegCount()
 {
-    Println "$tip FFmpeg 分割的数目是其2倍, 如果填0就是无限"
-    while true 
+    Println "$(eval_gettext "\$tip FFmpeg 分割的数目是其2倍, 如果填0就是无限")"
+    while true
     do
-        inquirer text_input "请输入m3u8文件包含的分片数目: " seg_count "$d_seg_count"
+        inquirer text_input "$(gettext "请输入m3u8文件包含的分片数目: ")" seg_count "$d_seg_count"
         case "$seg_count" in
             "")
                 seg_count="$d_seg_count"
@@ -446,38 +446,38 @@ SetSegCount()
 SetVideoCodec()
 {
     echo
-    inquirer text_input "请输入视频编码(不需要转码时输入 copy): " video_codec "$d_video_codec"
+    inquirer text_input "$(gettext "请输入视频编码(不需要转码时输入 copy): ")" video_codec "$d_video_codec"
 }
 
 SetAudioCodec()
 {
     echo
-    inquirer text_input "请输入音频编码(不需要转码时输入 copy): " audio_codec "$d_audio_codec"
+    inquirer text_input "$(gettext "请输入音频编码(不需要转码时输入 copy): ")" audio_codec "$d_audio_codec"
 }
 
 SetVideoAudioShift()
 {
-    if [ "$d_video_audio_shift_text" == "$i18n_blank" ] 
+    if [ "$d_video_audio_shift_text" == "$i18n_blank" ]
     then
-        video_audio_shift_options=( "$d_video_audio_shift_text" '设置 画面延迟' '设置 声音延迟' )
+        video_audio_shift_options=( "$d_video_audio_shift_text" "$(gettext "设置 画面延迟")" "$(gettext "设置 声音延迟")" )
     else
-        video_audio_shift_options=( "$d_video_audio_shift_text" '设置 画面延迟' '设置 声音延迟' '不设置' )
+        video_audio_shift_options=( "$d_video_audio_shift_text" "$(gettext "设置 画面延迟")" "$(gettext "设置 声音延迟")" "$(gettext "不设置")" )
     fi
 
-    while true 
+    while true
     do
         echo
-        inquirer list_input_index "画面或声音延迟" video_audio_shift_options video_audio_shift_options_index
+        inquirer list_input_index "$(gettext "画面或声音延迟")" video_audio_shift_options video_audio_shift_options_index
 
         case $video_audio_shift_options_index in
-            0) 
-                if [ "$d_video_audio_shift_text" != "$i18n_blank" ] 
+            0)
+                if [ "$d_video_audio_shift_text" != "$i18n_blank" ]
                 then
-                    if [ -n "${d_video_shift:-}" ] 
+                    if [ -n "${d_video_shift:-}" ]
                     then
                         video_shift="$d_video_shift"
                         video_audio_shift="v_$video_shift"
-                    elif [ -n "${d_audio_shift:-}" ] 
+                    elif [ -n "${d_audio_shift:-}" ]
                     then
                         audio_shift="$d_audio_shift"
                         video_audio_shift="a_$audio_shift"
@@ -488,27 +488,27 @@ SetVideoAudioShift()
                 video_audio_shift_text="$d_video_audio_shift_text"
                 break
             ;;
-            1) 
-                Println "请输入延迟时间(秒)"
-                read -p "(默认: 返回上级选项): " video_shift
-                if [ -n "$video_shift" ] 
+            1)
+                Println "$(gettext "请输入延迟时间(秒)")"
+                read -p "$(gettext "(默认: 返回上级选项): ")" video_shift
+                if [ -n "$video_shift" ]
                 then
                     video_audio_shift="v_$video_shift"
-                    video_audio_shift_text="画面延迟 $video_shift 秒"
+                    video_audio_shift_text=$(eval_gettext "画面延迟 \$video_shift 秒")
                     break
                 fi
             ;;
-            2) 
-                Println "请输入延迟时间(秒)"
-                read -p "(默认: 返回上级选项): " audio_shift
-                if [ -n "$audio_shift" ] 
+            2)
+                Println "$(gettext "请输入延迟时间(秒)")"
+                read -p "$(gettext "(默认: 返回上级选项): ")" audio_shift
+                if [ -n "$audio_shift" ]
                 then
                     video_audio_shift="a_$audio_shift"
-                    video_audio_shift_text="声音延迟 $audio_shift 秒"
+                    video_audio_shift_text=$(eval_gettext "声音延迟 \$audio_shift 秒")
                     break
                 fi
             ;;
-            3) 
+            3)
                 video_audio_shift=""
                 video_audio_shift_text="$i18n_blank"
                 break
@@ -516,16 +516,16 @@ SetVideoAudioShift()
         esac
     done
 
-    Println "  延迟: ${green} $video_audio_shift_text ${normal}\n"
+    Println "  $(gettext "延迟"): ${green} $video_audio_shift_text ${normal}\n"
 }
 
 SetQuality()
 {
-    Println "$tip 多个 crf 固定码率因子用逗号分隔, 取值每 +/- 6 会大概导致码率的减半或加倍\nx264 和 x265 取值范围为 [0,51]\nx264 的默认值是 23, 视觉无损值 18\nx265 的默认值是 28, 视觉无损值 24\nVP9 取值范围为 [0,63], 建议取值范围为 [15,35]"
-    while true 
+    Println "$tip $(gettext "多个 crf 固定码率因子用逗号分隔, 取值每 +/- 6 会大概导致码率的减半或加倍")\n$(gettext "x264 和 x265 取值范围为 [0,51]")\n$(gettext "x264 的默认值是 23, 视觉无损值 18")\n$(gettext "x265 的默认值是 28, 视觉无损值 24")\n$(gettext "VP9 取值范围为 [0,63], 建议取值范围为 [15,35]")"
+    while true
     do
-        inquirer text_input "请输入 crf 值: " quality "${d_quality:-$i18n_blank}"
-        if [ -z "$quality" ] 
+        inquirer text_input "$(gettext "请输入 crf 值: ")" quality "${d_quality:-$i18n_blank}"
+        if [ -z "$quality" ]
         then
             break
         fi
@@ -547,9 +547,9 @@ SetQuality()
 
 SetBitrate()
 {
-    Println "$tip 如果未设置 crf, 用于指定输出视频码率(ABR 或 CBR), 否则用于 VBV 的 -maxrate 和 -bufsize (capped CRF)\n多个码率(k)用逗号分隔, 比如: 800,1000,1500  可以输入 omit 省略此选项"
+    Println "$tip $(gettext "如果未设置 crf, 用于指定输出视频码率(ABR 或 CBR), 否则用于 VBV 的 -maxrate 和 -bufsize (capped CRF)")\n$(gettext "多个码率(k)用逗号分隔, 比如: 800,1000,1500  可以输入 omit 省略此选项")"
 
-    inquirer text_input "请输入码率: " bitrate "${d_bitrate:-$i18n_blank}"
+    inquirer text_input "$(gettext "请输入码率: ")" bitrate "${d_bitrate:-$i18n_blank}"
 
     if [ "$bitrate" == "omit" ]
     then
@@ -559,9 +559,9 @@ SetBitrate()
 
 SetResolution()
 {
-    Println "$tip 多个分辨率用逗号分隔, 比如: 960x540,1280x720  可以输入 omit 省略此选项"
+    Println "$(eval_gettext "\$tip 多个分辨率用逗号分隔, 比如: 960x540,1280x720  可以输入 omit 省略此选项")"
 
-    inquirer text_input "请输入分辨率: " resolution "${d_resolution:-$i18n_blank}"
+    inquirer text_input "$(gettext "请输入分辨率: ")" resolution "${d_resolution:-$i18n_blank}"
 
     if [ "$resolution" == "omit" ]
     then
@@ -571,21 +571,21 @@ SetResolution()
 
 SetConst()
 {
-    const_options=( "$i18n_blank" '限制性编码(VBV)' )
+    const_options=( "$i18n_blank" "$(gettext "限制性编码(VBV)")" )
 
-    if [ -z "${quality:-}" ] 
+    if [ -z "${quality:-}" ]
     then
-        const_options+=( '固定码率(CBR)' )
+        const_options+=( "$(gettext "固定码率(CBR)")" )
     fi
 
-    Println "$tip 限制性编码可以设定输出码率的上限"
-    inquirer list_input_index "码率控制" const_options const_options_index
+    Println "$(eval_gettext "\$tip 限制性编码可以设定输出码率的上限")"
+    inquirer list_input_index "$(gettext "码率控制")" const_options const_options_index
 
     if [ "$const_options_index" -eq 0 ]
     then
         const=false
         const_cbr=false
-    elif [ "$const_options_index" -eq 1 ] 
+    elif [ "$const_options_index" -eq 1 ]
     then
         const=true
         const_cbr=false
@@ -598,11 +598,11 @@ SetConst()
 SetEncrypt()
 {
     echo
-    if [ "$d_encrypt" = true ] 
+    if [ "$d_encrypt" = true ]
     then
-        inquirer list_input "是否加密分片: " yn_options encrypt_yn
+        inquirer list_input "$(gettext "是否加密分片: ")" yn_options encrypt_yn
     else
-        inquirer list_input "是否加密分片: " ny_options encrypt_yn
+        inquirer list_input "$(gettext "是否加密分片: ")" ny_options encrypt_yn
     fi
 
     if [ "$encrypt_yn" == "$i18n_yes" ]
@@ -610,15 +610,15 @@ SetEncrypt()
         encrypt=true
         OpensslInstall
 
-        if [[ -x $(command -v openssl) ]] 
+        if [[ -x $(command -v openssl) ]]
         then
-            Println "$tip 加密后只能通过网页浏览"
+            Println "$(eval_gettext "\$tip 加密后只能通过网页浏览")"
 
-            if [ "$d_encrypt_session" = false ] 
+            if [ "$d_encrypt_session" = false ]
             then
-                inquirer list_input "是否加密 session: " ny_options encrypt_session_text
+                inquirer list_input "$(gettext "是否加密 session: ")" ny_options encrypt_session_text
             else
-                inquirer list_input "是否加密 session: " yn_options encrypt_session_text
+                inquirer list_input "$(gettext "是否加密 session: ")" yn_options encrypt_session_text
             fi
 
             if [ "$encrypt_session_text" == "$i18n_yes" ]
@@ -628,17 +628,17 @@ SetEncrypt()
                 if [ ! -d "$NGINX_PREFIX_DEFAULT" ] && [ ! -d "$OPENRESTY_PREFIX_DEFAULT" ]
                 then
                     echo
-                    nginx_openresty_options=( 'nginx' 'openresty' '不安装' )
-                    inquirer list_input_index "选择安装 nginx 或 openresty, 耗时会很长: " nginx_openresty_options nginx_openresty_options_index
+                    nginx_openresty_options=( 'nginx' 'openresty' "$(gettext "不安装")" )
+                    inquirer list_input_index "$(gettext "选择安装 nginx 或 openresty, 耗时会很长: ")" nginx_openresty_options nginx_openresty_options_index
 
-                    if [ "$nginx_openresty_options_index" -eq 0 ] 
+                    if [ "$nginx_openresty_options_index" -eq 0 ]
                     then
                         nginx_prefix="$NGINX_PREFIX_DEFAULT"
                         nginx_name="nginx"
                         nginx_ctl="nx"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         NginxInstall
-                    elif [ "$nginx_openresty_options_index" -eq 1 ] 
+                    elif [ "$nginx_openresty_options_index" -eq 1 ]
                     then
                         nginx_prefix="$OPENRESTY_PREFIX_DEFAULT/nginx"
                         nginx_name="openresty"
@@ -651,9 +651,9 @@ SetEncrypt()
                     fi
                 fi
 
-                if [ -d "$NGINX_PREFIX_DEFAULT" ] || [ -d "$OPENRESTY_PREFIX_DEFAULT" ] 
+                if [ -d "$NGINX_PREFIX_DEFAULT" ] || [ -d "$OPENRESTY_PREFIX_DEFAULT" ]
                 then
-                    if [ -z "${nginx_name:-}" ] 
+                    if [ -z "${nginx_name:-}" ]
                     then
                         if [ -d "$NGINX_PREFIX_DEFAULT" ] && [ -d "$OPENRESTY_PREFIX_DEFAULT" ]
                         then
@@ -664,8 +664,8 @@ SetEncrypt()
                             else
                                 nginx_openresty_options=( 'nginx' 'openresty' )
                             fi
-                            inquirer list_input "选择使用 nginx 或 openresty: " nginx_openresty_options nginx_openresty_selected
-                            if [ "$nginx_openresty_selected" == "nginx" ] 
+                            inquirer list_input "$(gettext "选择使用 nginx 或 openresty: ")" nginx_openresty_options nginx_openresty_selected
+                            if [ "$nginx_openresty_selected" == "nginx" ]
                             then
                                 nginx_prefix="$NGINX_PREFIX_DEFAULT"
                                 nginx_name="nginx"
@@ -675,7 +675,7 @@ SetEncrypt()
                                 nginx_name="openresty"
                                 nginx_ctl="or"
                             fi
-                        elif [ -d "$NGINX_PREFIX_DEFAULT" ] 
+                        elif [ -d "$NGINX_PREFIX_DEFAULT" ]
                         then
                             nginx_prefix="$NGINX_PREFIX_DEFAULT"
                             nginx_name="nginx"
@@ -691,13 +691,13 @@ SetEncrypt()
                     if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]]
                     then
                         echo
-                        inquirer list_input "需安装配置 nodejs, 是否继续: " yn_options encrypt_session_text
-                        if [ "$encrypt_session_text" == "$i18n_yes" ] 
+                        inquirer list_input "$(gettext "需安装配置 nodejs, 是否继续: ")" yn_options encrypt_session_text
+                        if [ "$encrypt_session_text" == "$i18n_yes" ]
                         then
                             NodejsInstall
-                            if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
+                            if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]]
                             then
-                                if [ ! -f "$NODE_ROOT/index.js" ] 
+                                if [ ! -f "$NODE_ROOT/index.js" ]
                                 then
                                     MongodbInstall
                                     NodejsConfig
@@ -705,13 +705,13 @@ SetEncrypt()
                             else
                                 encrypt_session=false
                                 encrypt_session_text="$i18n_no"
-                                Println "$error nodejs 安装发生错误"
-                                Println "  加密 session: ${green} $encrypt_session_text ${normal}"
+                                Println "$(eval_gettext "\$error nodejs 安装发生错误")"
+                                Println "  $(gettext "加密 session"): ${green} $encrypt_session_text ${normal}"
                             fi
                         else
                             encrypt_session=false
                         fi
-                    elif [ ! -f "$NODE_ROOT/index.js" ] 
+                    elif [ ! -f "$NODE_ROOT/index.js" ]
                     then
                         MongodbInstall
                         NodejsConfig
@@ -730,28 +730,28 @@ SetEncrypt()
 SetKeyInfoName()
 {
     echo
-    inquirer text_input "请输入 keyinfo 名称: " keyinfo_name "${d_keyinfo_name:-$i18n_random}"
+    inquirer text_input "$(gettext "请输入 keyinfo 名称: ")" keyinfo_name "${d_keyinfo_name:-$i18n_random}"
     if [ "$keyinfo_name" == "$i18n_random" ]
     then
         keyinfo_name=$(RandStr)
-        Println "  keyinfo 名称: ${green} $keyinfo_name ${normal}\n"
+        Println "  $(gettext "keyinfo 名称"): ${green} $keyinfo_name ${normal}\n"
     fi
 }
 
 SetKeyName()
 {
     echo
-    inquirer text_input "请输入 keyinfo 名称: " key_name "${d_key_name:-$i18n_random}"
+    inquirer text_input "$(gettext "请输入 key 名称: ")" key_name "${d_key_name:-$i18n_random}"
     if [ "$key_name" == "$i18n_random" ]
     then
         key_name=$(RandStr)
-        Println "  key 名称: ${green} $key_name ${normal}\n"
+        Println "  $(gettext "key 名称"): ${green} $key_name ${normal}\n"
     fi
 }
 
 SetInputFlags()
 {
-    if [ -n "${stream_link:-}" ] 
+    if [ -n "${stream_link:-}" ]
     then
         if [[ $stream_link =~ \.m3u8 ]] || [ "${is_hls:-false}" = true ]
         then
@@ -767,8 +767,8 @@ SetInputFlags()
         fi
     fi
 
-    Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 额外的输入参数: " input_flags "${d_input_flags:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg 额外的输入参数: ")" input_flags "${d_input_flags:-$i18n_blank}"
 
     if [ "$input_flags" == "omit" ]
     then
@@ -778,12 +778,12 @@ SetInputFlags()
 
 SetOutputFlags()
 {
-    if [ -n "${kind:-}" ] 
+    if [ -n "${kind:-}" ]
     then
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
-    Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 额外的输出参数: " output_flags "${d_output_flags:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入 FFmpeg 额外的输出参数: ")" output_flags "${d_output_flags:-$i18n_blank}"
     if [ "$output_flags" == "omit" ]
     then
         output_flags=""
@@ -795,24 +795,24 @@ SetChannelName()
     echo
     same_as_playlist_name=$(gettext "跟m3u8名称相同")
     d_channel_name=${chnl_playlist_name:-$same_as_playlist_name}
-    inquirer text_input "请输入频道名称(可以是中文): " channel_name "${playlist_name:-$d_channel_name}"
+    inquirer text_input "$(gettext "请输入频道名称(可以是中文)"): " channel_name "${playlist_name:-$d_channel_name}"
 
     if [ "$channel_name" == "$same_as_playlist_name" ]
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
         channel_name="$playlist_name"
-        Println "  频道名称: ${green} $channel_name ${normal}\n"
+        Println "  $(gettext "频道名称"): ${green} $channel_name ${normal}\n"
     fi
 }
 
 SetSync()
 {
     echo
-    if [ "$d_sync" = true ] 
+    if [ "$d_sync" = true ]
     then
-        inquirer list_input "是否启用 sync: " yn_options sync_yn
+        inquirer list_input "$(gettext "是否启用 sync: ")" yn_options sync_yn
     else
-        inquirer list_input "是否启用 sync: " ny_options sync_yn
+        inquirer list_input "$(gettext "是否启用 sync: ")" ny_options sync_yn
     fi
 
     if [[ $sync_yn == "$i18n_yes" ]]
@@ -825,8 +825,8 @@ SetSync()
 
 SetSyncFile()
 {
-    Println "$tip 多个文件用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_file: " sync_file "${d_sync_file:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 多个文件用空格分隔, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "设置默认 sync_file: ")" sync_file "${d_sync_file:-$i18n_blank}"
 
     if [ "$sync_file" == "omit" ] || [ "$sync_file" == "$d_sync_file" ]
     then
@@ -836,8 +836,8 @@ SetSyncFile()
 
 SetSyncIndex()
 {
-    Println "$tip 多个 sync_index 用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_index: " sync_index "${d_sync_index:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 多个 sync_index 用空格分隔, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "设置默认 sync_index: ")" sync_index "${d_sync_index:-$i18n_blank}"
 
     if [ "$sync_index" == "omit" ] || [ "$sync_index" == "$d_sync_index" ]
     then
@@ -847,8 +847,8 @@ SetSyncIndex()
 
 SetSyncPairs()
 {
-    Println "$tip 多个 sync_pairs 用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_pairs: " sync_pairs "${d_sync_pairs:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 多个 sync_pairs 用空格分隔, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "设置默认 sync_pairs: ")" sync_pairs "${d_sync_pairs:-$i18n_blank}"
 
     if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "$d_sync_pairs" ]
     then
@@ -858,8 +858,8 @@ SetSyncPairs()
 
 SetScheduleFile()
 {
-    Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "设置节目表文件绝对路径: " schedule_file "${d_schedule_file:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "设置节目表文件绝对路径: ")" schedule_file "${d_schedule_file:-$i18n_blank}"
     if [ "$schedule_file" == "omit" ]
     then
         schedule_file=""
@@ -868,15 +868,15 @@ SetScheduleFile()
 
 SetFlvDelaySeconds()
 {
-    Println "设置超时多少秒自动重启频道"
-    while read -p "(默认: $d_flv_delay_seconds 秒): " flv_delay_seconds
+    Println "$(gettext "设置超时多少秒自动重启频道")"
+    while read -p "$(eval_gettext "(默认: \$d_flv_delay_seconds 秒): ")" flv_delay_seconds
     do
         case $flv_delay_seconds in
             "") flv_delay_seconds="$d_flv_delay_seconds" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$flv_delay_seconds" -gt 0 ]
                 then
                     break
@@ -890,15 +890,15 @@ SetFlvDelaySeconds()
 
 SetFlvRestartNums()
 {
-    Println "请输入尝试重启的次数"
-    while read -p "(默认: $d_flv_restart_nums次): " flv_restart_nums
+    Println "$(gettext "请输入尝试重启的次数")"
+    while read -p "$(eval_gettext "(默认: \$d_flv_restart_nums次): ")" flv_restart_nums
     do
         case $flv_restart_nums in
             "") flv_restart_nums="$d_flv_restart_nums" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$flv_restart_nums" -gt 0 ]
                 then
                     break
@@ -912,16 +912,16 @@ SetFlvRestartNums()
 
 SetHlsDelaySeconds()
 {
-    Println "设置超时多少秒自动重启频道"
-    echo -e "$tip 必须大于 分片时长*分片数目"
-    while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
+    Println "$(gettext "设置超时多少秒自动重启频道")"
+    echo -e "$(eval_gettext "\$tip 必须大于 分片时长*分片数目")"
+    while read -p "$(eval_gettext "(默认: \$d_hls_delay_seconds 秒): ")" hls_delay_seconds
     do
         case $hls_delay_seconds in
             "") hls_delay_seconds="$d_hls_delay_seconds" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$hls_delay_seconds" -gt 60 ]
                 then
                     break
@@ -935,15 +935,15 @@ SetHlsDelaySeconds()
 
 SetHlsMinBitrate()
 {
-    Println "请输入最低码率(k),低于此数值会重启频道"
-    while read -p "(默认: $d_hls_min_bitrate): " hls_min_bitrate
+    Println "$(gettext "请输入最低码率(k),低于此数值会重启频道")"
+    while read -p "$(eval_gettext "(默认: \$d_hls_min_bitrate): ")" hls_min_bitrate
     do
         case $hls_min_bitrate in
             "") hls_min_bitrate="$d_hls_min_bitrate" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$hls_min_bitrate" -gt 0 ]
                 then
                     break
@@ -957,15 +957,15 @@ SetHlsMinBitrate()
 
 SetHlsMaxSegSize()
 {
-    Println "请输入允许的最大分片"
-    while read -p "(默认: ${d_hls_max_seg_size}M): " hls_max_seg_size
+    Println "$(gettext "请输入允许的最大分片")"
+    while read -p "$(eval_gettext "(默认: \${d_hls_max_seg_size}M): ")" hls_max_seg_size
     do
         case $hls_max_seg_size in
             "") hls_max_seg_size="$d_hls_max_seg_size" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$hls_max_seg_size" -gt 0 ]
                 then
                     break
@@ -979,15 +979,15 @@ SetHlsMaxSegSize()
 
 SetHlsRestartNums()
 {
-    Println "请输入尝试重启的次数"
-    while read -p "(默认: $d_hls_restart_nums次): " hls_restart_nums
+    Println "$(gettext "请输入尝试重启的次数")"
+    while read -p "$(eval_gettext "(默认: \$d_hls_restart_nums次): ")" hls_restart_nums
     do
         case $hls_restart_nums in
             "") hls_restart_nums="$d_hls_restart_nums" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$hls_restart_nums" -gt 0 ]
                 then
                     break
@@ -1002,17 +1002,17 @@ SetHlsRestartNums()
 SetHlsKeyPeriod()
 {
     echo
-    inquirer text_input "每隔多少秒更改加密频道的 key: " hls_key_period $d_hls_key_period
+    inquirer text_input "$(gettext "每隔多少秒更改加密频道的 key: ")" hls_key_period $d_hls_key_period
 }
 
 SetAntiDDosPort()
 {
-    Println "设置封禁端口"
-    echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489"
-    while read -p "(默认: $d_anti_ddos_port_text): " anti_ddos_ports
+    Println "$(gettext "设置封禁端口")"
+    echo -e "$(eval_gettext "\$tip 多个端口用空格分隔 比如 22 80 443 12480-12489")"
+    while read -p "$(eval_gettext "(默认: \$d_anti_ddos_port_text): ")" anti_ddos_ports
     do
         anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
-        if [ -z "$anti_ddos_ports" ] 
+        if [ -z "$anti_ddos_ports" ]
         then
             Println "$error $i18n_input_correct_number\n"
             continue
@@ -1038,7 +1038,7 @@ SetAntiDDosPort()
                     break
                 ;;
                 *)
-                    if [ "$anti_ddos_port" -lt 1 ]  
+                    if [ "$anti_ddos_port" -lt 1 ]
                     then
                         error_no=2
                         break
@@ -1056,28 +1056,28 @@ SetAntiDDosPort()
                 anti_ddos_ports_range_command=""
                 for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
                 do
-                    if [[ $anti_ddos_port -eq 80 ]] 
+                    if [[ $anti_ddos_port -eq 80 ]]
                     then
                         anti_ddos_port="http"
-                    elif [[ $anti_ddos_port -eq 443 ]] 
+                    elif [[ $anti_ddos_port -eq 443 ]]
                     then
                         anti_ddos_port="https"
-                    elif [[ $anti_ddos_port -eq 22 ]] 
+                    elif [[ $anti_ddos_port -eq 22 ]]
                     then
                         anti_ddos_port="ssh"
-                    elif [[ $anti_ddos_port =~ - ]] 
+                    elif [[ $anti_ddos_port =~ - ]]
                     then
                         anti_ddos_ports_start=${anti_ddos_port%-*}
                         anti_ddos_ports_end=${anti_ddos_port#*-}
-                        if [[ anti_ddos_ports_start -le 22 && $anti_ddos_ports_end -ge 22 ]] 
+                        if [[ anti_ddos_ports_start -le 22 && $anti_ddos_ports_end -ge 22 ]]
                         then
                             [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
                             anti_ddos_ports_command="${anti_ddos_ports_command}ssh"
-                        elif [[ anti_ddos_ports_start -le 80 && $anti_ddos_ports_end -ge 80 ]] 
+                        elif [[ anti_ddos_ports_start -le 80 && $anti_ddos_ports_end -ge 80 ]]
                         then
                             [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
                             anti_ddos_ports_command="${anti_ddos_ports_command}http"
-                        elif [[ anti_ddos_ports_start -le 443 && $anti_ddos_ports_end -ge 443 ]] 
+                        elif [[ anti_ddos_ports_start -le 443 && $anti_ddos_ports_end -ge 443 ]]
                         then
                             [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
                             anti_ddos_ports_command="${anti_ddos_ports_command}https"
@@ -1092,7 +1092,7 @@ SetAntiDDosPort()
                 done
 
                 [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command='$4 ~ /^('"$anti_ddos_ports_command"')$/'
-                if [ -n "$anti_ddos_ports_range_command" ] 
+                if [ -n "$anti_ddos_ports_range_command" ]
                 then
                     anti_ddos_ports_range_command='$4 ~ /^[0-9]+$/ && ('"$anti_ddos_ports_range_command"')'
                     [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_range_command=' || ('"$anti_ddos_ports_range_command"')'
@@ -1114,14 +1114,14 @@ SetAntiDDosPort()
 SetAntiDDosSynFlood()
 {
     echo
-    if [ "$d_anti_ddos_syn_flood" = true ] 
+    if [ "$d_anti_ddos_syn_flood" = true ]
     then
-        inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
+        inquirer list_input "$(gettext "是否开启 SYN Flood attack 防御")" yn_options anti_ddos_syn_flood_yn
     else
-        inquirer list_input "是否开启 SYN Flood attack 防御" ny_options anti_ddos_syn_flood_yn
+        inquirer list_input "$(gettext "是否开启 SYN Flood attack 防御")" ny_options anti_ddos_syn_flood_yn
     fi
 
-    if [ "$anti_ddos_syn_flood_yn" == "$i18n_yes" ] 
+    if [ "$anti_ddos_syn_flood_yn" == "$i18n_yes" ]
     then
         anti_ddos_syn_flood=true
         sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
@@ -1130,15 +1130,15 @@ SetAntiDDosSynFlood()
         sysctl -w net.ipv4.tcp_max_syn_backlog=1024 > /dev/null
         #iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT --limit 1/s
 
-        Println "设置判断为 SYN Flood attack 的时间 (秒)"
-        while read -p "(默认: $d_anti_ddos_syn_flood_delay_seconds 秒): " anti_ddos_syn_flood_delay_seconds
+        Println "$(gettext "设置判断为 SYN Flood attack 的时间 (秒)")"
+        while read -p "$(eval_gettext "(默认: \$d_anti_ddos_syn_flood_delay_seconds 秒): ")" anti_ddos_syn_flood_delay_seconds
         do
             case $anti_ddos_syn_flood_delay_seconds in
                 "") anti_ddos_syn_flood_delay_seconds="$d_anti_ddos_syn_flood_delay_seconds" && break
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$anti_ddos_syn_flood_delay_seconds" -gt 0 ]
                     then
                         break
@@ -1149,15 +1149,15 @@ SetAntiDDosSynFlood()
             esac
         done
 
-        Println "设置封禁 SYN Flood attack ip 多少秒"
-        while read -p "(默认: $d_anti_ddos_syn_flood_seconds 秒): " anti_ddos_syn_flood_seconds
+        Println "$(gettext "设置封禁 SYN Flood attack ip 多少秒")"
+        while read -p "$(eval_gettext "(默认: \$d_anti_ddos_syn_flood_seconds 秒): ")" anti_ddos_syn_flood_seconds
         do
             case $anti_ddos_syn_flood_seconds in
                 "") anti_ddos_syn_flood_seconds="$d_anti_ddos_syn_flood_seconds" && break
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$anti_ddos_syn_flood_seconds" -gt 0 ]
                     then
                         break
@@ -1175,26 +1175,26 @@ SetAntiDDosSynFlood()
 SetAntiDDos()
 {
     echo
-    if [ "$d_anti_ddos" = true ] 
+    if [ "$d_anti_ddos" = true ]
     then
-        inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
+        inquirer list_input "$(gettext "是否开启 iptv 防御")" yn_options anti_ddos_yn
     else
-        inquirer list_input "是否开启 iptv 防御" ny_options anti_ddos_yn
+        inquirer list_input "$(gettext "是否开启 iptv 防御")" ny_options anti_ddos_yn
     fi
 
-    if [ "$anti_ddos_yn" == "$i18n_yes" ] 
+    if [ "$anti_ddos_yn" == "$i18n_yes" ]
     then
         anti_ddos=true
 
-        Println "设置封禁用户 ip 多少秒"
-        while read -p "(默认: $d_anti_ddos_seconds 秒): " anti_ddos_seconds
+        Println "$(gettext "设置封禁用户 ip 多少秒")"
+        while read -p "$(eval_gettext "(默认: \$d_anti_ddos_seconds 秒): ")" anti_ddos_seconds
         do
             case $anti_ddos_seconds in
                 "") anti_ddos_seconds="$d_anti_ddos_seconds" && break
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$anti_ddos_seconds" -gt 0 ]
                     then
                         break
@@ -1205,18 +1205,18 @@ SetAntiDDos()
             esac
         done
 
-        Println "设置封禁等级(1-9)"
-        echo -e "$tip 数值越低越严格, 也越容易误伤, 很多情况是网络问题导致重复请求并非 DDoS\n"
-        while read -p "(默认: $d_anti_ddos_level): " anti_ddos_level
+        Println "$(gettext "设置封禁等级(1-9)")"
+        echo -e "$(eval_gettext "\$tip 数值越低越严格, 也越容易误伤, 很多情况是网络问题导致重复请求并非 DDoS")\n"
+        while read -p "$(eval_gettext "(默认: \$d_anti_ddos_level): ")" anti_ddos_level
         do
             case $anti_ddos_level in
-                "") 
+                "")
                     anti_ddos_level="$d_anti_ddos_level"
                     break
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$anti_ddos_level" -gt 0 ] && [ "$anti_ddos_level" -lt 10 ]
                     then
                         break
@@ -1234,26 +1234,26 @@ SetAntiDDos()
 SetAntiLeech()
 {
     echo
-    if [ "$d_anti_leech" = true ] 
+    if [ "$d_anti_leech" = true ]
     then
-        inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
+        inquirer list_input "$(gettext "是否开启防盗链")" yn_options anti_leech_yn
     else
-        inquirer list_input "是否开启防盗链" ny_options anti_leech_yn
+        inquirer list_input "$(gettext "是否开启防盗链")" ny_options anti_leech_yn
     fi
 
     if [ "$anti_leech_yn" == "$i18n_yes" ]
     then
         anti_leech=true
 
-        Println "请输入每小时随机重启次数 (大于等于0)"
-        while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
+        Println "$(gettext "请输入每小时随机重启次数 (大于等于0)")"
+        while read -p "$(eval_gettext "(默认: \$d_anti_leech_restart_nums): ")" anti_leech_restart_nums
         do
             case $anti_leech_restart_nums in
                 "") anti_leech_restart_nums="$d_anti_leech_restart_nums" && break
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$anti_leech_restart_nums" -ge 0 ]
                     then
                         break
@@ -1264,11 +1264,11 @@ SetAntiLeech()
             esac
         done
 
-        if [ "$anti_leech_restart_nums" -gt 0 ] 
+        if [ "$anti_leech_restart_nums" -gt 0 ]
         then
             echo
-            inquirer list_input "是否下个小时开始随机重启" ny_options anti_leech_restart_next_hour_yn
-            if [ "$anti_leech_restart_next_hour_yn" == "$i18n_yes" ] 
+            inquirer list_input "$(gettext "是否下个小时开始随机重启")" ny_options anti_leech_restart_next_hour_yn
+            if [ "$anti_leech_restart_next_hour_yn" == "$i18n_yes" ]
             then
                 printf -v current_hour '%(%-H)T' -1
                 skip_hour=$current_hour
@@ -1277,14 +1277,14 @@ SetAntiLeech()
         fi
 
         echo
-        if [ "$d_anti_leech_restart_flv_changes" = true ] 
+        if [ "$d_anti_leech_restart_flv_changes" = true ]
         then
-            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
+            inquirer list_input "$(gettext "是否每当重启 FLV 频道更改成随机的推流和拉流地址")" yn_options anti_leech_restart_flv_changes_yn
         else
-            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" ny_options anti_leech_restart_flv_changes_yn
+            inquirer list_input "$(gettext "是否每当重启 FLV 频道更改成随机的推流和拉流地址")" ny_options anti_leech_restart_flv_changes_yn
         fi
 
-        if [ "$anti_leech_restart_flv_changes_yn" == "$i18n_yes" ] 
+        if [ "$anti_leech_restart_flv_changes_yn" == "$i18n_yes" ]
         then
             anti_leech_restart_flv_changes=true
         else
@@ -1292,14 +1292,14 @@ SetAntiLeech()
         fi
 
         echo
-        if [ "$d_anti_leech_restart_hls_changes" = true ] 
+        if [ "$d_anti_leech_restart_hls_changes" = true ]
         then
-            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
+            inquirer list_input "$(gettext "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称")" yn_options anti_leech_restart_hls_changes_yn
         else
-            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" ny_options anti_leech_restart_hls_changes_yn
+            inquirer list_input "$(gettext "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称")" ny_options anti_leech_restart_hls_changes_yn
         fi
 
-        if [ "$anti_leech_restart_hls_changes_yn" == "$i18n_yes" ] 
+        if [ "$anti_leech_restart_hls_changes_yn" == "$i18n_yes" ]
         then
             anti_leech_restart_hls_changes=true
         else
@@ -1318,16 +1318,16 @@ SetAntiLeech()
 
 SetRecheckPeriod()
 {
-    Println "设置重启频道失败后定时检查直播源(如可用即开启频道)的间隔时间(秒)"
-    echo -e "$tip 输入 0 关闭检查"
-    while read -p "(默认: $d_recheck_period_text): " recheck_period
+    Println "$(gettext "设置重启频道失败后定时检查直播源(如可用即开启频道)的间隔时间(秒)")"
+    echo -e "$(eval_gettext "\$tip 输入 0 关闭检查")"
+    while read -p "$(eval_gettext "(默认: \$d_recheck_period_text): ")" recheck_period
     do
         case $recheck_period in
             "") recheck_period="$d_recheck_period" && break
             ;;
             *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
-            *) 
+            *)
                 if [ "$recheck_period" -ge 0 ]
                 then
                     break
@@ -1342,8 +1342,8 @@ SetRecheckPeriod()
 SetFlvH265()
 {
     echo
-    inquirer list_input_index "是否推流 h265" ny_options ny_index
-    if [ "$ny_index" -eq 0 ] 
+    inquirer list_input_index "$(gettext "是否推流 h265")" ny_options ny_index
+    if [ "$ny_index" -eq 0 ]
     then
         flv_h265=false
     else
@@ -1354,15 +1354,15 @@ SetFlvH265()
         if [ "${FFMPEG_HAS_ENHANCED_FLV_HEVC:-false}" = false ] && [[ ! -x $(command -v ffmpeg_c) ]]
         then
             echo
-            ffmpeg_c_options=( '快速安装' '编译 FFmpeg (耗时非常非常久)' )
-            inquirer list_input_index "选择 FFmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
-            if [ "$ffmpeg_c_options_index" -eq 0 ] 
+            ffmpeg_c_options=( "$(gettext "快速安装")" "$(gettext "编译 FFmpeg (耗时非常非常久)")" )
+            inquirer list_input_index "$(gettext "选择 FFmpeg (h265版本) 安装方式")" ffmpeg_c_options ffmpeg_c_options_index
+            if [ "$ffmpeg_c_options_index" -eq 0 ]
             then
                 if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o "$AIOS_PREFIX"/bin/ffmpeg_c
                 then
                     chmod +x "$AIOS_PREFIX"/bin/ffmpeg_c
                 else
-                    Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
+                    Println "$(eval_gettext "\$error 暂时无法连接服务器, 请稍后再试 !")\n"
                     exit 1
                 fi
             else
@@ -1374,39 +1374,39 @@ SetFlvH265()
 
 SetFlvPushLink()
 {
-    Println "$tip 比如 rtmp://127.0.0.1/flv/xxx , 如指向本机请确保已经安装 nginx 或 openresty"
+    Println "$(eval_gettext "\$tip 比如 rtmp://127.0.0.1/flv/xxx , 如指向本机请确保已经安装 nginx 或 openresty")"
     while true
     do
-        inquirer text_input "请输入推流地址: " flv_push_link "本地随机地址"
-        if [ "$flv_push_link" == "本地随机地址" ]
+        inquirer text_input "$(gettext "请输入推流地址: ")" flv_push_link "$(gettext "本地随机地址")"
+        if [ "$flv_push_link" == "$(gettext "本地随机地址")" ]
         then
             flv_push_link="rtmp://127.0.0.1/flv/$(RandStr)"
-            until [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]] 
+            until [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
             do
                 flv_push_link=$(RandStr)
             done
-            Println "  推流地址: ${green} $flv_push_link ${normal}\n"
+            Println "  $(gettext "推流地址"): ${green} $flv_push_link ${normal}\n"
             break
         elif [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
         then
             break
         else
-            Println "$error 推流地址已存在!请重新输入\n"
+            Println "$(eval_gettext "\$error 推流地址已存在!请重新输入")\n"
         fi
     done
 }
 
 SetFlvPullLink()
 {
-    if [ -n "${flv_push_link:-}" ] 
+    if [ -n "${flv_push_link:-}" ]
     then
         d_flv_pull_link="http://127.0.0.1/flv?app=flv&stream=${flv_push_link##*/}"
-    elif [ -n "${chnl_flv_push_link:-}" ] 
+    elif [ -n "${chnl_flv_push_link:-}" ]
     then
         d_flv_pull_link="http://127.0.0.1/flv?app=flv&stream=${chnl_flv_push_link##*/}"
     fi
-    Println "$tip 比如 http://domain.com/flv?app=flv&stream=xxx 监控会验证此链接来确定是否重启频道, 如果不确定可以先留空, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入拉流(播放)地址: " flv_pull_link "${d_flv_pull_link:-$i18n_blank}"
+    Println "$(eval_gettext "\$tip 比如 http://domain.com/flv?app=flv&stream=xxx 监控会验证此链接来确定是否重启频道, 如果不确定可以先留空, 可以输入 omit 省略此选项")"
+    inquirer text_input "$(gettext "请输入拉流(播放)地址: ")" flv_pull_link "${d_flv_pull_link:-$i18n_blank}"
     if [ "$flv_pull_link" == "omit" ]
     then
         flv_pull_link=""

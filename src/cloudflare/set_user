@@ -1,6 +1,6 @@
 CloudflareSetUserEmail()
 {
-    Println "请输入用户邮箱"
+    Println "$(gettext "请输入用户邮箱")"
     while read -p "$i18n_default_cancel" cf_user_email 
     do
         [ -z "$cf_user_email" ] && Println "$i18n_canceled...\n" && exit 1
@@ -8,39 +8,39 @@ CloudflareSetUserEmail()
         then
             break
         else
-            Println "$error 邮箱格式错误, 请重新输入\n"
+            Println "$(eval_gettext "\$error 邮箱格式错误, 请重新输入")\n"
         fi
     done
-    Println "  用户邮箱: ${green} $cf_user_email ${normal}\n"
+    Println "$(eval_gettext "  用户邮箱: \${green} \$cf_user_email \${normal}")\n"
 }
 
 CloudflareSetUserPass()
 {
-    Println "输入用户密码"
-    while read -p "(默认: 随机): " cf_user_pass 
+    Println "$(gettext "输入用户密码")"
+    while read -p "$(gettext "(默认: 随机): ")" cf_user_pass 
     do
         [ -z "$cf_user_pass" ] && cf_user_pass=$(RandStr)
         if [[ ${#cf_user_pass} -ge 8 ]] 
         then
             break
         else
-            Println "$error 账号密码至少 8 位\n"
+            Println "$(eval_gettext "\$error 账号密码至少 8 位")\n"
         fi
     done
-    Println "  用户密码: ${green} $cf_user_pass ${normal}\n"
+    Println "$(eval_gettext "  用户密码: \${green} \$cf_user_pass \${normal}")\n"
 }
 
 CloudflareSetUserToken()
 {
-    Println "$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限"
-    inquirer text_input "请输入用户 Token: " cf_user_token "$i18n_blank"
+    Println "$(eval_gettext "\$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限")"
+    inquirer text_input "$(gettext "请输入用户 Token"): " cf_user_token "$i18n_blank"
     if [ -n "$cf_user_token" ] 
     then
         if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
             -H "Authorization: Bearer $cf_user_token" \
             -H "Content-Type: application/json" | $JQ_FILE -r '.success') = false ]]
         then
-            Println "$error Token 验证失败\n"
+            Println "$(eval_gettext "\$error Token 验证失败")\n"
             exit 1
         fi
     fi
@@ -49,5 +49,5 @@ CloudflareSetUserToken()
 CloudflareSetUserKey()
 {
     echo
-    inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "$i18n_blank"
+    inquirer text_input "$(gettext "请输入用户 Global API KEY: ")" cf_user_api_key "$i18n_blank"
 }

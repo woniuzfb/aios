@@ -1,15 +1,15 @@
 XtreamCodesAddMac()
 {
-    echo && read -p "请输入服务器地址: " server
+    echo && read -p "$(gettext "输入服务器地址"): " server
     [ -z "$server" ] && Println "$i18n_canceled...\n" && exit 1
 
     domain=${server#*http://}
     domain=${domain%%/*}
     ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
 
-    [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
+    [ -z "${ip:-}" ] && Println "$(eval_gettext "\$error 无法解析域名 !")\n" && exit 1
 
-    echo && read -p "请输入 mac 地址(多个地址空格分隔): " mac_address
+    echo && read -p "$(gettext "请输入 mac 地址(多个地址空格分隔): ")" mac_address
     [ -z "$mac_address" ] && Println "$i18n_canceled...\n" && exit 1
 
     IFS=" " read -ra macs <<< "$mac_address"
@@ -19,7 +19,7 @@ XtreamCodesAddMac()
     if [ -n "${d_xc_proxy:-}" ] 
     then
         echo
-        inquirer list_input "是否使用代理 $d_xc_proxy 验证: " yn_options use_proxy_yn
+        inquirer list_input "$(eval_gettext "是否使用代理 \$d_xc_proxy 验证: ")" yn_options use_proxy_yn
         if [ "$use_proxy_yn" == "$i18n_yes" ]
         then
             server="${d_xc_proxy%\/}/http://$domain"
@@ -35,7 +35,7 @@ XtreamCodesAddMac()
     profile_url="$server/portal.php?type=stb&action=get_profile"
     account_info_url="$server/portal.php?type=account_info&action=get_main_info"
 
-    Println "$info 验证中..."
+    Println "$(eval_gettext "\$info 验证中...")"
     add_mac_success=false
 
     for mac_address in "${macs[@]}"

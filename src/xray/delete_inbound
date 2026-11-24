@@ -1,8 +1,8 @@
 XrayDeleteInbound()
 {
-    ProxySelectBound "$X_CONFIG" inbounds "选择要删除的入站" || return 1
+    ProxySelectBound "$X_CONFIG" inbounds "$(gettext "选择要删除的入站")" || return 1
     local target_tag="${inbounds_tag[selected_bound_index]}"
     ProxyDeleteBound "$X_CONFIG" inbounds "$selected_bound_index"
     ProxyRestartIfActive xray
-    Println "$info 已删除入站 ${green}${target_tag}${normal}\n"
+    Println "$(eval_gettext "\$info 已删除入站 \${green}\${target_tag}\${normal}")\n"
 }

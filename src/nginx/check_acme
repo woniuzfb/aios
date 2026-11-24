@@ -13,7 +13,7 @@ AcmeCheck()
         bash acme.sh --install
     else
         echo
-        inquirer list_input_index "更新 acme.sh" ny_options ny_index
+        inquirer list_input_index "$(gettext "更新 acme.sh")" ny_options ny_index
 
         if [ "$ny_index" -eq 1 ] 
         then
@@ -21,9 +21,9 @@ AcmeCheck()
         fi
     fi
 
-    Println "$tip zerossl 不支持 tls-alpn-01"
+    Println "$(eval_gettext "\$tip zerossl 不支持 tls-alpn-01")"
     ca_options=( letsencrypt zerossl )
-    inquirer list_input "选择 CA" ca_options ca_server
+    inquirer list_input "$(gettext "选择 CA")" ca_options ca_server
 
     if [ "$ca_server" == "zerossl" ] 
     then
@@ -37,8 +37,8 @@ AcmeCheck()
 
         if [ -n "${CA_EAB_KEY_ID:-}" ] && [ -n "${CA_EAB_HMAC_KEY:-}" ]
         then
-            Println "$tip 请确保已有账号的 EAB 认证信息未过期, 否则请重新设置"
-            inquirer list_input "是否重新设置 zerossl 账号" ny_options yn_option
+            Println "$(eval_gettext "\$tip 请确保已有账号的 EAB 认证信息未过期, 否则请重新设置")"
+            inquirer list_input "$(gettext "是否重新设置 zerossl 账号")" ny_options yn_option
             if [ "$yn_option" == "$i18n_no" ] 
             then
                 return 0
@@ -46,33 +46,33 @@ AcmeCheck()
         fi
 
         echo
-        zerossl_options=( '注册新账号' '输入已有账号的 EAB 认证信息' )
-        inquirer list_input_index "未发现 zerossl 账号" zerossl_options zerossl_options_index
+        zerossl_options=( "$(gettext "注册新账号")" "$(gettext "输入已有账号的 EAB 认证信息")" )
+        inquirer list_input_index "$(gettext "未发现 zerossl 账号")" zerossl_options zerossl_options_index
 
         if [ "$zerossl_options_index" -eq 0 ] 
         then
             echo
-            ExitOnText "输入邮箱: " zerossl_email
+            ExitOnText "$(gettext "输入邮箱: ")" zerossl_email
 
             if ! ~/.acme.sh/acme.sh --register-account -m "$zerossl_email" --server zerossl 
             then
-                Println "$error 注册账号失败, 请稍后再试或前往官网注册 https://app.zerossl.com/signup?fpr=iptv-sh \n"
+                Println "$(eval_gettext "\$error 注册账号失败, 请稍后再试或前往官网注册 https://app.zerossl.com/signup?fpr=iptv-sh ")\n"
                 exit 1
             fi
         else
-            Println "$tip 可以在 https://app.zerossl.com/developer?fpr=iptv-sh 页面获取"
-            ExitOnText "输入 EAB KID: " zerossl_eab_kid
+            Println "$(eval_gettext "\$tip 可以在 https://app.zerossl.com/developer?fpr=iptv-sh 页面获取")"
+            ExitOnText "$(gettext "输入 EAB KID: ")" zerossl_eab_kid
 
             echo
-            ExitOnText "输入 EAB HMAC Key: " zerossl_eab_hmac_key
+            ExitOnText "$(gettext "输入 EAB HMAC Key: ")" zerossl_eab_hmac_key
 
             if ! ~/.acme.sh/acme.sh --register-account --server zerossl --eab-kid "$zerossl_eab_kid" --eab-hmac-key "$zerossl_eab_hmac_key" 
             then
-                Println "$error 注册账号失败, 请确保输入正确\n"
+                Println "$(eval_gettext "\$error 注册账号失败, 请确保输入正确")\n"
                 exit 1
             fi
         fi
 
-        Println "$info 账号注册成功\n"
+        Println "$(eval_gettext "\$info 账号注册成功")\n"
     fi
 }

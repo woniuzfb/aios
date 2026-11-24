@@ -2,7 +2,7 @@ VipListHosts()
 {
     if [ ! -s "$VIP_FILE" ] 
     then
-        Println "$error 请先添加 VIP 服务器\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加 VIP 服务器")\n" && exit 1
     fi
 
     VipGetHosts
@@ -11,6 +11,6 @@ VipListHosts()
     then
         Println "$vip_hosts_list"
     else
-        Println "$error 请先添加 VIP 服务器\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加 VIP 服务器")\n" && exit 1
     fi
 }

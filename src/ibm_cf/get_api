@@ -11,7 +11,7 @@ IbmGetApi()
 
     if [ -z "${ibm_api:-}" ] 
     then
-        Println "$error 无法获取 ibmcloud api ?\n"
+        Println "$(eval_gettext "\$error 无法获取 ibmcloud api ?")\n"
         exit 1
     fi
 }

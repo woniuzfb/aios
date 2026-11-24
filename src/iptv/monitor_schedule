@@ -192,10 +192,10 @@ MonitorProcessSchedules()
                         MonitorScheduleExpireEntry
                         MonitorScheduleDetachHls
 
-                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} $(gettext "计划到期关闭")"
                         GetChannel
                         StopChannel
-                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} $(gettext "计划到期关闭成功")"
                     else
                         if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ]
                         then
@@ -237,10 +237,10 @@ MonitorProcessSchedules()
                 then
                     if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ]
                     then
-                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} $(gettext "计划到期关闭")"
                         MonitorScheduleExpireEntry
                         MonitorScheduleDetachHls
-                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
+                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} $(gettext "计划到期关闭成功")"
                     elif [ "${chnl_schedules_start_time[chnl_schedules_index]}" -le "$now" ]
                     then
                         if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ]
@@ -396,6 +396,6 @@ MonitorCalcAntiLeechSlots()
             minutes+=("$rand_minute")
         done
 
-        MonitorLog "计划重启时间 ${minutes[*]}"
+        MonitorLog "$(gettext "计划重启时间") ${minutes[*]}"
     fi
 }

@@ -1,2 +1,2 @@
-[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+[ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
 RunEditor "$IPTV_CONFIG" && exit 0

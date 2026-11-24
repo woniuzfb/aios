@@ -23,5 +23,5 @@ CloudflareAddUser()
 
     jq_path='["users"]'
     JQ add "$CF_CONFIG" "[$new_user]"
-    Println "$info 用户添加成功\n"
+    Println "$(eval_gettext "\$info 用户添加成功")\n"
 }

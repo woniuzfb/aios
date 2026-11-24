@@ -11,7 +11,7 @@ XtreamCodesListChnls()
             XtreamCodesList mac
         fi
 
-        Println "请输入服务器的序号"
+        Println "$(gettext "请输入服务器的序号")"
         while read -p "$i18n_default_cancel" server_num
         do
             case $server_num in
@@ -44,8 +44,8 @@ XtreamCodesListChnls()
             done
             Println "$domains_list"
 
-            Println "请选择域名"
-            while read -p "(默认: 回到上级): " domains_num
+            Println "$(gettext "选择域名")"
+            while read -p "$(gettext "(默认: 回到上级): ")" domains_num
             do
                 case $domains_num in
                     ""|a) continue 2
@@ -83,7 +83,7 @@ XtreamCodesListChnls()
         macs_count=${#macs[@]}
         if [ "$macs_count" -gt 1 ] 
         then
-            macs_list="mac 地址: \n\n"
+            macs_list="$(gettext "mac 地址"): \n\n"
             for((i=0;i<macs_count;i++));
             do
                 using=""
@@ -91,7 +91,7 @@ XtreamCodesListChnls()
                 do
                     if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
                     then
-                        using="${red}[使用中]${normal}"
+                        using="${red}[$(gettext "使用中")]${normal}"
                         break
                     fi
                 done
@@ -99,8 +99,8 @@ XtreamCodesListChnls()
             done
             Println "$macs_list"
 
-            Println "请选择 mac"
-            while read -p "(默认: 回到上级): " macs_num
+            Println "$(gettext "请选择 mac")"
+            while read -p "$(gettext "(默认: 回到上级): ")" macs_num
             do
                 case $macs_num in
                     ""|a) continue 2
@@ -115,7 +115,7 @@ XtreamCodesListChnls()
                             do
                                 if [ "$xc_chnl_mac" == "$domain/$mac_address" ] 
                                 then
-                                    Println "$error 此账号已经在使用!\n"
+                                    Println "$(eval_gettext "\$error 此账号已经在使用!")\n"
                                     continue 2
                                 fi
                             done
@@ -138,7 +138,7 @@ XtreamCodesListChnls()
         if [ -n "${d_xc_proxy:-}" ] 
         then
             echo
-            inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
+            inquirer list_input "$(eval_gettext "是否使用代理 \$d_xc_proxy: ")" yn_options use_proxy_yn
             if [ "$use_proxy_yn" == "$i18n_yes" ]
             then
                 server="${d_xc_proxy%\/}/http://$domain"
@@ -189,7 +189,7 @@ XtreamCodesListChnls()
                                 continue 2
                             fi
                         done
-                        Println "$info 测试 $mac\n"
+                        Println "$(eval_gettext "\$info 测试 \$mac")\n"
                         mac_address="$mac"
                         continue 2
                     fi
@@ -239,7 +239,7 @@ XtreamCodesListChnls()
                                 continue 2
                             fi
                         done
-                        Println "$info 测试 $mac\n"
+                        Println "$(eval_gettext "\$info 测试 \$mac")\n"
                         mac_address="$mac"
                         continue 2
                     fi
@@ -269,15 +269,15 @@ XtreamCodesListChnls()
 
                 while true 
                 do
-                    Println "$genres_list\n\n${green}账号到期时间:${normal} $exp_date\n"
+                    Println "$genres_list\n\n${green}$(gettext "账号到期时间"):${normal} $exp_date\n"
 
                     if [ "${return_err:-0}" -eq 1 ] 
                     then
                         return_err=0
-                        Println "$error 返回错误, 请重试"
+                        Println "$(eval_gettext "\$error 返回错误, 请重试")"
                     fi
 
-                    Println "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址"
+                    Println "$(gettext "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址")"
                     while read -p "$i18n_default_cancel" genres_num 
                     do
                         case "$genres_num" in
@@ -308,12 +308,12 @@ XtreamCodesListChnls()
                                                 continue 2
                                             fi
                                         done
-                                        Println "$info 测试 $mac\n"
+                                        Println "$(eval_gettext "\$info 测试 \$mac")\n"
                                         mac_address="$mac"
                                         continue 4
                                     fi
                                 done
-                                Println "$error 没有剩余 mac 地址\n"
+                                Println "$(eval_gettext "\$error 没有剩余 mac 地址")\n"
                                 exit 1
                             ;;
                             *[!0-9]*)
@@ -351,7 +351,7 @@ XtreamCodesListChnls()
 
                     if [ "$total_items" == null ] || [ "${total_items:-0}" -eq 0 ] 
                     then
-                        Println "$error 此分类没有频道!\n"
+                        Println "$(eval_gettext "\$error 此分类没有频道!")\n"
                         continue
                     fi
 
@@ -408,24 +408,24 @@ XtreamCodesListChnls()
                         done < <($JQ_FILE '.js.data[] | [.id,.cmd,.name] | join("^")' <<< "$ordered_list_page")
 
                         Println "$xc_chnls_list"
-                        echo -e "$tip 输入 a 返回上级页面"
-                        echo -e "$tip 输入 s 频道名称 搜索频道"
-                        echo -e "$tip 输入 p 页数 跳转页面"
+                        echo -e "$(eval_gettext "\$tip 输入 a 返回上级页面")"
+                        echo -e "$(eval_gettext "\$tip 输入 s 频道名称 搜索频道")"
+                        echo -e "$(eval_gettext "\$tip 输入 p 页数 跳转页面")"
                         if [ "$pages" -gt 1 ] 
                         then
-                            Println "当前第 $page 页, 共 $pages 页"
+                            Println "$(eval_gettext "当前第 \$page 页, 共 \$pages 页")"
                             if [ "$page" -eq 1 ] 
                             then
-                                echo -e "$tip 输入 x 转到下一页"
+                                echo -e "$(eval_gettext "\$tip 输入 x 转到下一页")"
                             elif [ "$page" -eq "$pages" ] 
                             then
-                                echo -e "$tip 输入 z 转到上一页"
+                                echo -e "$(eval_gettext "\$tip 输入 z 转到上一页")"
                             else
-                                echo -e "$tip 输入 z 转到上一页, 输入 x 转到下一页"
+                                echo -e "$(eval_gettext "\$tip 输入 z 转到上一页, 输入 x 转到下一页")"
                             fi
                         fi
 
-                        echo && while read -p "输入频道序号: " xc_chnls_num 
+                        echo && while read -p "$(gettext "输入频道序号: ")" xc_chnls_num 
                         do
                             if [[ $xc_chnls_num =~ ^s\ * ]] 
                             then
@@ -433,16 +433,16 @@ XtreamCodesListChnls()
                                 Trim search_phrase
                                 if [ -z "$search_phrase" ] 
                                 then
-                                    Println "$error 搜索内容不能为空\n"
+                                    Println "$(eval_gettext "\$error 搜索内容不能为空")\n"
                                 else
                                     SearchXtreamCodesChnls
                                 fi
 
                                 if [ -n "$search_result" ] 
                                 then
-                                    Println "搜索结果:\n\n$search_result"
+                                    Println "$(gettext "搜索结果"):\n\n$search_result"
                                 else
-                                    Println "$error 没有搜索结果\n"
+                                    Println "$(eval_gettext "\$error 没有搜索结果")\n"
                                 fi
                                 continue
                             elif [[ $xc_chnls_num =~ ^p\ [0-9]+ ]] 
@@ -452,7 +452,7 @@ XtreamCodesListChnls()
                                     page=${xc_chnls_num#* }
                                     continue 2
                                 else
-                                    Println "$error 页数错误\n"
+                                    Println "$(eval_gettext "\$error 页数错误")\n"
                                     continue
                                 fi
                             fi
@@ -466,7 +466,7 @@ XtreamCodesListChnls()
                                         page=$((page-1))
                                         continue 2
                                     else
-                                        Println "$error 没有上一页\n"
+                                        Println "$(eval_gettext "\$error 没有上一页")\n"
                                     fi
                                 ;;
                                 x)
@@ -475,7 +475,7 @@ XtreamCodesListChnls()
                                         page=$((page+1))
                                         continue 2
                                     else
-                                        Println "$error 没有下一页\n"
+                                        Println "$(eval_gettext "\$error 没有下一页")\n"
                                     fi
                                 ;;
                                 ""|*[!0-9]*)
@@ -510,7 +510,7 @@ XtreamCodesListChnls()
                             then
                                 stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                             else
-                                Println "$error 返回 cmd: ${cmd:-无} 错误, 请重试"
+                                Println "$error $(gettext "返回") cmd: ${cmd:-$(gettext "无")} $(gettext "错误, 请重试")"
                                 continue
                             fi
                             stream_link=${stream_link// /}
@@ -524,12 +524,12 @@ XtreamCodesListChnls()
                         printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
                         echo
-                        inquirer list_input_index "截图" ny_options ny_index
+                        inquirer list_input_index "$(gettext "截图")" ny_options ny_index
 
                         if [[ $ny_index -eq 1 ]] 
                         then
-                            Println "$tip 格式如 HH:MM:SS"
-                            inquirer text_input "输入截图位置" ss 00:00:03
+                            Println "$(eval_gettext "\$tip 格式如 HH:MM:SS")"
+                            inquirer text_input "$(gettext "输入截图位置")" ss 00:00:03
 
                             if TMP_FILE=$(mktemp -q) 
                             then
@@ -564,7 +564,7 @@ XtreamCodesListChnls()
 
                         if [ "$EXIT_STATUS" -ne 0 ] && [ "$use_proxy_yn" == "$i18n_yes" ]
                         then
-                            Println "$info 尝试直连 ..."
+                            Println "$(eval_gettext "\$info 尝试直连 ...")"
                             # curl -k -s -o /dev/null -w '%{redirect_url}'
                             IFS=" " read -r stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                                 -H "User-Agent: $user_agent" \
@@ -573,7 +573,7 @@ XtreamCodesListChnls()
                             if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                             then
                                 Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '$(StripSuffix "$headers" 4)' --cookie '$cookies'"
-                                Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
+                                Println "$error $(gettext "返回错误")[ stream_link: ${stream_link:-$(gettext "无")} ], $(gettext "请重试")"
                                 continue
                             fi
 
@@ -616,7 +616,7 @@ XtreamCodesListChnls()
                         if [ "$EXIT_STATUS" -eq 0 ]
                         then
                             echo
-                            inquirer list_input "是否添加此频道" ny_options add_channel_yn
+                            inquirer list_input "$(gettext "是否添加此频道")" ny_options add_channel_yn
                             if [ "$add_channel_yn" == "$i18n_yes" ]
                             then
                                 if [ "$use_proxy_yn" == "$i18n_yes" ] 
@@ -634,7 +634,7 @@ XtreamCodesListChnls()
                                 stream_links=("$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address")
 
                                 echo
-                                inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+                                inquirer list_input "$(gettext "是否 添加/替换 现有频道直播源")" ny_options add_channel_yn
 
                                 if [ "$add_channel_yn" == "$i18n_yes" ]
                                 then
@@ -649,8 +649,8 @@ XtreamCodesListChnls()
                                         ListChannel
 
                                         echo
-                                        change_options=( '添加' '替换' )
-                                        inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+                                        change_options=( "$(gettext "添加")" "$(gettext "替换")" )
+                                        inquirer list_input_index "$(eval_gettext "如何修改频道 [ \$chnl_channel_name ]")" change_options change_options_index
 
                                         if [ "$change_options_index" -eq 0 ] 
                                         then
@@ -659,17 +659,17 @@ XtreamCodesListChnls()
                                             JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                                         else
                                             echo
-                                            inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+                                            inquirer list_input_index "$(gettext "选择替换的直播源")" chnl_stream_links chnl_stream_links_index
 
                                             jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
                                             JQ update "$CHANNELS_FILE" "${stream_links[0]}"
                                         fi
 
-                                        Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                                        Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 修改成功 !")\n"
                                     done
                                 else
                                     echo
-                                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                                    inquirer list_input "$(gettext "是否推流 flv")" ny_options add_channel_flv_yn
 
                                     if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                                     then
@@ -688,7 +688,7 @@ XtreamCodesListChnls()
                                 continue
                             fi
                         else
-                            Println "$error 频道不可用或账号权限不够\n"
+                            Println "$(eval_gettext "\$error 频道不可用或账号权限不够")\n"
                             continue
                         fi
                         break
@@ -696,7 +696,7 @@ XtreamCodesListChnls()
                     break
                 done
             else
-                Println "$error $mac_address 错误, 找不到分类! 账号到期时间: $exp_date\n"
+                Println "$(eval_gettext "\$error \$mac_address 错误, 找不到分类! 账号到期时间: \$exp_date")\n"
 
                 mac_addresses_failed+=("$mac_address")
 
@@ -718,7 +718,7 @@ XtreamCodesListChnls()
                                 continue 2
                             fi
                         done
-                        Println "$info 测试 $mac\n"
+                        Println "$(eval_gettext "\$info 测试 \$mac")\n"
                         mac_address="$mac"
                         continue 2
                     fi

@@ -1,6 +1,6 @@
 V2raySelectAccount()
 {
-    echo "选择账号"
+    echo "$(gettext "选择账号")"
     while read -p "$i18n_default_cancel" account_num
     do
         case "$account_num" in

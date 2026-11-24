@@ -1,6 +1,6 @@
 V2raySelectOutbound()
 {
-    echo -e "选择出站"
+    echo -e "$(gettext "选择出站")"
     while read -p "$i18n_default_cancel" outbound_num
     do
         case "$outbound_num" in

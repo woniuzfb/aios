@@ -9,12 +9,12 @@ CloudflareAddWorker()
     cd "$CF_WORKERS_ROOT"
 
     Println "
-  ${green}1.${normal} stream proxy (反向代理)
+  ${green}1.${normal} $(gettext "stream proxy (反向代理)")
   ${green}2.${normal} xtream codes proxy
-  ${green}3.${normal} 自定义 worker
+  ${green}3.${normal} $(gettext "自定义 worker")
 
     "
-    while read -p "选择 worker: " add_cf_worker_num 
+    while read -p "$(gettext "选择 worker"): " add_cf_worker_num 
     do
         case $add_cf_worker_num in
             1) 
@@ -86,5 +86,5 @@ CloudflareAddWorker()
 
     jq_path='["workers"]'
     JQ add "$CF_CONFIG" "[$new_worker]"
-    Println "$info worker: $cf_worker_name 添加成功\n"
+    Println "$(eval_gettext "\$info worker: \$cf_worker_name 添加成功")\n"
 }

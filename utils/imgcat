@@ -38,5 +38,5 @@ ImgcatInstall()
     kill $progress_pid 2> /dev/null || true
     wait $progress_pid 2> /dev/null || true
     trap - EXIT
-    echo -n "...100%" && Println "\n$info imgcat 安装完成"
+    echo -n "...100%" && Println "\n$(eval_gettext "\$info imgcat 安装完成")"
 }

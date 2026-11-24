@@ -12,7 +12,7 @@ CheckIfXtreamCodes()
         do
             if [ "$xc_domain" == "$chnl_domain" ]
             then
-                Println "$info 频道 [ $chnl_channel_name ] 检测账号中..."
+                Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 检测账号中...")"
                 XtreamCodesGetChnls
                 for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
@@ -34,7 +34,7 @@ CheckIfXtreamCodes()
 
             if [ "$try_success" -eq 0 ]
             then
-                Println "$error 没有可用账号"
+                Println "$(eval_gettext "\$error 没有可用账号")"
             fi
         else
             GetDefault
@@ -66,7 +66,7 @@ CheckIfXtreamCodes()
 
                 if [ "$try_success" -eq 0 ]
                 then
-                    Println "$error 没有可用账号"
+                    Println "$(eval_gettext "\$error 没有可用账号")"
                 fi
             else
                 local cl_rc=0
@@ -77,13 +77,13 @@ CheckIfXtreamCodes()
                     Println "$error $chnl_domain $chnl_mac $chnl_xc_proxy $chnl_stream_link\n" && exit 1
                 elif [ "$cl_rc" -eq 2 ]
                 then
-                    Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
+                    Println "$(eval_gettext "\$error \$chnl_domain 返回 cmd"): ${cmd:-$(gettext "无")} $chnl_domain $chnl_mac\n" && exit 1
                 fi
 
                 chnl_stream_links[0]="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
 
-                Println "$info 跳过检测频道 [ $chnl_channel_name ] 直接开启 ? [y/N]"
-                read -t 3 -p "(默认: 3 秒后自动检测): " skip_check_yn || true && echo
+                Println "$(eval_gettext "\$info 跳过检测频道 [ \$chnl_channel_name ] 直接开启 ? [y/N]")"
+                read -t 3 -p "$(gettext "(默认: 3 秒后自动检测): ")" skip_check_yn || true && echo
                 skip_check_yn=${skip_check_yn:-N}
 
                 if [[ $skip_check_yn == [Yy] ]]
@@ -101,7 +101,7 @@ CheckIfXtreamCodes()
 
                     if [ "$try_success" -eq 0 ]
                     then
-                        Println "$error 没有可用账号"
+                        Println "$(eval_gettext "\$error 没有可用账号")"
                     fi
                 fi
             fi
@@ -114,7 +114,7 @@ CheckIfXtreamCodes()
         do
             if [ "$xc_domain" == "$chnl_domain" ]
             then
-                Println "$info 频道 [ $chnl_channel_name ] 检测账号中..."
+                Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 检测账号中...")"
                 to_try=1
                 break
             fi
@@ -149,7 +149,7 @@ CheckIfXtreamCodes()
 
             if [ "$try_success" -eq 0 ]
             then
-                Println "$error 没有可用账号"
+                Println "$(eval_gettext "\$error 没有可用账号")"
             fi
         elif [ "$to_try" -eq 1 ]
         then
@@ -165,7 +165,7 @@ CheckIfXtreamCodes()
 
                 if [ "$try_success" -eq 0 ]
                 then
-                    Println "$error 没有可用账号"
+                    Println "$(eval_gettext "\$error 没有可用账号")"
                 fi
             else
                 to_try=0

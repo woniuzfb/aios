@@ -80,7 +80,7 @@ ServiceControlStart()
 {
     if ServiceControlIsActive "$1"
     then
-        echo "服务已启动"
+        echo "$(gettext "服务已启动")"
         return 0
     fi
 
@@ -94,7 +94,7 @@ ServiceControlStart()
             args=("${!var}")
             if [[ ! -x "${args[0]}" ]]
             then
-                echo "${args[0]} 不存在"
+                echo "${args[0]} $(gettext "不存在")"
                 return 1
             fi
         fi
@@ -102,7 +102,7 @@ ServiceControlStart()
 
     if [ "${#args[@]}" -eq 0 ] && [ ! -f "$service_file" ]
     then
-        echo "$service_file 不存在"
+        echo "$(eval_gettext "\$service_file 不存在")"
         return 1
     fi
 
@@ -171,7 +171,7 @@ ServiceControlStop()
 {
     if ! ServiceControlIsActive "$1"
     then
-        echo "服务未启动"
+        echo "$(gettext "服务未启动")"
         return 0
     fi
 

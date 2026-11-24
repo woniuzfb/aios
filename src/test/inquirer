@@ -10,40 +10,40 @@ TestInquirerInputValidator()
 
 TestInquirerInput()
 {
-    Println "$tip 输入非数字会提示错误"
-    inquirer text_input "测试输入 validator" user_input "$i18n_cancel" TestInquirerInputValidator "请输入数字"
+    Println "$(eval_gettext "\$tip 输入非数字会提示错误")"
+    inquirer text_input "$(gettext "测试输入 validator")" user_input "$i18n_cancel" TestInquirerInputValidator "$(gettext "请输入数字")"
 }
 
 TestInquirerList()
 {
-    Println "$tip 选择 是 得 true, 否 得 false"
-    inquirer list_input_yn "请选择" tf_options tf_result
-    Println "$info 结果为 $tf_result\n"
+    Println "$(eval_gettext "\$tip 选择 是 得 true, 否 得 false")"
+    inquirer list_input_yn "$(gettext "请选择")" tf_options tf_result
+    Println "$(eval_gettext "\$info 结果为 \$tf_result")\n"
 
-    Println "$tip 选择 是 得 0, 否 得 1"
-    inquirer list_input_ny "请选择" oz_options oz_result
-    Println "$info 结果为 $oz_result\n"
+    Println "$(eval_gettext "\$tip 选择 是 得 0, 否 得 1")"
+    inquirer list_input_ny "$(gettext "请选择")" oz_options oz_result
+    Println "$(eval_gettext "\$info 结果为 \$oz_result")\n"
 }
 
 TestInquirerBlank()
 {
     echo
-    inquirer text_input "请输入" blank_input "$i18n_blank"
+    inquirer text_input "$(gettext "请输入")" blank_input "$i18n_blank"
 
     if [ -z "$blank_input" ] 
     then
-        Println "$info 输入为空\n"
+        Println "$(eval_gettext "\$info 输入为空")\n"
     else
-        Println "$info 输入不为空\n"
+        Println "$(eval_gettext "\$info 输入不为空")\n"
     fi
 }
 
 TestInquirer()
 {
     test_inquirer_options=( 
-        '1. 输入非数字会提示错误'
-        '2. 选择获得正确值'
-        '3. 不设置输出为空'
+        "$(gettext "1. 输入非数字会提示错误")"
+        "$(gettext "2. 选择获得正确值")"
+        "$(gettext "3. 不设置输出为空")"
     )
 
     test_inquirer_actions=(
@@ -53,7 +53,7 @@ TestInquirer()
     )
 
     echo
-    inquirer checkbox_input_indices "选择测试项目" test_inquirer_options test_inquirer_options_indices
+    inquirer checkbox_input_indices "$(gettext "选择测试项目")" test_inquirer_options test_inquirer_options_indices
 
     for test_inquirer_options_index in "${test_inquirer_options_indices[@]}"
     do

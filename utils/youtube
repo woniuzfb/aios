@@ -17,7 +17,7 @@ YoutubeDlInstall()
             return 0
         fi
 
-        Println "$info 更新 youtube-dl ..."
+        Println "$(eval_gettext "\$info 更新 youtube-dl ...")"
 
         if youtube-dl -U > /dev/null
         then
@@ -34,11 +34,11 @@ YoutubeDlInstall()
 
         if [ "$monitor" = true ] 
         then
-            MonitorErr "无法安装 youtube-dl"
+            MonitorErr "$(gettext "无法安装 youtube-dl")"
             return 0
         fi
 
-        Println "$error 无法安装 youtube-dl, 请稍后再试\n"
+        Println "$(eval_gettext "\$error 无法安装 youtube-dl, 请稍后再试")\n"
         exit 1
     fi
 
@@ -66,7 +66,7 @@ YtDlpInstall()
             return 0
         fi
 
-        Println "$info 更新 yt-dlp ..."
+        Println "$(eval_gettext "\$info 更新 yt-dlp ...")"
 
         if yt-dlp -U > /dev/null 
         then
@@ -83,11 +83,11 @@ YtDlpInstall()
 
         if [ "$monitor" = true ] 
         then
-            MonitorErr "无法安装 yt-dlp"
+            MonitorErr "$(gettext "无法安装 yt-dlp")"
             return 0
         fi
 
-        Println "$error 无法安装 yt-dlp, 请稍后再试\n"
+        Println "$(eval_gettext "\$error 无法安装 yt-dlp, 请稍后再试")\n"
         exit 1
     fi
 

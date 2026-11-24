@@ -56,7 +56,7 @@ ParseHlsPlaylist()
 
         if ! m3u8_content=$(curl -s -Lm 20 ${curl_proxy_command[@]+"${curl_proxy_command[@]}"} ${curl_cookies_command[@]+"${curl_cookies_command[@]}"} ${curl_headers_command[@]+"${curl_headers_command[@]}"} "$stream_link_url")
         then
-            Println "$error 链接错误\n"
+            Println "$(eval_gettext "\$error 链接错误")\n"
             exit 1
         fi
     fi
@@ -192,7 +192,7 @@ ParseHlsPlaylist()
 
     if [ -z "$stream_urls_list" ] 
     then
-        Println "$error 没有可选分辨率"
+        Println "$(eval_gettext "\$error 没有可选分辨率")"
         return 1
     fi
 
@@ -251,9 +251,9 @@ ParseHlsPlaylist()
                 fi
             done
 
-            Println "$error ${stream_url_qualities[i]} 不存在 !"
+            Println "$error ${stream_url_qualities[i]} $(gettext "不存在")"
             choose=1
-            Println "$error 请重新选择 $channel_name 分辨率"
+            Println "$(eval_gettext "\$error 请重新选择 \$channel_name 分辨率")"
             break
         done
     else
@@ -263,11 +263,11 @@ ParseHlsPlaylist()
     if [ "$choose" -eq 1 ]
     then
         stream_urls_select_all=$((stream_urls_count+1))
-        stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}全部\n"
+        stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
         Println "$stream_urls_list"
-        echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+        echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
 
-        while read -p "(默认: $stream_urls_count): " stream_urls_num 
+        while read -p "$(eval_gettext "(默认: \$stream_urls_count): ")" stream_urls_num 
         do
             stream_urls_num=${stream_urls_num:-$stream_urls_count}
 
@@ -373,7 +373,7 @@ ParseHlsPlaylist()
                         fi
                     done
                     choose=1
-                    Println "$error 请重新选择音轨\n"
+                    Println "$(eval_gettext "\$error 请重新选择音轨")\n"
                     break
                 done
             fi
@@ -391,19 +391,19 @@ ParseHlsPlaylist()
                 then
                     stream_audio_num_default=$((i+1))
                 fi
-                stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${stream_audio_group_id[i]}${normal} 名称: ${green}${stream_audio_name[i]}${normal} 语言: ${green}${stream_audio_language[i]}${normal}\n\n"
+                stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}$(gettext "音轨组"): ${green}${stream_audio_group_id[i]}${normal} $(gettext "名称"): ${green}${stream_audio_name[i]}${normal} $(gettext "语言"): ${green}${stream_audio_language[i]}${normal}\n\n"
             done
 
             stream_audio_unselect_all=$((stream_audio_count+1))
-            stream_audio_list="$stream_audio_list ${green}$stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+            stream_audio_list="$stream_audio_list ${green}$stream_audio_unselect_all.${normal}${indent_6}$(gettext "不启用")\n\n"
 
             stream_audio_select_all=$((stream_audio_count+2))
-            stream_audio_list="$stream_audio_list ${green}$stream_audio_select_all.${normal}${indent_6}全部启用"
+            stream_audio_list="$stream_audio_list ${green}$stream_audio_select_all.${normal}${indent_6}$(gettext "全部启用")"
             Println "$stream_audio_list\n"
-            echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+            echo "$(gettext "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)")"
             stream_audio_num_default=$stream_audio_select_all
 
-            while read -p "(默认: $stream_audio_num_default): " stream_audio_num 
+            while read -p "$(eval_gettext "(默认: \$stream_audio_num_default): ")" stream_audio_num 
             do
                 stream_audio_num=${stream_audio_num:-$stream_audio_num_default}
 
@@ -533,7 +533,7 @@ ParseHlsPlaylist()
                         fi
                     done
                     choose=1
-                    Println "$error 请重新选择字幕\n"
+                    Println "$(eval_gettext "\$error 请重新选择字幕")\n"
                     break
                 done
             fi
@@ -551,19 +551,19 @@ ParseHlsPlaylist()
                 then
                     stream_subtitles_num_default=$((i+1))
                 fi
-                stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${stream_subtitles_group_id[i]}${normal} 名称: ${green}${stream_subtitles_name[i]}${normal} 语言: ${green}${stream_subtitles_language[i]}${normal}\n\n"
+                stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$(gettext "字幕组"): ${green}${stream_subtitles_group_id[i]}${normal} $(gettext "名称"): ${green}${stream_subtitles_name[i]}${normal} $(gettext "语言"): ${green}${stream_subtitles_language[i]}${normal}\n\n"
             done
 
             stream_subtitles_unselect_all=$((stream_subtitles_count+1))
-            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_unselect_all.${normal}${indent_6}$(gettext "不启用")\n\n"
 
             stream_subtitles_select_all=$((stream_subtitles_count+2))
-            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_select_all.${normal}${indent_6}全部启用"
+            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_select_all.${normal}${indent_6}$(gettext "全部启用")"
             Println "$stream_subtitles_list\n"
-            echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+            echo "$(gettext "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)")"
             stream_subtitles_num_default=$stream_subtitles_select_all
 
-            while read -p "(默认: $stream_subtitles_num_default): " stream_subtitles_num 
+            while read -p "$(eval_gettext "(默认: \$stream_subtitles_num_default): ")" stream_subtitles_num 
             do
                 stream_subtitles_num=${stream_subtitles_num:-$stream_subtitles_num_default}
 
@@ -677,8 +677,8 @@ ParseHlsPlaylist()
         stream_link=${stream_link_url%%|*}
         stream_link_url="$stream_link_url|parse"
     else
-        Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
-        inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+        Println "$(eval_gettext "\$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接")"
+        inquirer list_input "$(gettext "是否是需要鉴权的直播源")" yn_options yn_option
         if [ "$yn_option" == "$i18n_yes" ] 
         then
             use_primary_playlist=true

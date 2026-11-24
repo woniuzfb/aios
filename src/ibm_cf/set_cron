@@ -2,8 +2,8 @@ IbmSetCfAppCron()
 {
     IbmListCfApps
 
-    echo -e "选择 APP"
-    echo -e "$tip 多个 APP 用空格分隔, 比如 5 7 9-11\n"
+    echo -e "$(gettext "选择 APP")"
+    echo -e "$(eval_gettext "\$tip 多个 APP 用空格分隔, 比如 5 7 9-11")\n"
     apps_name=()
     apps_user_email=()
     while read -p "$i18n_default_cancel" apps_num
@@ -84,7 +84,7 @@ IbmSetCfAppCron()
 
     if [ "$ibm_cf_apps_path_count" -eq 0 ] 
     then
-        Println "$error 请将 APP 所在目录移动到目录 $IBM_APPS_ROOT 下\n"
+        Println "$(eval_gettext "\$error 请将 APP 所在目录移动到目录 \$IBM_APPS_ROOT 下")\n"
         exit 1
     fi
 
@@ -93,7 +93,7 @@ IbmSetCfAppCron()
     for((i=0;i<${#apps_name[@]};i++));
     do
         Println "$ibm_cf_apps_path_list"
-        echo -e "$info 选择 APP: ${green}${apps_name[i]}${normal} 本地目录"
+        echo -e "$info $(gettext "选择 APP"): ${green}${apps_name[i]}${normal} $(gettext "本地目录")"
         while read -p "$i18n_default_cancel" apps_path_num 
         do
             case $apps_path_num in
@@ -130,8 +130,8 @@ IbmSetCfAppCron()
         new_jobs="$new_jobs$new_job"
     done
 
-    Println "$info 输入重启间隔天数"
-    while read -p "(默认: 5): " cron_days 
+    Println "$(eval_gettext "\$info 输入重启间隔天数")"
+    while read -p "($(gettext "默认"): 5): " cron_days 
     do
         case $cron_days in
             "") 
@@ -152,8 +152,8 @@ IbmSetCfAppCron()
         esac
     done
 
-    Println "$info 输入重启小时 [0-23]"
-    while read -p "(默认: 0): " cron_hour 
+    Println "$(eval_gettext "\$info 输入重启小时 [0-23]")"
+    while read -p "($(gettext "默认"): 0): " cron_hour 
     do
         case $cron_hour in
             "") 
@@ -174,8 +174,8 @@ IbmSetCfAppCron()
         esac
     done
 
-    Println "$info 输入重启分钟 [0-59]"
-    while read -p "(默认: 0): " cron_min 
+    Println "$(eval_gettext "\$info 输入重启分钟 [0-59]")"
+    while read -p "($(gettext "默认"): 0): " cron_min 
     do
         case $cron_min in
             "") 
@@ -210,5 +210,5 @@ IbmSetCfAppCron()
     jq_json=true
     jq_path='["cf","cron"]'
     JQ update "$IBM_CONFIG" "$cron"
-    Println "$info 定时重启任务设置成功\n"
+    Println "$(eval_gettext "\$info 定时重启任务设置成功")\n"
 }

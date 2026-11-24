@@ -2,7 +2,7 @@ IbmDelAppRoute()
 {
     IbmListCfApp
 
-    echo -e "选择需要删除的路由"
+    echo -e "$(gettext "选择需要删除的路由")"
     while read -p "$i18n_default_cancel" ibm_cf_app_routes_num
     do
         case $ibm_cf_app_routes_num in
@@ -11,7 +11,7 @@ IbmDelAppRoute()
                 exit 1
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
+                Println "$(eval_gettext "\$error 请输入正确的端口")\n"
             ;;
             *) 
                 if [ "$ibm_cf_app_routes_num" -gt 0 ] && [ "$ibm_cf_app_routes_num" -le "$ibm_cf_app_routes_count" ]
@@ -29,7 +29,7 @@ IbmDelAppRoute()
         esac
     done
 
-    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    Println "$(eval_gettext "\$info 登录账号: \$ibm_user_email [ \$ibm_user_region ]")"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
@@ -58,6 +58,6 @@ IbmDelAppRoute()
         jq_path='["cf","apps",'"$ibm_cf_apps_index"',"routes",'"$ibm_cf_app_routes_index"']'
         JQ delete "$IBM_CONFIG"
 
-        Println "$info 路由删除成功"
+        Println "$(eval_gettext "\$info 路由删除成功")"
     fi
 }

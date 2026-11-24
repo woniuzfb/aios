@@ -1,6 +1,6 @@
 V2rayAddInboundAccount()
 {
-    ProxySelectBound "$V2_CONFIG" inbounds "选择要添加账号的入站" || return 1
+    ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择要添加账号的入站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${inbounds_protocol[idx]}"
     local item_json=""
@@ -8,10 +8,10 @@ V2rayAddInboundAccount()
     case "$protocol" in
         vmess)
             local uuid alter_id email level
-            inquirer text_input "输入用户 UUID" uuid ""
-            inquirer text_input "输入 alterId" alter_id "0"
-            inquirer text_input "输入 email (可留空)" email ""
-            inquirer text_input "输入 level" level "0"
+            inquirer text_input "$(gettext "输入用户 UUID")" uuid ""
+            inquirer text_input "$(gettext "输入 alterId")" alter_id "0"
+            inquirer text_input "$(gettext "输入 email (可留空)")" email ""
+            inquirer text_input "$(gettext "输入 level")" level "0"
             JQs build item_json '{"id": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}' \
                 --arg id "$uuid" --arg aid "$alter_id" --arg email "$email" --arg lvl "$level"
             jq_path='["inbounds",'"$idx"',"settings","clients"]'
@@ -19,9 +19,9 @@ V2rayAddInboundAccount()
         ;;
         vless)
             local uuid email level
-            inquirer text_input "输入用户 UUID" uuid ""
-            inquirer text_input "输入 email (可留空)" email ""
-            inquirer text_input "输入 level" level "0"
+            inquirer text_input "$(gettext "输入用户 UUID")" uuid ""
+            inquirer text_input "$(gettext "输入 email (可留空)")" email ""
+            inquirer text_input "$(gettext "输入 level")" level "0"
             JQs build item_json '{"id": $id, "email": $email, "level": ($lvl | tonumber)}' \
                 --arg id "$uuid" --arg email "$email" --arg lvl "$level"
             jq_path='["inbounds",'"$idx"',"settings","clients"]'
@@ -29,9 +29,9 @@ V2rayAddInboundAccount()
         ;;
         trojan)
             local pw email level
-            inquirer text_input "输入密码" pw ""
-            inquirer text_input "输入 email (可留空)" email ""
-            inquirer text_input "输入 level" level "0"
+            inquirer text_input "$(gettext "输入密码")" pw ""
+            inquirer text_input "$(gettext "输入 email (可留空)")" email ""
+            inquirer text_input "$(gettext "输入 level")" level "0"
             JQs build item_json '{"password": $pw, "email": $email, "level": ($lvl | tonumber)}' \
                 --arg pw "$pw" --arg email "$email" --arg lvl "$level"
             jq_path='["inbounds",'"$idx"',"settings","clients"]'
@@ -39,8 +39,8 @@ V2rayAddInboundAccount()
         ;;
         socks|http)
             local user pass
-            inquirer text_input "输入用户名" user ""
-            inquirer text_input "输入密码" pass ""
+            inquirer text_input "$(gettext "输入用户名")" user ""
+            inquirer text_input "$(gettext "输入密码")" pass ""
             JQs build item_json '{"user": $u, "pass": $p}' --arg u "$user" --arg p "$pass"
             if [ "$protocol" == "socks" ]
             then
@@ -54,11 +54,12 @@ V2rayAddInboundAccount()
             fi
         ;;
         *)
-            Println "$error 协议 ${protocol} 不支持多账号管理\n"
+            Println "$(eval_gettext "\$error 协议 \${protocol} 不支持多账号管理")\n"
             return 1
         ;;
     esac
 
     ProxyRestartIfActive v2ray
-    Println "$info 已向入站 ${green}${inbounds_tag[idx]}${normal} 添加账号\n"
+    local target_tag="${inbounds_tag[idx]}"
+    Println "$(eval_gettext "\$info 已向入站 \${green}\$target_tag\${normal} 添加账号")\n"
 }

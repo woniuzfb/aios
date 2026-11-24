@@ -4,7 +4,7 @@ PveListVMs()
 
     if [ "$pve_vm_count" -eq 0 ] 
     then
-        Println "$error 没有虚拟机\n"
+        Println "$(eval_gettext "\$error 没有虚拟机")\n"
         exit 1
     fi
 
@@ -12,7 +12,7 @@ PveListVMs()
 
     for((i=0;i<pve_vm_count;i++));
     do
-        pve_vm_list="$pve_vm_list ${green}$((i+1)).${normal}${indent_6}ID: ${green}${pve_vm_ids[i]}${normal} 名称: ${green}${pve_vm_name[i]}${normal}\n${indent_6}状态: ${green}${pve_vm_status[i]}${normal} 内存: ${green}${pve_vm_mem[i]} MB${normal}\n${indent_6}启动盘: ${green}${pve_vm_boot_disk[i]} GB${normal} pid: ${green}${pve_vm_pid[i]}${normal}\n\n"
+        pve_vm_list="$pve_vm_list ${green}$((i+1)).${normal}${indent_6}ID: ${green}${pve_vm_ids[i]}${normal} $(gettext "名称"): ${green}${pve_vm_name[i]}${normal}\n${indent_6}$(gettext "状态"): ${green}${pve_vm_status[i]}${normal} $(gettext "内存"): ${green}${pve_vm_mem[i]} MB${normal}\n${indent_6}$(gettext "启动盘"): ${green}${pve_vm_boot_disk[i]} GB${normal} pid: ${green}${pve_vm_pid[i]}${normal}\n\n"
     done
 
     Println "$pve_vm_list"

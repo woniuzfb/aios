@@ -4,14 +4,14 @@ DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
 dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
 echo
-dnscrypt_options=( '安装/升级 dnscrypt proxy' '开关 edns0' '开关 ipv6 查询' )
-inquirer list_input_index "选择操作" dnscrypt_options dnscrypt_options_index
+dnscrypt_options=( "$(gettext "安装/升级 dnscrypt proxy")" "$(gettext "开关 edns0")" "$(gettext "开关 ipv6 查询")" )
+inquirer list_input_index "$(gettext "选择操作")" dnscrypt_options dnscrypt_options_index
 
 if [ "$dnscrypt_options_index" -eq 1 ] 
 then
     if [[ $dnscrypt_version_old == "*" ]] 
     then
-        Println "$error 请先安装 dnscrypt proxy\n"
+        Println "$(eval_gettext "\$error 请先安装 dnscrypt proxy")\n"
         exit 1
     fi
     echo
@@ -22,35 +22,35 @@ then
         sed -i '/options edns0/d' /etc/resolv.conf
         echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
         systemctl restart dnscrypt-proxy
-        Println "$info edns0 已关闭\n"
+        Println "$(eval_gettext "\$info edns0 已关闭")\n"
     else
         ExitOnList n "`gettext \"是否开启 edns0\"`"
 
         echo "options edns0" >> /etc/resolv.conf
         echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
         systemctl restart dnscrypt-proxy
-        Println "$info edns0 已开启\n"
+        Println "$(eval_gettext "\$info edns0 已开启")\n"
     fi
     exit 0
 elif [ "$dnscrypt_options_index" -eq 2 ] 
 then
     if [[ $dnscrypt_version_old == "*" ]] 
     then
-        Println "$error 请先安装 dnscrypt proxy\n"
+        Println "$(eval_gettext "\$error 请先安装 dnscrypt proxy")\n"
         exit 1
     fi
     echo
-    switch_options=( '开启' '关闭' )
-    inquirer list_input_index "选择操作" switch_options switch_options_index
+    switch_options=( "$(gettext "开启")" "$(gettext "关闭")" )
+    inquirer list_input_index "$(gettext "选择操作")" switch_options switch_options_index
     if [ "$switch_options_index" -eq 0 ] 
     then
         echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
         systemctl restart dnscrypt-proxy
-        Println "$info ipv6 查询已开启\n"
+        Println "$(eval_gettext "\$info ipv6 查询已开启")\n"
     else
         echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
         systemctl restart dnscrypt-proxy
-        Println "$info ipv6 查询已关闭\n"
+        Println "$(eval_gettext "\$info ipv6 查询已关闭")\n"
     fi
     exit 0
 fi
@@ -64,27 +64,27 @@ fi
 
 if ! dnscrypt_version=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') 
 then
-    Println "$error 无法连接服务器, 请稍后再试\n"
+    Println "$(eval_gettext "\$error 无法连接服务器, 请稍后再试")\n"
     exit 1
 fi
 
 echo
-inquirer list_input "本机是否在国内" ny_options location_china
+inquirer list_input "$(gettext "本机是否在国内")" ny_options location_china
 
 if [[ $dnscrypt_version_old == "*" ]]
 then
     echo
-    inquirer text_input "输入监听端口 : " listen_port 53
+    inquirer text_input "$(gettext "输入监听端口 : ")" listen_port 53
 
-    Println "$info 下载 dnscrypt proxy ..."
+    Println "$(eval_gettext "\$info 下载 dnscrypt proxy ...")"
 
     if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
     then
-        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+        Println "$(eval_gettext "\$error dnscrypt proxy 下载失败, 请重试")\n"
         exit 1
     fi
 
-    Println "$info 设置 dnscrypt proxy ..."
+    Println "$(eval_gettext "\$info 设置 dnscrypt proxy ...")"
     cd ~
     mv dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
     tar zxf dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
@@ -104,7 +104,7 @@ then
         then
             cd ~
             rm -rf dnscrypt-$dnscrypt_version
-            Println "$error 发生错误, 请重试\n"
+            Println "$(eval_gettext "\$error 发生错误, 请重试")\n"
             exit 1
         fi
     done
@@ -132,18 +132,18 @@ then
         systemctl restart postfix
     fi
 
-    Println "$info dnscrypt proxy 安装配置成功\n"
+    Println "$(eval_gettext "\$info dnscrypt proxy 安装配置成功")\n"
 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
 then
     block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
     require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
 
     echo
-    inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+    inquirer text_input "$(gettext "输入监听端口 : ")" listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
 
     if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
     then
-        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+        Println "$(eval_gettext "\$error dnscrypt proxy 下载失败, 请重试")\n"
         exit 1
     fi
 
@@ -168,7 +168,7 @@ then
 
     ./dnscrypt-proxy -service install > /dev/null
     ./dnscrypt-proxy -service start > /dev/null
-    Println "$info dnscrypt proxy 升级成功\n"
+    Println "$(eval_gettext "\$info dnscrypt proxy 升级成功")\n"
 else
-    Println "$error dnscrypt proxy 已经是最新\n"
+    Println "$(eval_gettext "\$error dnscrypt proxy 已经是最新")\n"
 fi

@@ -1,38 +1,38 @@
 IbmV2rayMenu()
 {
-    Println " IBM $v2ray_package_name APP 面板 ${normal}${red}[v$sh_ver]${normal}
+    Println " $(eval_gettext "IBM \$v2ray_package_name APP 面板") ${normal}${red}[v$sh_ver]${normal}
 
-  ${green}1.${normal} 下载 $v2ray_package_name APP
-  ${green}2.${normal} 更新 $v2ray_package_name APP
-  ${green}3.${normal} 部署 $v2ray_package_name APP
+  ${green}1.${normal} $(eval_gettext "下载 \$v2ray_package_name APP")
+  ${green}2.${normal} $(eval_gettext "更新 \$v2ray_package_name APP")
+  ${green}3.${normal} $(eval_gettext "部署 \$v2ray_package_name APP")
 ————————————
-  ${green}4.${normal} 查看入站
-  ${green}5.${normal} 添加入站
-  ${green}6.${normal} 添加入站账号
+  ${green}4.${normal} $(gettext "查看入站")
+  ${green}5.${normal} $(gettext "添加入站")
+  ${green}6.${normal} $(gettext "添加入站账号")
 ————————————
-  ${green}7.${normal} 查看出站
-  ${green}8.${normal} 添加出站
-  ${green}9.${normal} 添加出站账号
+  ${green}7.${normal} $(gettext "查看出站")
+  ${green}8.${normal} $(gettext "添加出站")
+  ${green}9.${normal} $(gettext "添加出站账号")
 ————————————
- ${green}10.${normal} 查看DNS
- ${green}11.${normal} 设置DNS
+ ${green}10.${normal} $(gettext "查看DNS")
+ ${green}11.${normal} $(gettext "设置DNS")
 ————————————
- ${green}12.${normal} 查看路由
- ${green}13.${normal} 设置路由
+ ${green}12.${normal} $(gettext "查看路由")
+ ${green}13.${normal} $(gettext "设置路由")
 ————————————
- ${green}14.${normal} 查看策略
- ${green}15.${normal} 设置策略
+ ${green}14.${normal} $(gettext "查看策略")
+ ${green}15.${normal} $(gettext "设置策略")
 ————————————
- ${green}16.${normal} 查看流量
- ${green}17.${normal} 重置流量
+ ${green}16.${normal} $(gettext "查看流量")
+ ${green}17.${normal} $(gettext "重置流量")
 ————————————
- ${green}18.${normal} 查看反向代理
- ${green}19.${normal} 设置反向代理
+ ${green}18.${normal} $(gettext "查看反向代理")
+ ${green}19.${normal} $(gettext "设置反向代理")
 ————————————
- ${green}20.${normal} 删除入站
- ${green}21.${normal} 删除入站账号
- ${green}22.${normal} 删除出站
- ${green}23.${normal} 删除出站账号
+ ${green}20.${normal} $(gettext "删除入站")
+ ${green}21.${normal} $(gettext "删除入站账号")
+ ${green}22.${normal} $(gettext "删除出站")
+ ${green}23.${normal} $(gettext "删除出站账号")
 
     "
     read -p "$i18n_default_cancel" ibm_v2ray_num

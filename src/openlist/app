@@ -7,17 +7,17 @@ OpenListAppAdd()
         openlists_txt=""
         for((i=0;i<openlists_count;i++));
         do
-            openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}名称: ${openlists_name[i]:-无}\n${indent_6}地址: ${openlists_url[i]}\n"
+            openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[i]}\n"
         done
 
         Println "$openlists_txt"
     fi
 
     echo
-    inquirer text_input "输入 OpenList 名称" openlist_name "$i18n_blank"
+    inquirer text_input "$(gettext "输入 OpenList 名称")" openlist_name "$i18n_blank"
 
-    Println "$tip 比如 http://127.0.0.1:5244"
-    ExitOnText "输入 OpenList 地址" openlist_url
+    Println "$(eval_gettext "\$tip 比如 http://127.0.0.1:5244")"
+    ExitOnText "$(gettext "输入 OpenList 地址")" openlist_url
 
     if [ "$openlists_count" -gt 0 ] 
     then
@@ -25,7 +25,7 @@ OpenListAppAdd()
         do
             if [ "$url" == "$openlist_url" ] 
             then
-                Println "$error OpenList 地址已存在\n"
+                Println "$(eval_gettext "\$error OpenList 地址已存在")\n"
                 exit 1
             fi
         done
@@ -43,7 +43,7 @@ OpenListAppAdd()
     jq_path='["openlist"]'
     JQ add "$SERVICES_CONFIG" "[$new_app]"
 
-    Println "$info OpenList 添加成功\n"
+    Println "$(eval_gettext "\$info OpenList 添加成功")\n"
 }
 
 OpenListAppView()
@@ -52,14 +52,14 @@ OpenListAppView()
 
     if [ "$openlists_count" -eq 0 ] 
     then
-        Println "$error 没有 OpenList\n"
+        Println "$(eval_gettext "\$error 没有 OpenList")\n"
         exit 1
     fi
 
     openlists_txt=""
     for((i=0;i<openlists_count;i++));
     do
-        openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}名称: ${openlists_name[i]:-无}\n${indent_6}地址: ${openlists_url[i]}\n"
+        openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[i]}\n"
     done
 
     Println "$openlists_txt\n"
@@ -77,7 +77,7 @@ OpenListAppInstall()
             openlist_version=$("$OPENLIST_ROOT"/openlist version | grep -oP '^Version: \K.+')
             if [ "$openlist_version" == "$openlist_version_latest" ] 
             then
-                Println "$info OpenList 已是最新版本 $openlist_version\n"
+                Println "$(eval_gettext "\$info OpenList 已是最新版本 \$openlist_version")\n"
                 return 0
             fi
         fi
@@ -95,7 +95,7 @@ OpenListAppInstall()
         mv "$OPENLIST_ROOT" "$openlist_backup"
     else
         echo
-        ExitOnText "设置 OpenList admin 密码" openlist_pass
+        ExitOnText "$(gettext "设置 OpenList admin 密码")" openlist_pass
     fi
 
     if [ "$dist" == "mac" ] 
@@ -131,7 +131,7 @@ OpenListAppInstall()
 
     if ! curl -O -L "$OPENLIST_LINK/releases/latest/download/$openlist_pack_name" && ! curl -O -L "$OPENLIST_LINK_FALLBACK/releases/latest/download/$openlist_pack_name"
     then
-        Println "$error 无法下载 OpenList, 请稍后再试\n"
+        Println "$(eval_gettext "\$error 无法下载 OpenList, 请稍后再试")\n"
         return 1
     fi
 
@@ -241,12 +241,12 @@ OpenListAppInstall()
 
     if ! err_msg=$(ServiceControl start "$service_name" service_commands)
     then
-        Println "$error $service_name 启动失败, $err_msg\n"
+        Println "$(eval_gettext "\$error \$service_name 启动失败, \$err_msg")\n"
         return 1
     fi
 
     rm -rf "${TMP_DIR:-notfound}"
     trap - EXIT
 
-    Println "$info OpenList 安装成功\n"
+    Println "$(eval_gettext "\$info OpenList 安装成功")\n"
 }

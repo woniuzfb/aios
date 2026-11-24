@@ -6,7 +6,7 @@ Get4gtvAccToken()
 
     if [ -z "$fsVALUE" ]
     then
-        Println "$error 请先登录此账号\n"
+        Println "$(eval_gettext "\$error 请先登录此账号")\n"
         exit 1
     fi
 }

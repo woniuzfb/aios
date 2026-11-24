@@ -2,7 +2,7 @@ CloudflareListZones()
 {
     CloudflareListHosts
 
-    echo -e "选择 CFP"
+    echo -e "$(gettext "选择 CFP")"
     while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -44,10 +44,10 @@ CloudflareListZones()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n${indent_6}始终 https: ${green}${cf_zones_always_use_https[i]:-off}${normal}  ssl: ${green}${cf_zones_ssl[i]:-flexible}${normal}\n\n"
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}$(gettext "源站"): ${green}${cf_zones_name[i]}${normal} $(gettext "用户"): ${green}${cf_zones_user_email[i]}${normal}\n${indent_6}$(gettext "始终 https"): ${green}${cf_zones_always_use_https[i]:-off}${normal}  ssl: ${green}${cf_zones_ssl[i]:-flexible}${normal}\n\n"
     done
 
-    [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
+    [ -z "$cf_zones_list" ] && Println "$(eval_gettext "\$error 请先添加源站")\n" && exit 1
 
     Println "$cf_zones_list"
 }

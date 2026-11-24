@@ -2,7 +2,7 @@ CloudflareWorkersMonitorMoveZone()
 {
     CloudflareGetUser
 
-    Println "$info 删除源站 ..."
+    Println "$(eval_gettext "\$info 删除源站 ...")"
 
     IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_delete' \
@@ -19,20 +19,20 @@ CloudflareWorkersMonitorMoveZone()
     then
         if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
         then
-            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+            Println "$(eval_gettext "\$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !")"
         else
-            Println "$error ${msg:-超时, 请重试}\n"
+            Println "$error ${msg:-$(gettext "超时, 请重试")}\n"
         fi
-        MonitorErr "move zone 删除源站 $err_code, $msg"
+        MonitorErr "$(eval_gettext "move zone 删除源站 \$err_code, \$msg")"
         exit 1
     else
         jq_map_string=true
         jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
         JQ delete "$CF_CONFIG" name "$cf_zone_name"
-        Println "$info $cf_zone_name 删除成功"
+        Println "$(eval_gettext "\$info \$cf_zone_name 删除成功")"
     fi
 
-    Println "$info 移动中 ..."
+    Println "$(eval_gettext "\$info 移动中 ...")"
     cf_user_key=""
     until [ -n "$cf_user_key" ] 
     do
@@ -54,15 +54,15 @@ CloudflareWorkersMonitorMoveZone()
             Println "$error $msg"
             if [[ $msg == *"assword"* ]] 
             then
-                Println "$error 请检查密码是否正确\n"
-                MonitorErr "move zone 移动中 请检查密码是否正确, $msg"
+                Println "$(eval_gettext "\$error 请检查密码是否正确")\n"
+                MonitorErr "$(eval_gettext "move zone 移动中 请检查密码是否正确, \$msg")"
                 exit 1
             fi
         elif [ -z "$cf_user_api_key_new" ] 
         then
             jq_path='["users",'"$cf_users_index"',"key"]'
             JQ update "$CF_CONFIG" "$cf_user_api_key"
-            Println "$info 用户 $cf_user_email_new API Key 添加成功\n"
+            Println "$(eval_gettext "\$info 用户 \$cf_user_email_new API Key 添加成功")\n"
             cf_user_api_key_new="$cf_user_api_key"
         fi
     done
@@ -130,11 +130,11 @@ CloudflareWorkersMonitorMoveZone()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        MonitorErr "move zone 连接超时, 请查看是否已经完成 $msg"
-        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
+        MonitorErr "$(eval_gettext "move zone 连接超时, 请查看是否已经完成 \$msg")"
+        Println "$error ${msg:-$(gettext "连接超时, 请查看是否已经完成")}\n"
     fi
 
-    Println "$info 源站移动成功\n"
+    Println "$(eval_gettext "\$info 源站移动成功")\n"
 }
 
 CloudflareWorkersMonitorUpdateRoutes()
@@ -201,7 +201,7 @@ CloudflareWorkersMonitorUpdateRoutes()
         -H ''"$curl_header_auth_key"'' \
         -H ''"$curl_header_auth_token"'' \
         | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
-    ) || Println "$error Token 权限错误 ?"
+    ) || Println "$(eval_gettext "\$error Token 权限错误 ?")"
 
     IFS="|" read -r -a zones_id <<< "$zone_id"
     IFS="|" read -r -a zones_name <<< "$zone_name"
@@ -230,12 +230,13 @@ CloudflareWorkersMonitorUpdateRoutes()
                     -H "Content-Type: application/json" \
                     --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') = true ]] 
                 do
-                    MonitorErr "域名: $cf_zone_name always_use_https 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_always_use_https => $cf_zone_always_use_https"
-                    Println "$error 域名: $cf_zone_name always_use_https 设置失败\n"
+                    local current_zone_id="${zones_id[j]}"
+                    MonitorErr "$(eval_gettext "域名: \$cf_zone_name always_use_https 设置失败, Token: \$cf_user_token, zone id: \$current_zone_id, \$zone_always_use_https => \$cf_zone_always_use_https")"
+                    Println "$(eval_gettext "\$error 域名: \$cf_zone_name always_use_https 设置失败")\n"
                     fail_time=$((fail_time+1))
                     [ "$fail_time" -ge 5 ] && exit 1
                 done
-                Println "$info 域名: $cf_zone_name always_use_https 设置成功\n"
+                Println "$(eval_gettext "\$info 域名: \$cf_zone_name always_use_https 设置成功")\n"
             fi
 
             cf_zone_ssl=${cf_zone_ssl:-flexible}
@@ -257,12 +258,13 @@ CloudflareWorkersMonitorUpdateRoutes()
                     -H "Content-Type: application/json" \
                     --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') = true ]] 
                 do
-                    MonitorErr "域名: $cf_zone_name ssl 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_ssl => $cf_zone_ssl"
-                    Println "$error 域名: $cf_zone_name ssl 设置失败\n"
+                    local current_zone_id="${zones_id[j]}"
+                    MonitorErr "$(eval_gettext "域名: \$cf_zone_name ssl 设置失败, Token: \$cf_user_token, zone id: \$current_zone_id, \$zone_ssl => \$cf_zone_ssl")"
+                    Println "$(eval_gettext "\$error 域名: \$cf_zone_name ssl 设置失败")\n"
                     fail_time=$((fail_time+1))
                     [ "$fail_time" -ge 5 ] && exit 1
                 done
-                Println "$info 域名: $cf_zone_name ssl 设置成功\n"
+                Println "$(eval_gettext "\$info 域名: \$cf_zone_name ssl 设置成功")\n"
             fi
 
             IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
@@ -308,6 +310,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                 if [ "$script_found" -eq 0 ] 
                 then
                     fail_time=0
+                    local current_worker_name="${workers_name[j]}"
                     until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accounts_id[j]}/workers/scripts/${workers_project_name[k]}" \
                         -H ''"$curl_header_auth_email"'' \
                         -H ''"$curl_header_auth_key"'' \
@@ -315,12 +318,13 @@ CloudflareWorkersMonitorUpdateRoutes()
                         -H "Content-Type: application/javascript" \
                         --data "${workers_data[k]}" | $JQ_FILE -r '.success') = true ]] 
                     do
-                        MonitorErr "部署 worker 失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
-                        Println "$error worker: ${workers_name[j]} 部署失败\n"
+                        local current_pattern="${workers_pattern[k]}" current_script="${workers_project_name[k]}"
+                        MonitorErr "$(eval_gettext "部署 worker 失败 Token: \$cf_user_token, pattern: \$current_pattern, script: \$current_script")"
+                        Println "$(eval_gettext "\$error worker: \$current_worker_name 部署失败")\n"
                         fail_time=$((fail_time+1))
                         [ "$fail_time" -ge 5 ] && exit 1
                     done
-                    Println "$info worker: ${workers_name[j]} 部署成功\n"
+                    Println "$(eval_gettext "\$info worker: \$current_worker_name 部署成功")\n"
                 fi
                 if [ "$pattern_found" -eq 1 ] 
                 then
@@ -333,12 +337,13 @@ CloudflareWorkersMonitorUpdateRoutes()
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
                         | $JQ_FILE -r '.success' ) = true ]] 
                     do
-                        MonitorErr "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
-                        Println "$error 路由添加失败\n"
+                        local current_pattern="${workers_pattern[k]}" current_script="${workers_project_name[k]}"
+                        MonitorErr "$(eval_gettext "路由添加失败 Token: \$cf_user_token, pattern: \$current_pattern, script: \$current_script")"
+                        Println "$(eval_gettext "\$error 路由添加失败")\n"
                         fail_time=$((fail_time+1))
                         [ "$fail_time" -ge 5 ] && exit 1
                     done
-                    Println "$info 路由修改成功\n"
+                    Println "$(eval_gettext "\$info 路由修改成功")\n"
                 else
                     fail_time=0
                     until [[ $(curl -s "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
@@ -349,12 +354,13 @@ CloudflareWorkersMonitorUpdateRoutes()
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
                         | $JQ_FILE -r '.success' ) = true ]] 
                     do
-                        MonitorErr "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
-                        Println "$error 路由添加失败\n"
+                        local current_pattern="${workers_pattern[k]}" current_script="${workers_project_name[k]}"
+                        MonitorErr "$(eval_gettext "路由添加失败 Token: \$cf_user_token, pattern: \$current_pattern, script: \$current_script")"
+                        Println "$(eval_gettext "\$error 路由添加失败")\n"
                         fail_time=$((fail_time+1))
                         [ "$fail_time" -ge 5 ] && exit 1
                     done
-                    Println "$info 路由添加成功\n"
+                    Println "$(eval_gettext "\$info 路由添加成功")\n"
                 fi
             done
             break
@@ -374,8 +380,8 @@ CloudflareWorkersMonitorDeploy()
 
     if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
     then
-        MonitorErr "无法获取用户 ID, Token 错误 ? $cf_user_token"
-        Println "$error 无法获取用户 ID, Token 错误 ?\n"
+        MonitorErr "$(eval_gettext "无法获取用户 ID, Token 错误 ? \$cf_user_token")"
+        Println "$(eval_gettext "\$error 无法获取用户 ID, Token 错误 ?")\n"
         exit 1
     fi
 
@@ -388,7 +394,8 @@ CloudflareWorkersMonitorDeploy()
             -H "Content-Type: application/javascript" \
             --data "${workers_data[j]}" | $JQ_FILE -r '.success') = true ]]
         then
-            Println "$info ${workers_name[j]} 部署成功\n"
+            local current_worker_name="${workers_name[j]}"
+            Println "$(eval_gettext "\$info \$current_worker_name 部署成功")\n"
         fi
     done
 }
@@ -433,7 +440,7 @@ CloudflareWorkersMonitorGetRequests()
 
     if [ "$success" = false ] 
     then
-        request_count="获取账号 ID 失败: ${error_message//${delimiters[2]}/, }"
+        request_count="$(gettext "获取账号 ID 失败"): ${error_message//${delimiters[2]}/, }"
         return 0
     fi
 
@@ -494,7 +501,7 @@ CloudflareWorkersMonitorGetRequests()
 
     if [ -z "$cf_workers_requests" ] 
     then
-        request_count="获取 workers 访问数失败: ${error_message//${delimiters[2]}/, }"
+        request_count="$(gettext "获取 workers 访问数失败"): ${error_message//${delimiters[2]}/, }"
         return 0
     fi
 
@@ -513,7 +520,7 @@ CloudflareWorkersMonitor()
     {
         flock -x 204
         {
-            MonitorLog "启动 workers 监控  PID $cf_pid !"
+            MonitorLog "$(eval_gettext "启动 workers 监控  PID \$cf_pid !")"
 
             clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
             emails_dead=()
@@ -569,7 +576,7 @@ CloudflareWorkersMonitor()
                             CloudflareWorkersMonitorGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
                             if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                             then
-                                MonitorErr "request_count : ${request_count:-无}"
+                                MonitorErr "request_count : ${request_count:-$(gettext "无")}"
                                 sleep 10
                             else
                                 if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
@@ -664,7 +671,8 @@ CloudflareWorkersMonitor()
                                 JQ delete "$CF_CONFIG" email "${cf_users_email[cf_users_index]}"
                                 jq_path='["users"]'
                                 JQ add "$CF_CONFIG" "[$new_user]"
-                                Println "$info 用户 ${cf_users_email[cf_users_index]} 修改成功\n"
+                                local current_user_email="${cf_users_email[cf_users_index]}"
+                                Println "$(eval_gettext "\$info 用户 \$current_user_email 修改成功")\n"
                             else
                                 continue
                             fi
@@ -720,7 +728,7 @@ CloudflareWorkersMonitor()
                                 CloudflareWorkersMonitorGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
                                 if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                                 then
-                                    MonitorErr "request_count 2 : ${request_count:-无}"
+                                    MonitorErr "request_count 2 : ${request_count:-$(gettext "无")}"
                                     sleep 10
                                 else
                                     if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
@@ -796,7 +804,7 @@ CloudflareWorkersMonitor()
                                         CloudflareWorkersMonitorUpdateRoutes
                                         break
                                     else
-                                        MonitorErr "无法获取 $cf_zone_user_email Token"
+                                        MonitorErr "$(eval_gettext "无法获取 \$cf_zone_user_email Token")"
                                         sleep 30
                                     fi
                                 else
@@ -822,19 +830,19 @@ CloudflareEnableWorkersMonitor()
     # deprecated
     if [ -s "/tmp/cf_workers.pid" ] && kill -0 "$(< /tmp/cf_workers.pid)" 2> /dev/null
     then
-        Println "$error workers 监控已开启\n" && exit 1
+        Println "$(eval_gettext "\$error workers 监控已开启")\n" && exit 1
     fi
 
     if [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ] && kill -0 "$(< $CF_WORKERS_ROOT/cf_workers.pid)" 2> /dev/null
     then
-        Println "$error workers 监控已开启\n" && exit 1
+        Println "$(eval_gettext "\$error workers 监控已开启")\n" && exit 1
     fi
 
     CloudflareListWorkers
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        Println "$error 请先添加 worker\n"
+        Println "$(eval_gettext "\$error 请先添加 worker")\n"
         exit 1
     fi
 
@@ -842,7 +850,7 @@ CloudflareEnableWorkersMonitor()
     workers_path=()
     workers_project_name=()
     workers_upstream=()
-    echo "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
+    echo "$(gettext "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11")"
     while read -p "$i18n_default_cancel" workers_num 
     do
         [ -z "$workers_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -936,7 +944,7 @@ CloudflareEnableWorkersMonitor()
     if [ -n "$workers_monitor_stream_proxy_list" ] 
     then
         Println "$workers_monitor_stream_proxy_list"
-        while read -p "选择 stream proxy worker 历史配置(默认: 不选择): " history_num
+        while read -p "$(gettext "选择 stream proxy worker 历史配置(默认: 不选择): ")" history_num
         do
             case $history_num in
                 "") 
@@ -992,7 +1000,7 @@ CloudflareEnableWorkersMonitor()
     done
 
     echo
-    inquirer list_input "是否更新远端 worker" ny_options update_workers_data_yn
+    inquirer list_input "$(gettext "是否更新远端 worker")" ny_options update_workers_data_yn
 
     if [ -n "${stream_proxy_history:-}" ] 
     then
@@ -1033,7 +1041,7 @@ CloudflareEnableWorkersMonitor()
 
     if [ "$cf_hosts_count" -eq 0 ] 
     then
-        Println "$error 请先添加 CFP\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加 CFP")\n" && exit 1
     fi
 
     cf_zones_count=0
@@ -1085,18 +1093,18 @@ CloudflareEnableWorkersMonitor()
 
     if [ "$cf_zones_count" -eq 0 ] 
     then
-        Println "$error 请先添加源站\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加源站")\n" && exit 1
     fi
 
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n\n"
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}$(gettext "源站"): ${green}${cf_zones_name[i]}${normal} $(gettext "用户"): ${green}${cf_zones_user_email[i]}${normal}\n\n"
     done
 
     Println "$cf_zones_list"
 
-    echo -e "选择源站, 多个源站用空格分隔, 比如 5 7 9-11"
+    echo -e "$(gettext "选择源站, 多个源站用空格分隔, 比如 5 7 9-11")"
     while read -p "$i18n_default_cancel" zones_num 
     do
         [ -z "$zones_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -1195,7 +1203,8 @@ CloudflareEnableWorkersMonitor()
                     CloudflareGetUsers
                     if [ -z "${cf_users_api_key[j]}" ] 
                     then
-                        Println "$error 请先添加 ${cf_users_email[j]} Token 或 Key\n"
+                        local current_user_email="${cf_users_email[j]}"
+                        Println "$(eval_gettext "\$error 请先添加 \$current_user_email Token 或 Key")\n"
                         exit 1
                     fi
                 fi
@@ -1208,14 +1217,15 @@ CloudflareEnableWorkersMonitor()
         do
             if [ "$index" == "$i" ]
             then
-                Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n"
+                local current_user_email="${cf_zones_user_email[i]}"
+                Println "$(eval_gettext "\$error 请先添加用户 \$current_user_email")\n"
                 exit 1
             fi
         done
     done
 
-    Println "$info 设置检查时间间隔, 时间太短可能会被 cloudflare 限制查询 (秒)"
-    while read -p "(默认: $cf_workers_monitor_seconds_default): " cf_workers_monitor_seconds
+    Println "$(eval_gettext "\$info 设置检查时间间隔, 时间太短可能会被 cloudflare 限制查询 (秒)")"
+    while read -p "$(eval_gettext "(默认: \$cf_workers_monitor_seconds_default): ")" cf_workers_monitor_seconds
     do
         case $cf_workers_monitor_seconds in
             "") 
@@ -1230,14 +1240,14 @@ CloudflareEnableWorkersMonitor()
                 then
                     break
                 else
-                    Println "$error 检查时间间隔太短\n"
+                    Println "$(eval_gettext "\$error 检查时间间隔太短")\n"
                 fi
             ;;
         esac
     done
 
-    Println "$info 设置阀值, 请求数超过此值就会移动源站 CNAME"
-    while read -p "(默认: 100000): " cf_workers_monitor_request_counts
+    Println "$(eval_gettext "\$info 设置阀值, 请求数超过此值就会移动源站 CNAME")"
+    while read -p "$(gettext "(默认: 100000): ")" cf_workers_monitor_request_counts
     do
         case $cf_workers_monitor_request_counts in
             "") 
@@ -1258,8 +1268,8 @@ CloudflareEnableWorkersMonitor()
         esac
     done
 
-    Println "$tip 如果今天(UTC时间)已经开启过可以选 否"
-    inquirer list_input "是否从第一个账号开始" yn_options start_from_begin
+    Println "$(eval_gettext "\$tip 如果今天(UTC时间)已经开启过可以选 否")"
+    inquirer list_input "$(gettext "是否从第一个账号开始")" yn_options start_from_begin
 
     if [[ $start_from_begin == "$i18n_yes" ]] 
     then
@@ -1272,7 +1282,8 @@ CloudflareEnableWorkersMonitor()
     then
         PythonInstall
 
-        Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
+        local workers_file_name="${CF_WORKERS_FILE##*/}"
+        Println "$(eval_gettext "\$info 更新 \$workers_file_name ...")"
         if [ "$sh_debug" = false ] && [ ! -f "$IPTV_ROOT/VIP" ]
         then
             curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
@@ -1289,7 +1300,7 @@ CloudflareEnableWorkersMonitor()
         ( CloudflareWorkersMonitor ) > /dev/null 2> /dev/null < /dev/null &
     fi
 
-    Println "$info workers 监控开启成功\n"
+    Println "$(eval_gettext "\$info workers 监控开启成功")\n"
 }
 
 Include src/cloudflare/disable_workers_monitor "$@"

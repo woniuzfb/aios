@@ -62,7 +62,7 @@ OpensslSourceInstall()
 
     if [ -z "$openssl_pack_url" ]
     then
-        Println "$error 无法从 $openssl_url 获取 OpenSSL 源码包地址\n"
+        Println "$(eval_gettext "\$error 无法从 \$openssl_url 获取 OpenSSL 源码包地址")\n"
         return 1
     fi
 
@@ -111,7 +111,7 @@ OpensslSourceInstall()
             ;;
             arm*) args+=( linux-armv4 )
             ;;
-            *) Println "$error 不支持的架构 $arch\n"; return 1
+            *) Println "$(eval_gettext "\$error 不支持的架构 \$arch")\n"; return 1
         esac
 
         if [ "$dist" == "rpm" ] 
@@ -126,7 +126,7 @@ OpensslSourceInstall()
     cd "$DEPENDS_ROOT"
 
     curl -L "$openssl_pack_url" -o "$openssl_pack"
-    Println "$info 解压 $openssl_name ..."
+    Println "$(eval_gettext "\$info 解压 \$openssl_name ...")"
     tar xzf "$openssl_pack"
     cd "$openssl_name"
 

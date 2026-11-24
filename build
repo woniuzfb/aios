@@ -261,7 +261,7 @@ ReplaceInclude()
         elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]]
         then
             ReplaceInclude "${BASH_REMATCH[2]}" "${indent}${BASH_REMATCH[1]}"
-        elif [[ $line =~ ^([ ]*)\$\{ ]] || [[ $line =~ ^([ ]*)\` ]] || [[ $line =~ ^([ ]*)\— ]]
+        elif [[ $line =~ ^([ ]*)\$\{ ]] || [[ $line =~ ^([ ]*)\` ]] || [[ $line =~ ^([ ]*)\— ]] || [[ $line =~ ^([ ]*)\$\( ]]
         then
             echo "$line"
         else
@@ -296,9 +296,88 @@ BuildShFile()
         return 1
     fi
 
+    if [ "$out_file" == "$DEV_PATH/aios.sh" ] && [ -d "$DEV_PATH/docs" ]
+    then
+        cp -f "$out_file" "$DEV_PATH/docs/aios.sh"
+        chmod +x "$DEV_PATH/docs/aios.sh"
+    fi
+
     if [ "$INSTALL_SH" = true ]
     then
         cp -f "$out_file" "$SH_FILE"
+    fi
+}
+
+BuildI18nFiles()
+{
+    local make_pot="$DEV_PATH/i18n/make-pot.sh"
+    local po_dir="$DEV_PATH/i18n/po"
+    if [ ! -f "$make_pot" ] || ! command -v msgfmt > /dev/null 2>&1 || ! command -v xgettext > /dev/null 2>&1
+    then
+        return 0
+    fi
+
+    local err_log
+    err_log=$(mktemp)
+
+    if ! bash "$make_pot" zh_CN en > /dev/null 2> "$err_log"
+    then
+        cat "$err_log" >&2
+        rm -f "$err_log"
+        return 1
+    fi
+
+    local po_file po_base mo_lang mo_file mo_dir
+    for po_file in "$po_dir"/aios.sh-*.po
+    do
+        if [ ! -f "$po_file" ]
+        then
+            continue
+        fi
+
+        po_base="${po_file##*/}"
+        mo_lang="${po_base#aios.sh-}"
+        mo_lang="${mo_lang%.po}"
+        if [ "$mo_lang" == "en" ]
+        then
+            continue
+        fi
+
+        if ! bash "$make_pot" zh_CN "$mo_lang" > /dev/null 2> "$err_log"
+        then
+            cat "$err_log" >&2
+            rm -f "$err_log"
+            return 1
+        fi
+    done
+
+    if ! bash "$make_pot" b > /dev/null 2> "$err_log" \
+        || ! msgfmt --check -o /dev/null "$DEV_PATH/i18n/aios.sh.pot" 2>> "$err_log"
+    then
+        cat "$err_log" >&2
+        rm -f "$err_log"
+        return 1
+    fi
+
+    rm -f "$err_log"
+
+    if [ "$INSTALL_SH" = true ]
+    then
+        for mo_file in "$po_dir"/aios.sh-*.mo
+        do
+            if [ ! -f "$mo_file" ]
+            then
+                continue
+            fi
+
+            po_base="${mo_file##*/}"
+            mo_lang="${po_base#aios.sh-}"
+            mo_lang="${mo_lang%.mo}"
+            mo_dir="$TEXTDOMAINDIR/$mo_lang/LC_MESSAGES"
+            mkdir -p "$mo_dir"
+            cp -f "$mo_file" "$mo_dir/${TEXTDOMAIN}.mo"
+            chmod 644 "$mo_dir/${TEXTDOMAIN}.mo"
+        done
     fi
 }
 
@@ -312,6 +391,7 @@ fi
 if [ "${BUILD_LIBRARY_ONLY:-false}" != true ]
 then
     Spinner "Building aios.sh" BuildShFile
+    Spinner "Building i18n (.pot/.po/.mo)" BuildI18nFiles
 
     Println "$info new aios.sh created! For devs only!!\n"
 

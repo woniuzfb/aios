@@ -6,9 +6,9 @@ Del4gtvAcc()
 
     if JQ delete "$SERVICES_CONFIG"
     then
-        Println "$info 账号删除成功\n"
+        Println "$(eval_gettext "\$info 账号删除成功")\n"
     else
-        Println "$error 账号删除失败\n"
+        Println "$(eval_gettext "\$error 账号删除失败")\n"
         return 1
     fi
 }

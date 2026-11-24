@@ -15,7 +15,7 @@ CloudflareGetUsers()
         cf_users_token+=("$token")
         cf_users_api_key+=("$key")
 
-        cf_users_list="$cf_users_list ${green}$cf_users_count.${normal}${indent_6}邮箱: ${green}$email${normal}  密码: ${green}$pass${normal}\n${indent_6}Token: ${green}${token:-无}${normal}\n${indent_6}Key: ${green}${key:-无}${normal}\n\n"
+        cf_users_list="$cf_users_list ${green}$cf_users_count.${normal}${indent_6}$(gettext "邮箱"): ${green}$email${normal}  $(gettext "密码"): ${green}$pass${normal}\n${indent_6}Token: ${green}${token:-$(gettext "无")}${normal}\n${indent_6}Key: ${green}${key:-$(gettext "无")}${normal}\n\n"
     done < <(JQs query "$CF_CONFIG" '
         (if type == "object" and (.users | type) == "array" then .users else [] end)
         | map(select(type == "object"))[]

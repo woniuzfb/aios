@@ -10,30 +10,30 @@ SwapValidateSize()
 
 Swap()
 {
-    local swap_options=( '创建' '移除' )
+    local swap_options=( "$(gettext "创建")" "$(gettext "移除")" )
     echo
-    inquirer list_input_index "请选择" swap_options swap_options_index
+    inquirer list_input_index "$(gettext "请选择")" swap_options swap_options_index
 
     if [ $swap_options_index -eq 0 ]
     then
         if [ -f "$DEPENDS_ROOT"/swapfile ]
         then
-            Println "$DEPENDS_ROOT/swapfile 已存在\n"
+            Println "$(eval_gettext "\$DEPENDS_ROOT/swapfile 已存在")\n"
             return 1
         elif [ -f /swapfile ] 
         then
-            Println "/swapfile 已存在\n"
+            Println "$(gettext "/swapfile 已存在")\n"
             return 1
         fi
 
         echo
-        inquirer text_input "请输入 swap 大小(MB)" swapsize 500 SwapValidateSize "swap 大小必须是数字"
+        inquirer text_input "$(gettext "请输入 swap 大小(MB)")" swapsize 500 SwapValidateSize "$(gettext "swap 大小必须是数字")"
 
         mkdir -p "$DEPENDS_ROOT"
 
         if [ "$dist" == "mac" ] 
         then
-            Println "$tip 可能需要输入密码"
+            Println "$(eval_gettext "\$tip 可能需要输入密码")"
             sudo mkfile ${swapsize}m "$DEPENDS_ROOT"/swapfile
             sudo chmod 0600 "$DEPENDS_ROOT"/swapfile
             sudo mdutil -a -i -o SWAP="$DEPENDS_ROOT"/swapfile
@@ -46,11 +46,11 @@ Swap()
             echo "$DEPENDS_ROOT/swapfile none swap defaults 0 0" >> /etc/fstab
         fi
 
-        Println "swap 创建成功\n"
+        Println "$(gettext "swap 创建成功")\n"
     else
         if [ ! -f /swapfile ] && [ ! -f "$DEPENDS_ROOT"/swapfile ]
         then
-            Println "swapfile 不存在\n"
+            Println "$(gettext "swapfile 不存在")\n"
             return 1
         fi
 
@@ -63,7 +63,7 @@ Swap()
 
             if [ "$dist" == "mac" ] 
             then
-                Println "$tip 可能需要输入密码"
+                Println "$(eval_gettext "\$tip 可能需要输入密码")"
                 sudo mdutil -d -i -o SWAP="$swapfile"
             else
                 sed -i '/swapfile/d' /etc/fstab
@@ -74,6 +74,6 @@ Swap()
             rm -f "$swapfile"
         done
 
-        Println "swap 移除成功\n"
+        Println "$(gettext "swap 移除成功")\n"
     fi
 }

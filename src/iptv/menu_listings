@@ -8,7 +8,7 @@ Schedule()
 {
     if [ ! -d "$IPTV_ROOT" ]
     then
-        Println "$error 尚未安装, 请先安装 !" && exit 1
+        Println "$(eval_gettext "\$error 尚未安装, 请先安装 !")" && exit 1
     fi
 
     GetDefault
@@ -17,7 +17,7 @@ Schedule()
     then
         SCHEDULE_JSON="$d_schedule_file"
     else
-        Println "$error 请先设置 schedule_file 位置!\n" && exit 1
+        Println "$(eval_gettext "\$error 请先设置 schedule_file 位置!")\n" && exit 1
     fi
 
     if [ ! -s "$CRON_FILE" ]
@@ -80,7 +80,7 @@ Schedule()
                     break
                 fi
             done
-            [ "$provider_found" -eq 0 ] && Println "$error 没有找到频道\n" && exit 1
+            [ "$provider_found" -eq 0 ] && Println "$(eval_gettext "\$error 没有找到频道")\n" && exit 1
         fi
     fi
 
@@ -152,20 +152,20 @@ Schedule()
             ScheduleOther
         ;;
         "")
-            Println "节目表计划任务面板
+            Println "$(gettext "节目表计划任务面板")
 
-  ${green}1.${normal} 查看频道
-  ${green}2.${normal} 添加频道
-  ${green}3.${normal} 删除频道
-  ${green}4.${normal} 查看任务
-  ${green}5.${normal} 执行任务
-  ${green}6.${normal} 开启计划任务
-  ${green}7.${normal} 关闭计划任务
-  ${green}8.${normal} 备份任务
-  ${green}9.${normal} 查看备份
- ${green}10.${normal} 修改备份
- ${green}11.${normal} 恢复备份
- ${green}12.${normal} 删除备份
+  ${green}1.${normal} $(gettext "查看频道")
+  ${green}2.${normal} $(gettext "添加频道")
+  ${green}3.${normal} $(gettext "删除频道")
+  ${green}4.${normal} $(gettext "查看任务")
+  ${green}5.${normal} $(gettext "执行任务")
+  ${green}6.${normal} $(gettext "开启计划任务")
+  ${green}7.${normal} $(gettext "关闭计划任务")
+  ${green}8.${normal} $(gettext "备份任务")
+  ${green}9.${normal} $(gettext "查看备份")
+ ${green}10.${normal} $(gettext "修改备份")
+ ${green}11.${normal} $(gettext "恢复备份")
+ ${green}12.${normal} $(gettext "删除备份")
 
 "
             read -p "$i18n_default_cancel" cron_num
@@ -203,9 +203,9 @@ Schedule()
         "-")
             while IFS= read -r line
             do
-                if [[ $line == *"错误"* ]]
+                if [[ $line == *"$(gettext "[错误]")"* ]] || [[ $line == *"$(gettext "错误")"* ]] || [[ $line == *"错误"* ]]
                 then
-                    Println "错误: ${line#* }"
+                    Println "$(gettext "错误"): ${line#* }"
                 fi
             done < <(ScheduleExec)
         ;;
@@ -244,7 +244,7 @@ Schedule()
 
                 if [ -z "${schedule:-}" ]
                 then
-                    Println "$error $provider_name 没有找到: $2"
+                    Println "$(eval_gettext "\$error \$provider_name 没有找到"): $2"
                 else
                     if [ -e "$IPTV_ROOT/vip.pid" ]
                     then

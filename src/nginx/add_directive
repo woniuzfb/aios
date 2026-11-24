@@ -296,10 +296,11 @@ NginxAddDirective()
         level_1|level_2|level_3|level_4|level_5)
             level_id=${1#*_}
 
-            zh=( "" "一" "二" "三" "四" "五" )
+            zh=( "" "$(gettext "一")" "$(gettext "二")" "$(gettext "三")" "$(gettext "四")" "$(gettext "五")" )
+            local level_zh="${zh[level_id]}"
 
-            Println "$tip 空字符用 '' 表示"
-            inquirer text_input "输入${zh[level_id]}级指令: " new_directive "$i18n_cancel"
+            Println "$(eval_gettext "\$tip 空字符用 '' 表示")"
+            inquirer text_input "$(eval_gettext "输入\${level_zh}级指令: ")" new_directive "$i18n_cancel"
 
             if [ "$new_directive" == "$i18n_cancel" ]
             then
@@ -317,8 +318,8 @@ NginxAddDirective()
 
             if [ "$level_id" -ne 5 ]
             then
-                Println "$tip 如果需要添加下级指令请选择 是"
-                inquirer list_input "是否是 块 指令" ny_options yn_option
+                Println "$(eval_gettext "\$tip 如果需要添加下级指令请选择 是")"
+                inquirer list_input "$(gettext "是否是 块 指令")" ny_options yn_option
 
                 if [ "$yn_option" == "$i18n_yes" ]
                 then
@@ -360,7 +361,7 @@ NginxAddDirective()
             NginxBuildConf parse_out
             NginxGetConfig
 
-            Println "$info 指令 $new_directive 添加成功\n"
+            Println "$(eval_gettext "\$info 指令 \$new_directive 添加成功")\n"
         ;;
     esac
 }

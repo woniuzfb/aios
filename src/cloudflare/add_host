@@ -20,5 +20,5 @@ CloudflareAddHost()
 
     jq_path='["hosts"]'
     JQ add "$CF_CONFIG" "[$new_host]"
-    Println "$info CFP 添加成功\n"
+    Println "$(eval_gettext "\$info CFP 添加成功")\n"
 }

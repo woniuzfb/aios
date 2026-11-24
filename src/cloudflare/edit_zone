@@ -2,7 +2,7 @@ CloudflareEditZone()
 {
     CloudflareListZones
 
-    echo -e "选择源站"
+    echo -e "$(gettext "选择源站")"
     while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
@@ -31,7 +31,7 @@ CloudflareEditZone()
         esac
     done
 
-    Println "  选择需要修改的设置
+    Println "  $(gettext "选择需要修改的设置")
 
   ${green}1.${normal} Always Use HTTPS
   ${green}2.${normal} SSL
@@ -76,5 +76,5 @@ CloudflareEditZone()
     jq_json=true
     jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
     JQ update "$CF_CONFIG" "$new_zone"
-    Println "$info 源站修改成功\n"
+    Println "$(eval_gettext "\$info 源站修改成功")\n"
 }

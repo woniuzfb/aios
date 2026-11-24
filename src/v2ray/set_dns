@@ -1,25 +1,25 @@
 V2raySetDns()
 {
     local actions=(
-        '添加静态 IP (hosts)'
-        '添加 DNS 服务器'
-        '设置 clientIp'
-        '设置 DNS 标识 tag'
-        '设置 queryStrategy'
-        '设置缓存与回退开关'
-        '删除静态 IP (hosts)'
-        '删除 DNS 服务器'
+        "$(gettext "添加静态 IP (hosts)")"
+        "$(gettext "添加 DNS 服务器")"
+        "$(gettext "设置 clientIp")"
+        "$(gettext "设置 DNS 标识 tag")"
+        "$(gettext "设置 queryStrategy")"
+        "$(gettext "设置缓存与回退开关")"
+        "$(gettext "删除静态 IP (hosts)")"
+        "$(gettext "删除 DNS 服务器")"
     )
     local action_idx=0
     echo
-    inquirer list_input_index "选择 V2Ray DNS 操作" actions action_idx
+    inquirer list_input_index "$(gettext "选择 V2Ray DNS 操作")" actions action_idx
 
     case "$action_idx" in
         0)
             local domain ips
-            Println "$tip 格式如 v2fly.org, domain:v2fly.org, geosite:cn"
-            inquirer text_input "输入域名或规则" domain ""
-            inquirer text_input "输入目标 IP/域名 (逗号分隔)" ips ""
+            Println "$(eval_gettext "\$tip 格式如 v2fly.org, domain:v2fly.org, geosite:cn")"
+            inquirer text_input "$(gettext "输入域名或规则")" domain ""
+            inquirer text_input "$(gettext "输入目标 IP/域名 (逗号分隔)")" ips ""
             JQ mutate "$V2_CONFIG" '
                 def trim: gsub("^[ \t]+|[ \t]+$"; "");
                 .dns.hosts = ((.dns.hosts // {}) + {
@@ -31,22 +31,22 @@ V2raySetDns()
                         end
                     )
                 })' --arg d "$domain" --arg v "$ips"
-            Println "$info 静态 IP 添加成功: ${green}${domain}${normal}\n"
+            Println "$(eval_gettext "\$info 静态 IP 添加成功: \${green}\${domain}\${normal}")\n"
         ;;
         1)
             local addr port client_ip domains expect_ips
-            local skip_fb_opts=( '否' '是' )
+            local skip_fb_opts=( "$(gettext "否")" "$(gettext "是")" )
             local skip_fb_idx=0
-            inquirer text_input "输入 DNS 地址 (如 1.1.1.1, https://...)" addr "1.1.1.1"
-            inquirer text_input "输入端口 (留空默认)" port ""
-            inquirer text_input "输入服务器级 clientIp (可留空)" client_ip ""
-            inquirer text_input "输入匹配 domains (逗号分隔, 可留空)" domains ""
-            inquirer text_input "输入 expectIPs (逗号分隔, 可留空)" expect_ips ""
-            inquirer list_input_index "跳过回退 skipFallback" skip_fb_opts skip_fb_idx
+            inquirer text_input "$(gettext "输入 DNS 地址 (如 1.1.1.1, https://...)")" addr "1.1.1.1"
+            inquirer text_input "$(gettext "输入端口 (留空默认)")" port ""
+            inquirer text_input "$(gettext "输入服务器级 clientIp (可留空)")" client_ip ""
+            inquirer text_input "$(gettext "输入匹配 domains (逗号分隔, 可留空)")" domains ""
+            inquirer text_input "$(gettext "输入 expectIPs (逗号分隔, 可留空)")" expect_ips ""
+            inquirer list_input_index "$(gettext "跳过回退 skipFallback")" skip_fb_opts skip_fb_idx
 
             if [ -n "$port" ] && { ! [[ "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; }
             then
-                Println "$error DNS 端口必须为 1-65535 的整数: ${port}\n"
+                Println "$(eval_gettext "\$error DNS 端口必须为 1-65535 的整数: \${port}")\n"
                 return 1
             fi
 
@@ -69,11 +69,11 @@ V2raySetDns()
             fi
             jq_path='["dns","servers"]'
             JQ add "$V2_CONFIG" "[$srv_json]"
-            Println "$info DNS 服务器添加成功: ${green}${addr}${normal}\n"
+            Println "$(eval_gettext "\$info DNS 服务器添加成功: \${green}\${addr}\${normal}")\n"
         ;;
         2)
             local cip
-            inquirer text_input "输入全局 clientIp (留空清除)" cip ""
+            inquirer text_input "$(gettext "输入全局 clientIp (留空清除)")" cip ""
             jq_path='["dns","clientIp"]'
             if [ -z "$cip" ]
             then
@@ -81,36 +81,36 @@ V2raySetDns()
             else
                 JQ update "$V2_CONFIG" "$cip"
             fi
-            Println "$info DNS clientIp 设置成功\n"
+            Println "$(eval_gettext "\$info DNS clientIp 设置成功")\n"
         ;;
         3)
             local dtag
-            inquirer text_input "输入 DNS 标识 tag" dtag "dns_inbound"
+            inquirer text_input "$(gettext "输入 DNS 标识 tag")" dtag "dns_inbound"
             jq_path='["dns","tag"]'
             JQ update "$V2_CONFIG" "$dtag"
-            Println "$info DNS tag 设置成功: ${green}${dtag}${normal}\n"
+            Println "$(eval_gettext "\$info DNS tag 设置成功: \${green}\${dtag}\${normal}")\n"
         ;;
         4)
             local qs_options=( 'UseIP' 'UseIPv4' 'UseIPv6' )
             local qs=""
-            inquirer list_input "选择 DNS 查询策略 queryStrategy" qs_options qs
+            inquirer list_input "$(gettext "选择 DNS 查询策略 queryStrategy")" qs_options qs
             jq_path='["dns","queryStrategy"]'
             JQ update "$V2_CONFIG" "$qs"
-            Println "$info queryStrategy 已设置为 ${green}${qs}${normal}\n"
+            Println "$(eval_gettext "\$info queryStrategy 已设置为 \${green}\${qs}\${normal}")\n"
         ;;
         5)
-            local yn_opts=( '否' '是' )
+            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
             local dc_idx=0 df_idx=0 dfm_idx=0
-            inquirer list_input_index "禁用缓存 disableCache" yn_opts dc_idx
-            inquirer list_input_index "禁用回退 disableFallback" yn_opts df_idx
-            inquirer list_input_index "匹配时不回退 disableFallbackIfMatch" yn_opts dfm_idx
+            inquirer list_input_index "$(gettext "禁用缓存 disableCache")" yn_opts dc_idx
+            inquirer list_input_index "$(gettext "禁用回退 disableFallback")" yn_opts df_idx
+            inquirer list_input_index "$(gettext "匹配时不回退 disableFallbackIfMatch")" yn_opts dfm_idx
 
             JQ mutate "$V2_CONFIG" '.dns = ((.dns // {}) * {
                 "disableCache": ($dc == "1"),
                 "disableFallback": ($df == "1"),
                 "disableFallbackIfMatch": ($dfm == "1")
             })' --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx"
-            Println "$info V2Ray DNS 全局开关已更新\n"
+            Println "$(eval_gettext "\$info V2Ray DNS 全局开关已更新")\n"
         ;;
         6)
             local host_keys=()
@@ -121,14 +121,14 @@ V2raySetDns()
             done < <(JQs query "$V2_CONFIG" 'if (.dns | type) == "object" and (.dns.hosts | type) == "object" then (.dns.hosts | keys[]) else empty end')
             if [ "${#host_keys[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的静态 IP\n"
+                Println "$(eval_gettext "\$error 没有可删除的静态 IP")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的静态 IP" host_keys del_idx
+            inquirer list_input_index "$(gettext "选择要删除的静态 IP")" host_keys del_idx
             local del_key="${host_keys[$del_idx]}"
             JQ mutate "$V2_CONFIG" 'del(.dns.hosts[$k])' --arg k "$del_key"
-            Println "$info 已删除静态 IP: ${green}${del_key}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除静态 IP: \${green}\${del_key}\${normal}")\n"
         ;;
         7)
             local srv_opts=()
@@ -139,14 +139,14 @@ V2raySetDns()
             done < <(JQs query "$V2_CONFIG" 'if (.dns | type) == "object" and (.dns.servers | type) == "array" then (.dns.servers | to_entries[] | "\(.key + 1). \(if (.value | type) == "string" then .value elif (.value | type) == "object" then (.value.address // "server") else "server" end)") else empty end')
             if [ "${#srv_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的 DNS 服务器\n"
+                Println "$(eval_gettext "\$error 没有可删除的 DNS 服务器")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的 DNS 服务器" srv_opts del_idx
+            inquirer list_input_index "$(gettext "选择要删除的 DNS 服务器")" srv_opts del_idx
             jq_path='["dns","servers",'"$del_idx"']'
             JQ delete "$V2_CONFIG"
-            Println "$info 已删除 DNS 服务器: ${green}${srv_opts[$del_idx]}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除 DNS 服务器:") ${green}${srv_opts[$del_idx]}${normal}\n"
         ;;
     esac
 

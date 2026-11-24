@@ -43,8 +43,8 @@ StartChannel()
 
             if [ -z "${formats_indices:-}" ] 
             then
-                Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?\n"
-                MonitorErr "$chnl_channel_name 解析发生错误, 直播链接不存在?"
+                Println "$(eval_gettext "\$error [ \$chnl_channel_name ] 解析发生错误, 直播链接不存在?")\n"
+                MonitorErr "$(eval_gettext "\$chnl_channel_name 解析发生错误, 直播链接不存在?")"
                 return 0
             fi
         fi
@@ -71,8 +71,8 @@ StartChannel()
 
             if ! parse_urls=($(yt-dlp --no-warnings -f "$code" -g "$chnl_stream_link")) && ! parse_urls=($(youtube-dl -f "$code" -g "$chnl_stream_link"))
             then
-                Println "$error [ $chnl_channel_name ] 解析 $code 发生错误"
-                MonitorErr "$chnl_channel_name 解析 $code 发生错误"
+                Println "$(eval_gettext "\$error [ \$chnl_channel_name ] 解析 \$code 发生错误")"
+                MonitorErr "$(eval_gettext "\$chnl_channel_name 解析 \$code 发生错误")"
                 return 0
             fi
 
@@ -85,7 +85,7 @@ StartChannel()
             done
         elif ! chnl_stream_link=$(yt-dlp --no-warnings -f "$code" -g "$chnl_stream_link") && ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
         then
-            Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?"
+            Println "$(eval_gettext "\$error [ \$chnl_channel_name ] 解析发生错误, 直播链接不存在?")"
             return 0
         fi
 
@@ -121,7 +121,7 @@ StartChannel()
         chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
     elif [[ $chnl_stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
     then
-        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
+        Println "$(eval_gettext "\$info 解析 [ \$chnl_channel_name ] 链接 ...")"
         hinet_4gtv=(
             "litv-ftv13:民視新聞台"
             "litv-longturn14:寰宇新聞台"
@@ -184,7 +184,7 @@ StartChannel()
 
                 if [ -z "$stream_link_data" ] 
                 then
-                    Println "$error 无法连接 4gtv !\n"
+                    Println "$(eval_gettext "\$error 无法连接 4gtv !")\n"
                     return 0
                 fi
 
@@ -204,7 +204,7 @@ StartChannel()
         done
     elif [[ $chnl_stream_link == *"4gtv.tv/"* ]] 
     then
-        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
+        Println "$(eval_gettext "\$info 解析 [ \$chnl_channel_name ] 链接 ...")"
         chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers="Referer: $chnl_stream_link\r\n"
         chnl_cookies=""
@@ -267,7 +267,7 @@ StartChannel()
 
         if [ -z "$stream_link_data" ] 
         then
-            Println "$error 无法连接 4gtv !\n"
+            Println "$(eval_gettext "\$error 无法连接 4gtv !")\n"
             return 0
         fi
 
@@ -275,7 +275,7 @@ StartChannel()
 
         if [ "$stream_link_data" == null ] 
         then
-            Println "$error 此服务器 ip 不支持或频道 [ $chnl_channel_name ] 不可用!\n"
+            Println "$(eval_gettext "\$error 此服务器 ip 不支持或频道 [ \$chnl_channel_name ] 不可用!")\n"
             return 0
         fi
 
@@ -368,7 +368,7 @@ StartChannel()
 
         if [ -z "$token_url" ] 
         then
-            Println "$error 无法解析 tvb: token url\n"
+            Println "$(eval_gettext "\$error 无法解析 tvb: token url")\n"
             return 0
         fi
 
@@ -383,7 +383,7 @@ StartChannel()
 
         if [ "$chnl_stream_link" == null ] 
         then
-            Println "$error 无法解析 tvb: url\n"
+            Println "$(eval_gettext "\$error 无法解析 tvb: url")\n"
             return 0
         fi
 
@@ -624,7 +624,7 @@ StartChannel()
                             fi
                         done
 
-                        Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
+                        Println "$error ${chnl_stream_url_qualities[i]} $(gettext "不存在")"
 
                         if [ "$monitor" = true ] 
                         then
@@ -636,7 +636,7 @@ StartChannel()
                         then
                             choose_asked=true
                             echo
-                            inquirer list_input_index "是否按分辨率自动选择" yn_options yn_index
+                            inquirer list_input_index "$(gettext "是否按分辨率自动选择")" yn_options yn_index
 
                             if [ "$yn_index" -eq 0 ] 
                             then
@@ -646,13 +646,13 @@ StartChannel()
                         fi
 
                         choose=1
-                        Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                        Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                         break
                     done
 
                     if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
                     then
-                        Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                        Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                         return 0
                     fi
 
@@ -662,7 +662,7 @@ StartChannel()
                     fi
                 elif [ "$monitor" = true ] 
                 then
-                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                    Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                     return 0
                 else
                     choose=1
@@ -671,11 +671,11 @@ StartChannel()
                 if [ "$choose" -eq 1 ]
                 then
                     chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
-                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
+                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
                     Println "$chnl_stream_urls_list"
-                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+                    echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
 
-                    while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+                    while read -p "$(eval_gettext "(默认: \$chnl_stream_urls_count): ")" chnl_stream_urls_num 
                     do
                         chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
 
@@ -782,11 +782,11 @@ StartChannel()
                                 done
                                 if [ "$monitor" = true ] 
                                 then
-                                    MonitorErr "$chnl_channel_name 请重新选择音轨"
+                                    MonitorErr "$(eval_gettext "\$chnl_channel_name 请重新选择音轨")"
                                     return 0
                                 fi
                                 choose=1
-                                Println "$error 请重新选择音轨\n"
+                                Println "$(eval_gettext "\$error 请重新选择音轨")\n"
                                 break
                             done
                         fi
@@ -804,19 +804,19 @@ StartChannel()
                             then
                                 chnl_stream_audio_num_default=$((i+1))
                             fi
-                            chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${chnl_stream_audio_group_id[i]}${normal} 名称: ${green}${chnl_stream_audio_name[i]}${normal} 语言: ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
+                            chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}$(gettext "音轨组"): ${green}${chnl_stream_audio_group_id[i]}${normal} $(gettext "名称"): ${green}${chnl_stream_audio_name[i]}${normal} $(gettext "语言"): ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
                         done
 
                         chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
-                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_unselect_all.${normal}${indent_6}$(gettext "不启用")\n\n"
 
                         chnl_stream_audio_select_all=$((chnl_stream_audio_count+2))
-                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_select_all.${normal}${indent_6}全部启用"
+                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_select_all.${normal}${indent_6}$(gettext "全部启用")"
                         Println "$chnl_stream_audio_list\n"
-                        echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+                        echo "$(gettext "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)")"
                         chnl_stream_audio_num_default=$chnl_stream_audio_select_all
 
-                        while read -p "(默认: $chnl_stream_audio_num_default): " chnl_stream_audio_num 
+                        while read -p "$(eval_gettext "(默认: \$chnl_stream_audio_num_default): ")" chnl_stream_audio_num 
                         do
                             chnl_stream_audio_num=${chnl_stream_audio_num:-$chnl_stream_audio_num_default}
 
@@ -947,11 +947,11 @@ StartChannel()
                                 done
                                 if [ "$monitor" = true ] 
                                 then
-                                    MonitorErr "$chnl_channel_name 请重新选择字幕"
+                                    MonitorErr "$(eval_gettext "\$chnl_channel_name 请重新选择字幕")"
                                     return 0
                                 fi
                                 choose=1
-                                Println "$error 请重新选择字幕\n"
+                                Println "$(eval_gettext "\$error 请重新选择字幕")\n"
                                 break
                             done
                         fi
@@ -969,19 +969,19 @@ StartChannel()
                             then
                                 chnl_stream_subtitles_num_default=$((i+1))
                             fi
-                            chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${chnl_stream_subtitles_group_id[i]}${normal} 名称: ${green}${chnl_stream_subtitles_name[i]}${normal} 语言: ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                            chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$(gettext "字幕组"): ${green}${chnl_stream_subtitles_group_id[i]}${normal} $(gettext "名称"): ${green}${chnl_stream_subtitles_name[i]}${normal} $(gettext "语言"): ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
                         done
 
                         chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))
-                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_unselect_all.${normal}${indent_6}$(gettext "不启用")\n\n"
 
                         chnl_stream_subtitles_select_all=$((chnl_stream_subtitles_count+2))
-                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_select_all.${normal}${indent_6}全部启用"
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_select_all.${normal}${indent_6}$(gettext "全部启用")"
                         Println "$chnl_stream_subtitles_list\n"
-                        echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+                        echo "$(gettext "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)")"
                         chnl_stream_subtitles_num_default=$chnl_stream_subtitles_select_all
 
-                        while read -p "(默认: $chnl_stream_subtitles_num_default): " chnl_stream_subtitles_num 
+                        while read -p "$(eval_gettext "(默认: \$chnl_stream_subtitles_num_default): ")" chnl_stream_subtitles_num 
                         do
                             chnl_stream_subtitles_num=${chnl_stream_subtitles_num:-$chnl_stream_subtitles_num_default}
 
@@ -1095,8 +1095,8 @@ StartChannel()
                     chnl_stream_link=${chnl_stream_link_url%%|*}
                     chnl_stream_link_url="${chnl_stream_link_url}|origin"
                 else
-                    Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
-                    inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+                    Println "$(eval_gettext "\$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接")"
+                    inquirer list_input "$(gettext "是否是需要鉴权的直播源")" yn_options yn_option
                     if [ "$yn_option" == "$i18n_yes" ] 
                     then
                         chnl_use_primary_playlist=true
@@ -1137,8 +1137,8 @@ StartChannel()
             chnl_ts_id="${BASH_REMATCH[1]}"
             chnl_ts_user_name="${BASH_REMATCH[2]}"
         else
-            Println "$error 无法解析 code\n"
-            MonitorErr "$chnl_channel_name 无法解析 code"
+            Println "$(eval_gettext "\$error 无法解析 code")\n"
+            MonitorErr "$(eval_gettext "\$chnl_channel_name 无法解析 code")"
             return 0
         fi
     fi
@@ -1239,7 +1239,7 @@ StartChannel()
     then
         if [ "$chnl_status" == "on" ] 
         then
-            Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
+            Println "$(eval_gettext "\$error HLS 频道正开启, 走错片场了?")\n" && exit 1
         fi
 
         if [ "$chnl_flv_h265" = true ]
@@ -1252,15 +1252,15 @@ StartChannel()
                 if [ "$monitor" = false ] 
                 then
                     echo
-                    ffmpeg_c_options=( '快速安装' '编译 FFmpeg (耗时非常非常久)' )
-                    inquirer list_input_index "选择 FFmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
+                    ffmpeg_c_options=( "$(gettext "快速安装")" "$(gettext "编译 FFmpeg (耗时非常非常久)")" )
+                    inquirer list_input_index "$(gettext "选择 FFmpeg (h265版本) 安装方式")" ffmpeg_c_options ffmpeg_c_options_index
                     if [ "$ffmpeg_c_options_index" -eq 0 ] 
                     then
                         if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o "$AIOS_PREFIX"/bin/ffmpeg_c
                         then
                             chmod +x "$AIOS_PREFIX"/bin/ffmpeg_c
                         else
-                            Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
+                            Println "$(eval_gettext "\$error 暂时无法连接服务器, 请稍后再试 !")\n"
                             exit 1
                         fi
                     else
@@ -1286,12 +1286,12 @@ StartChannel()
                 ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
             fi
         else
-            Println "$error 暂不支持输出 $kind ...\n" && exit 1
+            Println "$(eval_gettext "\$error 暂不支持输出 \$kind ...")\n" && exit 1
         fi
     else
         if [ "$chnl_flv_status" == "on" ] 
         then
-            Println "$error FLV 频道正开启, 走错片场了？\n" && exit 1
+            Println "$(eval_gettext "\$error FLV 频道正开启, 走错片场了?")\n" && exit 1
         fi
 
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
@@ -1315,5 +1315,5 @@ StartChannel()
     chnl_stream_url_cdn=""
     chnl_xc_proxy=""
 
-    Println "$info 频道 [ $chnl_channel_name ] 已开启 !\n"
+    Println "$(eval_gettext "\$info 频道 [ \$chnl_channel_name ] 已开启 !")\n"
 }

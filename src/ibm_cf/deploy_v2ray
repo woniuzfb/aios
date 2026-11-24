@@ -14,19 +14,19 @@ IbmDeployV2ray()
 
     if [ "$port_found" -eq 0 ] 
     then
-        Println "$error 请先添加 8080 端口\n"
+        Println "$(eval_gettext "\$error 请先添加 8080 端口")\n"
         exit 1
     fi
 
     if [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name" ] || [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl" ]
     then
-        Println "$error 请先更新 IBM $v2ray_name APP\n"
+        Println "$(eval_gettext "\$error 请先更新 IBM \$v2ray_name APP")\n"
         exit 1
     fi
 
     IbmListCfApp
 
-    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    Println "$(eval_gettext "\$info 登录账号: \$ibm_user_email [ \$ibm_user_region ]")"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 

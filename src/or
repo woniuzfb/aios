@@ -75,7 +75,7 @@ if [ "$dist" != "mac" ] && [ ! -s "/etc/systemd/system/$nginx_name.service" ] &&
 then
     if ! ResourceLimit 
     then
-        Println "$error 可能环境是 Unprivileged Container ?\n"
+        Println "$(eval_gettext "\$error 可能环境是 Unprivileged Container ?")\n"
     fi
 cat > /etc/systemd/system/$nginx_name.service <<EOF
 [Unit]
@@ -113,7 +113,7 @@ EOF
     systemctl enable "$nginx_name"
     if ! systemctl start "$nginx_name"
     then
-        Println "$error 端口占用?\n"
+        Println "$(eval_gettext "\$error 端口占用?")\n"
     fi
 fi
 
@@ -121,7 +121,7 @@ case ${1:-} in
     e) 
         if [ ! -d "$nginx_prefix" ] 
         then
-            Println "$error 尚未安装, 请检查 !\n"
+            Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n"
             exit 1
         fi
 
@@ -132,14 +132,14 @@ case ${1:-} in
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
         echo
-        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index 20
+        inquirer list_input_index "$(gettext "选择配置文件")" nginx_confs nginx_confs_index 20
         editor "${nginx_confs[nginx_confs_index]}"
         exit 0
     ;;
     l) 
         if [ ! -d "$nginx_prefix" ] 
         then
-            Println "$error 尚未安装, 请检查 !\n"
+            Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n"
             exit 1
         fi
 
@@ -149,12 +149,12 @@ case ${1:-} in
 
         if [ -z "${nginx_logs:-}" ] 
         then
-            Println "$error 没有日志 !\n"
+            Println "$(eval_gettext "\$error 没有日志 !")\n"
             exit 1
         fi
 
         echo
-        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index 20
+        inquirer list_input_index "$(gettext "选择日志文件")" nginx_logs nginx_logs_index 20
 
         if [ "${2:-}" == "t" ] 
         then
@@ -168,30 +168,30 @@ case ${1:-} in
     ;;
 esac
 
-Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
+Println "  $(gettext "openresty 管理面板") ${normal}${red}[v$sh_ver]${normal}
 
-  ${green}1.${normal} 安装
-  ${green}2.${normal} 卸载
-  ${green}3.${normal} 升级
+  ${green}1.${normal} $(gettext "安装")
+  ${green}2.${normal} $(gettext "卸载")
+  ${green}3.${normal} $(gettext "升级")
 ————————————
-  ${green}4.${normal} 查看域名
-  ${green}5.${normal} 添加域名
-  ${green}6.${normal} 修改域名
-  ${green}7.${normal} 开关域名
-  ${green}8.${normal} 查看本地
-  ${green}9.${normal} 修改本地
+  ${green}4.${normal} $(gettext "查看域名")
+  ${green}5.${normal} $(gettext "添加域名")
+  ${green}6.${normal} $(gettext "修改域名")
+  ${green}7.${normal} $(gettext "开关域名")
+  ${green}8.${normal} $(gettext "查看本地")
+  ${green}9.${normal} $(gettext "修改本地")
 ————————————
- ${green}10.${normal} 状态
- ${green}11.${normal} 开关
- ${green}12.${normal} 重启
+ ${green}10.${normal} $(gettext "状态")
+ ${green}11.${normal} $(gettext "开关")
+ ${green}12.${normal} $(gettext "重启")
 ————————————
- ${green}13.${normal} 配置 日志切割
- ${green}14.${normal} 识别 ip
- ${green}15.${normal} 删除域名
- ${green}16.${normal} 证书管理
- ${green}17.${normal} 测速
+ ${green}13.${normal} $(gettext "配置 日志切割")
+ ${green}14.${normal} $(gettext "识别 ip")
+ ${green}15.${normal} $(gettext "删除域名")
+ ${green}16.${normal} $(gettext "证书管理")
+ ${green}17.${normal} $(gettext "测速")
 
- ${tip} 输入: or 打开面板
+ $(eval_gettext "\$tip 输入: or 打开面板")
 
 "
 read -p "`gettext \"输入序号\"` [1-17]: " openresty_num

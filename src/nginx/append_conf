@@ -24,7 +24,7 @@ EOF
 
 NginxAppendHttpRedirectConf()
 {
-    echo && read -p "输入网址: " http_redirect_address
+    echo && read -p "$(gettext "输入网址: ")" http_redirect_address
 cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
@@ -90,7 +90,7 @@ EOF
 
 NginxAppendHttpsRedirectConf()
 {
-    echo && read -p "输入网址: " https_redirect_address
+    echo && read -p "$(gettext "输入网址: ")" https_redirect_address
 cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_https_port ssl;
@@ -115,7 +115,7 @@ EOF
 
 NginxAppendHttpHttpsRedirectConf()
 {
-    echo && read -p "输入网址: " http_https_redirect_address
+    echo && read -p "$(gettext "输入网址: ")" http_https_redirect_address
 cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;

@@ -2,14 +2,14 @@ CloudflareListWorkersRoutes()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
-        Println "$error 请先添加用户\n" && exit 1
+        Println "$(eval_gettext "\$error 请先添加用户")\n" && exit 1
     fi
 
     CloudflareGetUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
@@ -47,7 +47,7 @@ CloudflareListWorkersRoutes()
             -H ''"$curl_header_auth_key"'' \
             -H ''"$curl_header_auth_token"'' \
             | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
-        ) || Println "$error Token 权限错误 ?"
+        ) || Println "$(eval_gettext "\$error Token 权限错误 ?")"
         IFS="|" read -r -a zones_id <<< "$zone_id"
         IFS="|" read -r -a zones_name <<< "$zone_name"
         IFS="|" read -r -a accounts_id <<< "$account_id"
@@ -75,13 +75,13 @@ CloudflareListWorkersRoutes()
             cf_users_zones_account_token+=("${cf_users_token[i]}")
             cf_users_zones_account_api_key+=("${cf_users_api_key[i]}")
             cf_users_zones_account_email+=("${cf_users_email[i]}")
-            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}${green}${zones_name[j]}${normal}  路由数: ${green}$count${normal}\n\n"
+            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}${green}${zones_name[j]}${normal}  $(gettext "路由数"): ${green}$count${normal}\n\n"
         done
     done
 
     if [ "$cf_users_zones_count" -eq 0 ] 
     then
-        Println "$error 没有找到域名, 请先添加源站\n"
+        Println "$(eval_gettext "\$error 没有找到域名, 请先添加源站")\n"
         exit 1
     fi
 

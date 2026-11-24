@@ -4,13 +4,13 @@ CloudflareDeployWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        Println "$error 请先添加 worker\n"
+        Println "$(eval_gettext "\$error 请先添加 worker")\n"
         exit 1
     fi
 
-    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}$(gettext "全部")"
 
-    Println "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
+    Println "$(gettext "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11")"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
         [ -z "$cf_workers_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -84,7 +84,8 @@ CloudflareDeployWorker()
     do
         if [ ! -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" ] 
         then
-            Println "$error worker ${cf_workers_name[cf_workers_index]} 目录: $CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]} 不存在\n"
+            local worker_name="${cf_workers_name[cf_workers_index]}" worker_path="${cf_workers_path[cf_workers_index]}"
+            Println "$(eval_gettext "\$error worker \$worker_name 目录: \$CF_WORKERS_ROOT/\$worker_path 不存在")\n"
             exit 1
         fi
     done
@@ -93,14 +94,14 @@ CloudflareDeployWorker()
 
     if [ "$cf_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
-    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}$(gettext "全部")"
 
     cf_users_indices=()
-    Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
+    Println "$(gettext "选择用户, 多个用户用空格分隔, 比如 5 7 9-11")"
     while read -p "$i18n_default_cancel" cf_users_num 
     do
         [ -z "$cf_users_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -180,7 +181,7 @@ CloudflareDeployWorker()
         for cf_users_index in "${cf_users_indices[@]}"
         do
             cf_user_email=${cf_users_email[cf_users_index]}
-            Println "$info 部署到 $cf_user_email"
+            Println "$(eval_gettext "\$info 部署到 \$cf_user_email")"
 
             cf_user_pass=${cf_users_pass[cf_users_index]}
             cf_user_token=${cf_users_token[cf_users_index]}
@@ -201,15 +202,16 @@ CloudflareDeployWorker()
             then
                 if [ "$cf_use_api" -eq 1 ] 
                 then
-                    Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
+                    Println "$(eval_gettext "\$error 请添加账号 \$cf_user_email Token 或 Key")\n"
                     exit 1
                 fi
 
-                Println "$info 尝试获取用户 Token ..."
+                Println "$(eval_gettext "\$info 尝试获取用户 Token ...")"
 
                 PythonInstall
 
-                Println "$info 更新 ${CF_WORKERS_FILE##*/}"
+                local workers_file_name="${CF_WORKERS_FILE##*/}"
+                Println "$(eval_gettext "\$info 更新 \$workers_file_name ...")"
                 wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
                 || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_FALLBACK" -qO "$CF_WORKERS_FILE"
 
@@ -227,7 +229,7 @@ CloudflareDeployWorker()
 
                 if [ -z "$cf_user_token" ] 
                 then
-                    Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+                    Println "$(eval_gettext "\$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录")\n"
                     exit 1
                 else
                     cf_users_token[cf_users_index]="$cf_user_token"
@@ -246,7 +248,7 @@ CloudflareDeployWorker()
                     jq_json=true
                     jq_path='["users",'"$cf_users_index"']'
                     JQ update "$CF_CONFIG" "$new_user"
-                    Println "$info 获取用户 $cf_user_email Token 成功"
+                    Println "$(eval_gettext "\$info 获取用户 \$cf_user_email Token 成功")"
                 fi
             fi
 
@@ -260,7 +262,7 @@ CloudflareDeployWorker()
 
             if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
             then
-                Println "$error 无法获取用户 ID, Token 错误 ?\n"
+                Println "$(eval_gettext "\$error 无法获取用户 ID, Token 错误 ?")\n"
                 exit 1
             fi
 
@@ -278,12 +280,12 @@ CloudflareDeployWorker()
 
             if CF_API_TOKEN="$cf_user_token" wrangler publish 
             then
-                Println "$info worker: $cf_worker_name 部署成功\n"
+                Println "$(eval_gettext "\$info worker: \$cf_worker_name 部署成功")\n"
             elif [ "$cf_use_api" -eq 1 ] 
             then
-                Println "$error 请检查 worker: $cf_worker_name Token 权限\n"
+                Println "$(eval_gettext "\$error 请检查 worker: \$cf_worker_name Token 权限")\n"
             else
-                Println "$error 请检查 worker: $cf_worker_name Token 权限, 尝试修复 ...\n"
+                Println "$(eval_gettext "\$error 请检查 worker: \$cf_worker_name Token 权限, 尝试修复 ...")\n"
 
                 PythonInstall
 

@@ -9,7 +9,7 @@ V2rayResetStats()
     then
         "$V2_FILE" api statsquery --server="$api_inbound_listen:$api_inbound_port" --pattern="" --reset
     else
-        Println "$error 未找到 v2ctl 或 v2ray 可执行文件\n"
+        Println "$(eval_gettext "\$error 未找到 v2ctl 或 v2ray 可执行文件")\n"
         return 1
     fi
 }

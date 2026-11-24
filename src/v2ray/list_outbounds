@@ -4,11 +4,11 @@ V2rayListOutbounds()
 
     if [ "$outbounds_count" -eq 0 ]
     then
-        Println "$error 没有出站\n"
+        Println "$(eval_gettext "\$error 没有出站")\n"
         return 1
     fi
 
-    Println "\n=== 出站数 ${green} $outbounds_count ${normal}"
+    Println "\n=== $(eval_gettext "出站数 \${green} \$outbounds_count \${normal}")"
     outbounds_list=$(ProxyRenderOutbounds "$V2_CONFIG" v2ray)
     Println "$outbounds_list"
 }

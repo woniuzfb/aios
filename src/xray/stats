@@ -26,13 +26,13 @@ XrayListStats()
     local raw_stats
     if ! raw_stats=$("$XCTL_FILE" api statsquery --server="$api_server" 2>&1)
     then
-        Println "$error 无法连接 Xray API ($api_server), 请确认已开启 api 与 stats: ${raw_stats}\n"
+        Println "$(eval_gettext "\$error 无法连接 Xray API (\$api_server), 请确认已开启 api 与 stats: \${raw_stats}")\n"
         return 1
     fi
 
     if ! printf '%s' "$raw_stats" | $JQ_FILE -e . > /dev/null 2>&1
     then
-        Println "$error Xray API 返回非合法 JSON ($api_server): ${raw_stats}\n"
+        Println "$(eval_gettext "\$error Xray API 返回非合法 JSON (\$api_server): \${raw_stats}")\n"
         return 1
     fi
 
@@ -41,24 +41,24 @@ XrayListStats()
 
     if [ -z "$formatted" ]
     then
-        Println "$info 暂无流量统计数据\n"
+        Println "$(eval_gettext "\$info 暂无流量统计数据")\n"
         return 0
     fi
 
-    Println "\n=== Xray 流量统计 ===\n$formatted\n"
+    Println "\n$(gettext "=== Xray 流量统计 ===")\n$formatted\n"
 }
 
 XrayResetStats()
 {
     if [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ] && [ -t 0 ]
     then
-        local confirm_opts=( '否' '是' )
+        local confirm_opts=( "$(gettext "否")" "$(gettext "是")" )
         local confirm_idx=0
         echo
-        inquirer list_input_index "确认重置 Xray 所有流量统计?" confirm_opts confirm_idx
+        inquirer list_input_index "$(gettext "确认重置 Xray 所有流量统计?")" confirm_opts confirm_idx
         if [ "$confirm_idx" -ne 1 ]
         then
-            Println "$info 已取消重置流量统计\n"
+            Println "$(eval_gettext "\$info 已取消重置流量统计")\n"
             return 0
         fi
     fi
@@ -69,9 +69,9 @@ XrayResetStats()
     local err_msg=""
     if err_msg=$("$XCTL_FILE" api statsquery --server="$api_server" --reset 2>&1)
     then
-        Println "$info 已重置 Xray 流量统计\n"
+        Println "$(eval_gettext "\$info 已重置 Xray 流量统计")\n"
     else
-        Println "$error 重置 Xray 流量统计失败 ($api_server): ${err_msg}\n"
+        Println "$(eval_gettext "\$error 重置 Xray 流量统计失败 (\$api_server): \${err_msg}")\n"
         return 1
     fi
 }

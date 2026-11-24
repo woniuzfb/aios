@@ -247,5 +247,5 @@ gettext()
 
 eval_gettext()
 {
-    printf '%s' "$1"
+    gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
 }

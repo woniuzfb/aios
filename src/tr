@@ -2,7 +2,7 @@ TrojanInstall()
 {
     if [ -s "$TR_CONFIG" ] 
     then
-        Println "$error $trojan_name 已存在...\n"
+        Println "$(eval_gettext "\$error \$trojan_name 已存在...")\n"
         ExitOnList n "`gettext \"是否覆盖原安装\"`"
     fi
 
@@ -20,7 +20,7 @@ TrojanInstall()
         usermod -s /usr/sbin/nologin $trojan_name
     fi
 
-    Println "$info 安装 $trojan_name..."
+    Println "$(eval_gettext "\$info 安装 \$trojan_name...")"
 
     { curl -s -m 10 "$TR_LINK" || curl -s -m 30 "$TR_LINK_FALLBACK"; } \
     | sed "s+nobody+$trojan_name+g" \
@@ -36,7 +36,7 @@ TrojanInstall()
     systemctl enable $trojan_name
     systemctl start $trojan_name
 
-    Println "$info $trojan_name 安装成功\n"
+    Println "$(eval_gettext "\$info \$trojan_name 安装成功")\n"
 }
 
 exit 0

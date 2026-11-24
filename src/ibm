@@ -56,10 +56,10 @@ IbmInstallCfCli()
 {
     if [[ -x $(command -v ibmcloud) ]] 
     then
-        Println "$error IBM CF CLI 已存在\n"
+        Println "$(eval_gettext "\$error IBM CF CLI 已存在")\n"
         exit 1
     fi
-    Println "$info 安装 IBM CF CLI ..."
+    Println "$(eval_gettext "\$info 安装 IBM CF CLI ...")"
     curl -sL https://ibm.biz/idt-installer | bash
     ibmcloud cf install
 }
@@ -68,10 +68,10 @@ IbmUpdateCfCli()
 {
     if [[ ! -x $(command -v ibmcloud) ]] 
     then
-        Println "$error IBM CF CLI 未安装\n"
+        Println "$(eval_gettext "\$error IBM CF CLI 未安装")\n"
         exit 1
     fi
-    Println "$info 更新 IBM CF CLI ..."
+    Println "$(eval_gettext "\$info 更新 IBM CF CLI ...")"
     ibmcloud update -f
     ibmcloud cf install -f
 }
@@ -80,7 +80,7 @@ IbmUninstallCfCli()
 {
     if [[ ! -x $(command -v ibmcloud) ]] 
     then
-        Println "$error IBM CF CLI 未安装\n"
+        Println "$(eval_gettext "\$error IBM CF CLI 未安装")\n"
         exit 1
     fi
 
@@ -98,9 +98,9 @@ IbmUninstallCfCli()
 
     if [ $EXIT_STATUS -eq 0 ]
     then
-        Println "$info 删除成功\n"
+        Println "$(eval_gettext "\$info 删除成功")\n"
     else
-        Println "$error 发生错误\n"
+        Println "$(eval_gettext "\$error 发生错误")\n"
     fi
 }
 

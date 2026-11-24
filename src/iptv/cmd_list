@@ -31,10 +31,10 @@ then
 
             for((j=0;j<${#chnl_stream_links[@]};j++));
             do
-                chnl_stream_links_list="$chnl_stream_links_list${indent_6}源$((j+1)): ${chnl_stream_links[j]}\n"
+                chnl_stream_links_list="$chnl_stream_links_list${indent_6}$(gettext "源")$((j+1)): ${chnl_stream_links[j]}\n"
             done
 
-            flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
+            flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$(gettext "无")}\n\n"
         elif [ "${chnls_status[i]:-}" == "on" ]
         then
             IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"
@@ -43,7 +43,7 @@ then
 
             for((j=0;j<${#chnl_stream_links[@]};j++));
             do
-                chnl_stream_links_list="$chnl_stream_links_list${indent_6}源$((j+1)): ${chnl_stream_links[j]}\n"
+                chnl_stream_links_list="$chnl_stream_links_list${indent_6}$(gettext "源")$((j+1)): ${chnl_stream_links[j]}\n"
             done
 
             hls_indices+=("$i")
@@ -68,22 +68,22 @@ then
             then
                 ls -lght "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* && echo
             else
-                Println "$error 无\n"
+                Println "$(eval_gettext "\$error 无")\n"
             fi
         else
-            Println "$error 目录不存在\n"
+            Println "$(eval_gettext "\$error 目录不存在")\n"
         fi
     done
 fi
 
 if [ -n "${flv_list:-}" ] 
 then
-    Println "${green}FLV 频道${normal}\n\n$flv_list"
+    Println "${green}$(gettext "FLV 频道")${normal}\n\n$flv_list"
 fi
 
 if [ -n "${hls_list:-}" ] 
 then
-    Println "${green}HLS 频道${normal}\n\n$hls_list"
+    Println "${green}$(gettext "HLS 频道")${normal}\n\n$hls_list"
 fi
 
 if [ -z "${1:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1 
@@ -103,7 +103,7 @@ then
             done
         fi
 
-        Println "$error 未知目录 $output_dir_name\n"
+        Println "$(eval_gettext "\$error 未知目录 \$output_dir_name")\n"
 
         if ls -A "$output_dir_root"/* > /dev/null 2>&1
         then
@@ -114,7 +114,7 @@ fi
 
 if [ -z "${flv_list:-}" ] && [ -z "${hls_list:-}" ]
 then
-    Println "$error 没有开启的频道 !\n"
+    Println "$(eval_gettext "\$error 没有开启的频道 !")\n"
     exit 1
 fi
 

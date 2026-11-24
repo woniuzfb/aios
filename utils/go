@@ -37,7 +37,7 @@ GoInstall()
 
     if ! go_version=$(curl -s -Lm 20 "${GO_DL_LINK}/?mode=json" | $JQ_FILE -r '.[0].version')
     then
-        Println "$error 无法连接 go.dev ?"
+        Println "$(eval_gettext "\$error 无法连接 go.dev ?")"
         go_version="$GO_FALLBACK_VER"
     fi
 
@@ -57,7 +57,7 @@ GoInstall()
 
     if ! curl -L "${GO_DL_LINK}/$go_package" -o ~/$go_package && ! curl -L "${GO_DL_MIRROR_LINK}/$go_package" -o ~/$go_package
     then
-        Println "$error 下载 golang 失败, 请稍后再试\n"
+        Println "$(eval_gettext "\$error 下载 golang 失败, 请稍后再试")\n"
         return 1
     fi
 

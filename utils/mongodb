@@ -9,7 +9,7 @@ MongodbInstall()
 
     if ! ResourceLimit 
     then
-        Println "$error 可能环境是 Unprivileged Container ?\n"
+        Println "$(eval_gettext "\$error 可能环境是 Unprivileged Container ?")\n"
     fi
 
     DepInstall curl
@@ -24,7 +24,7 @@ MongodbInstall()
     then
         arch_path="$arch"
     else
-        Println "$error 不支持当前系统\n"
+        Println "$(eval_gettext "\$error 不支持当前系统")\n"
         return 1
     fi
 
@@ -50,7 +50,7 @@ MongodbInstall()
                 brew install mongodb-community
             fi
             brew services start mongodb/brew/mongodb-community
-            Println "$info mongodb 安装成功\n"
+            Println "$(eval_gettext "\$info mongodb 安装成功")\n"
             return 0
         ;;
         rpm) 
@@ -89,7 +89,8 @@ EOF
             then
                 if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/ubuntu" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
                 then
-                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    local mongo_codename_text="${mongo_codename:-unknown}"
+                    Println "$(eval_gettext "\$error MongoDB \${MONGODB_VER} 官方源暂不支持当前系统 (\$mongo_codename_text), 未写入失效源")\n"
                     return 1
                 fi
 
@@ -111,7 +112,8 @@ EOF
             then
                 if ! AptRepoCheck "${MONGODB_REPO_LINK}/apt/debian" "${mongo_codename}/mongodb-org/${MONGODB_VER}"
                 then
-                    Println "$error MongoDB ${MONGODB_VER} 官方源暂不支持当前系统 (${mongo_codename:-unknown}), 未写入失效源\n"
+                    local mongo_codename_text="${mongo_codename:-unknown}"
+                    Println "$(eval_gettext "\$error MongoDB \${MONGODB_VER} 官方源暂不支持当前系统 (\$mongo_codename_text), 未写入失效源")\n"
                     return 1
                 fi
 
@@ -145,5 +147,5 @@ EOF
         service mongod start
     fi
 
-    Println "$info mongodb 安装成功\n"
+    Println "$(eval_gettext "\$info mongodb 安装成功")\n"
 }

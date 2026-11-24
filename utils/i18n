@@ -19,17 +19,23 @@ i18nInstall()
         return 0
     fi
 
-    trap '
-        rm -f "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo"
-    ' EXIT
+    local mo_dir="$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES"
+    local mo_file="$mo_dir/${TEXTDOMAIN}.mo"
+    local tmp_mo
+    mkdir -p "$mo_dir"
+    tmp_mo=$(mktemp)
 
-    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/aios.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo
+    if wget --timeout=15 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/locale/po/aios.sh-$sh_locale.mo" -qO "$tmp_mo" \
+        && [ -s "$tmp_mo" ] \
+        && ( ! command -v msgunfmt > /dev/null 2>&1 || msgunfmt "$tmp_mo" > /dev/null 2>&1 )
     then
-        trap - EXIT
+        chmod 644 "$tmp_mo"
+        mv -f "$tmp_mo" "$mo_file"
         echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-        Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
+        Println "$(eval_gettext "\${green}成功!\${normal}")\n"
     else
-        Println "`eval_gettext \"\\\${red}失败! 请稍后再试!\\\${normal}\"`\n"
+        rm -f "$tmp_mo"
+        Println "$(eval_gettext "\${red}失败! 请稍后再试!\${normal}")\n"
         exit 1
     fi
 }
@@ -117,8 +123,8 @@ i18nGetMsg()
             i18n_crf=${i18n_crf:-$(gettext "固定质量因子")}
             i18n_bitrate=${i18n_bitrate:-$(gettext "码率")}
             i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
-            i18n_enabled=${i18n_enabled:-$(gettext "开启")}
-            i18n_disabled=${i18n_disabled:-$(gettext "关闭")}
+            i18n_running=${i18n_running:-$(gettext "运行中")}
+            i18n_stopped=${i18n_stopped:-$(gettext "已停止")}
             i18n_pid=${i18n_pid:-$(gettext "进程ID")}
             i18n_status=${i18n_status:-$(gettext "状态")}
             i18n_channel_name=${i18n_channel_name:-$(gettext "频道名称")}
@@ -156,8 +162,8 @@ i18nGetMsg()
             i18n_crf=${i18n_crf:-$(gettext "固定质量因子")}
             i18n_bitrate=${i18n_bitrate:-$(gettext "码率")}
             i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
-            i18n_enabled=${i18n_enabled:-$(gettext "开启")}
-            i18n_disabled=${i18n_disabled:-$(gettext "关闭")}
+            i18n_running=${i18n_running:-$(gettext "运行中")}
+            i18n_stopped=${i18n_stopped:-$(gettext "已停止")}
             i18n_rate_control=${i18n_rate_control:-$(gettext "码率控制")}
             i18n_average_bitrate=${i18n_average_bitrate:-$(gettext "平均码率")}
             i18n_constant_bitrate=${i18n_constant_bitrate:-$(gettext "固定码率")}

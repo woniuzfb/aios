@@ -2,8 +2,8 @@ CloudflareRegenHost()
 {
     CloudflareListHosts
 
-    echo "选择 CFP"
-    echo -e "$tip 请勿更改公开的 CFP !\n"
+    echo "$(gettext "选择 CFP")"
+    echo -e "$(eval_gettext "\$tip 请勿更改公开的 CFP !")\n"
     while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -27,7 +27,7 @@ CloudflareRegenHost()
         esac
     done
 
-    Println "$info 稍等..."
+    Println "$(eval_gettext "\$info 稍等...")"
     IFS="^" read -r result cf_host_key_new msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=host_key_regen' \
         -d "host_key=$cf_host_key" \
@@ -39,11 +39,11 @@ CloudflareRegenHost()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error ${msg:-超时, 请重试}\n" && exit 1
+        Println "$error ${msg:-$(gettext "超时, 请重试")}\n" && exit 1
     fi
 
     jq_path='["hosts",'"$cf_hosts_index"',"key"]'
     JQ update "$CF_CONFIG" "$cf_host_key_new"
 
-    Println "$info $cf_host_name host key 修改成功"
+    Println "$(eval_gettext "\$info \$cf_host_name host key 修改成功")"
 }

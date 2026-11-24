@@ -1,8 +1,8 @@
 AptSetSources()
 {
     echo
-    apt_sources_options=( '国内' '国外' )
-    inquirer list_input_index "选择源" apt_sources_options apt_sources_options_index
+    apt_sources_options=( "$(gettext "国内")" "$(gettext "国外")" )
+    inquirer list_input_index "$(gettext "选择源")" apt_sources_options apt_sources_options_index
     if [ "$apt_sources_options_index" -eq 0 ]
     then
         sed -i "s/deb.debian.org/${USTC_MIRROR_HOST}/g" /etc/apt/sources.list
@@ -37,5 +37,5 @@ AptSetSources()
             $(AptGetCodename) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         fi
     fi
-    Println "$info 源更改成功\n"
+    Println "$(eval_gettext "\$info 源更改成功")\n"
 }

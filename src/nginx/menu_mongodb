@@ -1,14 +1,14 @@
 MongodbMenu()
 {
     echo
-    mongodb_options=( '查看' '安装' '升级' )
-    inquirer list_input_index "选择操作" mongodb_options mongodb_options_index
+    mongodb_options=( "$(gettext "查看")" "$(gettext "安装")" "$(gettext "升级")" )
+    inquirer list_input_index "$(gettext "选择操作")" mongodb_options mongodb_options_index
 
     if [ "$mongodb_options_index" -eq 0 ] 
     then
         if [[ ! -x $(command -v mongod) ]] 
         then
-            Println "$error 请先安装 mongodb\n"
+            Println "$(eval_gettext "\$error 请先安装 mongodb")\n"
             return 1
         fi
 
@@ -17,7 +17,7 @@ MongodbMenu()
     then
         if [[ -x $(command -v mongod) ]]
         then
-            Println "$error mongodb 已存在\n"
+            Println "$(eval_gettext "\$error mongodb 已存在")\n"
             return 1
         fi
 
@@ -25,12 +25,12 @@ MongodbMenu()
     else
         if [[ ! -x $(command -v mongod) ]] 
         then
-            Println "$error 请先安装 mongodb\n"
+            Println "$(eval_gettext "\$error 请先安装 mongodb")\n"
             return 1
         fi
 
         echo
-        ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
+        ExitOnList n "$(gettext "升级会清除现有 mongodb 配置, 是否继续")"
 
         service mongod stop
 

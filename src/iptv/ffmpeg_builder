@@ -26,7 +26,8 @@ FFmpegCheckDrawtextCap()
 
     if [ "$vcodec" != "copy" ] && [ -n "$dtext" ] && [ "${FFMPEG_HAS_DRAWTEXT:-false}" = false ]
     then
-        Println "$error 当前 FFmpeg (${FFMPEG_FILE:-ffmpeg}) 不支持 drawtext 滤镜，无法使用水印功能 !\n"
+        local ffmpeg_bin="${FFMPEG_FILE:-ffmpeg}"
+        Println "$(eval_gettext "\$error 当前 FFmpeg (\$ffmpeg_bin) 不支持 drawtext 滤镜, 无法使用水印功能 !")\n"
         return 1
     fi
 

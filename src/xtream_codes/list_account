@@ -2,7 +2,7 @@ XtreamCodesListAcc()
 {
     XtreamCodesList
 
-    Println "请输入服务器的序号"
+    Println "$(gettext "请输入服务器的序号")"
     while read -p "$i18n_default_cancel" server_num
     do
         case $server_num in
@@ -35,7 +35,7 @@ XtreamCodesListAcc()
         done
         Println "$domains_list"
 
-        Println "请选择域名"
+        Println "$(gettext "选择域名")"
         while read -p "$i18n_default_cancel" domains_num
         do
             case $domains_num in
@@ -74,7 +74,7 @@ XtreamCodesListAcc()
     accs_count=${#accs[@]}
     if [ "$accs_count" -gt 1 ] 
     then
-        accs_list="账号: \n\n"
+        accs_list="$(gettext "账号"): \n\n"
         for((i=0;i<accs_count;i++));
         do
             using=""
@@ -82,7 +82,7 @@ XtreamCodesListAcc()
             do
                 if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
                 then
-                    using="${red}[使用中]${normal}"
+                    using="${red}[$(gettext "使用中")]${normal}"
                     break
                 fi
             done
@@ -95,10 +95,10 @@ XtreamCodesListAcc()
         do
             if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
             then
-                using="${red}[使用中]${normal}"
+                using="${red}[$(gettext "使用中")]${normal}"
                 break
             fi
         done
-        Println "账号: \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
+        Println "$(gettext "账号"): \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
     fi
 }

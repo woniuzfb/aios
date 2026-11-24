@@ -8,7 +8,7 @@ SearchXtreamCodesChnls()
         then
             echo -en "\r$((i*100/pages))%"
         else
-            Println "$info 搜索进度"
+            Println "$(eval_gettext "\$info 搜索进度")"
             echo -n "$((i*100/pages))%"
         fi
         sleep 1
@@ -35,7 +35,7 @@ SearchXtreamCodesChnls()
             name_lower=$(tr '[:upper:]' '[:lower:]' <<< "$name")
             if [[ $name_lower == *"$search_phrase"* ]] 
             then
-                search_result="$search_result页数: ${green}$i${normal} 频道名称: ${green}$name${normal}\n\n"
+                search_result="$search_result$(gettext "页数"): ${green}$i${normal} $(gettext "频道名称"): ${green}$name${normal}\n\n"
             fi
         done < <($JQ_FILE '.js.data[].name' <<< "$ordered_list_page")
     done

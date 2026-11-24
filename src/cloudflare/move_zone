@@ -2,7 +2,7 @@ CloudflareMoveZone()
 {
     CloudflareListZones
 
-    echo -e "选择源站"
+    echo -e "$(gettext "选择源站")"
     while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
@@ -35,7 +35,7 @@ CloudflareMoveZone()
 
     CloudflareGetZone
 
-    Println "$info 删除源站 ..."
+    Println "$(eval_gettext "\$info 删除源站 ...")"
 
     IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_delete' \
@@ -52,20 +52,20 @@ CloudflareMoveZone()
     then
         if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
         then
-            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+            Println "$(eval_gettext "\$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !")"
         else
-            Println "$error ${msg:-超时, 请重试}\n"
+            Println "$error ${msg:-$(gettext "超时, 请重试")}\n"
         fi
         exit 1
     else
         jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
         JQ delete "$CF_CONFIG"
-        Println "$info $cf_zone_name 删除成功"
+        Println "$(eval_gettext "\$info \$cf_zone_name 删除成功")"
     fi
 
     CloudflareListHosts
 
-    echo -e "选择移动到的 CFP"
+    echo -e "$(gettext "选择移动到的 CFP")"
     while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -95,7 +95,7 @@ CloudflareMoveZone()
     do
         if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
         then
-            Println "$error 域名已经存在\n"
+            Println "$(eval_gettext "\$error 域名已经存在")\n"
             return 0
         fi
     done
@@ -104,11 +104,11 @@ CloudflareMoveZone()
 
     if [ "$cf_users_count" -eq 0 ] 
     then
-        Println "$error 请先添加用户\n"
+        Println "$(eval_gettext "\$error 请先添加用户")\n"
         exit 1
     fi
 
-    echo -e "选择移动到的用户"
+    echo -e "$(gettext "选择移动到的用户")"
     while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
@@ -133,7 +133,7 @@ CloudflareMoveZone()
         esac
     done
 
-    Println "$info 移动中 ..."
+    Println "$(eval_gettext "\$info 移动中 ...")"
     cf_user_key=""
     until [ -n "$cf_user_key" ] 
     do
@@ -155,14 +155,14 @@ CloudflareMoveZone()
             Println "$error $msg"
             if [[ $msg == *"assword"* ]] 
             then
-                Println "$error 请检查密码是否正确\n"
+                Println "$(eval_gettext "\$error 请检查密码是否正确")\n"
                 exit 1
             fi
         elif [ -z "${cf_users_api_key[cf_users_index]}" ] 
         then
             jq_path='["users",'"$cf_users_index"',"key"]'
             JQ update "$CF_CONFIG" "$cf_user_api_key"
-            Println "$info 用户 $cf_user_email API Key 添加成功\n"
+            Println "$(eval_gettext "\$info 用户 \$cf_user_email API Key 添加成功")\n"
         fi
     done
 
@@ -220,8 +220,8 @@ CloudflareMoveZone()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+        Println "$error ${msg:-$(gettext "连接超时, 请查看是否已经完成")}\n" && exit 1
     fi
 
-    Println "$info 源站移动成功\n"
+    Println "$(eval_gettext "\$info 源站移动成功")\n"
 }

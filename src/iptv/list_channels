@@ -76,7 +76,7 @@ ListChannels()
 
         for((chnl_i=0;chnl_i<chnl_variants_count;chnl_i++));
         do
-            chnls_video_quality_text="$chnls_video_quality_text${indent_6}输出$((chnl_i+1)): "
+            chnls_video_quality_text="$chnls_video_quality_text${indent_6}$(gettext "输出")$((chnl_i+1)): "
 
             if [ -n "${chnl_qualities[chnl_i]:-}" ] 
             then
@@ -130,16 +130,16 @@ ListChannels()
 
         for((list_i=0;list_i<${#chnl_stream_links[@]};list_i++));
         do
-            chnl_stream_links_text="$chnl_stream_links_text${indent_6}源$((list_i+1)): ${chnl_stream_links[list_i]}\n"
+            chnl_stream_links_text="$chnl_stream_links_text${indent_6}$(gettext "源")$((list_i+1)): ${chnl_stream_links[list_i]}\n"
         done
 
         if [ -z "${kind:-}" ] 
         then
             if [ "${chnls_status[chnls_index]}" == "on" ]
             then
-                chnls_status_text="${green}$i18n_enabled${normal}"
+                chnls_status_text="${green}$i18n_running${normal}"
             else
-                chnls_status_text="${red}$i18n_disabled${normal}"
+                chnls_status_text="${red}$i18n_stopped${normal}"
             fi
 
             if [ "$chnl_variants_count" -gt 1 ] 
@@ -154,11 +154,11 @@ ListChannels()
         then
             if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
             then
-                chnls_flv_status_text="${green}$i18n_enabled${normal}"
+                chnls_flv_status_text="${green}$i18n_running${normal}"
             else
-                chnls_flv_status_text="${red}$i18n_disabled${normal}"
+                chnls_flv_status_text="${red}$i18n_stopped${normal}"
             fi
-            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-无}\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-$(gettext "无")}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-$(gettext "无")}\n\n"
         fi
     done
 

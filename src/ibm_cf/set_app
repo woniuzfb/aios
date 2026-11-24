@@ -1,11 +1,11 @@
 IbmSetCfAppName()
 {
-    Println "请输入 APP 名称\n$tip 确保已经在官网建立此 CF APP, 也可以用命令 ibmcloud dev create 新建\n"
+    Println "$(gettext "请输入 APP 名称")\n$(eval_gettext "\$tip 确保已经在官网建立此 CF APP, 也可以用命令 ibmcloud dev create 新建")\n"
     read -p "$i18n_default_cancel" ibm_cf_app_name
     [ -z "$ibm_cf_app_name" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ -n $($JQ_FILE '.cf.apps[]|select(.user_email=="'"$ibm_user_email"'" and .name=="'"$ibm_cf_app_name"'")' "$IBM_CONFIG") ]] 
     then
-        Println "$error 此 APP 已存在\n"
+        Println "$(eval_gettext "\$error 此 APP 已存在")\n"
         exit 1
     fi
     Println "  APP: ${green} $ibm_cf_app_name ${normal}\n"
@@ -18,7 +18,7 @@ IbmSetCfAppRouteDomain()
 
     if [ -z "$domain" ] 
     then
-        Println "$error 无法获取域名, 请重试"
+        Println "$(eval_gettext "\$error 无法获取域名, 请重试")"
     fi
 
     IFS="|" read -r -a domains <<< "$domain"
@@ -38,8 +38,8 @@ IbmSetCfAppRouteDomain()
     default_domain_num=${default_domain_num:-1}
 
     Println "$domains_list"
-    echo -e "选择域名"
-    while read -p "(默认: $default_domain_num): " domains_num
+    echo -e "$(gettext "选择域名")"
+    while read -p "($(gettext "默认"): $default_domain_num): " domains_num
     do
         case $domains_num in
             "") 
@@ -63,26 +63,26 @@ IbmSetCfAppRouteDomain()
         esac
     done
 
-    Println "  路由域名: ${green} $ibm_cf_app_route_domain ${normal}\n"
+    Println "  $(eval_gettext "路由域名: \${green} \$ibm_cf_app_route_domain \${normal}")\n"
 }
 
 IbmSetCfAppRouteHostname()
 {
-    Println "请输入 http 路由 hostname (子域名名称)"
+    Println "$(gettext "请输入 http 路由 hostname (子域名名称)")"
     read -p "$i18n_default_cancel" ibm_cf_app_route_hostname
     [ -z "$ibm_cf_app_route_hostname" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  路由 hostname: ${green} $ibm_cf_app_route_hostname ${normal}\n"
+    Println "  $(eval_gettext "路由 hostname: \${green} \$ibm_cf_app_route_hostname \${normal}")\n"
 }
 
 IbmSetCfAppRoutePath()
 {
     echo
-    inquirer text_input "请输入 http 路由 path: " ibm_cf_app_route_path "$i18n_blank"
+    inquirer text_input "$(gettext "请输入 http 路由 path"): " ibm_cf_app_route_path "$i18n_blank"
 }
 
 IbmSetCfAppRoutePort()
 {
-    Println "请输入路由指向的 APP 端口"
+    Println "$(gettext "请输入路由指向的 APP 端口")"
     while read -p "$i18n_default_cancel" ibm_cf_app_route_port 
     do
         case $ibm_cf_app_route_port in
@@ -91,7 +91,7 @@ IbmSetCfAppRoutePort()
                 exit 1
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
+                Println "$(eval_gettext "\$error 请输入正确的端口")\n"
             ;;
             *) 
                 break
@@ -99,5 +99,5 @@ IbmSetCfAppRoutePort()
         esac
     done
 
-    Println "  路由端口: ${green} $ibm_cf_app_route_port ${normal}\n"
+    Println "  $(eval_gettext "路由端口: \${green} \$ibm_cf_app_route_port \${normal}")\n"
 }

@@ -2,18 +2,18 @@ Pdf2htmlInstall()
 {
     if [[ -x $(command -v pdf2htmlEX) ]] 
     then
-        Println "$error pdf2htmlEX 已存在!\n"
+        Println "$(eval_gettext "\$error pdf2htmlEX 已存在!")\n"
         return 0
     fi
 
     echo
     ExitOnList n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
 
-    Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
+    Println "$(eval_gettext "\$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用")\n"
 
     if ! pdf2htmlEX -v > /dev/null 2>&1
     then
-        Println "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX\n"
+        Println "$(eval_gettext "\$info 请先输入 source /etc/profile 以启用 pdf2htmlEX")\n"
         exit 1
     fi
 

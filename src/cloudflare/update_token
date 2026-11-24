@@ -2,7 +2,7 @@ CloudflareUpdateToken()
 {
     CloudflareListToken
 
-    echo -e "选择 Token"
+    echo -e "$(gettext "选择 Token")"
 
     while read -p "$i18n_default_cancel" tokens_num
     do
@@ -27,7 +27,7 @@ CloudflareUpdateToken()
         esac
     done
 
-    Println "$info 更新 Token"
+    Println "$(eval_gettext "\$info 更新 Token")"
     cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
         -H "X-Auth-Email:$cf_user_email" \
         -H "X-Auth-Key:$cf_user_api_key" \
@@ -36,8 +36,8 @@ CloudflareUpdateToken()
     ) || true
     if [ -z "$cf_user_token_new" ] || [ "$cf_user_token_new" == null ]
     then
-        Println "$error 更新 Token 失败\n"
+        Println "$(eval_gettext "\$error 更新 Token 失败")\n"
     else
-        Println "$info Token 更新成功: $cf_user_token_new\n"
+        Println "$(eval_gettext "\$info Token 更新成功: \$cf_user_token_new")\n"
     fi
 }

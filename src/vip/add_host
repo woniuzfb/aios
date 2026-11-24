@@ -27,5 +27,5 @@ VipAddHost()
 
     jq_path='["hosts"]'
     JQ add "$VIP_FILE" "[$new_host]"
-    Println "$info VIP 服务器添加成功\n"
+    Println "$(eval_gettext "\$info VIP 服务器添加成功")\n"
 }

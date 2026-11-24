@@ -1,61 +1,61 @@
 XraySetDns()
 {
     local actions=(
-        '添加静态 IP (hosts)'
-        '添加 DNS 服务器'
-        '设置 clientIp'
-        '设置 DNS 标识 tag'
-        '设置 queryStrategy'
-        '设置缓存与回退开关'
-        '删除静态 IP (hosts)'
-        '删除 DNS 服务器'
+        "$(gettext "添加静态 IP (hosts)")"
+        "$(gettext "添加 DNS 服务器")"
+        "$(gettext "设置 clientIp")"
+        "$(gettext "设置 DNS 标识 tag")"
+        "$(gettext "设置 queryStrategy")"
+        "$(gettext "设置缓存与回退开关")"
+        "$(gettext "删除静态 IP (hosts)")"
+        "$(gettext "删除 DNS 服务器")"
     )
     local action_idx=0
     echo
-    inquirer list_input_index "选择 Xray DNS 操作" actions action_idx
+    inquirer list_input_index "$(gettext "选择 Xray DNS 操作")" actions action_idx
 
     case "$action_idx" in
         0)
             local domain ips
-            Println "$tip 格式如 example.com, domain:example.com, geosite:cn"
-            inquirer text_input "输入域名或规则" domain ""
-            inquirer text_input "输入目标 IP/域名 (逗号分隔)" ips ""
+            Println "$(eval_gettext "\$tip 格式如 example.com, domain:example.com, geosite:cn")"
+            inquirer text_input "$(gettext "输入域名或规则")" domain ""
+            inquirer text_input "$(gettext "输入目标 IP/域名 (逗号分隔)")" ips ""
             if [ -z "$domain" ] || [ -z "$ips" ]
             then
-                Println "$error 域名和目标 IP/域名不能为空\n"
+                Println "$(eval_gettext "\$error 域名和目标 IP/域名不能为空")\n"
                 return 1
             fi
             if ! JQ mutate "$X_CONFIG" '.dns.hosts = ((.dns.hosts // {}) + {($d): (if ($v | contains(",")) then ($v | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else ($v | gsub("^\\s+|\\s+$"; "")) end)})' \
                 --arg d "$domain" --arg v "$ips"
             then
-                Println "$error 添加静态 IP 失败\n"
+                Println "$(eval_gettext "\$error 添加静态 IP 失败")\n"
                 return 1
             fi
-            Println "$info 静态 IP 添加成功: ${green}${domain}${normal}\n"
+            Println "$(eval_gettext "\$info 静态 IP 添加成功: \${green}\${domain}\${normal}")\n"
         ;;
         1)
             local addr port client_ip domains expected_ips unexpected_ips timeout_ms
-            local skip_fb_opts=( '否' '是' )
+            local skip_fb_opts=( "$(gettext "否")" "$(gettext "是")" )
             local skip_fb_idx=0 final_q_idx=0
-            inquirer text_input "输入 DNS 地址 (如 1.1.1.1, https://...)" addr "1.1.1.1"
-            inquirer text_input "输入端口 (留空默认)" port ""
+            inquirer text_input "$(gettext "输入 DNS 地址 (如 1.1.1.1, https://...)")" addr "1.1.1.1"
+            inquirer text_input "$(gettext "输入端口 (留空默认)")" port ""
             if [ -n "$port" ] && [[ ! $port =~ ^[0-9]+$ ]]
             then
-                Println "$error DNS 端口必须为非负整数\n"
+                Println "$(eval_gettext "\$error DNS 端口必须为非负整数")\n"
                 return 1
             fi
-            inquirer text_input "输入服务器级 clientIP (可留空)" client_ip ""
-            inquirer text_input "输入匹配 domains (逗号分隔, 可留空)" domains ""
-            inquirer text_input "输入 expectedIPs (逗号分隔, 可留空)" expected_ips ""
-            inquirer text_input "输入 unexpectedIPs (逗号分隔, 可留空)" unexpected_ips ""
-            inquirer text_input "输入 timeoutMs (可留空)" timeout_ms ""
+            inquirer text_input "$(gettext "输入服务器级 clientIP (可留空)")" client_ip ""
+            inquirer text_input "$(gettext "输入匹配 domains (逗号分隔, 可留空)")" domains ""
+            inquirer text_input "$(gettext "输入 expectedIPs (逗号分隔, 可留空)")" expected_ips ""
+            inquirer text_input "$(gettext "输入 unexpectedIPs (逗号分隔, 可留空)")" unexpected_ips ""
+            inquirer text_input "$(gettext "输入 timeoutMs (可留空)")" timeout_ms ""
             if [ -n "$timeout_ms" ] && [[ ! $timeout_ms =~ ^[0-9]+$ ]]
             then
-                Println "$error timeoutMs 必须为非负整数\n"
+                Println "$(eval_gettext "\$error timeoutMs 必须为非负整数")\n"
                 return 1
             fi
-            inquirer list_input_index "跳过回退 skipFallback" skip_fb_opts skip_fb_idx
-            inquirer list_input_index "终止后续查询 finalQuery" skip_fb_opts final_q_idx
+            inquirer list_input_index "$(gettext "跳过回退 skipFallback")" skip_fb_opts skip_fb_idx
+            inquirer list_input_index "$(gettext "终止后续查询 finalQuery")" skip_fb_opts final_q_idx
 
             local srv_json=""
             if [ -z "$port" ] && [ -z "$client_ip" ] && [ -z "$domains" ] && [ -z "$expected_ips" ] && [ -z "$unexpected_ips" ] && [ -z "$timeout_ms" ] && [ "$skip_fb_idx" -eq 0 ] && [ "$final_q_idx" -eq 0 ]
@@ -79,72 +79,72 @@ XraySetDns()
             jq_path='["dns","servers"]'
             if ! JQ add "$X_CONFIG" "[$srv_json]"
             then
-                Println "$error 添加 DNS 服务器失败\n"
+                Println "$(eval_gettext "\$error 添加 DNS 服务器失败")\n"
                 return 1
             fi
-            Println "$info DNS 服务器添加成功: ${green}${addr}${normal}\n"
+            Println "$(eval_gettext "\$info DNS 服务器添加成功: \${green}\${addr}\${normal}")\n"
         ;;
         2)
             local cip
-            inquirer text_input "输入全局 clientIp (留空清除)" cip ""
+            inquirer text_input "$(gettext "输入全局 clientIp (留空清除)")" cip ""
             jq_path='["dns","clientIp"]'
             if [ -z "$cip" ]
             then
                 if ! JQ delete "$X_CONFIG"
                 then
-                    Println "$error 清除 DNS clientIp 失败\n"
+                    Println "$(eval_gettext "\$error 清除 DNS clientIp 失败")\n"
                     return 1
                 fi
             else
                 if ! JQ update "$X_CONFIG" "$cip"
                 then
-                    Println "$error 设置 DNS clientIp 失败\n"
+                    Println "$(eval_gettext "\$error 设置 DNS clientIp 失败")\n"
                     return 1
                 fi
             fi
-            Println "$info DNS clientIp 设置成功\n"
+            Println "$(eval_gettext "\$info DNS clientIp 设置成功")\n"
         ;;
         3)
             local dtag
-            inquirer text_input "输入 DNS 标识 tag" dtag "dns_inbound"
+            inquirer text_input "$(gettext "输入 DNS 标识 tag")" dtag "dns_inbound"
             jq_path='["dns","tag"]'
             if ! JQ update "$X_CONFIG" "$dtag"
             then
-                Println "$error 设置 DNS tag 失败\n"
+                Println "$(eval_gettext "\$error 设置 DNS tag 失败")\n"
                 return 1
             fi
-            Println "$info DNS tag 设置成功: ${green}${dtag}${normal}\n"
+            Println "$(eval_gettext "\$info DNS tag 设置成功: \${green}\${dtag}\${normal}")\n"
         ;;
         4)
             local qs_options=( 'UseIP' 'UseIPv4' 'UseIPv6' 'UseSystem' )
             local qs=""
-            inquirer list_input "选择 DNS 查询策略 queryStrategy" qs_options qs
+            inquirer list_input "$(gettext "选择 DNS 查询策略 queryStrategy")" qs_options qs
             jq_path='["dns","queryStrategy"]'
             if ! JQ update "$X_CONFIG" "$qs"
             then
-                Println "$error 设置 queryStrategy 失败\n"
+                Println "$(eval_gettext "\$error 设置 queryStrategy 失败")\n"
                 return 1
             fi
-            Println "$info queryStrategy 已设置为 ${green}${qs}${normal}\n"
+            Println "$(eval_gettext "\$info queryStrategy 已设置为 \${green}\${qs}\${normal}")\n"
         ;;
         5)
-            local yn_opts=( '否' '是' )
+            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
             local dc_idx=0 df_idx=0 dfm_idx=0 ss_idx=0 pq_idx=0 sh_idx=0 ttl=""
-            inquirer list_input_index "禁用缓存 disableCache" yn_opts dc_idx
-            inquirer list_input_index "禁用回退 disableFallback" yn_opts df_idx
-            inquirer list_input_index "匹配时不回退 disableFallbackIfMatch" yn_opts dfm_idx
-            inquirer list_input_index "启用过期缓存 serveStale" yn_opts ss_idx
+            inquirer list_input_index "$(gettext "禁用缓存 disableCache")" yn_opts dc_idx
+            inquirer list_input_index "$(gettext "禁用回退 disableFallback")" yn_opts df_idx
+            inquirer list_input_index "$(gettext "匹配时不回退 disableFallbackIfMatch")" yn_opts dfm_idx
+            inquirer list_input_index "$(gettext "启用过期缓存 serveStale")" yn_opts ss_idx
             if [ "$ss_idx" -eq 1 ]
             then
-                inquirer text_input "过期缓存 TTL (秒, 0 不限)" ttl "0"
+                inquirer text_input "$(gettext "过期缓存 TTL (秒, 0 不限)")" ttl "0"
                 if [ -n "$ttl" ] && [[ ! $ttl =~ ^[0-9]+$ ]]
                 then
-                    Println "$error serveExpiredTTL 必须为非负整数\n"
+                    Println "$(eval_gettext "\$error serveExpiredTTL 必须为非负整数")\n"
                     return 1
                 fi
             fi
-            inquirer list_input_index "启用并行查询 enableParallelQuery" yn_opts pq_idx
-            inquirer list_input_index "使用系统 Hosts useSystemHosts" yn_opts sh_idx
+            inquirer list_input_index "$(gettext "启用并行查询 enableParallelQuery")" yn_opts pq_idx
+            inquirer list_input_index "$(gettext "使用系统 Hosts useSystemHosts")" yn_opts sh_idx
 
             if ! JQ mutate "$X_CONFIG" '.dns = ((.dns // {}) * {
                 "disableCache": ($dc == "1"),
@@ -157,10 +157,10 @@ XraySetDns()
                 --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx" \
                 --arg ss "$ss_idx" --arg pq "$pq_idx" --arg sh "$sh_idx" --arg ttl "$ttl"
             then
-                Println "$error 更新 Xray DNS 全局开关失败\n"
+                Println "$(eval_gettext "\$error 更新 Xray DNS 全局开关失败")\n"
                 return 1
             fi
-            Println "$info Xray DNS 全局开关已更新\n"
+            Println "$(eval_gettext "\$info Xray DNS 全局开关已更新")\n"
         ;;
         6)
             local host_keys=()
@@ -171,19 +171,19 @@ XraySetDns()
             done < <(JQs query "$X_CONFIG" 'if (.dns | type) == "object" and (.dns.hosts | type) == "object" then (.dns.hosts | keys[]) else empty end')
             if [ "${#host_keys[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的静态 IP\n"
+                Println "$(eval_gettext "\$error 没有可删除的静态 IP")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的静态 IP" host_keys del_idx
+            inquirer list_input_index "$(gettext "选择要删除的静态 IP")" host_keys del_idx
             local del_key="${host_keys[$del_idx]}"
             jq_path='["dns","hosts","'"$del_key"'"]'
             if ! JQ delete "$X_CONFIG"
             then
-                Println "$error 删除静态 IP 失败\n"
+                Println "$(eval_gettext "\$error 删除静态 IP 失败")\n"
                 return 1
             fi
-            Println "$info 已删除静态 IP: ${green}${del_key}${normal}\n"
+            Println "$(eval_gettext "\$info 已删除静态 IP: \${green}\${del_key}\${normal}")\n"
         ;;
         7)
             local srv_opts=()
@@ -194,18 +194,19 @@ XraySetDns()
             done < <(JQs query "$X_CONFIG" 'if (.dns | type) == "object" and (.dns.servers | type) == "array" then (.dns.servers | to_entries[] | "\(.key + 1). \(if (.value | type) == "string" then .value elif (.value | type) == "object" then (.value.address // "server") else "server" end)") else empty end')
             if [ "${#srv_opts[@]}" -eq 0 ]
             then
-                Println "$error 没有可删除的 DNS 服务器\n"
+                Println "$(eval_gettext "\$error 没有可删除的 DNS 服务器")\n"
                 return 1
             fi
             local del_idx=0
-            inquirer list_input_index "选择要删除的 DNS 服务器" srv_opts del_idx
+            inquirer list_input_index "$(gettext "选择要删除的 DNS 服务器")" srv_opts del_idx
             jq_path='["dns","servers",'"$del_idx"']'
             if ! JQ delete "$X_CONFIG"
             then
-                Println "$error 删除 DNS 服务器失败\n"
+                Println "$(eval_gettext "\$error 删除 DNS 服务器失败")\n"
                 return 1
             fi
-            Println "$info 已删除 DNS 服务器: ${green}${srv_opts[$del_idx]}${normal}\n"
+            local del_srv="${srv_opts[$del_idx]}"
+            Println "$(eval_gettext "\$info 已删除 DNS 服务器: \${green}\${del_srv}\${normal}")\n"
         ;;
     esac
 

@@ -1,6 +1,6 @@
 AddChannel()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 尚未安装, 请检查 !")\n" && exit 1
 
     use_primary_playlist=false
 
@@ -211,7 +211,7 @@ AddChannel()
                 ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
             fi
         else
-            Println "$error 暂不支持输出 $kind ...\n" && exit 1
+            Println "$(eval_gettext "\$error 暂不支持输出 \$kind ...")\n" && exit 1
         fi
     else
         if [ "$sh_debug" = true ] 
@@ -232,5 +232,5 @@ AddChannel()
     stream_link_parsed=false
     xc_proxy=""
 
-    Println "$info 频道添加成功 !\n"
+    Println "$(eval_gettext "\$info 频道添加成功 !")\n"
 }

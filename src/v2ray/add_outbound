@@ -579,13 +579,13 @@ V2rayAddOutbound()
                 if [ "$tls_disable_system_root" = false ] 
                 then
                     echo
-                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                     if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
                 fi
-                Println "$info 设置证书"
+                Println "$(eval_gettext "\$info 设置证书")"
                 V2raySetCertificates
                 merge=$(
                 $JQ_FILE -n --argjson certificates "[$certificate]" \
@@ -600,7 +600,7 @@ V2rayAddOutbound()
                 if [ "$tls_disable_system_root" = true ] 
                 then
                     echo
-                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                     if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
@@ -653,13 +653,13 @@ V2rayAddOutbound()
                 if [ "$tls_disable_system_root" = false ] 
                 then
                     echo
-                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                     if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
                 fi
-                Println "$info 设置证书"
+                Println "$(eval_gettext "\$info 设置证书")"
                 V2raySetCertificates
                 merge=$(
                 $JQ_FILE -n --argjson certificates "[$certificate]" \
@@ -674,7 +674,7 @@ V2rayAddOutbound()
                 if [ "$tls_disable_system_root" = true ] 
                 then
                     echo
-                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
                     if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
@@ -687,5 +687,5 @@ V2rayAddOutbound()
     jq_path='["outbounds"]'
     JQ add "$V2_CONFIG" "[$new_outbound]"
 
-    Println "$info 出站 $tag 添加成功\n"
+    Println "$(eval_gettext "\$info 出站 \$tag 添加成功")\n"
 }
