@@ -325,10 +325,11 @@ RunSuiteCoreMatrix()
         local mock_state="$tmpd/mock_svc_state"
         mkdir -p "$mock_state"
         touch "$mock_state/aios-xray.active"
-        local orig_svc_is_active orig_svc_is_enabled orig_svc_ctrl
+        local orig_svc_is_active orig_svc_is_enabled orig_svc_ctrl orig_proxy_readiness
         orig_svc_is_active=$(declare -f ServiceControlIsActive)
         orig_svc_is_enabled=$(declare -f ServiceControlIsEnabled)
         orig_svc_ctrl=$(declare -f ServiceControl)
+        orig_proxy_readiness=$(declare -f ProxyCheckReadiness)
 
         ServiceControlIsActive()
         {
@@ -337,6 +338,10 @@ RunSuiteCoreMatrix()
         ServiceControlIsEnabled()
         {
             [ -f "$mock_state/${1}.active" ]
+        }
+        ProxyCheckReadiness()
+        {
+            ServiceControlIsActive "aios-${1}"
         }
         ServiceControl()
         {
@@ -446,6 +451,7 @@ RunSuiteCoreMatrix()
         eval "$orig_svc_is_active"
         eval "$orig_svc_is_enabled"
         eval "$orig_svc_ctrl"
+        eval "$orig_proxy_readiness"
         PROXY_OBSERVE_SECONDS="$orig_obs"
     elif [ "$strict" == "1" ]
     then

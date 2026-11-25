@@ -294,6 +294,19 @@ LocaleFix()
 
 i18nCheck()
 {
+    local i18n_dir="${i18n_FILE%/*}"
+    local can_write=0
+    if [ -n "${i18n_FILE:-}" ] && { [ -w "$i18n_FILE" ] || { [ ! -e "$i18n_FILE" ] && [ -d "$i18n_dir" ] && [ -w "$i18n_dir" ]; }; }
+    then
+        can_write=1
+    fi
+
+    if [ "$can_write" -ne 1 ]
+    then
+        sh_locale="${sh_locale:-zh_CN}"
+        return 0
+    fi
+
     if [ -z "${sh_locale:-}" ]
     then
         sh_locale="zh_CN"
@@ -338,16 +351,13 @@ eval_gettext()
     fi
 }
 
-if [ "${AIOS_TEST_SKIP_I18N_CHECK:-0}" != "1" ]
+if [ -n "${i18n_FILE:-}" ] && [ -s "$i18n_FILE" ]
 then
-    if [ -s "$i18n_FILE" ]
-    then
-        # shellcheck source=/dev/null
-        . "$i18n_FILE"
-    fi
-
-    i18nCheck
+    # shellcheck source=/dev/null
+    . "$i18n_FILE"
 fi
+
+i18nCheck
 
 i18nSetupFastPath
 

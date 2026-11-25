@@ -265,6 +265,10 @@ RunSuiteCoreJq()
         source "$DEV_PATH/src/service/control"
         unset dist
         eval "$(sed -n '1,40p' "$DEV_PATH/utils/system")"
+        DistCheck
+        [ -n "${dist:-}" ] || exit 91
+        unset dist
+        DistCheck() { dist="mac"; }
         HOME="$tmpdir"
         mkdir -p "$HOME/Library/LaunchAgents"
         printf '<plist/>' > "$HOME/Library/LaunchAgents/xray.plist"

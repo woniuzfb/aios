@@ -391,7 +391,10 @@ fi
 if [ "${BUILD_LIBRARY_ONLY:-false}" != true ]
 then
     Spinner "Building aios.sh" BuildShFile
-    Spinner "Building i18n (.pot/.po/.mo)" BuildI18nFiles
+    if ! Spinner "Building i18n (.pot/.po/.mo)" BuildI18nFiles
+    then
+        Println "$error Building i18n (.pot/.po/.mo) failed!\n"
+    fi
 
     Println "$info new aios.sh created! For devs only!!\n"
 

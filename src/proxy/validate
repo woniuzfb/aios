@@ -280,7 +280,7 @@ ProxyTestConfigWithBinary()
     fi
 
     local run_as_user=""
-    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ] && [ "${AIOS_TEST_SKIP_DROP_PRIV:-0}" != "1" ]
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ]
     then
         local svc_user="aios-${core}"
         if id -u "$svc_user" > /dev/null 2>&1
@@ -891,12 +891,7 @@ ProxyCheckReadiness()
         return 1
     fi
 
-    if [ -n "${AIOS_MOCK_SVC_STATE_DIR:-}" ] || [ ! -s "$cfg_file" ]
-    then
-        return 0
-    fi
-
-    if [ -n "${mock_state:-}" ] && [ -d "${mock_state}" ]
+    if [ ! -s "$cfg_file" ]
     then
         return 0
     fi

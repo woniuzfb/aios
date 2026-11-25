@@ -52,8 +52,8 @@ Include()
 
 JQ_FILE=$(command -v jq)
 dist="test"
+i18n_FILE=""
 sh_locale="zh_CN"
-AIOS_TEST_SKIP_I18N_CHECK=1
 # shellcheck disable=SC1091
 . "$DEV_PATH/utils/i18n"
 info="[INFO]"

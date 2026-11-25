@@ -137,6 +137,48 @@ fi
 printf 'systemctl mock: %s\n' "$*"
 MOCKSYS
     chmod +x "$E2E_SANDBOX_DIR/bin/systemctl"
+
+    # Mock ss so ProxyCheckReadiness exercises real jq/awk parsing against active mocked services
+    cat > "$E2E_SANDBOX_DIR/bin/ss" <<'MOCKSS'
+#!/bin/bash
+STATE_DIR="${AIOS_MOCK_SVC_STATE_DIR:-}"
+PREFIX_DIR="${AIOS_PREFIX:-}"
+JQ_BIN="${PREFIX_DIR}/bin/jq"
+[ -x "$JQ_BIN" ] || JQ_BIN=$(command -v jq || true)
+printf 'Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port\n'
+[ -n "$STATE_DIR" ] && [ -n "$PREFIX_DIR" ] && [ -x "$JQ_BIN" ] || exit 0
+for core in xray v2ray
+do
+    [ -f "$STATE_DIR/aios-${core}.active" ] || continue
+    cfg="$PREFIX_DIR/aios/proxy/${core}/config.json"
+    [ -s "$cfg" ] || continue
+    while IFS= read -r p
+    do
+        [ -z "$p" ] && continue
+        IFS=',' read -r -a toks <<< "$p"
+        for tok in "${toks[@]+"${toks[@]}"}"
+        do
+            tok="${tok//[[:space:]]/}"
+            port="${tok%%-*}"
+            if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -gt 0 ]
+            then
+                printf 'tcp   LISTEN 0      128    0.0.0.0:%s 0.0.0.0:*\n' "$port"
+            fi
+        done
+    done < <("$JQ_BIN" -r '
+        [
+            ((if (.inbounds | type) == "array" then .inbounds else [] end)[]
+                | select(type == "object" and (.protocol // "") != "tun")
+                | (.port // empty | tostring)
+                | select(length > 0 and . != "0")),
+            (if (.api | type) == "object" and (.api.listen | type) == "string" and (.api.listen | contains(":")) then
+                (.api.listen | split(":") | last)
+            else empty end)
+        ] | unique[]
+    ' "$cfg" 2> /dev/null || true)
+done
+MOCKSS
+    chmod +x "$E2E_SANDBOX_DIR/bin/ss"
 }
 
 E2eSandboxCleanup()

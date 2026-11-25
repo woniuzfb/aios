@@ -2382,6 +2382,19 @@ LocaleFix()
 
 i18nCheck()
 {
+    local i18n_dir="${i18n_FILE%/*}"
+    local can_write=0
+    if [ -n "${i18n_FILE:-}" ] && { [ -w "$i18n_FILE" ] || { [ ! -e "$i18n_FILE" ] && [ -d "$i18n_dir" ] && [ -w "$i18n_dir" ]; }; }
+    then
+        can_write=1
+    fi
+
+    if [ "$can_write" -ne 1 ]
+    then
+        sh_locale="${sh_locale:-zh_CN}"
+        return 0
+    fi
+
     if [ -z "${sh_locale:-}" ]
     then
         sh_locale="zh_CN"
@@ -2426,16 +2439,13 @@ eval_gettext()
     fi
 }
 
-if [ "${AIOS_TEST_SKIP_I18N_CHECK:-0}" != "1" ]
+if [ -n "${i18n_FILE:-}" ] && [ -s "$i18n_FILE" ]
 then
-    if [ -s "$i18n_FILE" ]
-    then
-        # shellcheck source=/dev/null
-        . "$i18n_FILE"
-    fi
-
-    i18nCheck
+    # shellcheck source=/dev/null
+    . "$i18n_FILE"
 fi
+
+i18nCheck
 
 i18nSetupFastPath
 
@@ -6907,7 +6917,7 @@ ProxyTestConfigWithBinary()
     fi
 
     local run_as_user=""
-    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ] && [ "${AIOS_TEST_SKIP_DROP_PRIV:-0}" != "1" ]
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ]
     then
         local svc_user="aios-${core}"
         if id -u "$svc_user" > /dev/null 2>&1
@@ -7518,12 +7528,7 @@ ProxyCheckReadiness()
         return 1
     fi
 
-    if [ -n "${AIOS_MOCK_SVC_STATE_DIR:-}" ] || [ ! -s "$cfg_file" ]
-    then
-        return 0
-    fi
-
-    if [ -n "${mock_state:-}" ] && [ -d "${mock_state}" ]
+    if [ ! -s "$cfg_file" ]
     then
         return 0
     fi

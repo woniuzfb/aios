@@ -60,16 +60,16 @@
 
 ---
 
-### 铁律 3：必须通过非交互式自动化测试（Automated Self-Test）
+### 铁律 3：必须通过全量非交互式自动化测试（Automated Self-Test）
 
-- **要求**：所有核心工具库（`core`、`utils/jq`）、配置解析器（`nginx`、`v2ray`、`xray`）及 JSON 构造/渲染逻辑的改动，必须运行非交互式回归测试并 100% 通过。
+- **要求**：任何代码改动交付或提交前，**必须运行全量非交互式回归测试（`bash test/run`）并 100% 通过**，严禁仅运行单个子套件（如 `bash test/run core`）就宣称通过或提交。
 - **执行命令**：
   ```bash
   bash test/run
   # 需要查看各板块真实渲染输出与生成的 JSON 时：
   bash test/run --show-output [all|core|nginx|xray|v2ray]
   ```
-- **基线要求**：不得出现任何失败用例；每次修复 Bug 必须补充对应的回归断言。
+- **硬性验收门禁（必须亲眼看到 `Summary:` 行）**：必须等全量测试完整执行结束，并在输出中明确看到 `Summary: xxx passed, 0 failed`（且退出码为 `0`、`0 failed`），严禁在输出被截断、后台任务未完成或未确认 `Summary:` 行时就跳过或报告通过；每次修复 Bug 必须补充对应的回归断言。
 
 ---
 

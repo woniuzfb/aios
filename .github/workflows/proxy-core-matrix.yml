@@ -19,7 +19,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq shellcheck unzip curl gettext gawk openssl
+          sudo apt-get install -y jq shellcheck unzip curl gettext gawk openssl locales
+          sudo locale-gen zh_CN.UTF-8
 
       - name: Fetch pinned multi-version Xray/V2Ray cores & GeoData
         env:
