@@ -1,18 +1,36 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2016,SC2034,SC2154
+
 RunSuiteV2ray()
 {
     printf '\n=== Suite: v2ray ===\n'
 
     local tmpdir
-    tmpdir=$(mktemp -d)
-    local orig_v2_root="${V2_ROOT:-}" orig_v2_backup="${V2_BACKUP_ROOT:-}" orig_v2_log="${V2_LOG_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/aios-v2ray.XXXXXX")
+    local orig_v2_root="${V2_ROOT:-}" orig_v2_backup="${V2_BACKUP_ROOT:-}" orig_v2_log="${V2_LOG_ROOT:-}" orig_v2_config="${V2_CONFIG:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}" orig_v2_path="$PATH"
     local orig_v2_svc_resolve
     orig_v2_svc_resolve=$(declare -f ServiceResolveLabel)
-    # shellcheck disable=SC2329
-    ServiceResolveLabel()
-    {
-        service_label="$1"
-        service_file="$tmpdir/systemd/${service_label}.service"
-    }
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        TestInstallMacLaunchctlStub "$tmpdir/stub_bin" "$tmpdir/launchctl.log" "$tmpdir/svc_state"
+        PATH="$tmpdir/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpdir/LaunchAgents/${service_label}.plist"
+        }
+    else
+        TestInstallLinuxSystemctlStub "$tmpdir/stub_bin" "$tmpdir/systemctl.log" "$tmpdir/svc_state"
+        PATH="$tmpdir/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpdir/systemd/${service_label}.service"
+        }
+    fi
     V2_ROOT="$tmpdir"
     V2_BACKUP_ROOT="$tmpdir/backups"
     V2_LOG_ROOT="$tmpdir/logs"
@@ -373,24 +391,48 @@ V2HY2EOF
     AssertContains "$v2_hy2_share_out" "hysteria2://pw-hy2-v5@203.0.113.20:8445?sni=hy2v5.example.test#v2-hy2-v5" "ARCH-06: hysteria2 jsonv5 transportSettings share link exported"
 
     # ARCH-05: V2raySetAdvanced services.tun allowed on both jsonv4 (>=5.17.0) and jsonv5 (>=5.9.0)
-    local orig_v2_fmt="${AIOS_V2RAY_FORMAT:-}" orig_v2_ver="${AIOS_V2RAY_TARGET_VERSION:-}" orig_v2_dist="${dist:-}"
-    dist="mac"
+    local orig_v2_fmt="${AIOS_V2RAY_FORMAT:-}" orig_v2_ver="${AIOS_V2RAY_TARGET_VERSION:-}"
+    local v2_can_write_tun=1
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ]
+    then
+        if [ ! -c /dev/net/tun ] || [ ! -r /dev/net/tun ] || [ ! -w /dev/net/tun ]
+        then
+            v2_can_write_tun=0
+        fi
+    fi
+
     AIOS_V2RAY_FORMAT="jsonv4"
     AIOS_V2RAY_TARGET_VERSION="5.18.0"
     MockInquirerReset
     MockInquirerPush "4" "tun-v4" "1500"
-    AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv4 >= 5.17.0" V2raySetAdvanced
-    AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv4 tun drained"
-    AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v4" "ARCH-05: jsonv4 writes services.tun.name"
+
+    if [ "$v2_can_write_tun" -eq 1 ]
+    then
+        AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv4 >= 5.17.0" V2raySetAdvanced
+        AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv4 tun drained"
+        AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v4" "ARCH-05: jsonv4 writes services.tun.name"
+    else
+        AssertFailWithOutput "ARCH-05: V2raySetAdvanced jsonv4 rejects services.tun without /dev/net/tun" "/dev/net/tun" V2raySetAdvanced
+        AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv4 tun drained"
+        SkipPrivilege "ARCH-05: jsonv4 writes services.tun.name" "requires readable/writable /dev/net/tun on Linux"
+    fi
 
     AIOS_V2RAY_FORMAT="jsonv5"
     AIOS_V2RAY_TARGET_VERSION="5.56.0"
     MockInquirerReset
     MockInquirerPush "4" "tun-v5" "1420"
-    AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv5 >= 5.9.0" V2raySetAdvanced
-    AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv5 tun drained"
-    AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v5" "ARCH-05: jsonv5 writes services.tun.name"
-    dist="$orig_v2_dist"
+
+    if [ "$v2_can_write_tun" -eq 1 ]
+    then
+        AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv5 >= 5.9.0" V2raySetAdvanced
+        AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv5 tun drained"
+        AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v5" "ARCH-05: jsonv5 writes services.tun.name"
+    else
+        AssertFailWithOutput "ARCH-05: V2raySetAdvanced jsonv5 rejects services.tun without /dev/net/tun" "/dev/net/tun" V2raySetAdvanced
+        AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv5 tun drained"
+        SkipPrivilege "ARCH-05: jsonv5 writes services.tun.name" "requires readable/writable /dev/net/tun on Linux"
+    fi
 
     # ARCH-06b: jsonv5 certificate read/write via V2rayGetInbounds & V2rayConfigDomain
     local orig_nginx_prefix="${nginx_prefix:-}"
@@ -510,9 +552,11 @@ MOCKACME
     ShowCaptured "Final Generated V2Ray Config JSON" "$(cat "$V2_CONFIG")"
 
     eval "$orig_v2_svc_resolve"
+    PATH="$orig_v2_path"
     V2_ROOT="${orig_v2_root}"
     V2_BACKUP_ROOT="${orig_v2_backup}"
     V2_LOG_ROOT="${orig_v2_log}"
+    V2_CONFIG="${orig_v2_config}"
     PROXY_LOCK_FILE="${orig_proxy_lock}"
     rm -rf "$tmpdir"
 }

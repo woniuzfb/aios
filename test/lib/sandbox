@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 E2E_SANDBOX_DIR=""
 
 E2eSandboxInit()
@@ -6,6 +8,7 @@ E2eSandboxInit()
     E2E_SANDBOX_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aios-e2e.XXXXXX")
     mkdir -p \
         "$E2E_SANDBOX_DIR/bin" \
+        "$E2E_SANDBOX_DIR/home/Library/LaunchAgents" \
         "$E2E_SANDBOX_DIR/aios/proxy/xray/backups" \
         "$E2E_SANDBOX_DIR/aios/proxy/xray/logs" \
         "$E2E_SANDBOX_DIR/aios/proxy/v2ray/backups" \
@@ -18,6 +21,7 @@ E2eSandboxInit()
 
     cp "$built_aios" "$E2E_SANDBOX_DIR/bin/tv"
     chmod +x "$E2E_SANDBOX_DIR/bin/tv"
+
     local alias_cmd
     for alias_cmd in x v2 nx or ibm cf cx arm pve ali lhh rc cw dr ha
     do
@@ -29,7 +33,7 @@ E2eSandboxInit()
 
     # Mock isolated aios-xray binary (no public xray binary in sandbox PATH)
     cat > "$E2E_SANDBOX_DIR/bin/aios-xray" <<'MOCKX'
-#!/bin/bash
+#!/usr/bin/env bash
 case "${1:-}" in
     version)
         printf 'Xray 26.11.9 (Xray, Penetrates Everything.) Mock\n'
@@ -58,7 +62,7 @@ MOCKX
 
     # Mock isolated aios-v2ray binary (v5 CLI, no v2ctl in sandbox PATH)
     cat > "$E2E_SANDBOX_DIR/bin/aios-v2ray" <<'MOCKV2'
-#!/bin/bash
+#!/usr/bin/env bash
 case "${1:-}" in
     version)
         printf 'V2Ray 5.56.0 (V2Fly, a community-driven edition of V2Ray.) Mock\n'
@@ -80,67 +84,35 @@ MOCKV2
     chmod +x "$E2E_SANDBOX_DIR/bin/aios-v2ray"
 
     cat > "$E2E_SANDBOX_DIR/bin/dig" <<'MOCKDIG'
-#!/bin/bash
+#!/usr/bin/env bash
 printf '203.0.113.10\n'
 MOCKDIG
     chmod +x "$E2E_SANDBOX_DIR/bin/dig"
 
     cat > "$E2E_SANDBOX_DIR/bin/curl" <<'MOCKCURL'
-#!/bin/bash
+#!/usr/bin/env bash
 printf '203.0.113.10\n'
 MOCKCURL
     chmod +x "$E2E_SANDBOX_DIR/bin/curl"
 
-    # Stateful mock systemctl for safe status/restart/rollback failure injection
-    cat > "$E2E_SANDBOX_DIR/bin/systemctl" <<'MOCKSYS'
-#!/bin/bash
-STATE_DIR="${AIOS_MOCK_SVC_STATE_DIR:-}"
-action="${1:-}"
-shift || true
-target=""
-for arg in "$@"
-do
-    case "$arg" in
-        -*) continue ;;
-        *) target="$arg" ;;
-    esac
-done
-if [ -n "$STATE_DIR" ]
-then
-    case "$action" in
-        is-active)
-            [ -f "$STATE_DIR/${target}.active" ] && exit 0 || exit 3
-        ;;
-        start|restart)
-            if [ -f "$STATE_DIR/fail_next_restart" ]
-            then
-                rm -f "$STATE_DIR/fail_next_restart"
-                rm -f "$STATE_DIR/${target}.active"
-                printf 'mock restart failed\n' >&2
-                exit 1
-            fi
-            if [ -f "$STATE_DIR/fail_all_restarts" ]
-            then
-                rm -f "$STATE_DIR/${target}.active"
-                printf 'mock persistent restart failure\n' >&2
-                exit 1
-            fi
-            touch "$STATE_DIR/${target}.active"
-            exit 0
-        ;;
-        stop)
-            rm -f "$STATE_DIR/${target}.active"
-            exit 0
-        ;;
-    esac
-fi
-printf 'systemctl mock: %s\n' "$*"
-MOCKSYS
-    chmod +x "$E2E_SANDBOX_DIR/bin/systemctl"
+    # Install same-platform service control stub only (never fake systemctl on macOS)
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ]
+    then
+        TestInstallLinuxSystemctlStub \
+            "$E2E_SANDBOX_DIR/bin" \
+            "$E2E_SANDBOX_DIR/mock_svc_state/systemctl.log" \
+            "$E2E_SANDBOX_DIR/mock_svc_state"
+    elif [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        TestInstallMacLaunchctlStub \
+            "$E2E_SANDBOX_DIR/bin" \
+            "$E2E_SANDBOX_DIR/mock_svc_state/launchctl.log" \
+            "$E2E_SANDBOX_DIR/mock_svc_state"
+    fi
 
     # Mock ss so ProxyCheckReadiness exercises real jq/awk parsing against active mocked services
     cat > "$E2E_SANDBOX_DIR/bin/ss" <<'MOCKSS'
-#!/bin/bash
+#!/usr/bin/env bash
 STATE_DIR="${AIOS_MOCK_SVC_STATE_DIR:-}"
 PREFIX_DIR="${AIOS_PREFIX:-}"
 JQ_BIN="${PREFIX_DIR}/bin/jq"
@@ -209,15 +181,19 @@ E2eRunPty()
     local cmd_name="$1"
     local steps_json="$2"
     local mode_flag="${3:-}"
+    local bash_bin="${BASH:-bash}"
 
+    HOME="$E2E_SANDBOX_DIR/home" \
     PATH="$E2E_SANDBOX_DIR/bin:$PATH" \
     AIOS_PREFIX="$E2E_SANDBOX_DIR" \
     AIOS_MOCK_SVC_STATE_DIR="$E2E_SANDBOX_DIR/mock_svc_state" \
+    AIOS_STUB_SYSTEMCTL_STATE_DIR="$E2E_SANDBOX_DIR/mock_svc_state" \
+    AIOS_STUB_LAUNCHCTL_STATE_DIR="$E2E_SANDBOX_DIR/mock_svc_state" \
     LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN \
-        bash "$REPO_ROOT/test/lib/pty_driver" \
+        "$bash_bin" "$REPO_ROOT/test/lib/pty_driver" \
         --cmd "$E2E_SANDBOX_DIR/bin/$cmd_name" \
-        --timeout 3 \
+        --timeout "${AIOS_E2E_PTY_TIMEOUT:-10}" \
         --steps "$steps_json" \
         ${mode_flag:+$mode_flag}
 }

@@ -1,16 +1,146 @@
+# shellcheck shell=bash
+
 PASS_COUNT=0
 FAIL_COUNT=0
+SKIP_PLATFORM_COUNT=0
+SKIP_PRIVILEGE_COUNT=0
+SKIP_DEPENDENCY_COUNT=0
 SHOW_OUTPUT="${SHOW_OUTPUT:-0}"
+
+AIOS_TEST_CASES_FILE="${AIOS_TEST_CASES_FILE:-}"
+AIOS_TEST_EVENTS_FILE="${AIOS_TEST_EVENTS_FILE:-}"
+AIOS_TEST_FAIL_LOG="${AIOS_TEST_FAIL_LOG:-}"
 
 MOCK_INQUIRER_QUEUE=()
 MOCK_INQUIRER_POS=0
 MOCK_INQUIRER_TRACE=()
 MOCK_SERVICE_CALLS=()
-MOCK_INQUIRER_STATE_DIR=""
+MOCK_INQUIRER_STATE_DIR="${MOCK_INQUIRER_STATE_DIR:-}"
 
 StripAnsi()
 {
     printf '%b' "$1" | sed -E $'s/\x1b\\[[0-9;]*[a-zA-Z]//g' | tr -d '\r'
+}
+
+HarnessSanitizeId()
+{
+    local raw="$1"
+    raw="${raw//$'\t'/ }"
+    raw="${raw//$'\n'/ }"
+    raw="${raw//$'\r'/ }"
+    printf '%s' "$raw"
+}
+
+HarnessRecordCase()
+{
+    local status="$1"
+    local case_id="$2"
+
+    if [ -n "${AIOS_TEST_CASES_FILE:-}" ]
+    then
+        printf '%s\t%s\n' "$status" "$(HarnessSanitizeId "$case_id")" >> "$AIOS_TEST_CASES_FILE"
+    fi
+}
+
+HarnessEmitEvent()
+{
+    local line="$1"
+
+    if [ -n "${AIOS_TEST_EVENTS_FILE:-}" ]
+    then
+        printf '%s\n' "$line" >> "$AIOS_TEST_EVENTS_FILE"
+    fi
+
+    printf '%s\n' "$line"
+}
+
+HarnessEmitFail()
+{
+    local msg="$1"
+
+    if [ -n "${AIOS_TEST_EVENTS_FILE:-}" ]
+    then
+        printf '%s\n' "$msg" >> "$AIOS_TEST_EVENTS_FILE"
+    fi
+
+    if [ -n "${AIOS_TEST_FAIL_LOG:-}" ]
+    then
+        printf '%s\n' "$msg" >> "$AIOS_TEST_FAIL_LOG"
+        printf '%s\n' "$msg"
+    else
+        printf '%s\n' "$msg" >&2
+    fi
+}
+
+RecordPass()
+{
+    local label="$1"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    HarnessRecordCase "PASS" "$label"
+    HarnessEmitEvent "[PASS] ${label}"
+}
+
+RecordFail()
+{
+    local label="$1"
+    local detail="${2:-}"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    HarnessRecordCase "FAIL" "$label"
+
+    if [ -n "$detail" ]
+    then
+        HarnessEmitFail "[FAIL] ${label}
+${detail}"
+    else
+        HarnessEmitFail "[FAIL] ${label}"
+    fi
+}
+
+SkipPlatform()
+{
+    local case_id="$1"
+    local reason="$2"
+    SKIP_PLATFORM_COUNT=$((SKIP_PLATFORM_COUNT + 1))
+    HarnessRecordCase "SKIP_PLATFORM" "$case_id"
+    HarnessEmitEvent "[SKIP][platform] ${case_id}: ${reason}"
+}
+
+SkipPrivilege()
+{
+    local case_id="$1"
+    local reason="$2"
+
+    if [ "${AIOS_REQUIRE_ROOT_SYSTEMD:-0}" == "1" ]
+    then
+        local msg="[FAIL] [SKIP][privilege] forbidden in linux-root-systemd: ${case_id}: ${reason}"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        HarnessRecordCase "FAIL" "$case_id"
+        HarnessEmitFail "$msg"
+        return 0
+    fi
+
+    SKIP_PRIVILEGE_COUNT=$((SKIP_PRIVILEGE_COUNT + 1))
+    HarnessRecordCase "SKIP_PRIVILEGE" "$case_id"
+    HarnessEmitEvent "[SKIP][privilege] ${case_id}: ${reason}"
+}
+
+SkipDependency()
+{
+    local case_id="$1"
+    local reason="$2"
+
+    if [ "${AIOS_REQUIRE_CORE_MATRIX:-0}" == "1" ] || [ "${AIOS_STRICT_DEPS:-0}" == "1" ]
+    then
+        local msg="[FAIL] [SKIP][dependency] forbidden in strict mode: ${case_id}: ${reason}"
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        HarnessRecordCase "FAIL" "$case_id"
+        HarnessEmitFail "$msg"
+        return 0
+    fi
+
+    SKIP_DEPENDENCY_COUNT=$((SKIP_DEPENDENCY_COUNT + 1))
+    HarnessRecordCase "SKIP_DEPENDENCY" "$case_id"
+    HarnessEmitEvent "[SKIP][dependency] ${case_id}: ${reason}"
 }
 
 ShowCaptured()
@@ -35,10 +165,12 @@ AssertEq()
     if [ "$expected" == "$actual" ]
     then
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s\n' "$label"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s\n  expected: %q\n  actual:   %q\n' "$label" "$expected" "$actual" >&2
+        local detail
+        detail=$(printf '  expected: %q\n  actual:   %q' "$expected" "$actual")
+        RecordFail "$label" "$detail"
     fi
 }
 
@@ -53,10 +185,12 @@ AssertContains()
     if [[ "$plain" == *"$needle"* ]]
     then
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s\n' "$label"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s\n  missing substring: %q\n' "$label" "$needle" >&2
+        local detail
+        detail=$(printf '  missing substring: %q' "$needle")
+        RecordFail "$label" "$detail"
     fi
 }
 
@@ -71,10 +205,12 @@ AssertNotContains()
     if [[ "$plain" != *"$needle"* ]]
     then
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s\n' "$label"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s\n  unexpected substring: %q\n' "$label" "$needle" >&2
+        local detail
+        detail=$(printf '  unexpected substring: %q' "$needle")
+        RecordFail "$label" "$detail"
     fi
 }
 
@@ -93,13 +229,14 @@ AssertOk()
 {
     local label="$1"
     shift
+
     if "$@" > /dev/null 2>&1
     then
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s\n' "$label"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s (command failed: %s)\n' "$label" "$*" >&2
+        RecordFail "${label} (command failed: $*)"
     fi
 }
 
@@ -107,17 +244,339 @@ AssertFail()
 {
     local label="$1"
     shift
+
     if "$@" > /dev/null 2>&1
     then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s (expected failure but succeeded: %s)\n' "$label" "$*" >&2
+        RecordFail "${label} (expected failure but succeeded: $*)"
     else
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s\n' "$label"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
     fi
 }
 
-_MockInquirerEnsureStateDir()
+AssertFailWithOutput()
+{
+    local label="$1"
+    local expected_pattern="$2"
+    shift 2
+
+    local out="" rc=0 plain=""
+    out=$("$@" 2>&1) || rc=$?
+    plain=$(StripAnsi "$out")
+
+    if [ "$rc" -eq 0 ]
+    then
+        local detail
+        detail=$(printf '  expected failure containing %q but command exited 0\n  output: %q' "$expected_pattern" "$plain")
+        RecordFail "$label" "$detail"
+        return 0
+    fi
+
+    if [[ "$plain" == *"$expected_pattern"* ]]
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label}"
+    else
+        local detail
+        detail=$(printf '  expected failure output substring: %q\n  exit_code: %d\n  actual output: %q' "$expected_pattern" "$rc" "$plain")
+        RecordFail "$label" "$detail"
+    fi
+}
+
+TestInstallLinuxSystemctlStub()
+{
+    local bin_dir="$1"
+    local log_file="$2"
+    local state_dir="$3"
+
+    if [ "${AIOS_TEST_HOST_OS:-}" != "linux" ]
+    then
+        printf '[ERROR] TestInstallLinuxSystemctlStub is forbidden on host OS "%s" (linux only)\n' "${AIOS_TEST_HOST_OS:-unknown}" >&2
+        return 1
+    fi
+
+    mkdir -p "$bin_dir" "$state_dir" "$(dirname "$log_file")"
+    touch "$log_file"
+
+    local stub_path="$bin_dir/systemctl"
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf 'DEFAULT_LOG_FILE=%q\n' "$log_file"
+        printf 'DEFAULT_STATE_DIR=%q\n' "$state_dir"
+        cat <<'MOCKSYS'
+LOG_FILE="${AIOS_STUB_SYSTEMCTL_LOG:-$DEFAULT_LOG_FILE}"
+STATE_DIR="${AIOS_STUB_SYSTEMCTL_STATE_DIR:-${AIOS_MOCK_SVC_STATE_DIR:-$DEFAULT_STATE_DIR}}"
+
+if [ -n "$LOG_FILE" ]
+then
+    printf '%s\n' "$*" >> "$LOG_FILE"
+fi
+
+action=""
+target=""
+has_now=0
+for arg in "$@"
+do
+    case "$arg" in
+        --now)
+            has_now=1
+        ;;
+        -*)
+            continue
+        ;;
+        *)
+            if [ -z "$action" ]
+            then
+                action="$arg"
+            elif [ -z "$target" ]
+            then
+                target="$arg"
+            fi
+        ;;
+    esac
+done
+
+unit="${target%.service}"
+
+if [ -n "$STATE_DIR" ]
+then
+    mkdir -p "$STATE_DIR"
+    case "$action" in
+        daemon-reload)
+            count_file="$STATE_DIR/daemon_reload_count"
+            reload_count=0
+            if [ -f "$count_file" ]
+            then
+                reload_count=$(cat "$count_file" 2> /dev/null || printf '0')
+            fi
+            reload_count=$((reload_count + 1))
+            printf '%d\n' "$reload_count" > "$count_file"
+
+            if [ -f "$STATE_DIR/fail_daemon_reload" ]
+            then
+                printf 'Failed to reload daemon: mock persistent failure\n' >&2
+                exit 1
+            fi
+
+            if [ -f "$STATE_DIR/fail_next_daemon_reload" ]
+            then
+                rm -f "$STATE_DIR/fail_next_daemon_reload"
+                printf 'Failed to reload daemon: mock transient failure\n' >&2
+                exit 1
+            fi
+
+            if [ -f "$STATE_DIR/fail_nth_daemon_reload" ]
+            then
+                nth=$(cat "$STATE_DIR/fail_nth_daemon_reload" 2> /dev/null || printf '0')
+                if [ "$reload_count" -eq "$nth" ]
+                then
+                    printf 'Failed to reload daemon: mock nth failure (%d)\n' "$nth" >&2
+                    exit 1
+                fi
+            fi
+
+            exit 0
+        ;;
+        is-active)
+            if [ -f "$STATE_DIR/${unit}.active" ]
+            then
+                exit 0
+            fi
+            exit 3
+        ;;
+        is-enabled)
+            if [ -f "$STATE_DIR/${unit}.enabled" ]
+            then
+                exit 0
+            fi
+            exit 1
+        ;;
+        enable)
+            touch "$STATE_DIR/${unit}.enabled"
+            if [ "$has_now" -eq 1 ]
+            then
+                touch "$STATE_DIR/${unit}.active"
+            fi
+            exit 0
+        ;;
+        disable)
+            rm -f "$STATE_DIR/${unit}.enabled"
+            if [ "$has_now" -eq 1 ]
+            then
+                rm -f "$STATE_DIR/${unit}.active"
+            fi
+            exit 0
+        ;;
+        start|restart|reload|try-reload-or-restart)
+            if [ -f "$STATE_DIR/fail_next_restart" ]
+            then
+                rm -f "$STATE_DIR/fail_next_restart"
+                rm -f "$STATE_DIR/${unit}.active"
+                printf 'mock restart failed\n' >&2
+                exit 1
+            fi
+
+            if [ -f "$STATE_DIR/fail_all_restarts" ]
+            then
+                rm -f "$STATE_DIR/${unit}.active"
+                printf 'mock persistent restart failure\n' >&2
+                exit 1
+            fi
+
+            touch "$STATE_DIR/${unit}.active"
+            exit 0
+        ;;
+        stop)
+            rm -f "$STATE_DIR/${unit}.active"
+            exit 0
+        ;;
+        status)
+            if [ -f "$STATE_DIR/${unit}.active" ]
+            then
+                printf '%s.service - mock service\n   Active: active (running)\n' "$unit"
+                exit 0
+            fi
+            printf '%s.service - mock service\n   Active: inactive (dead)\n' "$unit"
+            exit 3
+        ;;
+    esac
+fi
+
+exit 0
+MOCKSYS
+    } > "$stub_path"
+    chmod +x "$stub_path"
+}
+
+TestInstallMacLaunchctlStub()
+{
+    local bin_dir="$1"
+    local log_file="$2"
+    local state_dir="$3"
+
+    if [ "${AIOS_TEST_HOST_OS:-}" != "mac" ]
+    then
+        printf '[ERROR] TestInstallMacLaunchctlStub is forbidden on host OS "%s" (mac only)\n' "${AIOS_TEST_HOST_OS:-unknown}" >&2
+        return 1
+    fi
+
+    mkdir -p "$bin_dir" "$state_dir" "$(dirname "$log_file")"
+    touch "$log_file"
+
+    local stub_path="$bin_dir/launchctl"
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf 'DEFAULT_LOG_FILE=%q\n' "$log_file"
+        printf 'DEFAULT_STATE_DIR=%q\n' "$state_dir"
+        cat <<'MOCKLAUNCH'
+LOG_FILE="${AIOS_STUB_LAUNCHCTL_LOG:-$DEFAULT_LOG_FILE}"
+STATE_DIR="${AIOS_STUB_LAUNCHCTL_STATE_DIR:-${AIOS_MOCK_SVC_STATE_DIR:-$DEFAULT_STATE_DIR}}"
+
+if [ -n "$LOG_FILE" ]
+then
+    printf '%s\n' "$*" >> "$LOG_FILE"
+fi
+
+action="${1:-}"
+shift || true
+
+target=""
+for arg in "$@"
+do
+    case "$arg" in
+        -*)
+            continue
+        ;;
+        *)
+            target="$arg"
+        ;;
+    esac
+done
+
+label=""
+case "$target" in
+    gui/*/*)
+        label="${target##*/}"
+    ;;
+    *.plist)
+        label="${target##*/}"
+        label="${label%.plist}"
+    ;;
+    *)
+        label="${target##*/}"
+    ;;
+esac
+
+short_label=""
+case "$label" in
+    com.aios.*)
+        short_label="${label#com.aios.}"
+    ;;
+esac
+
+if [ -n "$STATE_DIR" ]
+then
+    mkdir -p "$STATE_DIR"
+    case "$action" in
+        print)
+            if [ -f "$STATE_DIR/${label}.active" ] || { [ -n "$short_label" ] && [ -f "$STATE_DIR/${short_label}.active" ]; }
+            then
+                printf 'gui/%s/%s = {\n    state = running\n    pid = 12345\n}\n' "${UID:-501}" "$label"
+                exit 0
+            fi
+            exit 113
+        ;;
+        load|bootstrap|kickstart)
+            if [ -f "$STATE_DIR/fail_next_restart" ]
+            then
+                rm -f "$STATE_DIR/fail_next_restart"
+                rm -f "$STATE_DIR/${label}.active"
+                if [ -n "$short_label" ]
+                then
+                    rm -f "$STATE_DIR/${short_label}.active"
+                fi
+                printf 'mock launchctl load failed\n' >&2
+                exit 1
+            fi
+
+            if [ -f "$STATE_DIR/fail_all_restarts" ]
+            then
+                rm -f "$STATE_DIR/${label}.active"
+                if [ -n "$short_label" ]
+                then
+                    rm -f "$STATE_DIR/${short_label}.active"
+                fi
+                printf 'mock launchctl persistent failure\n' >&2
+                exit 1
+            fi
+
+            touch "$STATE_DIR/${label}.active"
+            if [ -n "$short_label" ]
+            then
+                touch "$STATE_DIR/${short_label}.active"
+            fi
+            exit 0
+        ;;
+        unload|bootout)
+            rm -f "$STATE_DIR/${label}.active"
+            if [ -n "$short_label" ]
+            then
+                rm -f "$STATE_DIR/${short_label}.active"
+            fi
+            exit 0
+        ;;
+    esac
+fi
+
+exit 0
+MOCKLAUNCH
+    } > "$stub_path"
+    chmod +x "$stub_path"
+}
+
+MockInquirerEnsureStateDir()
 {
     if [ -z "${MOCK_INQUIRER_STATE_DIR:-}" ] || [ ! -d "$MOCK_INQUIRER_STATE_DIR" ]
     then
@@ -132,7 +591,7 @@ MockInquirerReset()
     MOCK_INQUIRER_QUEUE=()
     MOCK_INQUIRER_POS=0
     MOCK_INQUIRER_TRACE=()
-    _MockInquirerEnsureStateDir
+    MockInquirerEnsureStateDir
     printf '0\n' > "$MOCK_INQUIRER_STATE_DIR/pos"
     : > "$MOCK_INQUIRER_STATE_DIR/trace"
 }
@@ -159,6 +618,7 @@ AssertInquirerDrained()
 {
     local label="$1"
     local pos="$MOCK_INQUIRER_POS"
+
     if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -f "$MOCK_INQUIRER_STATE_DIR/pos" ]
     then
         pos=$(cat "$MOCK_INQUIRER_STATE_DIR/pos")
@@ -173,13 +633,14 @@ AssertInquirerDrained()
     fi
 
     local remaining=$(( ${#MOCK_INQUIRER_QUEUE[@]} - pos ))
+
     if [ "$remaining" -eq 0 ]
     then
         PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] %s (steps=%d)\n' "$label" "$pos"
+        HarnessRecordCase "PASS" "$label"
+        HarnessEmitEvent "[PASS] ${label} (steps=${pos})"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] %s: %d unused mock input(s) left in queue (consumed=%d, queued=%d)\n' "$label" "$remaining" "$pos" "${#MOCK_INQUIRER_QUEUE[@]}" >&2
+        RecordFail "${label}: ${remaining} unused mock input(s) left in queue (consumed=${pos}, queued=${#MOCK_INQUIRER_QUEUE[@]})"
     fi
 }
 
@@ -199,13 +660,14 @@ inquirer()
 
     if [ "$pos" -ge "${#MOCK_INQUIRER_QUEUE[@]}" ]
     then
-        printf '[FAIL] inquirer(%s "%s"): mock queue exhausted at step %d\n' "$kind" "$prompt" "$pos" >&2
+        HarnessEmitFail "[FAIL] inquirer(${kind} \"${prompt}\"): mock queue exhausted at step ${pos}"
         return 1
     fi
 
     next_val="${MOCK_INQUIRER_QUEUE[$pos]}"
     pos=$((pos + 1))
     MOCK_INQUIRER_POS="$pos"
+
     if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -d "$MOCK_INQUIRER_STATE_DIR" ]
     then
         printf '%d\n' "$pos" > "$MOCK_INQUIRER_STATE_DIR/pos"
@@ -218,11 +680,13 @@ inquirer()
             out_var="$2"
             local opts_len=0
             eval "opts_len=\${#${arr_name}[@]}"
+
             if ! [[ "$next_val" =~ ^[0-9]+$ ]] || [ "$next_val" -ge "$opts_len" ]
             then
-                printf '[FAIL] inquirer(list_input_index "%s"): index %q out of range [0..%d)\n' "$prompt" "$next_val" "$opts_len" >&2
+                HarnessEmitFail "[FAIL] inquirer(list_input_index \"${prompt}\"): index ${next_val} out of range [0..${opts_len})"
                 return 1
             fi
+
             local chosen_label=""
             eval "chosen_label=\"\${${arr_name}[$next_val]}\""
             trace_line="[STEP $pos] $kind \"$prompt\" => [$next_val] $chosen_label"
@@ -251,6 +715,7 @@ inquirer()
     esac
 
     MOCK_INQUIRER_TRACE+=("$trace_line")
+
     if [ -n "${MOCK_INQUIRER_STATE_DIR:-}" ] && [ -d "$MOCK_INQUIRER_STATE_DIR" ]
     then
         printf '%s\n' "$trace_line" >> "$MOCK_INQUIRER_STATE_DIR/trace"
@@ -270,7 +735,7 @@ ExitOnList()
 
 ExitOnText()
 {
-    inquirer text_input "$1" "$2" "$i18n_cancel" "${3:-}" "${4:-}"
+    inquirer text_input "$1" "$2" "${i18n_cancel:-}" "${3:-}" "${4:-}"
 }
 
 gettext()

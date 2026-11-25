@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
@@ -45,14 +45,17 @@ IN_FIFO="$WORK_DIR/in"
 OUT_LOG="$WORK_DIR/out"
 CHILD_PID=""
 
+# shellcheck disable=SC2329
 CleanupDriver()
 {
     exec 3>&- 2> /dev/null || true
+
     if [ -n "${CHILD_PID:-}" ] && kill -0 "$CHILD_PID" 2> /dev/null
     then
         kill -9 "$CHILD_PID" 2> /dev/null || true
         wait "$CHILD_PID" 2> /dev/null || true
     fi
+
     rm -rf "$WORK_DIR"
 }
 trap CleanupDriver EXIT
@@ -92,17 +95,26 @@ WaitForPattern()
 {
     local offset="$1"
     local pattern="$2"
-    local max_ticks=$((TIMEOUT_S * 20))
-    local ticks=0
+    local deadline=$((SECONDS + TIMEOUT_S))
+    local fast_ticks=0
+    local last_checked_size=-1
+    local cur_size=0
 
-    while [ "$ticks" -lt "$max_ticks" ]
+    while [ "$SECONDS" -lt "$deadline" ]
     do
         if [ -n "$pattern" ]
         then
-            if tail -c +"$((offset + 1))" "$OUT_LOG" 2> /dev/null | StripAnsiStream | LC_ALL=C grep -qF "$pattern"
+            cur_size=$(FileSize "$OUT_LOG")
+
+            if [ "$cur_size" -ne "$last_checked_size" ] && [ "$cur_size" -gt "$offset" ]
             then
-                sleep 0.04
-                return 0
+                last_checked_size="$cur_size"
+
+                if tail -c +"$((offset + 1))" "$OUT_LOG" 2> /dev/null | StripAnsiStream | LC_ALL=C grep -qF "$pattern"
+                then
+                    sleep 0.01
+                    return 0
+                fi
             fi
         else
             if ! kill -0 "$CHILD_PID" 2> /dev/null
@@ -115,9 +127,54 @@ WaitForPattern()
         then
             return 0
         fi
-        sleep 0.05
-        ticks=$((ticks + 1))
+
+        if [ "$fast_ticks" -lt 10 ]
+        then
+            sleep 0.01
+            fast_ticks=$((fast_ticks + 1))
+        else
+            sleep 0.02
+        fi
     done
+
+    return 1
+}
+
+WaitForExitAfterEof()
+{
+    local offset="$1"
+    local deadline=$((SECONDS + TIMEOUT_S))
+    local last_size="$offset"
+    local cur_size="$offset"
+    local idle_ticks=0
+    local saw_output=0
+
+    while [ "$SECONDS" -lt "$deadline" ]
+    do
+        if ! kill -0 "$CHILD_PID" 2> /dev/null
+        then
+            return 0
+        fi
+
+        cur_size=$(FileSize "$OUT_LOG")
+
+        if [ "$cur_size" -gt "$last_size" ]
+        then
+            last_size="$cur_size"
+            saw_output=1
+            idle_ticks=0
+        else
+            idle_ticks=$((idle_ticks + 1))
+
+            if [ "$saw_output" -eq 1 ] && [ "$idle_ticks" -ge 100 ]
+            then
+                return 2
+            fi
+        fi
+
+        sleep 0.02
+    done
+
     return 1
 }
 
@@ -141,13 +198,19 @@ fi
 OFFSET=0
 STEP_COUNT=${#STEP_WAITS[@]}
 STEP_IDX=0
+STEP_TIMED_OUT=0
 
 while [ "$STEP_IDX" -lt "$STEP_COUNT" ]
 do
     w_pat="${STEP_WAITS[$STEP_IDX]}"
     s_keys="${STEP_SENDS[$STEP_IDX]}"
 
-    WaitForPattern "$OFFSET" "$w_pat" || true
+    if ! WaitForPattern "$OFFSET" "$w_pat"
+    then
+        STEP_TIMED_OUT=1
+        break
+    fi
+
     NEW_SIZE=$(FileSize "$OUT_LOG")
 
     if [ "$VERBOSE" -eq 1 ]
@@ -155,6 +218,7 @@ do
         printf '\n=== [TTY STEP %d] send=%s ===\n' "$STEP_IDX" "$s_keys"
         tail -c +"$((OFFSET + 1))" "$OUT_LOG" | StripAnsiStream
     fi
+
     OFFSET="$NEW_SIZE"
 
     if ! kill -0 "$CHILD_PID" 2> /dev/null
@@ -170,17 +234,54 @@ do
     STEP_IDX=$((STEP_IDX + 1))
 done
 
-# Wait for process to finish cleanly
-WaitForPattern "$OFFSET" "" || true
+# Close write end so interactive menus blocked on read receive EOF and exit promptly
+exec 3>&- 2> /dev/null || true
+
 EXIT_CODE=0
-if kill -0 "$CHILD_PID" 2> /dev/null
+
+if [ "$STEP_TIMED_OUT" -eq 1 ]
 then
-    kill -9 "$CHILD_PID" 2> /dev/null || true
-    wait "$CHILD_PID" 2> /dev/null || true
+    if kill -0 "$CHILD_PID" 2> /dev/null
+    then
+        kill -TERM "$CHILD_PID" 2> /dev/null || true
+        sleep 0.03
+
+        if kill -0 "$CHILD_PID" 2> /dev/null
+        then
+            kill -9 "$CHILD_PID" 2> /dev/null || true
+        fi
+
+        wait "$CHILD_PID" 2> /dev/null || true
+    fi
+
     EXIT_CODE=124
 else
-    wait "$CHILD_PID" || EXIT_CODE=$?
+    eof_wait_rc=0
+    WaitForExitAfterEof "$OFFSET" || eof_wait_rc=$?
+
+    if kill -0 "$CHILD_PID" 2> /dev/null
+    then
+        kill -TERM "$CHILD_PID" 2> /dev/null || true
+        sleep 0.03
+
+        if kill -0 "$CHILD_PID" 2> /dev/null
+        then
+            kill -9 "$CHILD_PID" 2> /dev/null || true
+        fi
+
+        wait "$CHILD_PID" 2> /dev/null || true
+
+        if [ "$eof_wait_rc" -eq 2 ]
+        then
+            EXIT_CODE=0
+        else
+            EXIT_CODE=124
+        fi
+    else
+        wait "$CHILD_PID" || EXIT_CODE=$?
+    fi
 fi
+
 CHILD_PID=""
 
 if [ "$VERBOSE" -eq 1 ]
@@ -196,4 +297,5 @@ if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 1 ]
 then
     exit 0
 fi
-exit 1
+
+exit "$EXIT_CODE"

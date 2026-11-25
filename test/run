@@ -7,6 +7,16 @@ DEV_PATH="$REPO_ROOT"
 
 SHOW_OUTPUT=0
 TARGET_SUITE="all"
+JOBS=""
+TIMEOUT_SEC="${AIOS_TEST_SUITE_TIMEOUT:-180}"
+RESULTS_FILE=""
+WORKER_SUITE=""
+WORKER_DIR=""
+
+Usage()
+{
+    printf 'Usage: %s [-j N|--jobs N] [--show-output|-v] [--timeout SEC] [--results-file PATH] [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e|core_matrix]\n' "$0" >&2
+}
 
 while [ $# -gt 0 ]
 do
@@ -15,26 +25,152 @@ do
             SHOW_OUTPUT=1
             shift
         ;;
+        -j|--jobs)
+            if [ $# -lt 2 ] || ! [[ "$2" =~ ^[1-9][0-9]*$ ]]
+            then
+                printf '[ERROR] invalid jobs value: %s\n' "${2:-}" >&2
+                Usage
+                exit 2
+            fi
+            JOBS="$2"
+            shift 2
+        ;;
+        --timeout)
+            if [ $# -lt 2 ] || ! [[ "$2" =~ ^[1-9][0-9]*$ ]]
+            then
+                printf '[ERROR] invalid timeout value: %s\n' "${2:-}" >&2
+                Usage
+                exit 2
+            fi
+            TIMEOUT_SEC="$2"
+            shift 2
+        ;;
+        --results-file)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                printf '[ERROR] missing path for --results-file\n' >&2
+                Usage
+                exit 2
+            fi
+            RESULTS_FILE="$2"
+            shift 2
+        ;;
+        --worker-suite)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                printf '[ERROR] missing suite for --worker-suite\n' >&2
+                exit 2
+            fi
+            WORKER_SUITE="$2"
+            shift 2
+        ;;
+        --worker-dir)
+            if [ $# -lt 2 ] || [ -z "$2" ]
+            then
+                printf '[ERROR] missing dir for --worker-dir\n' >&2
+                exit 2
+            fi
+            WORKER_DIR="$2"
+            shift 2
+        ;;
         core|nginx|xray|v2ray|matrix|types|iptv|e2e|core_matrix|all)
             TARGET_SUITE="$1"
             shift
         ;;
         *)
-            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e|core_matrix]\n' "$0" >&2
+            Usage
             exit 2
         ;;
     esac
 done
 
+DetectHostPlatform()
+{
+    local dist_check_def=""
+    dist_check_def=$(awk '/^DistCheck\(\)$/,/^}$/' "$DEV_PATH/utils/system")
+
+    if [ -z "$dist_check_def" ]
+    then
+        printf '[ERROR] failed to load DistCheck from %s/utils/system\n' "$DEV_PATH" >&2
+        return 1
+    fi
+
+    red="${red:-}"
+    normal="${normal:-}"
+    Println()
+    {
+        printf '%b\n' "$*"
+    }
+
+    eval "$dist_check_def"
+    dist=""
+    DistCheck
+
+    local host_os="linux"
+
+    if [ "$dist" == "mac" ]
+    then
+        host_os="mac"
+    fi
+
+    local is_root="0"
+
+    if [ "$(id -u)" -eq 0 ]
+    then
+        is_root="1"
+    fi
+
+    local has_real_systemd="0"
+
+    if [ "$host_os" == "linux" ] && [ "$is_root" == "1" ] && [ -d /run/systemd/system ]
+    then
+        if systemctl is-system-running > /dev/null 2>&1 || systemctl list-units --no-pager > /dev/null 2>&1
+        then
+            has_real_systemd="1"
+        fi
+    fi
+
+    AIOS_TEST_HOST_OS="$host_os"
+    AIOS_TEST_IS_ROOT="$is_root"
+    AIOS_TEST_HAS_REAL_SYSTEMD="$has_real_systemd"
+    readonly AIOS_TEST_HOST_OS AIOS_TEST_IS_ROOT AIOS_TEST_HAS_REAL_SYSTEMD
+    export AIOS_TEST_HOST_OS AIOS_TEST_IS_ROOT AIOS_TEST_HAS_REAL_SYSTEMD
+}
+
+DetectCpuCount()
+{
+    local ncpu=""
+
+    if [ "$AIOS_TEST_HOST_OS" == "mac" ]
+    then
+        ncpu=$(sysctl -n hw.ncpu 2> /dev/null || true)
+    elif command -v nproc > /dev/null 2>&1
+    then
+        ncpu=$(nproc 2> /dev/null || true)
+    elif command -v getconf > /dev/null 2>&1
+    then
+        ncpu=$(getconf _NPROCESSORS_ONLN 2> /dev/null || true)
+    fi
+
+    if ! [[ "$ncpu" =~ ^[1-9][0-9]*$ ]]
+    then
+        ncpu=1
+    fi
+
+    printf '%s\n' "$ncpu"
+}
+
 Include()
 {
     local inc_path="$DEV_PATH"
     local inc_name="$1"
+
     while [[ $inc_name =~ \/ ]]
     do
         inc_path="$inc_path/${inc_name%%/*}"
         inc_name="${inc_name#*/}"
     done
+
     shift
     case "$inc_path/$inc_name" in
         "$DEV_PATH/utils/i18n"|"$DEV_PATH/utils/system"|"$DEV_PATH/utils/inquirer"|"$DEV_PATH/utils/spinner"|"$DEV_PATH/utils/progress"|"$DEV_PATH/utils/shfile"|"$DEV_PATH/utils/build"|"$DEV_PATH/utils/git"|"$DEV_PATH/utils/curl"|"$DEV_PATH/utils/log")
@@ -45,210 +181,679 @@ Include()
     . "$inc_path/$inc_name" "$@"
 }
 
-# shellcheck disable=SC1091
-. "$DEV_PATH/ver"
-# shellcheck disable=SC1091
-. "$DEV_PATH/env"
+RunWorkerSuite()
+{
+    local suite="$1"
+    local wdir="$2"
 
-JQ_FILE=$(command -v jq)
-dist="test"
-i18n_FILE=""
-sh_locale="zh_CN"
-# shellcheck disable=SC1091
-. "$DEV_PATH/utils/i18n"
-info="[INFO]"
-error="[ERROR]"
-tip="[TIP]"
-LogInfo() { :; }
-LogErr() { :; }
+    mkdir -p "$wdir/tmp" "$wdir/mock_inq" "$wdir/home/Library/LaunchAgents"
+    chmod 700 "$wdir/home"
+    export HOME="$wdir/home"
+    export TMPDIR="$wdir/tmp"
+    export MOCK_INQUIRER_STATE_DIR="$wdir/mock_inq"
+    export AIOS_TEST_CASES_FILE="$wdir/cases.tsv"
+    export AIOS_TEST_EVENTS_FILE="$wdir/events.log"
+    export AIOS_TEST_FAIL_LOG="$wdir/fail.log"
+    : > "$AIOS_TEST_CASES_FILE"
+    : > "$AIOS_TEST_EVENTS_FILE"
+    : > "$AIOS_TEST_FAIL_LOG"
 
-# shellcheck disable=SC1091
-. "$DEV_PATH/core"
-# shellcheck disable=SC1091
-. "$DEV_PATH/utils/jq"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/service/control"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/core_features"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/validate"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/core_manager"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/stream_editor"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/uri_codec"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/presets"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/proxy/common"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/nginx/get_config"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/nginx/get_stream"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/nginx/list_localhost"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/nginx/list_domain"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/get_inbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_inbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_inbound_accounts"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/add_inbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/delete_inbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/inbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/get_outbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_outbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_outbound_accounts"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/add_outbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/delete_outbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/get_routing"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/get_burstObservatory"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/get_log"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_dns"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/set_dns"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_routing"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/set_routing"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_policy"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/set_policy"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_reverse"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/set_reverse"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/stats"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/list_inbound_share"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/outbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/xray/config_domain"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/get_inbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_inbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_inbound_accounts"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_inbound_share"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/add_inbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/delete_inbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/delete_inbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/get_outbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_outbounds"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_outbound_accounts"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/add_outbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/delete_outbound_account"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/delete_outbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/get_transport"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_dns"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_dns"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_routing"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_routing"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_policy"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_policy"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_reverse"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_reverse"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/stats"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_advanced"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/set_bound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/add_inbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/add_outbound"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/config_domain"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/update_cert"
-# shellcheck disable=SC1091
-. "$DEV_PATH/src/v2ray/list_nginx_domain"
+    trap 'if type MockInquirerCleanup > /dev/null 2>&1; then MockInquirerCleanup; fi; if type E2eSandboxCleanup > /dev/null 2>&1; then E2eSandboxCleanup; fi' EXIT
 
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/lib/harness"
-trap 'MockInquirerCleanup; E2eSandboxCleanup' EXIT
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/lib/sandbox"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/core_jq"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/nginx"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/xray"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/v2ray"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/matrix"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/type_safety"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/e2e_aios"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/iptv"
-# shellcheck disable=SC1091
-. "$DEV_PATH/test/suites/core_matrix"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/ver"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/env"
 
-case "$TARGET_SUITE" in
-    core) RunSuiteCoreJq ;;
-    nginx) RunSuiteNginx ;;
-    xray) RunSuiteXray ;;
-    v2ray) RunSuiteV2ray ;;
-    matrix) RunSuiteMatrix ;;
-    types) RunSuiteTypeSafety ;;
-    e2e) RunSuiteE2eAios ;;
-    iptv) RunSuiteIptv ;;
-    core_matrix) RunSuiteCoreMatrix ;;
-    all)
-        RunSuiteCoreJq
-        RunSuiteNginx
-        RunSuiteXray
-        RunSuiteV2ray
-        RunSuiteMatrix
-        RunSuiteTypeSafety
-        RunSuiteIptv
-        RunSuiteCoreMatrix
-        RunSuiteE2eAios
-    ;;
-esac
+    DetectHostPlatform
 
-printf '\nSummary: %d passed, %d failed\n' "$PASS_COUNT" "$FAIL_COUNT"
-[ "$FAIL_COUNT" -eq 0 ]
+    if [ "$AIOS_TEST_HOST_OS" == "linux" ] && [ "$AIOS_TEST_IS_ROOT" == "1" ]
+    then
+        chmod 755 "$wdir" "$wdir/tmp"
+    fi
+
+    JQ_FILE=$(command -v jq)
+    i18n_FILE=""
+    sh_locale="zh_CN"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/utils/i18n"
+    info="[INFO]"
+    error="[ERROR]"
+    # shellcheck disable=SC2034
+    tip="[TIP]"
+    LogInfo()
+    {
+        :
+    }
+    LogErr()
+    {
+        :
+    }
+
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/core"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/utils/jq"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/service/control"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/core_features"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/validate"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/core_manager"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/stream_editor"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/uri_codec"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/presets"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/proxy/common"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/nginx/get_config"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/nginx/get_stream"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/nginx/list_localhost"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/nginx/list_domain"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/get_inbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_inbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_inbound_accounts"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/add_inbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/delete_inbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/inbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/get_outbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_outbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_outbound_accounts"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/add_outbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/delete_outbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/get_routing"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/get_burstObservatory"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/get_log"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_dns"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/set_dns"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_routing"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/set_routing"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_policy"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/set_policy"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_reverse"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/set_reverse"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/stats"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/list_inbound_share"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/outbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/xray/config_domain"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/get_inbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_inbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_inbound_accounts"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_inbound_share"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/add_inbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/delete_inbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/delete_inbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/get_outbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_outbounds"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_outbound_accounts"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/add_outbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/delete_outbound_account"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/delete_outbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/get_transport"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_dns"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_dns"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_routing"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_routing"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_policy"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_policy"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_reverse"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_reverse"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/stats"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_advanced"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/set_bound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/add_inbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/add_outbound"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/config_domain"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/update_cert"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/src/v2ray/list_nginx_domain"
+
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/lib/harness"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/lib/sandbox"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/core_jq"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/nginx"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/xray"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/v2ray"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/matrix"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/type_safety"
+    # shellcheck disable=SC1091
+    . "$DEV_PATH/test/suites/e2e_aios"
+    # shellcheck disable=SC1091,SC2031
+    . "$DEV_PATH/test/suites/iptv"
+    # shellcheck disable=SC1091,SC2031
+    . "$DEV_PATH/test/suites/core_matrix"
+
+    local start_ms end_ms elapsed_ms suite_rc=0
+    start_ms=$(DateMs)
+
+    case "$suite" in
+        core) RunSuiteCoreJq || suite_rc=$? ;;
+        nginx) RunSuiteNginx || suite_rc=$? ;;
+        xray) RunSuiteXray || suite_rc=$? ;;
+        v2ray) RunSuiteV2ray || suite_rc=$? ;;
+        matrix) RunSuiteMatrix || suite_rc=$? ;;
+        types) RunSuiteTypeSafety || suite_rc=$? ;;
+        iptv) RunSuiteIptv || suite_rc=$? ;;
+        core_matrix) RunSuiteCoreMatrix || suite_rc=$? ;;
+        e2e) RunSuiteE2eAios || suite_rc=$? ;;
+        *)
+            printf '[ERROR] unknown worker suite: %s\n' "$suite" >&2
+            return 2
+        ;;
+    esac
+
+    end_ms=$(DateMs)
+    elapsed_ms=$((end_ms - start_ms))
+
+    if [ "$elapsed_ms" -lt 0 ]
+    then
+        elapsed_ms=0
+    fi
+
+    local status_val="DONE"
+
+    if [ "$suite_rc" -ne 0 ]
+    then
+        status_val="ERROR"
+    fi
+
+    {
+        printf 'STATUS=%s\n' "$status_val"
+        printf 'SUITE=%s\n' "$suite"
+        printf 'SUITE_RC=%d\n' "$suite_rc"
+        printf 'PASS_COUNT=%d\n' "$PASS_COUNT"
+        printf 'FAIL_COUNT=%d\n' "$FAIL_COUNT"
+        printf 'SKIP_PLATFORM_COUNT=%d\n' "$SKIP_PLATFORM_COUNT"
+        printf 'SKIP_PRIVILEGE_COUNT=%d\n' "$SKIP_PRIVILEGE_COUNT"
+        printf 'SKIP_DEPENDENCY_COUNT=%d\n' "$SKIP_DEPENDENCY_COUNT"
+        printf 'ELAPSED_MS=%d\n' "$elapsed_ms"
+    } > "$wdir/result.env.tmp"
+    mv -f "$wdir/result.env.tmp" "$wdir/result.env"
+
+    return "$suite_rc"
+}
+
+if [ -n "$WORKER_SUITE" ]
+then
+    if [ -z "$WORKER_DIR" ]
+    then
+        printf '[ERROR] --worker-suite requires --worker-dir\n' >&2
+        exit 2
+    fi
+    RunWorkerSuite "$WORKER_SUITE" "$WORKER_DIR"
+    exit $?
+fi
+
+DetectHostPlatform
+
+SUITES=()
+
+if [ "$TARGET_SUITE" == "all" ]
+then
+    SUITES=(core nginx xray v2ray matrix types iptv core_matrix e2e)
+else
+    SUITES=("$TARGET_SUITE")
+fi
+
+if [ -z "$JOBS" ]
+then
+    if [ "$TARGET_SUITE" == "all" ]
+    then
+        cpu_count=$(DetectCpuCount)
+        default_jobs="${AIOS_TEST_JOBS:-4}"
+
+        if ! [[ "$default_jobs" =~ ^[1-9][0-9]*$ ]]
+        then
+            default_jobs=4
+        fi
+
+        if [ "$default_jobs" -gt "$cpu_count" ]
+        then
+            JOBS="$cpu_count"
+        else
+            JOBS="$default_jobs"
+        fi
+    else
+        JOBS=1
+    fi
+fi
+
+if [ "$JOBS" -lt 1 ]
+then
+    JOBS=1
+fi
+
+TMP_BASE="${AIOS_TEST_TMP_ROOT:-${TMPDIR:-/tmp}}"
+mkdir -p "$TMP_BASE"
+RUN_TAG="$$-$(date +%s)"
+AIOS_TEST_RUN_DIR=$(mktemp -d "${TMP_BASE%/}/aios-run-${RUN_TAG}.XXXXXX")
+
+if [ "$AIOS_TEST_HOST_OS" == "linux" ] && [ "$AIOS_TEST_IS_ROOT" == "1" ]
+then
+    chmod 755 "$AIOS_TEST_RUN_DIR"
+fi
+
+ACTIVE_PIDS=()
+ACTIVE_SUITES=()
+ACTIVE_WDIRS=()
+ACTIVE_STARTS=()
+CLEANED_UP=0
+
+KillProcessTree()
+{
+    local root_pid="$1"
+    local sig="$2"
+    local child_pid=""
+    local children=""
+
+    children=$(ps -eo pid=,ppid= 2> /dev/null | awk -v p="$root_pid" '$2 == p { print $1 }' || true)
+
+    for child_pid in $children
+    do
+        if [ -n "$child_pid" ] && [ "$child_pid" != "$root_pid" ]
+        then
+            KillProcessTree "$child_pid" "$sig"
+        fi
+    done
+
+    kill -"$sig" "$root_pid" 2> /dev/null || true
+}
+
+CleanupRunDir()
+{
+    if [ "$CLEANED_UP" -eq 1 ]
+    then
+        return 0
+    fi
+    CLEANED_UP=1
+
+    local i pid
+    for((i=0;i<${#ACTIVE_PIDS[@]};i++));
+    do
+        pid="${ACTIVE_PIDS[$i]}"
+
+        if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+        then
+            KillProcessTree "$pid" TERM
+        fi
+    done
+
+    if [ "${#ACTIVE_PIDS[@]}" -gt 0 ]
+    then
+        sleep 0.1
+    fi
+
+    for((i=0;i<${#ACTIVE_PIDS[@]};i++));
+    do
+        pid="${ACTIVE_PIDS[$i]}"
+
+        if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null
+        then
+            KillProcessTree "$pid" KILL
+            wait "$pid" 2> /dev/null || true
+        fi
+    done
+
+    if [ -n "${AIOS_TEST_RUN_DIR:-}" ] && [ -d "$AIOS_TEST_RUN_DIR" ]
+    then
+        rm -rf "$AIOS_TEST_RUN_DIR"
+    fi
+}
+
+OnInterrupt()
+{
+    local sig="$1"
+    CleanupRunDir
+
+    if [ "$sig" == "INT" ]
+    then
+        exit 130
+    fi
+
+    exit 143
+}
+
+trap 'OnInterrupt INT' INT
+trap 'OnInterrupt TERM' TERM
+trap 'CleanupRunDir' EXIT
+
+FormatElapsedMs()
+{
+    local ms="${1:-0}"
+    awk -v v="$ms" 'BEGIN { printf "%.1fs", v / 1000 }'
+}
+
+BASH_BIN="${BASH:-bash}"
+SCRIPT_PATH="$0"
+NEXT_IDX=0
+TOTAL_SUITES="${#SUITES[@]}"
+
+while [ "$NEXT_IDX" -lt "$TOTAL_SUITES" ] || [ "${#ACTIVE_PIDS[@]}" -gt 0 ]
+do
+    while [ "$NEXT_IDX" -lt "$TOTAL_SUITES" ] && [ "${#ACTIVE_PIDS[@]}" -lt "$JOBS" ]
+    do
+        suite="${SUITES[$NEXT_IDX]}"
+        wdir="$AIOS_TEST_RUN_DIR/$suite"
+        mkdir -p "$wdir"
+
+        if [ "$AIOS_TEST_HOST_OS" == "linux" ] && [ "$AIOS_TEST_IS_ROOT" == "1" ]
+        then
+            chmod 755 "$wdir"
+        fi
+
+        worker_args=(--worker-suite "$suite" --worker-dir "$wdir")
+
+        if [ "$SHOW_OUTPUT" -eq 1 ]
+        then
+            worker_args+=(--show-output)
+        fi
+
+        "$BASH_BIN" "$SCRIPT_PATH" "${worker_args[@]}" > "$wdir/stdout.log" 2> "$wdir/stderr.log" &
+        wpid=$!
+
+        ACTIVE_PIDS+=("$wpid")
+        ACTIVE_SUITES+=("$suite")
+        ACTIVE_WDIRS+=("$wdir")
+        ACTIVE_STARTS+=("$(date +%s)")
+        NEXT_IDX=$((NEXT_IDX + 1))
+    done
+
+    if [ "${#ACTIVE_PIDS[@]}" -eq 0 ]
+    then
+        break
+    fi
+
+    progressed=0
+    now_sec=$(date +%s)
+    new_pids=()
+    new_suites=()
+    new_wdirs=()
+    new_starts=()
+
+    for((i=0;i<${#ACTIVE_PIDS[@]};i++));
+    do
+        pid="${ACTIVE_PIDS[$i]}"
+        suite="${ACTIVE_SUITES[$i]}"
+        wdir="${ACTIVE_WDIRS[$i]}"
+        start_sec="${ACTIVE_STARTS[$i]}"
+
+        if ! kill -0 "$pid" 2> /dev/null
+        then
+            w_rc=0
+            wait "$pid" 2> /dev/null || w_rc=$?
+            printf '%d\n' "$w_rc" > "$wdir/exit_code"
+            progressed=1
+        elif [ $((now_sec - start_sec)) -ge "$TIMEOUT_SEC" ]
+        then
+            printf '1\n' > "$wdir/timed_out"
+            KillProcessTree "$pid" TERM
+            sleep 0.2
+            KillProcessTree "$pid" KILL
+            wait "$pid" 2> /dev/null || true
+            printf '124\n' > "$wdir/exit_code"
+            progressed=1
+        else
+            new_pids+=("$pid")
+            new_suites+=("$suite")
+            new_wdirs+=("$wdir")
+            new_starts+=("$start_sec")
+        fi
+    done
+
+    ACTIVE_PIDS=(${new_pids[@]+"${new_pids[@]}"})
+    ACTIVE_SUITES=(${new_suites[@]+"${new_suites[@]}"})
+    ACTIVE_WDIRS=(${new_wdirs[@]+"${new_wdirs[@]}"})
+    ACTIVE_STARTS=(${new_starts[@]+"${new_starts[@]}"})
+
+    if [ "$progressed" -eq 0 ] && [ "${#ACTIVE_PIDS[@]}" -gt 0 ]
+    then
+        sleep 0.05
+    fi
+done
+
+TOTAL_PASS=0
+TOTAL_FAIL=0
+TOTAL_SKIP_PLATFORM=0
+TOTAL_SKIP_PRIVILEGE=0
+TOTAL_SKIP_DEPENDENCY=0
+
+SUITE_RESULT_LINES=()
+MERGED_CASES_FILE="$AIOS_TEST_RUN_DIR/all_cases.tsv"
+: > "$MERGED_CASES_FILE"
+
+for suite in "${SUITES[@]}"
+do
+    wdir="$AIOS_TEST_RUN_DIR/$suite"
+    w_rc=1
+
+    if [ -f "$wdir/exit_code" ]
+    then
+        w_rc=$(cat "$wdir/exit_code")
+    fi
+
+    s_status=""
+    s_suite_rc=0
+    s_pass=0
+    s_fail=0
+    s_skip_plat=0
+    s_skip_priv=0
+    s_skip_dep=0
+    s_elapsed_ms=0
+
+    if [ -f "$wdir/result.env" ]
+    then
+        while IFS='=' read -r k v
+        do
+            case "$k" in
+                STATUS) s_status="$v" ;;
+                SUITE_RC) s_suite_rc="$v" ;;
+                PASS_COUNT) s_pass="$v" ;;
+                FAIL_COUNT) s_fail="$v" ;;
+                SKIP_PLATFORM_COUNT) s_skip_plat="$v" ;;
+                SKIP_PRIVILEGE_COUNT) s_skip_priv="$v" ;;
+                SKIP_DEPENDENCY_COUNT) s_skip_dep="$v" ;;
+                ELAPSED_MS) s_elapsed_ms="$v" ;;
+            esac
+        done < "$wdir/result.env"
+    fi
+
+    diag_msgs=()
+
+    if [ -f "$wdir/timed_out" ]
+    then
+        s_fail=$((s_fail + 1))
+        diag_msgs+=("suite timed out after ${TIMEOUT_SEC}s")
+    elif [ "$s_status" != "DONE" ]
+    then
+        s_fail=$((s_fail + 1))
+        diag_msgs+=("worker did not complete cleanly (STATUS=${s_status:-MISSING}, exit=${w_rc}, suite_rc=${s_suite_rc})")
+    elif [ "$w_rc" -ne 0 ] || [ "$s_suite_rc" -ne 0 ]
+    then
+        if [ "$s_fail" -eq 0 ]
+        then
+            s_fail=$((s_fail + 1))
+        fi
+        diag_msgs+=("worker exited with non-zero status (exit=${w_rc}, suite_rc=${s_suite_rc})")
+    fi
+
+    if [ -s "$wdir/stderr.log" ]
+    then
+        s_fail=$((s_fail + 1))
+        diag_msgs+=("unexpected stderr output captured")
+    fi
+
+    s_skip_total=$((s_skip_plat + s_skip_priv + s_skip_dep))
+
+    if [ $((s_pass + s_fail + s_skip_total)) -eq 0 ]
+    then
+        s_fail=$((s_fail + 1))
+        diag_msgs+=("fail-closed: zero test cases recorded")
+    fi
+
+    TOTAL_PASS=$((TOTAL_PASS + s_pass))
+    TOTAL_FAIL=$((TOTAL_FAIL + s_fail))
+    TOTAL_SKIP_PLATFORM=$((TOTAL_SKIP_PLATFORM + s_skip_plat))
+    TOTAL_SKIP_PRIVILEGE=$((TOTAL_SKIP_PRIVILEGE + s_skip_priv))
+    TOTAL_SKIP_DEPENDENCY=$((TOTAL_SKIP_DEPENDENCY + s_skip_dep))
+
+    if [ -s "$wdir/cases.tsv" ]
+    then
+        awk -v s="$suite" 'BEGIN { OFS="\t" } { print s, $0 }' "$wdir/cases.tsv" >> "$MERGED_CASES_FILE"
+    fi
+
+    elapsed_str=$(FormatElapsedMs "$s_elapsed_ms")
+    badge="[PASS]"
+
+    if [ "$s_fail" -gt 0 ]
+    then
+        badge="[FAIL]"
+    fi
+
+    skip_summary="0 skipped"
+
+    if [ "$s_skip_total" -gt 0 ]
+    then
+        skip_summary="skipped: platform=${s_skip_plat}, privilege=${s_skip_priv}, dependency=${s_skip_dep}"
+    fi
+
+    summary_line="${badge} ${suite} (${s_pass} passed, ${s_fail} failed, ${skip_summary}, ${elapsed_str})"
+    SUITE_RESULT_LINES+=("$summary_line")
+
+    if [ "$SHOW_OUTPUT" -eq 1 ]
+    then
+        if [ -s "$wdir/stdout.log" ]
+        then
+            cat "$wdir/stdout.log"
+        fi
+        printf '%s\n' "$summary_line"
+    else
+        printf '%s\n' "$summary_line"
+    fi
+
+    if [ "$s_fail" -gt 0 ]
+    then
+        if [ "$SHOW_OUTPUT" -eq 0 ] && [ -s "$wdir/fail.log" ]
+        then
+            sed 's/^/  /' "$wdir/fail.log"
+        fi
+
+        local_diag=""
+        for local_diag in ${diag_msgs[@]+"${diag_msgs[@]}"}
+        do
+            printf '  [DIAG] %s: %s\n' "$suite" "$local_diag"
+        done
+
+        if [ -s "$wdir/stderr.log" ]
+        then
+            printf '  [STDERR] %s:\n' "$suite"
+            sed 's/^/    /' "$wdir/stderr.log"
+        fi
+    fi
+done
+
+TOTAL_SKIP=$((TOTAL_SKIP_PLATFORM + TOTAL_SKIP_PRIVILEGE + TOTAL_SKIP_DEPENDENCY))
+
+if [ -n "$RESULTS_FILE" ]
+then
+    mkdir -p "$(dirname "$RESULTS_FILE")"
+    {
+        printf 'HOST_OS=%s\n' "$AIOS_TEST_HOST_OS"
+        printf 'DIST=%s\n' "$dist"
+        printf 'IS_ROOT=%s\n' "$AIOS_TEST_IS_ROOT"
+        printf 'HAS_REAL_SYSTEMD=%s\n' "$AIOS_TEST_HAS_REAL_SYSTEMD"
+        printf 'JOBS=%d\n' "$JOBS"
+        printf 'TOTAL_PASS=%d\n' "$TOTAL_PASS"
+        printf 'TOTAL_FAIL=%d\n' "$TOTAL_FAIL"
+        printf 'TOTAL_SKIP_PLATFORM=%d\n' "$TOTAL_SKIP_PLATFORM"
+        printf 'TOTAL_SKIP_PRIVILEGE=%d\n' "$TOTAL_SKIP_PRIVILEGE"
+        printf 'TOTAL_SKIP_DEPENDENCY=%d\n' "$TOTAL_SKIP_DEPENDENCY"
+        printf '\n[SUITES]\n'
+        for line in ${SUITE_RESULT_LINES[@]+"${SUITE_RESULT_LINES[@]}"}
+        do
+            printf '%s\n' "$line"
+        done
+        printf '\n[CASES]\n'
+        cat "$MERGED_CASES_FILE"
+    } > "$RESULTS_FILE"
+fi
+
+if [ "$TOTAL_SKIP" -gt 0 ]
+then
+    printf '\nSummary: %d passed, %d failed (skipped: platform=%d, privilege=%d, dependency=%d)\n' \
+        "$TOTAL_PASS" "$TOTAL_FAIL" "$TOTAL_SKIP_PLATFORM" "$TOTAL_SKIP_PRIVILEGE" "$TOTAL_SKIP_DEPENDENCY"
+else
+    printf '\nSummary: %d passed, %d failed\n' "$TOTAL_PASS" "$TOTAL_FAIL"
+fi
+
+[ "$TOTAL_FAIL" -eq 0 ]

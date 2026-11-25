@@ -1,20 +1,39 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154
+
 RunSuiteXray()
 {
     printf '\n=== Suite: xray ===\n'
 
     local tmpdir
-    tmpdir=$(mktemp -d)
-    local orig_x_root="${X_ROOT:-}" orig_x_backup="${X_BACKUP_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/aios-xray.XXXXXX")
+    local orig_x_root="${X_ROOT:-}" orig_x_backup="${X_BACKUP_ROOT:-}" orig_x_log="${X_LOG_ROOT:-}" orig_x_config="${X_CONFIG:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}" orig_x_path="$PATH"
     local orig_x_svc_resolve
     orig_x_svc_resolve=$(declare -f ServiceResolveLabel)
-    # shellcheck disable=SC2329
-    ServiceResolveLabel()
-    {
-        service_label="$1"
-        service_file="$tmpdir/systemd/${service_label}.service"
-    }
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        TestInstallMacLaunchctlStub "$tmpdir/stub_bin" "$tmpdir/launchctl.log" "$tmpdir/svc_state"
+        PATH="$tmpdir/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpdir/LaunchAgents/${service_label}.plist"
+        }
+    else
+        TestInstallLinuxSystemctlStub "$tmpdir/stub_bin" "$tmpdir/systemctl.log" "$tmpdir/svc_state"
+        PATH="$tmpdir/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpdir/systemd/${service_label}.service"
+        }
+    fi
     X_ROOT="$tmpdir"
     X_BACKUP_ROOT="$tmpdir/backups"
+    X_LOG_ROOT="$tmpdir/logs"
     PROXY_LOCK_FILE="$tmpdir/proxy.lock"
     X_CONFIG="$tmpdir/xray.json"
 
@@ -568,8 +587,11 @@ REGEOF
     AssertEq "0" "$inbounds_count" "Xray handles empty config gracefully"
 
     eval "$orig_x_svc_resolve"
+    PATH="$orig_x_path"
     X_ROOT="${orig_x_root}"
     X_BACKUP_ROOT="${orig_x_backup}"
+    X_LOG_ROOT="${orig_x_log}"
+    X_CONFIG="${orig_x_config}"
     PROXY_LOCK_FILE="${orig_proxy_lock}"
     rm -rf "$tmpdir"
 }

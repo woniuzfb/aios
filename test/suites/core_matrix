@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2016,SC2034,SC2154
+
 _CoreMatrixFindCoresDir()
 {
     if [ -n "${AIOS_CORES_DIR:-}" ] && [ -d "$AIOS_CORES_DIR" ]
@@ -96,49 +99,38 @@ RunSuiteCoreMatrix()
 
     # 2. Real multi-version binary matrix
     local cores_dir=""
-    local strict="${AIOS_REQUIRE_CORE_MATRIX:-0}"
+
     if ! cores_dir=$(_CoreMatrixFindCoresDir)
     then
-        if [ "$strict" == "1" ]
-        then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] core_matrix: AIOS_REQUIRE_CORE_MATRIX=1 but no cores directory found\n' >&2
-        else
-            printf '[SKIP] core_matrix: no local cores directory found\n'
-        fi
+        SkipDependency "core_matrix:cores_dir" "no local cores directory found"
         return 0
     fi
 
     local geodata_dir="${cores_dir}/geodata"
+
     if [ ! -s "${geodata_dir}/geoip.dat" ] || [ ! -s "${geodata_dir}/geosite.dat" ]
     then
-        if [ "$strict" == "1" ]
-        then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] core_matrix: missing geodata in %s\n' "$geodata_dir" >&2
-        else
-            printf '[SKIP] core_matrix: missing geodata in %s\n' "$geodata_dir"
-        fi
+        SkipDependency "core_matrix:geodata" "missing geodata in ${geodata_dir}"
         return 0
     fi
 
     local tmpd
     tmpd=$(mktemp -d "${TMPDIR:-/tmp}/aios-core-matrix.XXXXXX")
 
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+    then
+        chmod 755 "$tmpd"
+    fi
+
     # Test Xray versions
     local xver xbin
     for xver in v25.9.11 v26.5.3 v26.5.9 v26.6.22 v26.6.27 v26.11.9
     do
         xbin="${cores_dir}/xray/${xver}/xray"
+
         if [ ! -x "$xbin" ]
         then
-            if [ "$strict" == "1" ]
-            then
-                FAIL_COUNT=$((FAIL_COUNT + 1))
-                printf '[FAIL] core_matrix: missing required xray %s at %s\n' "$xver" "$xbin" >&2
-            else
-                printf '[SKIP] core_matrix: xray %s not installed\n' "$xver"
-            fi
+            SkipDependency "core_matrix:xray_${xver}" "xray ${xver} not installed at ${xbin}"
             continue
         fi
 
@@ -208,15 +200,10 @@ RunSuiteCoreMatrix()
     for vver in v5.18.0 v5.56.0
     do
         vbin="${cores_dir}/v2ray/${vver}/v2ray"
+
         if [ ! -x "$vbin" ]
         then
-            if [ "$strict" == "1" ]
-            then
-                FAIL_COUNT=$((FAIL_COUNT + 1))
-                printf '[FAIL] core_matrix: missing required v2ray %s at %s\n' "$vver" "$vbin" >&2
-            else
-                printf '[SKIP] core_matrix: v2ray %s not installed\n' "$vver"
-            fi
+            SkipDependency "core_matrix:v2ray_${vver}" "v2ray ${vver} not installed at ${vbin}"
             continue
         fi
 
@@ -300,20 +287,41 @@ RunSuiteCoreMatrix()
     AIOS_PREFIX="$tmpd"
 
     ProxyEnsureDirs
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+    then
+        chmod 755 "$tx_root" "$tmpd/bin" "$PROXY_CORES_ROOT" "$PROXY_CORES_ROOT/xray" "$PROXY_CORES_ROOT/v2ray" "$PROXY_GEODATA_ROOT" "$PROXY_XDG_ROOT" 2> /dev/null || true
+    fi
     mkdir -p "${PROXY_LOCK_FILE}.d"
     printf '999999:1\n' > "${PROXY_LOCK_FILE}.d/pid"
     AssertOk "ProxyAcquireLock recovers stale mkdir lock from dead PID" ProxyAcquireLock "$PROXY_LOCK_FILE" 2 1
     ProxyReleaseLock
 
-    # QUAL-03: Sandbox ServiceResolveLabel so unit writes target $tmpd/systemd/ and never touch host systemd/LaunchAgents
+    # QUAL-03: Sandbox ServiceResolveLabel & platform service stub so unit writes never touch host systemd/LaunchAgents
+    local orig_cm_path="$PATH"
     local orig_svc_resolve
     orig_svc_resolve=$(declare -f ServiceResolveLabel)
-    # shellcheck disable=SC2329
-    ServiceResolveLabel()
-    {
-        service_label="$1"
-        service_file="$tmpd/systemd/${service_label}.service"
-    }
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        TestInstallMacLaunchctlStub "$tmpd/stub_bin" "$tmpd/launchctl.log" "$tmpd/svc_state"
+        PATH="$tmpd/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpd/LaunchAgents/${service_label}.plist"
+        }
+    else
+        TestInstallLinuxSystemctlStub "$tmpd/stub_bin" "$tmpd/systemctl.log" "$tmpd/svc_state"
+        PATH="$tmpd/stub_bin:$PATH"
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$1"
+            service_file="$tmpd/systemd/${service_label}.service"
+        }
+    fi
 
     if [ -x "${cores_dir}/xray/v25.9.11/xray" ] && [ -x "${cores_dir}/xray/v26.11.9/xray" ]
     then
@@ -326,8 +334,15 @@ RunSuiteCoreMatrix()
         PROXY_OBSERVE_SECONDS=0
         AssertOk "ProxyCoreSwitch v25.9.11 -> v26.11.9 commits cleanly" ProxyCoreSwitch "xray" "v26.11.9"
         AssertEq "v26.11.9" "$(readlink "${PROXY_CORES_ROOT}/xray/current")" "current symlink points to v26.11.9"
-        AssertOk "QUAL-03: sandbox systemd unit file created in tmpd" test -s "$tmpd/systemd/aios-xray.service"
-        AssertContains "$(cat "$tmpd/systemd/aios-xray.service")" "ExecStart=${AIOS_XRAY_BIN} run -c ${X_CONFIG}" "QUAL-03: sandbox unit file contains expected ExecStart"
+
+        if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+        then
+            AssertOk "QUAL-03: sandbox LaunchAgent plist created in tmpd" test -s "$tmpd/LaunchAgents/aios-xray.plist"
+            AssertContains "$(cat "$tmpd/LaunchAgents/aios-xray.plist")" "<string>${AIOS_XRAY_BIN}</string>" "QUAL-03: sandbox plist contains expected binary path"
+        else
+            AssertOk "QUAL-03: sandbox systemd unit file created in tmpd" test -s "$tmpd/systemd/aios-xray.service"
+            AssertContains "$(cat "$tmpd/systemd/aios-xray.service")" "ExecStart=${AIOS_XRAY_BIN} run -c ${X_CONFIG}" "QUAL-03: sandbox unit file contains expected ExecStart"
+        fi
         AssertFail "ProxyCoreRemove blocks deleting LKG slot v25.9.11" ProxyCoreRemove "xray" "v25.9.11"
 
         # QUAL-01: Reject empty, slash, dotdot traversal and invalid core names
@@ -358,13 +373,12 @@ RunSuiteCoreMatrix()
 
         # QUAL-04: xray-vless-reality-server preset generates random non-hardcoded UUID & shortId
         local reality_cfg_1="$tmpd/reality_preset_1.json" reality_cfg_2="$tmpd/reality_preset_2.json"
+
         if ProxyBuildPresetConfig "xray-vless-reality-server" "xray" "26.11.9" "json" > "$reality_cfg_1" && ProxyBuildPresetConfig "xray-vless-reality-server" "xray" "26.11.9" "json" > "$reality_cfg_2"
         then
-            PASS_COUNT=$((PASS_COUNT + 1))
-            printf '[PASS] %s\n' "QUAL-04: ProxyBuildPresetConfig xray-vless-reality-server generates configs"
+            RecordPass "QUAL-04: ProxyBuildPresetConfig xray-vless-reality-server generates configs"
         else
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] %s\n' "QUAL-04: ProxyBuildPresetConfig xray-vless-reality-server generates configs" >&2
+            RecordFail "QUAL-04: ProxyBuildPresetConfig xray-vless-reality-server generates configs"
         fi
         AssertOk "QUAL-04: reality preset #1 passes real xray v26.11.9 -test" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.11.9/xray" "$reality_cfg_1" "json" "$geodata_dir"
         AssertOk "QUAL-04: reality preset #2 passes real xray v26.11.9 -test" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.11.9/xray" "$reality_cfg_2" "json" "$geodata_dir"
@@ -379,16 +393,21 @@ RunSuiteCoreMatrix()
         AssertOk "QUAL-04: generated shortId is random 8-hex and non-hardcoded" test "${#r_sid_1}" -eq 8 -a "$r_sid_1" != "01234567" -a "$r_sid_1" != "$r_sid_2"
         AssertOk "QUAL-04: generated REALITY privateKey is random per call" test -n "$r_pk_1" -a "$r_pk_1" != "$r_pk_2"
 
-        # QUAL-05: 0600 permissions & atomic temp cleanup on ProxyConfigTx / ProxyCoreSwitch / ProxyTxWriteState
+        # QUAL-05: config permissions & atomic temp cleanup on ProxyConfigTx / ProxyCoreSwitch / ProxyTxWriteState
         local valid_tx_cfg
         valid_tx_cfg=$(ProxyBuildPresetConfig "xray-local-socks-http" "xray" "26.11.9" "json")
         AssertOk "QUAL-05: ProxyConfigTx commits valid config cleanly" ProxyConfigTx "xray" "$valid_tx_cfg" 1
-        local p_cfg p_tx p_meta p_man
+        local p_cfg p_tx p_meta p_man expected_cfg_perm="600"
+
+        if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ] && id -u aios-xray > /dev/null 2>&1
+        then
+            expected_cfg_perm="640"
+        fi
         p_cfg=$(stat -f %Lp "$X_CONFIG" 2> /dev/null || stat -c %a "$X_CONFIG" 2> /dev/null || echo "")
         p_tx=$(stat -f %Lp "$X_TX_STATE" 2> /dev/null || stat -c %a "$X_TX_STATE" 2> /dev/null || echo "")
         p_meta=$(stat -f %Lp "$X_META" 2> /dev/null || stat -c %a "$X_META" 2> /dev/null || echo "")
         p_man=$(stat -f %Lp "$PROXY_CORES_MANIFEST" 2> /dev/null || stat -c %a "$PROXY_CORES_MANIFEST" 2> /dev/null || echo "")
-        AssertEq "600" "$p_cfg" "QUAL-05: ProxyConfigTx writes config.json with 0600 permissions"
+        AssertEq "$expected_cfg_perm" "$p_cfg" "QUAL-05: ProxyConfigTx writes config.json with ${expected_cfg_perm} permissions"
         AssertEq "600" "$p_tx" "QUAL-05: ProxyTxWriteState writes tx_state.json with 0600 permissions"
         AssertEq "600" "$p_meta" "QUAL-05: ProxyCoreSwitch writes meta.json with 0600 permissions"
         AssertEq "600" "$p_man" "QUAL-05: ProxyCoreSwitch writes manifest.json with 0600 permissions"
@@ -396,90 +415,63 @@ RunSuiteCoreMatrix()
         leftover_tmp=$(find "$X_ROOT" -maxdepth 1 \( -name '.config.tmp.*' -o -name '.switch.config.tmp.*' -o -name 'tx_state.json.tmp.*' \) 2> /dev/null | wc -l | tr -d ' ')
         AssertEq "0" "$leftover_tmp" "QUAL-05: no leftover temp files/dirs after atomic ProxyConfigTx/ProxyCoreSwitch/ProxyTxWriteState"
 
-        # QUAL-R1: ProxyApplyTempDirPerms preserves 0700 on non-root/macOS and applies chown root:aios-xray + chmod 750 on Linux root (including ProxyConfigTx & ProxyCoreSwitch)
-        local qr1_nonroot_dir
-        qr1_nonroot_dir=$(umask 077 && mktemp -d "$tmpd/qr1_nonroot.XXXXXX")
-        AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on non-root" ProxyApplyTempDirPerms "xray" "$qr1_nonroot_dir"
-        local qr1_perm_nonroot
-        qr1_perm_nonroot=$(stat -f %Lp "$qr1_nonroot_dir" 2> /dev/null || stat -c %a "$qr1_nonroot_dir" 2> /dev/null || echo "")
-        AssertEq "700" "$qr1_perm_nonroot" "QUAL-R1: ProxyApplyTempDirPerms keeps 0700 on non-root"
+        # QUAL-R1: ProxyApplyTempDirPerms preserves 0700 on macOS / non-root Linux and applies real chown root:aios-xray + chmod 750 on Linux root
+        if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+        then
+            local qr1_mac_dir qr1_perm_mac
+            qr1_mac_dir=$(umask 077 && mktemp -d "$tmpd/qr1_mac.XXXXXX")
+            AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on macOS" ProxyApplyTempDirPerms "xray" "$qr1_mac_dir"
+            qr1_perm_mac=$(stat -f %Lp "$qr1_mac_dir" 2> /dev/null || echo "")
+            AssertEq "700" "$qr1_perm_mac" "QUAL-R1: ProxyApplyTempDirPerms keeps 0700 on macOS"
+            SkipPlatform "QUAL-R1: ProxyApplyTempDirPerms chown root:aios-xray + chmod 750" "Linux root privilege contract only"
+            SkipPlatform "QUAL-R1: ProxyConfigTx temp dir chown root:aios-xray + chmod 750" "Linux root privilege contract only"
+            SkipPlatform "QUAL-R1: ProxyCoreSwitch temp dir chown root:aios-xray + chmod 750" "Linux root privilege contract only"
+        elif [ "${AIOS_TEST_IS_ROOT:-0}" != "1" ]
+        then
+            local qr1_nonroot_dir qr1_perm_nonroot
+            qr1_nonroot_dir=$(umask 077 && mktemp -d "$tmpd/qr1_nonroot.XXXXXX")
+            AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on non-root Linux" ProxyApplyTempDirPerms "xray" "$qr1_nonroot_dir"
+            qr1_perm_nonroot=$(stat -c %a "$qr1_nonroot_dir" 2> /dev/null || echo "")
+            AssertEq "700" "$qr1_perm_nonroot" "QUAL-R1: ProxyApplyTempDirPerms keeps 0700 on non-root Linux"
+            SkipPrivilege "QUAL-R1: ProxyApplyTempDirPerms chown root:aios-xray + chmod 750" "requires root on Linux"
+            SkipPrivilege "QUAL-R1: ProxyConfigTx temp dir chown root:aios-xray + chmod 750" "requires root on Linux"
+            SkipPrivilege "QUAL-R1: ProxyCoreSwitch temp dir chown root:aios-xray + chmod 750" "requires root on Linux"
+        else
+            local qr1_root_dir qr1_stat_direct
+            qr1_root_dir=$(umask 077 && mktemp -d "$tmpd/qr1_root.XXXXXX")
+            AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on real Linux root" ProxyApplyTempDirPerms "xray" "$qr1_root_dir"
+            qr1_stat_direct=$(stat -c '%U:%G %a' "$qr1_root_dir" 2> /dev/null || echo "")
+            AssertEq "root:aios-xray 750" "$qr1_stat_direct" "QUAL-R1: ProxyApplyTempDirPerms applies real root:aios-xray 750"
 
-        local orig_qr1_dist="${dist:-}" orig_qr1_path="$PATH"
-        dist="mac"
-        AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on macOS" ProxyApplyTempDirPerms "xray" "$qr1_nonroot_dir"
-        local qr1_perm_mac
-        qr1_perm_mac=$(stat -f %Lp "$qr1_nonroot_dir" 2> /dev/null || stat -c %a "$qr1_nonroot_dir" 2> /dev/null || echo "")
-        AssertEq "700" "$qr1_perm_mac" "QUAL-R1: ProxyApplyTempDirPerms keeps 0700 on macOS"
+            local qr1_obs_log="$tmpd/qr1_real_stat.log"
+            local orig_apply_temp_dir_perms
+            orig_apply_temp_dir_perms=$(declare -f ProxyApplyTempDirPerms)
+            eval "${orig_apply_temp_dir_perms/ProxyApplyTempDirPerms/_RealProxyApplyTempDirPerms}"
+            # shellcheck disable=SC2329
+            ProxyApplyTempDirPerms()
+            {
+                _RealProxyApplyTempDirPerms "$@" || return $?
+                printf '%s|%s\n' "$2" "$(stat -c '%U:%G %a' "$2" 2> /dev/null || echo '')" >> "$qr1_obs_log"
+            }
 
-        dist="linux"
-        local qr1_log="$tmpd/qr1_root_calls.log"
-        local qr1_mock_bin="$tmpd/qr1_mock_bin"
-        mkdir -p "$qr1_mock_bin"
-        cat > "$qr1_mock_bin/runuser" <<'MOCKRU'
-#!/bin/bash
-while [ $# -gt 0 ] && [ "$1" != "--" ]
-do
-    shift
-done
-[ "${1:-}" == "--" ] && shift
-exec "$@"
-MOCKRU
-        chmod +x "$qr1_mock_bin/runuser"
-        PATH="$qr1_mock_bin:$PATH"
+            : > "$qr1_obs_log"
+            AssertOk "QUAL-R1: ProxyConfigTx succeeds on real Linux root with runuser" ProxyConfigTx "xray" "$valid_tx_cfg" 1
+            local qr1_obs_cfg=""
+            qr1_obs_cfg=$(cat "$qr1_obs_log")
+            AssertContains "$qr1_obs_cfg" "${X_ROOT}/.config.tmp." "QUAL-R1: ProxyConfigTx created temp config dir under X_ROOT"
+            AssertContains "$qr1_obs_cfg" "|root:aios-xray 750" "QUAL-R1: ProxyConfigTx temp config dir has real root:aios-xray 750"
 
-        # shellcheck disable=SC2329
-        id()
-        {
-            if [ "${1:-}" == "-u" ] && [ $# -eq 1 ]
-            then
-                printf '0\n'
-                return 0
-            fi
-            if [ "${1:-}" == "-u" ] && { [ "${2:-}" == "aios-xray" ] || [ "${2:-}" == "aios-v2ray" ]; }
-            then
-                printf '999\n'
-                return 0
-            fi
-            command id "$@"
-        }
-        # shellcheck disable=SC2329
-        chown()
-        {
-            printf 'chown %s\n' "$*" >> "$qr1_log"
-            return 0
-        }
-        # shellcheck disable=SC2329
-        chmod()
-        {
-            printf 'chmod %s\n' "$*" >> "$qr1_log"
-            command chmod "$@"
-        }
+            : > "$qr1_obs_log"
+            AssertOk "QUAL-R1: ProxyCoreSwitch succeeds on real Linux root with runuser" ProxyCoreSwitch "xray" "v25.9.11"
+            local qr1_obs_sw=""
+            qr1_obs_sw=$(cat "$qr1_obs_log")
+            AssertContains "$qr1_obs_sw" "${X_ROOT}/.switch.config.tmp." "QUAL-R1: ProxyCoreSwitch created switch temp dir under X_ROOT"
+            AssertContains "$qr1_obs_sw" "|root:aios-xray 750" "QUAL-R1: ProxyCoreSwitch temp dir has real root:aios-xray 750"
 
-        local qr1_root_dir
-        qr1_root_dir=$(umask 077 && mktemp -d "$tmpd/qr1_root.XXXXXX")
-        : > "$qr1_log"
-        AssertOk "QUAL-R1: ProxyApplyTempDirPerms succeeds on simulated Linux root" ProxyApplyTempDirPerms "xray" "$qr1_root_dir"
-        local qr1_calls=""
-        qr1_calls=$(cat "$qr1_log")
-        AssertContains "$qr1_calls" "chown root:aios-xray ${qr1_root_dir}" "QUAL-R1: ProxyApplyTempDirPerms chowns temp dir to root:aios-xray"
-        AssertContains "$qr1_calls" "chmod 750 ${qr1_root_dir}" "QUAL-R1: ProxyApplyTempDirPerms chmods temp dir to 750"
-
-        : > "$qr1_log"
-        AssertOk "QUAL-R1: ProxyConfigTx succeeds on simulated Linux root" ProxyConfigTx "xray" "$valid_tx_cfg" 1
-        qr1_calls=$(cat "$qr1_log")
-        AssertContains "$qr1_calls" "chown root:aios-xray ${X_ROOT}/.config.tmp." "QUAL-R1: ProxyConfigTx chowns temp config dir to root:aios-xray"
-        AssertContains "$qr1_calls" "chmod 750 ${X_ROOT}/.config.tmp." "QUAL-R1: ProxyConfigTx chmods temp config dir to 750"
-
-        : > "$qr1_log"
-        AssertOk "QUAL-R1: ProxyCoreSwitch succeeds on simulated Linux root" ProxyCoreSwitch "xray" "v25.9.11"
-        qr1_calls=$(cat "$qr1_log")
-        AssertContains "$qr1_calls" "chown root:aios-xray ${X_ROOT}/.switch.config.tmp." "QUAL-R1: ProxyCoreSwitch chowns switch temp dir to root:aios-xray"
-        AssertContains "$qr1_calls" "chmod 750 ${X_ROOT}/.switch.config.tmp." "QUAL-R1: ProxyCoreSwitch chmods switch temp dir to 750"
-
-        unset -f id chown chmod
-        PATH="$orig_qr1_path"
-        dist="$orig_qr1_dist"
-        AssertOk "QUAL-R1: restore active xray slot to v26.11.9 after root simulation" ProxyCoreSwitch "xray" "v26.11.9"
+            eval "$orig_apply_temp_dir_perms"
+            unset -f _RealProxyApplyTempDirPerms
+            AssertOk "QUAL-R1: restore active xray slot to v26.11.9 after real Linux root check" ProxyCoreSwitch "xray" "v26.11.9"
+        fi
 
         # ProxyConfigTx rejects invalid JSON and bad-schema config without touching existing config.json
         local orig_cfg_sha
@@ -587,7 +579,11 @@ MOCKRU
             service_file="$blocked_unit_parent/${service_label}.service"
         }
         AssertFail "QUAL-02: ProxyWriteServiceUnit returns non-zero when unit dir creation fails" ProxyWriteServiceUnit "xray"
-        sleep 1
+
+        if [ -d "${X_BACKUP_ROOT}/tx_$(date +%Y%m%d_%H%M%S 2> /dev/null || echo 0)_$$" ]
+        then
+            sleep 1
+        fi
         AssertFail "QUAL-02: ProxyCoreSwitch rolls back when ProxyWriteServiceUnit fails" ProxyCoreSwitch "xray" "v25.9.11"
         AssertEq "v26.11.9" "$(readlink "${PROXY_CORES_ROOT}/xray/current")" "QUAL-02: ProxyCoreSwitch restored v26.11.9 after unit write failure"
         AssertEq "rolled_back" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "QUAL-02: tx_state.json records rolled_back after unit write failure"
@@ -595,12 +591,92 @@ MOCKRU
         cfg_sha_before_unit_fail=$(ProxySha256File "$X_CONFIG")
         AssertFail "QUAL-02: ProxyConfigTx rolls back when ProxyWriteServiceUnit fails" ProxyConfigTx "xray" "$alt_tx_cfg" 0
         AssertEq "$cfg_sha_before_unit_fail" "$(ProxySha256File "$X_CONFIG")" "QUAL-02: ProxyConfigTx restored config.json after unit write failure"
-        # shellcheck disable=SC2329
-        ServiceResolveLabel()
-        {
-            service_label="$1"
-            service_file="$tmpd/systemd/${service_label}.service"
-        }
+
+        if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+        then
+            # shellcheck disable=SC2329
+            ServiceResolveLabel()
+            {
+                service_label="$1"
+                service_file="$tmpd/LaunchAgents/${service_label}.plist"
+            }
+        else
+            # shellcheck disable=SC2329
+            ServiceResolveLabel()
+            {
+                service_label="$1"
+                service_file="$tmpd/systemd/${service_label}.service"
+            }
+        fi
+
+        # Case C3 (POLKIT-REG-01..03): Polkit / systemctl daemon-reload regression gates
+        if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+        then
+            SkipPlatform "POLKIT-REG-01: ProxyWriteServiceUnit systemctl daemon-reload contract" "Linux systemd only"
+            SkipPlatform "POLKIT-REG-02: ProxyConfigTx rollback second daemon-reload contract" "Linux systemd only"
+            SkipPlatform "POLKIT-REG-03: sandbox unit write avoids host systemctl and Polkit" "Linux systemd only"
+        else
+            local reg_dir="$tmpd/polkit_reg"
+            local reg_bin="$reg_dir/bin"
+            local reg_log="$reg_dir/systemctl.log"
+            local reg_state="$reg_dir/state"
+            local reg_saved_path="$PATH"
+            TestInstallLinuxSystemctlStub "$reg_bin" "$reg_log" "$reg_state"
+            PATH="$reg_bin:$orig_cm_path"
+            # shellcheck disable=SC2329
+            ServiceResolveLabel()
+            {
+                service_label="$1"
+                service_file="$reg_dir/systemd/${service_label}.service"
+            }
+
+            # POLKIT-REG-01: ProxyWriteServiceUnit calls systemctl daemon-reload once & propagates failure
+            : > "$reg_log"
+            rm -f "$reg_state/daemon_reload_count" "$reg_state/fail_daemon_reload" "$reg_state/fail_next_daemon_reload" "$reg_state/fail_nth_daemon_reload"
+            AssertOk "POLKIT-REG-01: ProxyWriteServiceUnit calls systemctl daemon-reload cleanly" ProxyWriteServiceUnit "xray"
+            AssertEq "1" "$(cat "$reg_state/daemon_reload_count" 2> /dev/null || echo 0)" "POLKIT-REG-01: systemctl daemon-reload invoked once"
+            AssertContains "$(cat "$reg_log")" "daemon-reload" "POLKIT-REG-01: systemctl stub logged daemon-reload"
+            touch "$reg_state/fail_next_daemon_reload"
+            AssertFailWithOutput "POLKIT-REG-01: ProxyWriteServiceUnit propagates daemon-reload failure" "systemctl daemon-reload" ProxyWriteServiceUnit "xray"
+
+            # POLKIT-REG-02: ProxyConfigTx rollback second daemon-reload failure sets rb_ok=0 -> recovery_failed; success rolls back cleanly
+            ProxyTxWriteState "$X_TX_STATE" "committed" "polkit_reg_2a" "" ""
+            touch "$mock_state/aios-xray.active"
+            rm -f "$mock_state/fail_all_restarts"
+            rm -f "$reg_state/daemon_reload_count" "$reg_state/fail_daemon_reload" "$reg_state/fail_next_daemon_reload"
+            printf '2\n' > "$reg_state/fail_nth_daemon_reload"
+            touch "$mock_state/fail_next_restart"
+            AssertFail "POLKIT-REG-02: ProxyConfigTx fails when rollback daemon-reload fails" ProxyConfigTx "xray" "$alt_tx_cfg" 0
+            AssertEq "recovery_failed" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "POLKIT-REG-02: rollback daemon-reload failure writes recovery_failed"
+            AssertEq "2" "$(cat "$reg_state/daemon_reload_count" 2> /dev/null || echo 0)" "POLKIT-REG-02: daemon-reload called twice (apply + rollback)"
+
+            ProxyTxWriteState "$X_TX_STATE" "committed" "polkit_reg_2b" "" ""
+            rm -f "$reg_state/daemon_reload_count" "$reg_state/fail_nth_daemon_reload"
+            touch "$mock_state/aios-xray.active"
+            touch "$mock_state/fail_next_restart"
+            AssertFail "POLKIT-REG-02: ProxyConfigTx rolls back cleanly when rollback daemon-reload succeeds" ProxyConfigTx "xray" "$alt_tx_cfg" 0
+            AssertNotContains "$PROXY_LAST_VALIDATE_ERROR" "recovery_failed" "POLKIT-REG-02: clean rollback does not report recovery_failed"
+            AssertEq "committed" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "POLKIT-REG-02: tx_state.json stays committed on clean rollback"
+            AssertOk "POLKIT-REG-02: aios-xray active again after clean rollback" ServiceControlIsActive "aios-xray"
+
+            # POLKIT-REG-03: sandbox unit write + ProxyConfigTx never invokes host systemctl / Polkit
+            : > "$reg_log"
+            rm -f "$reg_state/daemon_reload_count"
+            local reg3_out="" reg3_rc=0
+            reg3_out=$( { ProxyWriteServiceUnit "xray" && ProxyConfigTx "xray" "$valid_tx_cfg" 1; } 2>&1 ) || reg3_rc=$?
+            AssertEq "0" "$reg3_rc" "POLKIT-REG-03: sandbox unit write and ProxyConfigTx succeed via Linux stub"
+            AssertNotContains "$reg3_out" "Reload daemon failed" "POLKIT-REG-03: no host Reload daemon failed error"
+            AssertNotContains "$reg3_out" "Interactive authentication required" "POLKIT-REG-03: no Polkit authentication error"
+            AssertContains "$(cat "$reg_log")" "daemon-reload" "POLKIT-REG-03: all daemon-reload calls captured by Linux stub"
+
+            PATH="$reg_saved_path"
+            # shellcheck disable=SC2329
+            ServiceResolveLabel()
+            {
+                service_label="$1"
+                service_file="$tmpd/systemd/${service_label}.service"
+            }
+        fi
 
         # Case D: V2Ray jsonv4 -> jsonv5 automatic config adaptation + real -format jsonv5 test
         if [ -x "${cores_dir}/v2ray/v5.56.0/v2ray" ]
@@ -609,10 +685,8 @@ MOCKRU
             printf '{"log":{"loglevel":"warning","access":"/tmp/v2-acc.log","error":"/tmp/v2-err.log"},"inbounds":[{"tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"auth":"noauth","udp":true}}],"outbounds":[{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]}\n' > "$v2_src_v4"
             AssertOk "ProxyAdaptConfigForTarget converts V2Ray jsonv4 -> jsonv5" ProxyAdaptConfigForTarget "v2ray" "$v2_src_v4" "$v2_dst_v5" "5.56.0" "jsonv5"
             AssertOk "v2ray v5.56.0: adapted jsonv5 config passes real test (-format jsonv5)" ProxyTestConfigWithBinary "v2ray" "${cores_dir}/v2ray/v5.56.0/v2ray" "$v2_dst_v5" "jsonv5" "$geodata_dir" "$tmpd/v5_adapt_xdg"
-        elif [ "$strict" == "1" ]
-        then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] core_matrix: missing v2ray v5.56.0 for Case D\n' >&2
+        else
+            SkipDependency "core_matrix:case_d_v2ray_v5.56.0" "missing v2ray v5.56.0 for Case D"
         fi
 
         # Case E: Real core + rule negative feature rejection (tun/hysteria on v25.9.11, masque/legacyReverse on v26.6.27, SS dual-key)
@@ -631,10 +705,8 @@ MOCKRU
         then
             AssertFail "xray v26.6.27: real binary rejects masque outbound" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.6.27/xray" "$mq_cfg" "json" "$geodata_dir"
             AssertFail "xray v26.6.27: real binary rejects legacy top-level reverse" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.6.27/xray" "$rev_cfg" "json" "$geodata_dir"
-        elif [ "$strict" == "1" ]
-        then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] core_matrix: missing xray v26.6.27 for real negative test\n' >&2
+        else
+            SkipDependency "core_matrix:case_e_xray_v26.6.27" "missing xray v26.6.27 for real negative test"
         fi
 
         local ss_dual_src="$tmpd/ss_dual.json" ss_dual_dst="$tmpd/ss_dual_out.json"
@@ -811,10 +883,8 @@ MOCKRU
             else
                 unset AIOS_V2RAY_TARGET_VERSION
             fi
-        elif [ "$strict" == "1" ]
-        then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] core_matrix: missing v2ray v5.56.0 for ARCH-01/ARCH-02 tests\n' >&2
+        else
+            SkipDependency "core_matrix:case_g_v2ray_v5.56.0" "missing v2ray v5.56.0 for ARCH-01/ARCH-02 tests"
         fi
 
         eval "$orig_svc_is_active"
@@ -822,13 +892,66 @@ MOCKRU
         eval "$orig_svc_ctrl"
         eval "$orig_proxy_readiness"
         PROXY_OBSERVE_SECONDS="$orig_obs"
-    elif [ "$strict" == "1" ]
-    then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] core_matrix: missing xray v25.9.11 or v26.11.9 for transactional tests\n' >&2
+    else
+        SkipDependency "core_matrix:transactional_xray_cores" "missing xray v25.9.11 or v26.11.9 for transactional tests"
     fi
 
     eval "$orig_svc_resolve"
+    PATH="$orig_cm_path"
+
+    # Case H (POLKIT-REG-04): Real systemd lifecycle & daemon-reload integration (linux-root-systemd only)
+    if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        SkipPlatform "POLKIT-REG-04: real systemd lifecycle and daemon-reload integration" "Linux root systemd only"
+    elif [ "${AIOS_TEST_HAS_REAL_SYSTEMD:-0}" != "1" ]
+    then
+        SkipPrivilege "POLKIT-REG-04: real systemd lifecycle and daemon-reload integration" "requires Linux root with real systemd"
+    else
+        local real_unit="aios-test-$$"
+        local real_unit_file="/etc/systemd/system/${real_unit}.service"
+        local sleep_bin=""
+        sleep_bin=$(command -v sleep)
+        cat > "$real_unit_file" <<REALSYS
+[Unit]
+Description=AIOS Real Systemd Regression Test Unit (${real_unit})
+
+[Service]
+Type=simple
+ExecStart=${sleep_bin} 300
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+REALSYS
+        AssertOk "POLKIT-REG-04: real systemctl daemon-reload succeeds" systemctl daemon-reload
+        AssertOk "POLKIT-REG-04: real systemctl enable --now succeeds" systemctl enable --now "${real_unit}.service"
+        AssertOk "POLKIT-REG-04: real systemctl is-active succeeds" systemctl is-active --quiet "${real_unit}.service"
+        AssertOk "POLKIT-REG-04: real systemctl is-enabled succeeds" systemctl is-enabled --quiet "${real_unit}.service"
+        AssertOk "POLKIT-REG-04: real systemctl restart succeeds" systemctl restart "${real_unit}.service"
+        AssertOk "POLKIT-REG-04: real unit remains active after restart" systemctl is-active --quiet "${real_unit}.service"
+
+        local orig_real_svc_resolve
+        orig_real_svc_resolve=$(declare -f ServiceResolveLabel)
+        # shellcheck disable=SC2329
+        ServiceResolveLabel()
+        {
+            service_label="$real_unit"
+            service_file="$real_unit_file"
+        }
+
+        if [ -s "$X_CONFIG" ]
+        then
+            AssertOk "POLKIT-REG-04: ProxyWriteServiceUnit real systemctl daemon-reload succeeds" ProxyWriteServiceUnit "xray"
+            local real_tx_cfg=""
+            real_tx_cfg=$(cat "$X_CONFIG")
+            AssertOk "POLKIT-REG-04: ProxyConfigTx real systemctl daemon-reload succeeds" ProxyConfigTx "xray" "$real_tx_cfg" 1
+        fi
+        eval "$orig_real_svc_resolve"
+
+        systemctl disable --now "${real_unit}.service" > /dev/null 2>&1 || true
+        rm -f "$real_unit_file"
+        AssertOk "POLKIT-REG-04: real systemctl daemon-reload cleanup succeeds" systemctl daemon-reload
+    fi
 
     # 4. V2Ray XDG isolation test: poisoned host XDG_DATA_DIRS must not break AIOS v2ray test
     if [ -x "${cores_dir}/v2ray/v5.56.0/v2ray" ]
@@ -855,10 +978,8 @@ MOCKRU
         else
             unset XDG_DATA_HOME
         fi
-    elif [ "$strict" == "1" ]
-    then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] core_matrix: missing v2ray v5.56.0 for XDG isolation test\n' >&2
+    else
+        SkipDependency "core_matrix:xdg_v2ray_v5.56.0" "missing v2ray v5.56.0 for XDG isolation test"
     fi
 
     PROXY_ROOT="$orig_proxy_root"

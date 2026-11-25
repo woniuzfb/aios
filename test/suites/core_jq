@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2030,SC2031,SC2034,SC2329
+
 RunSuiteCoreJq()
 {
     printf '\n=== Suite: core & utils/jq ===\n'
@@ -46,13 +49,13 @@ RunSuiteCoreJq()
         "$DEV_PATH/src/cloudflare/get_workers" "$DEV_PATH/src/cloudflare/list_user" \
         "$DEV_PATH/src/cloudflare/monitor_workers" "$DEV_PATH/src/lhh"
     do
-        if bash -n "$f"
+        local syntax_err=""
+
+        if syntax_err=$(bash -n "$f" 2>&1)
         then
-            PASS_COUNT=$((PASS_COUNT + 1))
-            printf '[PASS] syntax: %s\n' "${f#"$DEV_PATH/"}"
+            RecordPass "syntax: ${f#"$DEV_PATH/"}"
         else
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] syntax: %s\n' "${f#"$DEV_PATH/"}" >&2
+            RecordFail "syntax: ${f#"$DEV_PATH/"}" "$syntax_err"
         fi
     done
 
@@ -63,15 +66,17 @@ RunSuiteCoreJq()
     SetDelimiters
 
     local obj='{"a":1}'
+    # shellcheck disable=SC2016
     JQs merge_c obj --arg b 'hello "world"' '. * {"b": $b}'
     AssertEq '{"a":1,"b":"hello \"world\""}' "$obj" "JQs merge_c preserves quotes and passes args"
 
     local built=""
+    # shellcheck disable=SC2016
     JQs build built '{"tag": $tag, "empty_s": "", "empty_a": [], "empty_o": {}, "nested": {"ok": true, "drop": null, "zero": 0}}' --arg tag "t1"
     AssertEq '{"tag":"t1","nested":{"ok":true,"zero":0}}' "$built" "JQs build compacts empties while preserving false/0"
 
     local tmpdir
-    tmpdir=$(mktemp -d)
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/aios-core-jq.XXXXXX")
     local cfg="$tmpdir/config.json"
     printf '%s\n' '{"inbounds":[{"tag":"a","port":443}]}' > "$cfg"
 
@@ -86,6 +91,7 @@ RunSuiteCoreJq()
     local flat_out
     flat_out=$(JQs flat "$mixed_json")
     local sub_k
+    # shellcheck disable=SC2153
     sub_k=$($JQ_FILE -r '.items.sub.k // ""' <<< "$flat_out")
     AssertContains "$sub_k" "v" "JQs flat handles null mixed with object elements"
 
@@ -105,7 +111,9 @@ RunSuiteCoreJq()
     local cf_cfg="$tmpdir/cf.json"
     printf '%s\n' '{"users":[{"email":"a@b.com","pass":"p1","token":"t1","key":"k1"},null,"bad"],"workers":[{"name":"w1","path":"p1","project_name":"proj1","upstream":"u1"},{"name":"w2","path":"p2","project_name":"proj2","upstream":""}]}' > "$cf_cfg"
     CF_CONFIG="$cf_cfg"
+    # shellcheck disable=SC1091
     source "$DEV_PATH/src/cloudflare/get_workers"
+    # shellcheck disable=SC1091
     source "$DEV_PATH/src/cloudflare/get_users"
 
     CloudflareGetWorkers
@@ -129,6 +137,7 @@ RunSuiteCoreJq()
     local svc_cfg="$tmpdir/services.json"
     SERVICES_CONFIG="$svc_cfg"
     SERVICES_ROOT="$tmpdir"
+    # shellcheck disable=SC1091
     source "$DEV_PATH/src/service/get"
 
     printf '%s\n' '{
@@ -259,27 +268,73 @@ RunSuiteCoreJq()
     AssertJsonEq "$jqf" '.empty_arr | length' "3" "JQ delete by index removes element"
 
     # ServiceControl cold-start (unset dist) + single-arg start/stop/restart under set -u
-    local sc_out=""
-    local sc_rc=0
-    sc_out=$(
-        source "$DEV_PATH/src/service/control"
-        unset dist
-        eval "$(sed -n '1,40p' "$DEV_PATH/utils/system")"
-        DistCheck
-        [ -n "${dist:-}" ] || exit 91
-        unset dist
-        DistCheck() { dist="mac"; }
-        HOME="$tmpdir"
-        mkdir -p "$HOME/Library/LaunchAgents"
-        printf '<plist/>' > "$HOME/Library/LaunchAgents/xray.plist"
-        launchctl() { echo "mock_launchctl:$*"; return 0; }
-        ServiceControl restart xray
-    ) || sc_rc=$?
-    AssertEq "0" "$sc_rc" "ServiceControl restart xray succeeds without prior DistCheck or \$2"
-    AssertContains "$sc_out" "mock_launchctl:load" "ServiceControl restart xray invokes launchctl load"
+    local sc_out="" sc_rc=0
+    local sc_root="$tmpdir/service_control"
+    local sc_bin="$sc_root/bin"
+    local sc_state="$sc_root/state"
+    local sc_log=""
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+    then
+        sc_log="$sc_root/launchctl.log"
+        TestInstallMacLaunchctlStub "$sc_bin" "$sc_log" "$sc_state"
+        sc_out=$(
+            # shellcheck disable=SC1091
+            source "$DEV_PATH/src/service/control"
+            unset dist
+            eval "$(awk '/^DistCheck\(\)$/,/^}$/' "$DEV_PATH/utils/system")"
+            DistCheck
+            [ "${dist:-}" == "mac" ] || exit 91
+            unset dist
+            HOME="$sc_root/home"
+            PATH="$sc_bin:$PATH"
+            mkdir -p "$HOME/Library/LaunchAgents"
+            printf '<plist/>' > "$HOME/Library/LaunchAgents/xray.plist"
+            ServiceControl restart xray
+        ) 2>&1 || sc_rc=$?
+        ShowCaptured "ServiceControl restart xray (mac)" "$sc_out"
+        AssertEq "0" "$sc_rc" "ServiceControl restart xray succeeds without prior DistCheck or \$2"
+        AssertContains "$(cat "$sc_log" 2> /dev/null || true)" "load $sc_root/home/Library/LaunchAgents/xray.plist" "ServiceControl restart xray invokes launchctl load"
+    elif [ "${AIOS_TEST_HOST_OS:-}" == "linux" ]
+    then
+        sc_log="$sc_root/systemctl.log"
+        TestInstallLinuxSystemctlStub "$sc_bin" "$sc_log" "$sc_state"
+        sc_out=$(
+            # shellcheck disable=SC1091
+            source "$DEV_PATH/src/service/control"
+            unset dist
+            eval "$(awk '/^DistCheck\(\)$/,/^}$/' "$DEV_PATH/utils/system")"
+            DistCheck
+
+            if [ "${dist:-}" != "ubu" ] && [ "${dist:-}" != "deb" ] && [ "${dist:-}" != "rpm" ]
+            then
+                exit 91
+            fi
+            unset dist
+            mkdir -p "$sc_root/systemd"
+            printf '[Unit]\nDescription=xray test\n' > "$sc_root/systemd/xray.service"
+            ServiceResolveLabel()
+            {
+                [ -z "${dist:-}" ] && DistCheck
+                service_label="$1"
+                service_file="$sc_root/systemd/${1}.service"
+            }
+            PATH="$sc_bin:$PATH"
+            ServiceControl restart xray
+        ) 2>&1 || sc_rc=$?
+        ShowCaptured "ServiceControl restart xray (linux)" "$sc_out"
+        AssertEq "0" "$sc_rc" "ServiceControl restart xray succeeds without prior DistCheck or \$2"
+        local sc_log_content=""
+        sc_log_content=$(cat "$sc_log" 2> /dev/null || true)
+        AssertContains "$sc_log_content" "daemon-reload" "ServiceControl restart xray invokes systemctl daemon-reload"
+        AssertContains "$sc_log_content" "enable xray.service" "ServiceControl restart xray invokes systemctl enable"
+        AssertContains "$sc_log_content" "start xray.service" "ServiceControl restart xray invokes systemctl start"
+    else
+        SkipPlatform "ServiceControl restart xray" "unsupported host OS: ${AIOS_TEST_HOST_OS:-unknown}"
+    fi
 
     # AptUpdate + AptFixBrokenRepos (consent guard, pgdg archive, dead repo disable, network fail) + AptInstall stale-index retry
-    local apt_rc=0
+    local apt_out_file="$tmpdir/apt.out" apt_rc=0
     (
         eval "$(sed -n '1,/^BrewInstall()/{/^BrewInstall()/!p;}' "$DEV_PATH/utils/system")"
         local apt_dir="$tmpdir/apt_test"
@@ -297,6 +352,7 @@ RunSuiteCoreJq()
         }
         apt_updated=false
         APT_AUTO_FIX=false
+
         if AptUpdate force > /dev/null 2>&1
         then
             exit 10
@@ -310,6 +366,7 @@ RunSuiteCoreJq()
             then
                 return 0
             fi
+            # shellcheck disable=SC1111
             printf "错误:4 https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release\n  404  Not Found\nE: 仓库 “https://apt.postgresql.org/pub/repos/apt bullseye-pgdg Release” 不再含有 Release 文件。\n"
             return 100
         }
@@ -354,6 +411,7 @@ RunSuiteCoreJq()
                 return 0
             fi
             install_calls=$((install_calls + 1))
+
             if [ "$install_calls" -eq 1 ]
             then
                 printf "Err:1 http://security.debian.org/debian-security bullseye-security/main amd64 libpng-dev\n  404  Not Found\nE: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?\n"
@@ -375,7 +433,10 @@ RunSuiteCoreJq()
 
         printf 'ID=debian\nVERSION_ID="11"\n' > "$OS_RELEASE_FILE"
         printf 'deb [arch=amd64] http://ftp.us.debian.org/debian bullseye-updates main\n' > "$APT_SOURCES_FILE"
-        lsb_release() { return 1; }
+        lsb_release()
+        {
+            return 1
+        }
         [ "$(AptGetCodename)" == "bullseye" ] || exit 18
 
         # Case 5: AptRepoCheck probes InRelease then falls back to Release
@@ -389,12 +450,14 @@ RunSuiteCoreJq()
         }
         AptRepoCheck "https://download.docker.com/linux/ubuntu" "noble" || exit 19
         AptRepoCheck "https://apt-archive.postgresql.org/pub/repos/apt" "bullseye-pgdg" || exit 20
+
         if AptRepoCheck "https://repo.mongodb.org/apt/ubuntu" "plucky/mongodb-org/7.0"
         then
             exit 21
         fi
 
         # Case 6: OpensslFetchPackUrl filters major version (avoids grabbing 4.x when requesting 3.x) and resolves relative/absolute href
+        # shellcheck disable=SC1091
         source "$DEV_PATH/utils/openssl"
         curl()
         {
@@ -402,7 +465,8 @@ RunSuiteCoreJq()
         }
         [ "$(OpensslFetchPackUrl "https://openssl-library.org/source" "3")" == "https://openssl-library.org/source/openssl-3.5.9.tar.gz" ] || exit 22
         [ "$(OpensslFetchPackUrl "https://openssl-library.org/source" "4")" == "https://github.com/openssl/openssl/releases/download/openssl-4.1.0/openssl-4.1.0.tar.gz" ] || exit 23
-    ) || apt_rc=$?
+    ) > "$apt_out_file" 2>&1 || apt_rc=$?
+    ShowCaptured "AptUpdate / OpensslFetchPackUrl" "$(cat "$apt_out_file" 2> /dev/null || true)"
     AssertEq "0" "$apt_rc" "AptUpdate, AptInstall, AptGetCodename, AptRepoCheck, and OpensslFetchPackUrl work correctly"
 
     rm -rf "$tmpdir"

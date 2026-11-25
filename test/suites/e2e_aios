@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 RunSuiteE2eAios()
 {
     printf '\n=== Suite: e2e (real generated aios.sh via PTY) ===\n'
@@ -10,6 +12,7 @@ RunSuiteE2eAios()
         set -euo pipefail
         DEV_PATH="$REPO_ROOT"
         BUILD_LIBRARY_ONLY=true
+        # shellcheck disable=SC2329
         Include()
         {
             local p="$DEV_PATH" n="$1"
@@ -27,10 +30,17 @@ RunSuiteE2eAios()
         # shellcheck disable=SC1091
         . "$REPO_ROOT/env"
         info="[INFO]"
-        Println() { printf '%b\n' "$*"; }
+        Println()
+        {
+            printf '%b\n' "$*"
+        }
         # shellcheck disable=SC1091
         . "$REPO_ROOT/utils/shfile"
-        Spinner() { shift; "$@"; }
+        Spinner()
+        {
+            shift
+            "$@"
+        }
         # shellcheck disable=SC1091
         . "$REPO_ROOT/build"
         BuildShFile "$e2e_built_aios" > /dev/null
@@ -38,19 +48,21 @@ RunSuiteE2eAios()
 
     if [ "$e2e_build_rc" -ne 0 ] || [ -s "$e2e_build_err" ]
     then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] e2e: BuildShFile exited %d with stderr:\n%s\n' "$e2e_build_rc" "$(head -n 20 "$e2e_build_err")" >&2
+        local build_detail=""
+        build_detail=$(head -n 20 "$e2e_build_err")
+        RecordFail "e2e: BuildShFile exited ${e2e_build_rc}" "$build_detail"
         rm -f "$e2e_built_aios" "$e2e_build_err"
         return 1
     fi
     rm -f "$e2e_build_err"
-    if bash -n "$e2e_built_aios"
+
+    local syntax_err=""
+
+    if syntax_err=$(bash -n "$e2e_built_aios" 2>&1)
     then
-        PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] e2e: rebuilt aios.sh passes bash -n\n'
+        RecordPass "e2e: rebuilt aios.sh passes bash -n"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] e2e: rebuilt aios.sh failed bash -n\n' >&2
+        RecordFail "e2e: rebuilt aios.sh failed bash -n" "$syntax_err"
         rm -f "$e2e_built_aios"
         return 1
     fi
@@ -75,7 +87,7 @@ RunSuiteE2eAios()
 
     # 1. Menu 5: 查看入站 -> 全部入站 -> 选择入站 1 (vless-reality)
     local out
-    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E x menu 5 (inbound 1: vless-reality)" "$out"
     AssertContains "$out" "用户数: 2" "e2e x menu 5: inbound 1 shows user count 2 despite empty clients[]"
     AssertContains "$out" "alice@example.test" "e2e x menu 5: inbound 1 shows alice account"
@@ -85,7 +97,7 @@ RunSuiteE2eAios()
     AssertNotContains "$out" "trojan://" "e2e x menu 5: share link excludes unselected inbound 3 (trojan)"
 
     # 2. Menu 5: 查看入站 -> 全部入站 -> 选择入站 2 (nginx-vmess-ws)
-    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E x menu 5 (inbound 2: nginx-vmess-ws)" "$out"
     AssertContains "$out" "vmess-user@example.test" "e2e x menu 5: inbound 2 shows vmess-user"
     AssertContains "$out" "vmess://" "e2e x menu 5: share link includes selected inbound 2 (vmess)"
@@ -93,7 +105,7 @@ RunSuiteE2eAios()
     AssertNotContains "$out" "trojan://" "e2e x menu 5: share link excludes unselected inbound 3 (trojan)"
 
     # 3. Menu 5: 查看入站 -> 全部入站 -> 选择入站 3 (tls-trojan)
-    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><DOWN><ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><DOWN><ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E x menu 5 (inbound 3: tls-trojan)" "$out"
     AssertContains "$out" "trojan://trojan-secret-pass@203.0.113.10:8443?" "e2e x menu 5: share link includes selected inbound 3 (trojan)"
     AssertNotContains "$out" "vless://" "e2e x menu 5: inbound 3 share excludes vless"
@@ -105,7 +117,7 @@ RunSuiteE2eAios()
     AssertContains "$out" "nginx-vmess-ws" "e2e x menu 5: nginx filter displays nginx-vmess-ws"
 
     # 5. Menu 8: 查看出站 -> 选择出站 2 (upstream-vless)
-    out=$(E2eRunPty x '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号/服务端明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
     ShowCaptured "E2E x menu 8 (outbound 2)" "$out"
     AssertContains "$out" "edge.example.test:443" "e2e x menu 8: shows flat vless outbound address"
     AssertContains "$out" "dialerProxy" "e2e x menu 8: renders sockopt.dialerProxy"
@@ -133,6 +145,7 @@ RunSuiteE2eAios()
     AssertContains "$out" "bridge-1" "e2e x menu 19: renders Xray reverse bridge"
 
     # Remove deprecated top-level reverse before 26.11.9 transactional mutation tests
+    # shellcheck disable=SC2031
     $JQ_FILE 'del(.reverse)' "$x_cfg" > "${x_cfg}.clean" && mv -f "${x_cfg}.clean" "$x_cfg"
 
     # 7. Menu 3: 配置域名 -> 选择入站 3 (tls-trojan) -> 修改证书文件路径
@@ -167,20 +180,20 @@ RunSuiteE2eAios()
     E2eLoadFixture v2ray v2ray_full_matrix.json
 
     # 12. V2Ray Menu 5: 选择入站 1 (vmess-direct) -> 只输出 vmess 分享链接
-    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E v2 menu 5 (inbound 1: vmess-direct)" "$out"
     AssertContains "$out" "v2-alice@example.test" "e2e v2 menu 5: inbound 1 shows v2-alice"
     AssertContains "$out" "vmess://" "e2e v2 menu 5: share link includes selected inbound 1 (vmess)"
     AssertNotContains "$out" "trojan://" "e2e v2 menu 5: share link excludes unselected inbound 2 (trojan)"
 
     # 13. V2Ray Menu 5: 选择入站 2 (nginx-trojan) -> 只输出 trojan 分享链接
-    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E v2 menu 5 (inbound 2: nginx-trojan)" "$out"
     AssertContains "$out" "trojan://v2-trojan-pass@203.0.113.10:10002?" "e2e v2 menu 5: share link includes selected inbound 2 (trojan)"
     AssertNotContains "$out" "vmess://" "e2e v2 menu 5: share link excludes unselected inbound 1 (vmess)"
 
     # 14. V2Ray Menu 8, 11, 13, 15, 19
-    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"8<ENTER>"},{"wait":"选择查看账号/服务端明细的出站","send":"<DOWN><ENTER>"}]' "$pty_mode")
     AssertContains "$out" "v2-edge.example.test:443" "e2e v2 menu 8: shows vnext outbound address"
 
     out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"11<ENTER>"}]' "$pty_mode")

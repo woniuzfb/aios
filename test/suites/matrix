@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2016,SC2034,SC2154
+
 _MatrixBuildXrayInbound()
 {
     local proto="$1"
@@ -552,12 +555,11 @@ RunSuiteMatrix()
     rm -rf "$tmpdir"
 
     AssertEq "0" "$matrix_fail" "matrix: all $dataset_count combinatorial datasets passed (xray + v2ray + dns/routing/policy/edge + nginx)"
+
     if [ "$dataset_count" -ge 100 ]
     then
-        PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] matrix: dataset count >= 100 (actual=%d)\n' "$dataset_count"
+        RecordPass "matrix: dataset count >= 100 (actual=${dataset_count})"
     else
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] matrix: dataset count < 100 (actual=%d)\n' "$dataset_count" >&2
+        RecordFail "matrix: dataset count < 100 (actual=${dataset_count})"
     fi
 }

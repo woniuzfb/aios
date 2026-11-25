@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 RunSuiteIptv()
 {
     printf '\n=== Suite: iptv (P0 FFmpeg 8/9, IPTV_CONFIG split, update_self, core helpers) ===\n'
@@ -13,13 +15,31 @@ RunSuiteIptv()
     AssertEq "abc" "$(StripSuffix "abcdef" 3)" "StripSuffix strips trailing 3 chars"
     AssertEq "" "$(StripSuffix "ab" 5)" "StripSuffix returns empty when n >= len"
 
-    local spid ms_now uuid_val md5_val
+    local spid ms_now uuid_val md5_val rx_rc
     spid=$(GetSubshellPid)
-    AssertEq "0" "$([[ $spid =~ ^[0-9]+$ ]]; echo $?)" "GetSubshellPid returns numeric PID"
+    rx_rc=1
+
+    if [[ $spid =~ ^[0-9]+$ ]]
+    then
+        rx_rc=0
+    fi
+    AssertEq "0" "$rx_rc" "GetSubshellPid returns numeric PID"
     ms_now=$(DateMs)
-    AssertEq "0" "$([[ $ms_now =~ ^[0-9]{13,}$ ]]; echo $?)" "DateMs returns numeric ms timestamp"
+    rx_rc=1
+
+    if [[ $ms_now =~ ^[0-9]{13,}$ ]]
+    then
+        rx_rc=0
+    fi
+    AssertEq "0" "$rx_rc" "DateMs returns numeric ms timestamp"
     uuid_val=$(GenUuid)
-    AssertEq "0" "$([[ $uuid_val =~ ^[0-9a-fA-F-]{36}$ ]]; echo $?)" "GenUuid returns UUID"
+    rx_rc=1
+
+    if [[ $uuid_val =~ ^[0-9a-fA-F-]{36}$ ]]
+    then
+        rx_rc=0
+    fi
+    AssertEq "0" "$rx_rc" "GenUuid returns UUID"
     md5_val=$(printf 'aios' | Md5Hex)
     AssertEq "32" "${#md5_val}" "Md5Hex returns 32-char hex digest"
 
@@ -59,6 +79,7 @@ MIXEOF
     AssertContains "$sched_st" "1700000000" "JQs flat preserves schedule.start_time when sibling channel has schedule: []"
 
     # 3. ParseSchedule (redirect + delimiters[1] regression)
+    local ps_rc=0
     (
         # shellcheck disable=SC1091
         . "$DEV_PATH/src/iptv/parse_schedule"
@@ -71,18 +92,21 @@ MIXEOF
         schedules_list=()
         schedule='[{"title":"Match A","time":"12:00","start_time":1700000000,"end_time":1700007200},{"title":"Match B","time":"14:00","start_time":1700007200,"end_time":1700014400}]'
         ParseSchedule
-        [ "${#schedules_title[@]}" -eq 2 ] && [ "${schedules_title[0]}" = "Match A" ] && [ "${schedules_title[1]}" = "Match B" ] && [ "${schedules_chnl_id[1]}" = "ch_sp1" ]
-    )
-    AssertEq "0" "$?" "ParseSchedule parses schedule array with delimiters[1] without stdin hang"
+        [ "${#schedules_title[@]}" -eq 2 ] && [ "${schedules_title[0]}" == "Match A" ] && [ "${schedules_title[1]}" == "Match B" ] && [ "${schedules_chnl_id[1]}" == "ch_sp1" ]
+    ) || ps_rc=$?
+    AssertEq "0" "$ps_rc" "ParseSchedule parses schedule array with delimiters[1] without stdin hang"
 
     # 4. IPTV_CONFIG split + update_self migration (1.87.9 -> 2.1.0) & idempotency
+    local mig_rc=0
     (
         IPTV_ROOT="$tmpdir/iptv_mig"
         mkdir -p "$IPTV_ROOT"
         CHANNELS_FILE="$IPTV_ROOT/channels.json"
+        # shellcheck disable=SC2030
         IPTV_CONFIG="$IPTV_ROOT/config.json"
         LOCK_FILE="$IPTV_ROOT/update.lock"
         i18n_blank="留空"
+        # shellcheck disable=SC2034
         i18n_not_set="未设置"
         # shellcheck disable=SC1091
         . "$DEV_PATH/ver"
@@ -170,38 +194,38 @@ MIGEOF
         . "$DEV_PATH/src/iptv/update_self" > /dev/null
 
         [ -s "$IPTV_CONFIG" ] || exit 11
-        [ "$("$JQ_FILE" -r '.version' "$IPTV_CONFIG")" = "$sh_ver" ] || exit 12
-        [ "$("$JQ_FILE" -r '.schema_version' "$IPTV_CONFIG")" = "1" ] || exit 13
-        [ "$("$JQ_FILE" -r 'has("txt_format")' "$IPTV_CONFIG")" = "false" ] || exit 14
-        [ "$("$JQ_FILE" -r 'has("default")' "$CHANNELS_FILE")" = "false" ] || exit 15
-        [ "$("$JQ_FILE" -r '.channels | length' "$CHANNELS_FILE")" = "1" ] || exit 16
-        [ "$("$JQ_FILE" -r '.channels[0].live' "$CHANNELS_FILE")" = "true" ] || exit 17
-        [ "$("$JQ_FILE" -r '.channels[0] | has("subtitle") and has("hide") and has("const_cbr")' "$CHANNELS_FILE")" = "true" ] || exit 18
-        [ "$("$JQ_FILE" -r '.channels[0].headers' "$CHANNELS_FILE")" = 'x-forwarded-for: 127.0.0.1\r\n' ] || exit 21
+        [ "$("$JQ_FILE" -r '.version' "$IPTV_CONFIG")" == "$sh_ver" ] || exit 12
+        [ "$("$JQ_FILE" -r '.schema_version' "$IPTV_CONFIG")" == "1" ] || exit 13
+        [ "$("$JQ_FILE" -r 'has("txt_format")' "$IPTV_CONFIG")" == "false" ] || exit 14
+        [ "$("$JQ_FILE" -r 'has("default")' "$CHANNELS_FILE")" == "false" ] || exit 15
+        [ "$("$JQ_FILE" -r '.channels | length' "$CHANNELS_FILE")" == "1" ] || exit 16
+        [ "$("$JQ_FILE" -r '.channels[0].live' "$CHANNELS_FILE")" == "true" ] || exit 17
+        [ "$("$JQ_FILE" -r '.channels[0] | has("subtitle") and has("hide") and has("const_cbr")' "$CHANNELS_FILE")" == "true" ] || exit 18
+        [ "$("$JQ_FILE" -r '.channels[0].headers' "$CHANNELS_FILE")" == 'x-forwarded-for: 127.0.0.1\r\n' ] || exit 21
 
         # Run update_self second time (idempotent 2.1.0 -> 2.1.0)
         rm -f "$LOCK_FILE"
         unset d_version
         # shellcheck disable=SC1091
         . "$DEV_PATH/src/iptv/update_self" > /dev/null
-        [ "$("$JQ_FILE" -r '.channels[0].live' "$CHANNELS_FILE")" = "true" ] || exit 19
-        [ "$("$JQ_FILE" -r '.channels[0].stream_link | type' "$CHANNELS_FILE")" = "array" ] || exit 20
+        [ "$("$JQ_FILE" -r '.channels[0].live' "$CHANNELS_FILE")" == "true" ] || exit 19
+        [ "$("$JQ_FILE" -r '.channels[0].stream_link | type' "$CHANNELS_FILE")" == "array" ] || exit 20
 
         # Test GetDefault & EditDefault on IPTV_CONFIG
         unset d_version
         GetDefault
-        [ "$d_version" = "$sh_ver" ] || exit 21
+        [ "$d_version" == "$sh_ver" ] || exit 21
         EditDefault bitrate "1500" > /dev/null
-        [ "$("$JQ_FILE" -r '.bitrate' "$IPTV_CONFIG")" = "1500" ] || exit 22
+        [ "$("$JQ_FILE" -r '.bitrate' "$IPTV_CONFIG")" == "1500" ] || exit 22
 
         # Test GetChannel reads const_cbr & hide under set -u
         monitor=true
         kind=""
         output_dir_name="cctv1"
         GetChannel
-        [ "$chnl_const_cbr" = "false" ] && [ "$chnl_hide" = "false" ] || exit 23
-    )
-    AssertEq "0" "$?" "IPTV_CONFIG split, 1.87.9->2.1.0 migration, idempotency, EditDefault & GetChannel succeed"
+        [ "$chnl_const_cbr" == "false" ] && [ "$chnl_hide" == "false" ] || exit 23
+    ) || mig_rc=$?
+    AssertEq "0" "$mig_rc" "IPTV_CONFIG split, 1.87.9->2.1.0 migration, idempotency, EditDefault & GetChannel succeed"
 
     # 5. FFmpeg capabilities & real dual-binary tests (FFmpeg 8.1.3 & FFmpeg 9.0.2_1 if installed)
     # shellcheck disable=SC1091
@@ -236,7 +260,7 @@ MIGEOF
             AssertNotContains "$norm_rtmp" "-reconnect" "$ff_label: strips -reconnect for non-HTTP URL"
 
             # Real short lavfi encode smoke test (HLS + Enhanced FLV HEVC)
-            local hls_dir="$tmpdir/hls_${FFMPEG_MAJOR}"
+            local hls_dir="$tmpdir/hls_${FFMPEG_MAJOR}" ff_rc=0
             mkdir -p "$hls_dir"
             "$ff_bin" -hide_banner -loglevel error -y \
                 -f lavfi -i testsrc=duration=0.2:size=160x120:rate=10 \
@@ -244,16 +268,17 @@ MIGEOF
                 -map 0:v -map 1:a -c:v libx264 -preset ultrafast -c:a aac \
                 -fps_mode passthrough \
                 -f hls -hls_time 1 -var_stream_map "v:0,a:0,name:sd" \
-                -master_pl_name master.m3u8 "$hls_dir/v_%v.m3u8"
-            AssertEq "0" "$?" "$ff_label: real HLS multi-stream encode with -fps_mode passthrough succeeds"
+                -master_pl_name master.m3u8 "$hls_dir/v_%v.m3u8" > /dev/null 2>&1 || ff_rc=$?
+            AssertEq "0" "$ff_rc" "$ff_label: real HLS multi-stream encode with -fps_mode passthrough succeeds"
 
+            ff_rc=0
             "$ff_bin" -hide_banner -loglevel error -y \
                 -f lavfi -i testsrc=duration=0.2:size=160x120:rate=10 \
                 -f lavfi -i sine=frequency=440:duration=0.2 \
                 -c:v libx265 -preset ultrafast -x265-params "vbv-maxrate=500:vbv-bufsize=500:log-level=none" \
                 -c:a aac -fps_mode passthrough \
-                -f flv "$tmpdir/out_${FFMPEG_MAJOR}.flv"
-            AssertEq "0" "$?" "$ff_label: real Enhanced FLV HEVC + x265 vbv encode succeeds"
+                -f flv "$tmpdir/out_${FFMPEG_MAJOR}.flv" > /dev/null 2>&1 || ff_rc=$?
+            AssertEq "0" "$ff_rc" "$ff_label: real Enhanced FLV HEVC + x265 vbv encode succeeds"
         fi
     done
 

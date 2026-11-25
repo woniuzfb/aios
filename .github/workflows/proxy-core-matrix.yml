@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  test-matrix:
+  linux-nonroot:
+    name: Linux Non-Root (Strict Core Matrix)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -28,10 +29,9 @@ jobs:
           AIOS_REQUIRE_PINNED_SHA256: "1"
         run: bash scripts/fetch_test_cores.sh
 
-      - name: Syntax, Lint, Build & Full Test Suite (Strict Core Matrix)
-        env:
-          AIOS_REQUIRE_CORE_MATRIX: "1"
+      - name: Static Checks (ShellCheck, Build, Syntax & No .sh Guard)
         run: |
+          set -euo pipefail
           shellcheck -s bash -e SC2034,SC2154,SC2016 \
             src/service/control src/proxy/core_features src/proxy/core_manager \
             src/proxy/validate src/proxy/stream_editor src/proxy/uri_codec \
@@ -39,4 +39,627 @@ jobs:
             src/v2ray/stats scripts/fetch_test_cores.sh
           ./make
           bash -n aios.sh
-          AIOS_REQUIRE_CORE_MATRIX=1 bash test/run
+          bash -n test/run
+          sh_files=$(find test src utils -type f -name '*.sh' 2>/dev/null || true)
+          if [ -n "$sh_files" ]; then
+            printf '[FAIL] unexpected .sh files found under test/, src/, or utils/:\n%s\n' "$sh_files" >&2
+            exit 1
+          fi
+
+      - name: Run Strict Test Matrix (Serial -j 1 & Parallel Equivalence)
+        env:
+          AIOS_REQUIRE_CORE_MATRIX: "1"
+        run: |
+          set -euo pipefail
+          if [ "$(id -u)" -eq 0 ]; then
+            printf '[FAIL] linux-nonroot job must run as a non-root user (uid=0 detected)\n' >&2
+            exit 1
+          fi
+
+          ART_DIR="ci-artifacts/linux-nonroot"
+          mkdir -p "$ART_DIR"
+
+          serial_results="$ART_DIR/results-serial.txt"
+          parallel_results="$ART_DIR/results-parallel.txt"
+          serial_log="$ART_DIR/serial.log"
+          parallel_log="$ART_DIR/parallel.log"
+
+          serial_start=$(date +%s)
+          serial_rc=0
+          AIOS_REQUIRE_CORE_MATRIX=1 bash test/run -j 1 --show-output --results-file "$serial_results" 2>&1 | tee "$serial_log" || serial_rc=$?
+          serial_end=$(date +%s)
+          serial_elapsed=$((serial_end - serial_start))
+
+          parallel_start=$(date +%s)
+          parallel_rc=0
+          AIOS_REQUIRE_CORE_MATRIX=1 bash test/run --show-output --results-file "$parallel_results" 2>&1 | tee "$parallel_log" || parallel_rc=$?
+          parallel_end=$(date +%s)
+          parallel_elapsed=$((parallel_end - parallel_start))
+
+          total_elapsed=$((serial_elapsed + parallel_elapsed))
+
+          cat > "$ART_DIR/timings.env" <<EOF
+          SERIAL_ELAPSED_SEC=${serial_elapsed}
+          PARALLEL_ELAPSED_SEC=${parallel_elapsed}
+          TOTAL_ELAPSED_SEC=${total_elapsed}
+          EOF
+
+          python3 - "$serial_results" "$parallel_results" "$serial_log" "$parallel_log" \
+            "$serial_rc" "$parallel_rc" "$serial_elapsed" "$parallel_elapsed" "$total_elapsed" "$ART_DIR" <<'PY'
+          import os
+          import sys
+          from collections import Counter
+
+          (
+              serial_results_path,
+              parallel_results_path,
+              serial_log_path,
+              parallel_log_path,
+              serial_rc_s,
+              parallel_rc_s,
+              serial_elapsed_s,
+              parallel_elapsed_s,
+              total_elapsed_s,
+              art_dir,
+          ) = sys.argv[1:11]
+
+          serial_rc = int(serial_rc_s)
+          parallel_rc = int(parallel_rc_s)
+
+          def parse_results(path):
+              meta = {}
+              suites = []
+              cases = []
+              if not os.path.isfile(path):
+                  return meta, suites, cases
+              section = "META"
+              with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                  for raw in fh:
+                      line = raw.rstrip("\r\n")
+                      if line == "[SUITES]":
+                          section = "SUITES"
+                          continue
+                      if line == "[CASES]":
+                          section = "CASES"
+                          continue
+                      if not line:
+                          continue
+                      if section == "META" and "=" in line:
+                          k, v = line.split("=", 1)
+                          meta[k] = v
+                      elif section == "SUITES":
+                          suites.append(line)
+                      elif section == "CASES":
+                          parts = line.split("\t")
+                          if len(parts) >= 3:
+                              cases.append((parts[0], parts[1], "\t".join(parts[2:])))
+              return meta, suites, cases
+
+          s_meta, s_suites, s_cases = parse_results(serial_results_path)
+          p_meta, p_suites, p_cases = parse_results(parallel_results_path)
+
+          primary_meta = p_meta if p_meta else s_meta
+          primary_cases = p_cases if p_cases else s_cases
+
+          skips = [c for c in primary_cases if c[1].startswith("SKIP_")]
+          with open(os.path.join(art_dir, "skips.tsv"), "w", encoding="utf-8") as fh:
+              fh.write("suite\tcategory\tcase_id\n")
+              for suite, status, case_id in sorted(skips):
+                  fh.write(f"{suite}\t{status}\t{case_id}\n")
+
+          errors = []
+          if serial_rc != 0:
+              errors.append(f"serial run (-j 1) exited with code {serial_rc}")
+          if parallel_rc != 0:
+              errors.append(f"parallel run exited with code {parallel_rc}")
+          if not s_meta or not p_meta:
+              errors.append("missing results file from serial or parallel run")
+          else:
+              for key in (
+                  "TOTAL_PASS",
+                  "TOTAL_FAIL",
+                  "TOTAL_SKIP_PLATFORM",
+                  "TOTAL_SKIP_PRIVILEGE",
+                  "TOTAL_SKIP_DEPENDENCY",
+              ):
+                  if s_meta.get(key) != p_meta.get(key):
+                      errors.append(
+                          f"count mismatch for {key}: serial={s_meta.get(key)} vs parallel={p_meta.get(key)}"
+                      )
+
+              if int(s_meta.get("TOTAL_FAIL", "1")) != 0 or int(p_meta.get("TOTAL_FAIL", "1")) != 0:
+                  errors.append(
+                      f"non-zero TOTAL_FAIL: serial={s_meta.get('TOTAL_FAIL')}, parallel={p_meta.get('TOTAL_FAIL')}"
+                  )
+              if int(s_meta.get("TOTAL_SKIP_DEPENDENCY", "1")) != 0 or int(p_meta.get("TOTAL_SKIP_DEPENDENCY", "1")) != 0:
+                  errors.append(
+                      f"[SKIP][dependency] must be 0: serial={s_meta.get('TOTAL_SKIP_DEPENDENCY')}, parallel={p_meta.get('TOTAL_SKIP_DEPENDENCY')}"
+                  )
+
+              s_ids = Counter((suite, case_id) for suite, _, case_id in s_cases)
+              p_ids = Counter((suite, case_id) for suite, _, case_id in p_cases)
+              if s_ids != p_ids:
+                  only_s = list((s_ids - p_ids).elements())[:10]
+                  only_p = list((p_ids - s_ids).elements())[:10]
+                  errors.append(
+                      f"executed case ID set mismatch between -j 1 and parallel (only_serial={only_s}, only_parallel={only_p})"
+                  )
+
+              s_fails = Counter((suite, case_id) for suite, status, case_id in s_cases if status == "FAIL")
+              p_fails = Counter((suite, case_id) for suite, status, case_id in p_cases if status == "FAIL")
+              if s_fails != p_fails:
+                  errors.append(f"failed case set mismatch: serial={list(s_fails)} vs parallel={list(p_fails)}")
+
+              s_skips = Counter((suite, status, case_id) for suite, status, case_id in s_cases if status.startswith("SKIP_"))
+              p_skips = Counter((suite, status, case_id) for suite, status, case_id in p_cases if status.startswith("SKIP_"))
+              if s_skips != p_skips:
+                  only_s = list((s_skips - p_skips).elements())[:10]
+                  only_p = list((p_skips - s_skips).elements())[:10]
+                  errors.append(
+                      f"skipped case set mismatch between -j 1 and parallel (only_serial={only_s}, only_parallel={only_p})"
+                  )
+
+          forbidden_patterns = [
+              "Reload daemon failed",
+              "Interactive authentication",
+              "systemctl: command not found",
+              "systemctl: 未找到命令",
+              "[SKIP][dependency]",
+          ]
+          for label, log_path in (("serial.log", serial_log_path), ("parallel.log", parallel_log_path)):
+              if not os.path.isfile(log_path):
+                  errors.append(f"missing log file: {label}")
+                  continue
+              with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                  content = fh.read()
+              for pat in forbidden_patterns:
+                  if pat in content:
+                      errors.append(f"forbidden pattern {pat!r} found in {label}")
+
+          status_label = "PASS" if not errors else "FAIL"
+          summary_env = {
+              "LANE": "linux-nonroot",
+              "LANE_STATUS": status_label,
+              "HOST_OS": primary_meta.get("HOST_OS", "linux"),
+              "IS_ROOT": primary_meta.get("IS_ROOT", "0"),
+              "HAS_REAL_SYSTEMD": primary_meta.get("HAS_REAL_SYSTEMD", "0"),
+              "TOTAL_PASS": primary_meta.get("TOTAL_PASS", "0"),
+              "TOTAL_FAIL": primary_meta.get("TOTAL_FAIL", "0"),
+              "TOTAL_SKIP_PLATFORM": primary_meta.get("TOTAL_SKIP_PLATFORM", "0"),
+              "TOTAL_SKIP_PRIVILEGE": primary_meta.get("TOTAL_SKIP_PRIVILEGE", "0"),
+              "TOTAL_SKIP_DEPENDENCY": primary_meta.get("TOTAL_SKIP_DEPENDENCY", "0"),
+              "SERIAL_ELAPSED_SEC": serial_elapsed_s,
+              "PARALLEL_ELAPSED_SEC": parallel_elapsed_s,
+              "ELAPSED_SEC": total_elapsed_s,
+              "EQUIVALENCE_CHECK": "PASS" if not errors else "FAIL",
+          }
+          with open(os.path.join(art_dir, "summary.env"), "w", encoding="utf-8") as fh:
+              for k, v in summary_env.items():
+                  fh.write(f"{k}={v}\n")
+
+          with open(os.path.join(art_dir, "summary.txt"), "w", encoding="utf-8") as fh:
+              fh.write(f"Lane: linux-nonroot ({status_label})\n")
+              fh.write(
+                  f"Pass={summary_env['TOTAL_PASS']}, Fail={summary_env['TOTAL_FAIL']}, "
+                  f"Skip(platform={summary_env['TOTAL_SKIP_PLATFORM']}, "
+                  f"privilege={summary_env['TOTAL_SKIP_PRIVILEGE']}, "
+                  f"dependency={summary_env['TOTAL_SKIP_DEPENDENCY']})\n"
+              )
+              fh.write(
+                  f"Timing: serial(-j 1)={serial_elapsed_s}s, parallel={parallel_elapsed_s}s, total={total_elapsed_s}s\n"
+              )
+              if errors:
+                  fh.write("Errors:\n")
+                  for err in errors:
+                      fh.write(f"  - {err}\n")
+
+          if errors:
+              for err in errors:
+                  print(f"[ASSERT FAIL] {err}", file=sys.stderr)
+              sys.exit(1)
+
+          print(
+              f"[ASSERT OK] linux-nonroot equivalence & log checks passed "
+              f"(pass={summary_env['TOTAL_PASS']}, skip_platform={summary_env['TOTAL_SKIP_PLATFORM']}, "
+              f"skip_privilege={summary_env['TOTAL_SKIP_PRIVILEGE']}, skip_dependency=0, "
+              f"serial={serial_elapsed_s}s, parallel={parallel_elapsed_s}s)"
+          )
+          PY
+
+      - name: Upload linux-nonroot results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-nonroot-results
+          path: ci-artifacts/linux-nonroot/
+          if-no-files-found: warn
+
+  linux-root-systemd:
+    name: Linux Root + Real Systemd (Ephemeral Privileged Container)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch pinned multi-version Xray/V2Ray cores & GeoData on host
+        env:
+          AIOS_CORES_SHA256_FILE: scripts/test_cores.sha256
+          AIOS_REQUIRE_PINNED_SHA256: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/fetch_test_cores.sh
+          chmod a+rx .memory
+          chmod -R a+rX .memory/cores
+
+      - name: Start ephemeral real systemd PID 1 container & verify readiness
+        run: |
+          set -euo pipefail
+          sudo modprobe tun || true
+          docker pull jrei/systemd-ubuntu:24.04
+          docker rm -f aios-systemd-ci >/dev/null 2>&1 || true
+          docker run -d \
+            --name aios-systemd-ci \
+            --privileged \
+            --cgroupns=host \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            --tmpfs /run \
+            --tmpfs /run/lock \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            jrei/systemd-ubuntu:24.04 \
+            /sbin/init
+
+          ready=0
+          for i in $(seq 1 60); do
+            pid1_comm=$(docker exec aios-systemd-ci cat /proc/1/comm 2>/dev/null || true)
+            has_run_dir=0
+            if docker exec aios-systemd-ci test -d /run/systemd/system 2>/dev/null; then
+              has_run_dir=1
+            fi
+            sys_state=$(docker exec aios-systemd-ci systemctl is-system-running 2>&1 || true)
+            dbus_ok=0
+            if docker exec aios-systemd-ci busctl --no-pager list >/dev/null 2>&1; then
+              dbus_ok=1
+            fi
+            reload_ok=0
+            if docker exec aios-systemd-ci systemctl daemon-reload >/dev/null 2>&1; then
+              reload_ok=1
+            fi
+
+            if [ "$pid1_comm" = "systemd" ] \
+              && [ "$has_run_dir" -eq 1 ] \
+              && { [ "$sys_state" = "running" ] || [ "$sys_state" = "degraded" ]; } \
+              && [ "$dbus_ok" -eq 1 ] \
+              && [ "$reload_ok" -eq 1 ]; then
+              ready=1
+              printf '[OK] real systemd PID 1 ready after %ds (state=%s, dbus=ok, daemon-reload=0)\n' "$i" "$sys_state"
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" -ne 1 ]; then
+            printf '[FAIL] real systemd PID 1 / DBus readiness check failed after 60s\n' >&2
+            printf '--- Diagnostics ---\n' >&2
+            docker exec aios-systemd-ci ps -p 1 -o pid,comm,args 2>&1 || true
+            docker exec aios-systemd-ci ls -ld /run/systemd/system 2>&1 || true
+            docker exec aios-systemd-ci systemctl is-system-running 2>&1 || true
+            docker exec aios-systemd-ci systemctl --failed --no-pager 2>&1 || true
+            docker exec aios-systemd-ci busctl status 2>&1 || true
+            docker exec aios-systemd-ci systemctl daemon-reload 2>&1 || true
+            docker logs --tail 50 aios-systemd-ci 2>&1 || true
+            exit 1
+          fi
+
+          docker exec -u 0 aios-systemd-ci bash -euo pipefail -c '
+            if [ ! -c /dev/net/tun ]; then
+              mkdir -p /dev/net
+              mknod /dev/net/tun c 10 200
+              chmod 666 /dev/net/tun
+            fi
+            if ! { [ -c /dev/net/tun ] && [ -r /dev/net/tun ] && [ -w /dev/net/tun ]; }; then
+              printf "[FAIL] /dev/net/tun preflight check failed\n" >&2
+              ls -la /dev/net/tun >&2 || true
+              exit 1
+            fi
+            printf "[OK] /dev/net/tun ready\n"
+          '
+
+      - name: Provision container dependencies, system users & writable workdir
+        run: |
+          set -euo pipefail
+          docker exec -u 0 aios-systemd-ci bash -euo pipefail -c '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              jq unzip curl gettext gawk openssl locales procps iproute2 acl ca-certificates
+            locale-gen zh_CN.UTF-8
+            update-locale LANG=zh_CN.UTF-8
+
+            id -u aios-xray >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin aios-xray
+            id -u aios-v2ray >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin aios-v2ray
+            id aios-xray
+            id aios-v2ray
+
+            rm -rf /tmp/aios-work
+            mkdir -p /tmp/aios-work
+            tar -C /workspace --exclude=.git --exclude=.memory -cf - . | tar -C /tmp/aios-work -xf -
+            cd /tmp/aios-work
+            ./make
+            bash -n aios.sh
+          '
+
+      - name: Run Strict Test Suite as root under real systemd
+        run: |
+          set -euo pipefail
+          ART_DIR="ci-artifacts/linux-root-systemd"
+          mkdir -p "$ART_DIR"
+
+          run_start=$(date +%s)
+          test_rc=0
+          docker exec -u 0 -w /tmp/aios-work \
+            -e AIOS_REQUIRE_CORE_MATRIX=1 \
+            -e AIOS_REQUIRE_ROOT_SYSTEMD=1 \
+            -e AIOS_CORES_DIR=/workspace/.memory/cores \
+            aios-systemd-ci \
+            bash -o pipefail -c 'bash test/run --show-output --results-file /tmp/systemd-results.txt 2>&1 | tee /tmp/systemd-test.log' || test_rc=$?
+          run_end=$(date +%s)
+          elapsed_sec=$((run_end - run_start))
+
+          docker cp aios-systemd-ci:/tmp/systemd-results.txt "$ART_DIR/systemd-results.txt" 2>/dev/null || true
+          docker cp aios-systemd-ci:/tmp/systemd-test.log "$ART_DIR/systemd-test.log" 2>/dev/null || true
+
+          cat > "$ART_DIR/timings.env" <<EOF
+          ELAPSED_SEC=${elapsed_sec}
+          EOF
+
+          python3 - "$ART_DIR/systemd-results.txt" "$ART_DIR/systemd-test.log" "$test_rc" "$elapsed_sec" "$ART_DIR" <<'PY'
+          import os
+          import sys
+
+          results_path, log_path, test_rc_s, elapsed_s, art_dir = sys.argv[1:6]
+          test_rc = int(test_rc_s)
+
+          meta = {}
+          suites = []
+          cases = []
+          if os.path.isfile(results_path):
+              section = "META"
+              with open(results_path, "r", encoding="utf-8", errors="replace") as fh:
+                  for raw in fh:
+                      line = raw.rstrip("\r\n")
+                      if line == "[SUITES]":
+                          section = "SUITES"
+                          continue
+                      if line == "[CASES]":
+                          section = "CASES"
+                          continue
+                      if not line:
+                          continue
+                      if section == "META" and "=" in line:
+                          k, v = line.split("=", 1)
+                          meta[k] = v
+                      elif section == "SUITES":
+                          suites.append(line)
+                      elif section == "CASES":
+                          parts = line.split("\t")
+                          if len(parts) >= 3:
+                              cases.append((parts[0], parts[1], "\t".join(parts[2:])))
+
+          skips = [c for c in cases if c[1].startswith("SKIP_")]
+          with open(os.path.join(art_dir, "skips.tsv"), "w", encoding="utf-8") as fh:
+              fh.write("suite\tcategory\tcase_id\n")
+              for suite, status, case_id in sorted(skips):
+                  fh.write(f"{suite}\t{status}\t{case_id}\n")
+
+          errors = []
+          if test_rc != 0:
+              errors.append(f"test/run exited with non-zero code {test_rc}")
+          if not meta:
+              errors.append("missing systemd-results.txt")
+          else:
+              if meta.get("IS_ROOT") != "1":
+                  errors.append(f"expected IS_ROOT=1, got {meta.get('IS_ROOT')}")
+              if meta.get("HAS_REAL_SYSTEMD") != "1":
+                  errors.append(f"expected HAS_REAL_SYSTEMD=1, got {meta.get('HAS_REAL_SYSTEMD')}")
+              if int(meta.get("TOTAL_FAIL", "1")) != 0:
+                  errors.append(f"expected TOTAL_FAIL=0, got {meta.get('TOTAL_FAIL')}")
+              if int(meta.get("TOTAL_SKIP_PRIVILEGE", "1")) != 0:
+                  errors.append(f"expected TOTAL_SKIP_PRIVILEGE=0, got {meta.get('TOTAL_SKIP_PRIVILEGE')}")
+              if int(meta.get("TOTAL_SKIP_DEPENDENCY", "1")) != 0:
+                  errors.append(f"expected TOTAL_SKIP_DEPENDENCY=0, got {meta.get('TOTAL_SKIP_DEPENDENCY')}")
+
+          if os.path.isfile(log_path):
+              with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                  log_content = fh.read()
+              forbidden_patterns = (
+                  "Reload daemon failed",
+                  "Interactive authentication",
+                  "systemctl: command not found",
+                  "systemctl: 未找到命令",
+                  "[SKIP][privilege]",
+                  "[SKIP][dependency]",
+              )
+              for pat in forbidden_patterns:
+                  if pat in log_content:
+                      errors.append(f"forbidden pattern {pat!r} found in systemd-test.log")
+          else:
+              errors.append("missing systemd-test.log")
+
+          status_label = "PASS" if not errors else "FAIL"
+          summary_env = {
+              "LANE": "linux-root-systemd",
+              "LANE_STATUS": status_label,
+              "HOST_OS": meta.get("HOST_OS", "linux"),
+              "IS_ROOT": meta.get("IS_ROOT", "0"),
+              "HAS_REAL_SYSTEMD": meta.get("HAS_REAL_SYSTEMD", "0"),
+              "TOTAL_PASS": meta.get("TOTAL_PASS", "0"),
+              "TOTAL_FAIL": meta.get("TOTAL_FAIL", "0"),
+              "TOTAL_SKIP_PLATFORM": meta.get("TOTAL_SKIP_PLATFORM", "0"),
+              "TOTAL_SKIP_PRIVILEGE": meta.get("TOTAL_SKIP_PRIVILEGE", "0"),
+              "TOTAL_SKIP_DEPENDENCY": meta.get("TOTAL_SKIP_DEPENDENCY", "0"),
+              "ELAPSED_SEC": elapsed_s,
+          }
+          with open(os.path.join(art_dir, "summary.env"), "w", encoding="utf-8") as fh:
+              for k, v in summary_env.items():
+                  fh.write(f"{k}={v}\n")
+
+          with open(os.path.join(art_dir, "summary.txt"), "w", encoding="utf-8") as fh:
+              fh.write(f"Lane: linux-root-systemd ({status_label})\n")
+              fh.write(
+                  f"Pass={summary_env['TOTAL_PASS']}, Fail={summary_env['TOTAL_FAIL']}, "
+                  f"Skip(platform={summary_env['TOTAL_SKIP_PLATFORM']}, "
+                  f"privilege={summary_env['TOTAL_SKIP_PRIVILEGE']}, "
+                  f"dependency={summary_env['TOTAL_SKIP_DEPENDENCY']})\n"
+              )
+              fh.write(f"Timing: {elapsed_s}s\n")
+              if errors:
+                  fh.write("Errors:\n")
+                  for err in errors:
+                      fh.write(f"  - {err}\n")
+
+          if errors:
+              for err in errors:
+                  print(f"[ASSERT FAIL] {err}", file=sys.stderr)
+              sys.exit(1)
+
+          print(
+              f"[ASSERT OK] linux-root-systemd passed "
+              f"(pass={summary_env['TOTAL_PASS']}, fail=0, "
+              f"skip_platform={summary_env['TOTAL_SKIP_PLATFORM']}, "
+              f"skip_privilege=0, skip_dependency=0, elapsed={elapsed_s}s)"
+          )
+          PY
+
+      - name: Upload linux-root-systemd results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-root-systemd-results
+          path: ci-artifacts/linux-root-systemd/
+          if-no-files-found: warn
+
+      - name: Cleanup ephemeral systemd container
+        if: always()
+        run: docker rm -f aios-systemd-ci || true
+
+  ci-summary:
+    name: CI Dual-Lane Summary & Gate
+    needs: [ linux-nonroot, linux-root-systemd ]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download linux-nonroot results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-nonroot-results
+          path: downloaded/linux-nonroot
+
+      - name: Download linux-root-systemd results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-root-systemd-results
+          path: downloaded/linux-root-systemd
+
+      - name: Publish Step Summary & Enforce Dual-Lane Gate
+        env:
+          NONROOT_RESULT: ${{ needs.linux-nonroot.result }}
+          SYSTEMD_RESULT: ${{ needs.linux-root-systemd.result }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import sys
+
+          nonroot_result = os.environ.get("NONROOT_RESULT", "unknown")
+          systemd_result = os.environ.get("SYSTEMD_RESULT", "unknown")
+
+          def load_env(path):
+              data = {}
+              if not os.path.isfile(path):
+                  return data
+              with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                  for raw in fh:
+                      line = raw.strip()
+                      if "=" in line:
+                          k, v = line.split("=", 1)
+                          data[k] = v
+              return data
+
+          def load_skips(path):
+              rows = []
+              if not os.path.isfile(path):
+                  return rows
+              with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                  for idx, raw in enumerate(fh):
+                      if idx == 0:
+                          continue
+                      line = raw.rstrip("\r\n")
+                      if line:
+                          rows.append(line.split("\t"))
+              return rows
+
+          lanes = [
+              ("linux-nonroot", nonroot_result, "downloaded/linux-nonroot"),
+              ("linux-root-systemd", systemd_result, "downloaded/linux-root-systemd"),
+          ]
+
+          lines = [
+              "## Dual-Lane CI Summary",
+              "",
+              "| Lane | Job Status | Passed | Failed | Skip (platform) | Skip (privilege) | Skip (dependency) | Duration |",
+              "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+          ]
+
+          for lane_name, job_status, base_dir in lanes:
+              env_data = load_env(os.path.join(base_dir, "summary.env"))
+              passed = env_data.get("TOTAL_PASS", "N/A")
+              failed = env_data.get("TOTAL_FAIL", "N/A")
+              skip_plat = env_data.get("TOTAL_SKIP_PLATFORM", "N/A")
+              skip_priv = env_data.get("TOTAL_SKIP_PRIVILEGE", "N/A")
+              skip_dep = env_data.get("TOTAL_SKIP_DEPENDENCY", "N/A")
+              elapsed = env_data.get("ELAPSED_SEC")
+              if lane_name == "linux-nonroot" and "SERIAL_ELAPSED_SEC" in env_data and "PARALLEL_ELAPSED_SEC" in env_data:
+                  duration = f"{elapsed}s (serial {env_data['SERIAL_ELAPSED_SEC']}s / parallel {env_data['PARALLEL_ELAPSED_SEC']}s)"
+              elif elapsed is not None:
+                  duration = f"{elapsed}s"
+              else:
+                  duration = "N/A"
+              lines.append(
+                  f"| `{lane_name}` | `{job_status}` | {passed} | {failed} | {skip_plat} | {skip_priv} | {skip_dep} | {duration} |"
+              )
+
+          lines.append("")
+          for lane_name, _, base_dir in lanes:
+              skips = load_skips(os.path.join(base_dir, "skips.tsv"))
+              lines.append(f"### Skipped Cases: `{lane_name}` ({len(skips)})")
+              if skips:
+                  lines.append("")
+                  lines.append("| Suite | Category | Case ID |")
+                  lines.append("| --- | --- | --- |")
+                  for row in skips:
+                      suite = row[0] if len(row) > 0 else ""
+                      cat = row[1] if len(row) > 1 else ""
+                      cid = row[2] if len(row) > 2 else ""
+                      lines.append(f"| `{suite}` | `{cat}` | `{cid}` |")
+              else:
+                  lines.append("None.")
+              lines.append("")
+
+          summary_md = "\n".join(lines)
+          step_summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if step_summary_path:
+              with open(step_summary_path, "a", encoding="utf-8") as fh:
+                  fh.write(summary_md + "\n")
+          print(summary_md)
+
+          if nonroot_result != "success" or systemd_result != "success":
+              print(
+                  f"[GATE FAIL] Required lanes did not all succeed: "
+                  f"linux-nonroot={nonroot_result}, linux-root-systemd={systemd_result}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          print("[GATE OK] Both linux-nonroot and linux-root-systemd succeeded.")
+          PY

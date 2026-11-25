@@ -1,3 +1,5 @@
+# shellcheck shell=bash
+
 _TypeSafetyRunAllRenderers()
 {
     local cfg="$1"
@@ -21,12 +23,11 @@ _TypeSafetyRunAllRenderers()
 
     if [ -s "$err_file" ]
     then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        printf '[FAIL] type_safety (%s) [%s]: stderr not empty:\n' "$mode" "$label" >&2
-        head -n 6 "$err_file" | sed 's/^/  /' >&2
+        local detail=""
+        detail=$(head -n 6 "$err_file" | sed 's/^/  /')
+        RecordFail "type_safety (${mode}) [${label}]: stderr not empty" "$detail"
     else
-        PASS_COUNT=$((PASS_COUNT + 1))
-        printf '[PASS] type_safety (%s): %s\n' "$mode" "$label"
+        RecordPass "type_safety (${mode}): ${label}"
     fi
     return 0
 }
@@ -223,16 +224,16 @@ JSON
     do
         nx_idx=$((nx_idx + 1))
         : > "$err_file"
+        # shellcheck disable=SC2034
         parse_out="$nx_case"
         NginxGetConfig parse_out 2>> "$err_file" || true
         if [ -s "$err_file" ]
         then
-            FAIL_COUNT=$((FAIL_COUNT + 1))
-            printf '[FAIL] type_safety (nginx): malformed case #%d stderr:\n' "$nx_idx" >&2
-            head -n 5 "$err_file" | sed 's/^/  /' >&2
+            local nx_detail=""
+            nx_detail=$(head -n 5 "$err_file" | sed 's/^/  /')
+            RecordFail "type_safety (nginx): malformed case #${nx_idx} stderr" "$nx_detail"
         else
-            PASS_COUNT=$((PASS_COUNT + 1))
-            printf '[PASS] type_safety (nginx): malformed case #%d\n' "$nx_idx"
+            RecordPass "type_safety (nginx): malformed case #${nx_idx}"
         fi
     done
 

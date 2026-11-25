@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2016,SC2034,SC2154,SC2329
+
 RunSuiteNginx()
 {
     printf '\n=== Suite: nginx ===\n'
@@ -99,7 +102,10 @@ RunSuiteNginx()
     AssertEq "1" "$nginx_stream_upstream_count" "NginxGetStream upstream count"
     AssertEq "up_alpha => 127.0.0.1:8443" "${nginx_stream_upstream[0]}" "NginxGetStream upstream[0]"
 
-    NginxCheckLocalhost() { :; }
+    NginxCheckLocalhost()
+    {
+        :
+    }
     nginx_prefix="/tmp/nginx"
     local lh_out
     lh_out=$(NginxListLocalhost)
@@ -154,9 +160,19 @@ RunSuiteNginx()
     }'
 
     NginxGetConfig
-    NginxListDomains() { nginx_domains=("multi.example.test"); nginx_domains_count=1; }
-    NginxSelectDomain() { nginx_domains_index=0; }
-    NginxParseConfig() { :; }
+    NginxListDomains()
+    {
+        nginx_domains=("multi.example.test")
+        nginx_domains_count=1
+    }
+    NginxSelectDomain()
+    {
+        nginx_domains_index=0
+    }
+    NginxParseConfig()
+    {
+        :
+    }
     local dom_out
     dom_out=$(NginxListDomain)
     ShowCaptured "NginxListDomain (2 servers)" "$dom_out"
@@ -201,7 +217,10 @@ RunSuiteNginx()
     }'
     v2ray_nginx_domains=("site.example.test")
     v2ray_nginx_domains_count=1
-    V2rayNginxSelectDomain() { v2ray_nginx_domains_index=0; }
+    V2rayNginxSelectDomain()
+    {
+        v2ray_nginx_domains_index=0
+    }
     local v2_nx_out
     v2_nx_out=$(V2rayNginxListDomain)
     ShowCaptured "V2rayNginxListDomain" "$v2_nx_out"
