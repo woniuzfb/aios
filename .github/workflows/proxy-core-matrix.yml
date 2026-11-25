@@ -272,7 +272,7 @@ jobs:
 
       - name: Upload linux-nonroot results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-nonroot-results
           path: ci-artifacts/linux-nonroot/
@@ -539,7 +539,7 @@ jobs:
 
       - name: Upload linux-root-systemd results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-root-systemd-results
           path: ci-artifacts/linux-root-systemd/
@@ -557,14 +557,14 @@ jobs:
     steps:
       - name: Download linux-nonroot results
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-nonroot-results
           path: downloaded/linux-nonroot
 
       - name: Download linux-root-systemd results
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-root-systemd-results
           path: downloaded/linux-root-systemd
