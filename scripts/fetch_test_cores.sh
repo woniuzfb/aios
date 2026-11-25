@@ -144,7 +144,9 @@ fetch_core()
 
 fetch_geodata()
 {
-    if [ -s "$GEODATA_DIR/geoip.dat" ] && [ -s "$GEODATA_DIR/geosite.dat" ]
+    if [ -s "$GEODATA_DIR/geoip.dat" ] && [ -s "$GEODATA_DIR/geosite.dat" ] \
+        && verify_pinned_sha "geodata/geoip.dat" "$GEODATA_DIR/geoip.dat" 2> /dev/null \
+        && verify_pinned_sha "geodata/geosite.dat" "$GEODATA_DIR/geosite.dat" 2> /dev/null
     then
         printf '[OK] geodata already present\n'
         return 0
@@ -154,8 +156,13 @@ fetch_geodata()
     then
         cp "$LUCI_CORES/geodata/geoip.dat" "$GEODATA_DIR/geoip.dat"
         cp "$LUCI_CORES/geodata/geosite.dat" "$GEODATA_DIR/geosite.dat"
-        printf '[COPY] geodata from luci-app-aios/.memory/cores\n'
-        return 0
+        rm -f "$GEODATA_DIR/geoip.dat.sha256" "$GEODATA_DIR/geosite.dat.sha256"
+        if verify_pinned_sha "geodata/geoip.dat" "$GEODATA_DIR/geoip.dat" 2> /dev/null \
+            && verify_pinned_sha "geodata/geosite.dat" "$GEODATA_DIR/geosite.dat" 2> /dev/null
+        then
+            printf '[COPY] geodata from luci-app-aios/.memory/cores\n'
+            return 0
+        fi
     fi
 
     local tag="202611222203"
@@ -164,10 +171,11 @@ fetch_geodata()
     tmpd=$(mktemp -d "${TMPDIR:-/tmp}/aios-geo.XXXXXX")
     for f in geoip.dat geosite.dat
     do
-        curl -fsSL -m 60 "${base}/${f}" -o "$tmpd/${f}"
-        curl -fsSL -m 30 "${base}/${f}.sha256sum" -o "$tmpd/${f}.sha256sum"
+        curl -fsSL --retry 3 --retry-delay 2 -m 60 "${base}/${f}" -o "$tmpd/${f}"
+        curl -fsSL --retry 3 --retry-delay 2 -m 30 "${base}/${f}.sha256sum" -o "$tmpd/${f}.sha256sum"
         verify_dgst "$tmpd/${f}" "$tmpd/${f}.sha256sum"
         mv -f "$tmpd/${f}" "$GEODATA_DIR/${f}"
+        rm -f "$GEODATA_DIR/${f}.sha256"
     done
     rm -rf "$tmpd"
     printf '[DL] geodata %s verified\n' "$tag"

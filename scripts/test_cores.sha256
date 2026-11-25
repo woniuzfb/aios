@@ -1,7 +1,7 @@
 # Pinned SHA256 checksums for scripts/fetch_test_cores.sh (format: <sha256>  <key>)
-# Platform-independent GeoData (Loyalsoldier/v2ray-rules-dat)
-283119b5c7679d3cc9a750e1b6da693ecfd42e5d5036b57f0c2d0505f76e36f4  geodata/geoip.dat
-daaae9760ab5e687845817967257a6e9883d42ac9c09f4b774a32bd5cb39b4d7  geodata/geosite.dat
+# Platform-independent GeoData (Loyalsoldier/v2ray-rules-dat 202611222203)
+d4ec4c5e5d5a38c1399964ea9fd8c94288426a3b31b483904b67819fc07f4466  geodata/geoip.dat
+94e6f902cfa9d4d70ebf3c0138d9cc24175b51885c490cb673ee54f5e1b6ce6f  geodata/geosite.dat
 # Xray cores (macos-arm64-v8a)
 9607c03515859495f7e3ed312750a4741d8b3603fe5dd198633a66be1939d7bc  xray/v25.9.11/macos-arm64-v8a/xray
 c4d7265a0711e0db16c235255b3d6e85e0712464519de0a1e7384873e14fcced  xray/v26.5.3/macos-arm64-v8a/xray

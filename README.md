@@ -1,6 +1,6 @@
 # AIOS (All In One Script)
 
-纯 Bash + `jq` 驱动的多服务运维与媒体流管理面板，支持 Linux 与 macOS，通过模块化源码静态打包为单文件 `aios.sh`，运行时按命令软链自动分发至各管理模块。
+纯 Bash（兼容 Bash 3.2+）+ `jq` 驱动的多服务运维与媒体流管理面板，支持 Linux 与 macOS，内置多语言国际化（`zh_CN` / `en` 等），通过模块化源码静态打包为单文件 `aios.sh`，运行时按命令软链自动分发至各管理模块。
 
 <details>
 <summary><strong>目录</strong></summary>
@@ -32,24 +32,24 @@ wget https://woniuzfb.github.io/aios/aios.sh && bash aios.sh
 
 ## 命令入口一览
 
-| 命令  | 模块          | 说明                                                            |
-| :---- | :------------ | :-------------------------------------------------------------- |
-| `tv`  | FFmpeg / IPTV | HLS / FLV 推流、多码率转码、监控、防盗链、计划任务、节目表、VIP |
-| `x`   | Xray          | Xray-core 入站/出站/路由/DNS/策略/流量统计/分享链接与二维码     |
-| `v2`  | V2Ray         | V2Ray v4/v5 入站/出站/路由/DNS/策略/流量统计/分享链接           |
-| `nx`  | Nginx         | 编译/包安装、crossplane 五级配置管理、SNI/SSL/ALPN 分流         |
-| `or`  | OpenResty     | 编译/包安装、Nginx + Lua 扩展配置管理                           |
-| `cx`  | Xtream Codes  | Xtream Codes / Stalker 账号与频道管理                           |
-| `dr`  | Docker        | Docker / Compose 与常用服务编排                                 |
-| `ha`  | HAProxy       | 动/静态链接 PCRE / zlib / Lua / OpenSSL / QuicTLS 编译与管理    |
-| `rc`  | Rclone        | Remote / Mount / Serve / Sync 管理                              |
-| `ali` | OpenList      | OpenList 服务与账号管理                                         |
-| `cw`  | Calibre       | Calibre-Web 与 KCC 电子书转换                                   |
-| `lhh` | LianHuanHua   | 连环画资源抓取与整理                                            |
-| `arm` | Armbian       | 旁路由 OpenWrt、透明代理、DNSCrypt、Docker、NAT 检测            |
-| `pve` | Proxmox VE    | NBFC、DNSCrypt、OpenWrt 透明代理与源管理                        |
-| `cf`  | Cloudflare    | 多账号 CFP / Workers 管理与自动切换监控（已失效，仅归档）       |
-| `ibm` | IBM CF        | IBM Cloud Foundry 应用管理（已失效，仅归档）                    |
+| 命令  | 模块          | 说明                                                                 |
+| :---- | :------------ | :------------------------------------------------------------------- |
+| `tv`  | FFmpeg / IPTV | HLS / FLV 推流、多码率转码、监控、防盗链、计划任务、节目表、VIP      |
+| `x`   | Xray          | Xray-core 多版本隔离管理、出入站/路由/DNS/策略/统计/预设/URI 导入    |
+| `v2`  | V2Ray         | V2Ray 5.x（`jsonv4`/`jsonv5`）多版本隔离管理、出入站/路由/统计/导入  |
+| `nx`  | Nginx         | 编译/包安装、crossplane 五级配置管理、SNI/SSL/ALPN 分流              |
+| `or`  | OpenResty     | 编译/包安装、Nginx + Lua 扩展配置管理                                |
+| `cx`  | Xtream Codes  | Xtream Codes / Stalker 账号与频道管理                                |
+| `dr`  | Docker        | Docker / Compose 与常用服务编排                                      |
+| `ha`  | HAProxy       | 动/静态链接 PCRE / zlib / Lua / OpenSSL / QuicTLS 编译与管理         |
+| `rc`  | Rclone        | Remote / Mount / Serve / Sync 管理                                   |
+| `ali` | OpenList      | OpenList 服务与账号管理                                              |
+| `cw`  | Calibre       | Calibre-Web 与 KCC 电子书转换                                        |
+| `lhh` | LianHuanHua   | 连环画资源抓取与整理                                                 |
+| `arm` | Armbian       | 旁路由 OpenWrt、透明代理、DNSCrypt、Docker、NAT 检测                 |
+| `pve` | Proxmox VE    | NBFC、DNSCrypt、OpenWrt 透明代理与源管理                             |
+| `cf`  | Cloudflare    | 多账号 CFP / Workers 管理与自动切换监控（已失效，仅归档）            |
+| `ibm` | IBM CF        | IBM Cloud Foundry 应用管理（已失效，仅归档）                         |
 
 ---
 
@@ -59,11 +59,12 @@ wget https://woniuzfb.github.io/aios/aios.sh && bash aios.sh
 wget https://woniuzfb.github.io/aios/x.sh && bash x.sh
 ```
 
-输入 `x` 打开 Xray 管理面板：
+输入 `x` 打开 Xray 管理面板（支持 Xray-core **`25.9.11` – `26.11.9`**）：
 
-- 完整支持 VLESS / VMess / Trojan / Shadowsocks（含 2022 多用户）/ Hysteria / WireGuard / MASQUE 入站与出站配置。
-- 支持 `raw` / `ws` / `grpc` / `xhttp` / `httpupgrade` / `kcp` 及 TLS / REALITY（自动由私钥派生 `pbk` 并输出安全分享链接与终端二维码，绝不泄露服务端私钥）。
-- 内置路由规则、DNS、Policy、Reverse 与 API 流量统计/重置。
+- **完全命名空间隔离与多版本管理**：配置、多版本内核槽位、共享 GeoData（`Loyalsoldier/v2ray-rules-dat`）、备份、日志与事务状态统一收敛在 `$AIOS_ROOT/proxy`，对外仅暴露固定软链 `aios-xray` 与独立服务 `aios-xray.service`（不触碰宿主机公共 `xray`）；支持在线安装/本地导入多版本、原子切换与失败自动回滚（含 `last-known-good` 槽位保护）。
+- **Feature 级版本感知与事务写盘**：自动按当前内核版本适配 `flatOutbounds`、`inboundUsersKey`、`dnsRewriteKeys`、`streamMethodKey`、`freedom.finalRules`、`ssUot` 升级拦截与公网明文 VLESS/Trojan 拦截；所有配置修改均走统一事务（排他锁 → 同身份 `-test` 校验 → 动态 Capabilities 与 `/dev/net/tun` 预检 → 原子写盘 → 就绪检查与失败回滚）。
+- **全协议与高级能力**：完整支持 VLESS（含内联 `reverse`）/ VMess / Trojan / Shadowsocks（含 2022 多用户）/ Hysteria / WireGuard / TUN / MASQUE 入站与出站，支持 `raw` / `ws` / `grpc` / `xhttp` / `httpupgrade` / `kcp` / `finalmask` 及 TLS / REALITY（自动派生 `pbk`/`pqv`、多用户按账号选打二维码，绝不泄露服务端私钥）。
+- **运维与便捷工具**：内置路由、DNS、Policy、顶层高级配置（`log`/`api`/`metrics`/`observatory`/`burstObservatory`/`version`/`env`）、API 流量统计/重置、Nginx/ACME 证书联动、一键预设模板（动态生成 X25519 密钥对）及多协议 URI 批量导入（含脱敏 Diff 预览）。
 
 ---
 
@@ -73,7 +74,11 @@ wget https://woniuzfb.github.io/aios/x.sh && bash x.sh
 wget https://woniuzfb.github.io/aios/v2.sh && bash v2.sh
 ```
 
-输入 `v2` 打开 V2Ray 管理面板，兼容 V2Ray v4 与 v5（无 `v2ctl` 时自动回退 `v2ray api` / `v2ray tls cert`），支持 VMess / VLESS / Trojan / Shadowsocks / Hysteria2 等协议与分享链接生成。
+输入 `v2` 打开 V2Ray 管理面板（支持 V2Ray 5.x **`5.18.0` – `5.56.0`**，不再支持 V2Ray 4.x 与 `v2ctl`）：
+
+- **完全隔离与双配置格式**：使用独立 `aios-v2ray` 与 `aios-v2ray.service`，隔离 `XDG_DATA_HOME`/`XDG_DATA_DIRS` 防止宿主机 GeoData 劫持；原生支持 **`jsonv4`（`-format json`）与 `jsonv5`（`-format jsonv5`）**双格式生成与一键事务切换（自动回滚与崩溃恢复）。
+- **全协议与 v5 能力**：支持 VMess / VLESS / Trojan / Shadowsocks / Shadowsocks 2022（`jsonv5`）/ Hysteria2（`hy2Settings` 与 `transportSettings` 分离生成）/ Loopback、传输层 `packetEncoding` / `bindToDevice` / `mptcp`、`services.tun` / `services.burstObservatory` / `browserForwarder`。
+- **统计、证书与导入**：统一使用 `aios-v2ray api stats`（支持单用户与全量流量查询）与 `aios-v2ray tls cert`，支持 Nginx/ACME 证书权限联动、一键预设模板与多协议 URI 批量导入。
 
 ---
 
@@ -265,11 +270,21 @@ wget https://woniuzfb.github.io/aios/ibm.sh && bash ibm.sh
 # 静态打包生成单文件 aios.sh（或同时安装软链）
 ./make [install]
 
-# 运行非交互式全量自动化测试（8 大套件：core / nginx / xray / v2ray / matrix / types / iptv / e2e）
+# 拉取锁定版本的多版本 Xray/V2Ray 测试内核与 GeoData（支持 SHA256 校验）
+bash scripts/fetch_test_cores.sh
+
+# 运行非交互式全量自动化测试（9 大套件：core / nginx / xray / v2ray / matrix / types / iptv / core_matrix / e2e）
 bash test/run
 
+# 严格核心矩阵模式（缺失任一测试内核或 GeoData 直接失败，CI 同款门禁）
+AIOS_REQUIRE_CORE_MATRIX=1 bash test/run
+
 # 查看指定套件的真实渲染与 JSON 输出
-bash test/run --show-output [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e]
+bash test/run --show-output [all|core|nginx|xray|v2ray|matrix|types|iptv|core_matrix|e2e]
+
+# 多语言模板同步与校验（要求 zh_CN.pot 与 aios.sh.pot 严格 1:1 一致）
+./i18n/make-pot.sh zh_CN en
+./i18n/make-pot.sh b
 
 # 交互式开发调试入口
 ./debug tt
