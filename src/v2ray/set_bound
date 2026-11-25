@@ -168,11 +168,6 @@ V2raySetInboundProtocol()
     echo
     protocol_options=( 'vmess' 'vless' 'http' 'socks' 'shadowsocks' 'dokodemo-door' 'trojan' )
 
-    if ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "shadowsocks2022"
-    then
-        protocol_options+=('shadowsocks2022')
-    fi
-
     if ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "hysteria2"
     then
         protocol_options+=('hysteria2')
@@ -389,7 +384,10 @@ V2raySetCertificateFile()
     then
         cp -f "$certificate_file" "$cert_dir/"
         certificate_file="$cert_dir/${certificate_file##*/}"
-        ProxySyncCertPerms "v2ray" "$certificate_file" ""
+        if ! ProxySyncCertPerms "v2ray" "$certificate_file" ""
+        then
+            return 1
+        fi
         Println "$(eval_gettext "\$info 已复制证书到 \$certificate_file 并同步 aios-v2ray 读权限")"
     else
         Println "$(eval_gettext "\$error 证书不存在: \$certificate_file")"
@@ -413,7 +411,10 @@ V2raySetKeyFile()
     then
         cp -f "$key_file" "$cert_dir/"
         key_file="$cert_dir/${key_file##*/}"
-        ProxySyncCertPerms "v2ray" "" "$key_file"
+        if ! ProxySyncCertPerms "v2ray" "" "$key_file"
+        then
+            return 1
+        fi
         Println "$(eval_gettext "\$info 已复制密钥到 \$key_file 并同步 aios-v2ray 读权限")"
     else
         Println "$(eval_gettext "\$error 密钥不存在: \$key_file")"
@@ -518,7 +519,10 @@ V2raySetCertificates()
                 fi
             fi
 
-            ProxySyncCertPerms "v2ray" "$cert_dir/$domain.crt" "$cert_dir/$domain.key"
+            if ! ProxySyncCertPerms "v2ray" "$cert_dir/$domain.crt" "$cert_dir/$domain.key"
+            then
+                return 1
+            fi
             JQs build certificate '{
                 "usage": $usage,
                 "certificateFile": $certificateFile,

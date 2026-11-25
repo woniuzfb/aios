@@ -15,6 +15,9 @@ V2rayGetInbounds()
         return 0
     fi
 
+    local v2_fmt=""
+    v2_fmt=$(ProxyGetV2rayFormat)
+
     SetDelimiters
     local real_idx s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
     while IFS="$field_sep" read -r real_idx s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
@@ -26,7 +29,7 @@ V2rayGetInbounds()
         inbounds_stream_tls_certificates_certificate_file[real_idx]="$s_cert_file"
         inbounds_stream_tls_certificates_key_file[real_idx]="$s_key_file"
         inbounds_stream_tls_certificates_certificate[real_idx]="$s_cert"
-    done < <($JQ_FILE -r --arg sep "$field_sep" '
+    done < <($JQ_FILE -r --arg sep "$field_sep" --arg fmt "$v2_fmt" '
         def obj($x): if ($x | type) == "object" then $x else {} end;
         def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
         (if (.inbounds | type) == "array" then .inbounds else [] end)
@@ -36,7 +39,14 @@ V2rayGetInbounds()
         | .value as $ib
         | obj($ib.streamSettings) as $st
         | obj($st.tlsSettings) as $tls
-        | arr_objs($tls.certificates) as $certs
+        | obj($st.securitySettings) as $sec
+        | (
+            if $fmt == "jsonv5" then
+                (if ($sec.certificate | type) == "array" then arr_objs($sec.certificate) else arr_objs($tls.certificates) end)
+            else
+                (if ($tls.certificates | type) == "array" then arr_objs($tls.certificates) else arr_objs($sec.certificate) end)
+            end
+          ) as $certs
         | [
             ($idx | tostring),
             ($st.network // $st.transport // "tcp" | tostring),
@@ -49,7 +59,7 @@ V2rayGetInbounds()
                 // ""
                 | tostring
             ),
-            ($tls.serverName // obj($st.securitySettings).serverName // "" | tostring),
+            (if $fmt == "jsonv5" then ($sec.serverName // $tls.serverName // "") else ($tls.serverName // $sec.serverName // "") end | tostring),
             ($certs | map(.usage // "encipherment" | tostring) | join("|")),
             ($certs | map(.certificateFile // "" | tostring) | join("|")),
             ($certs | map(.keyFile // "" | tostring) | join("|")),

@@ -112,7 +112,13 @@ V2raySetAdvanced()
             v2_ver=$(ProxyGetTargetVersion "v2ray")
             v2_fmt=$(ProxyGetV2rayFormat)
 
-            if ! ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "v5ServicesTun"
+            local tun_feature="v4Services"
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                tun_feature="v5ServicesTun"
+            fi
+
+            if ! ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "$tun_feature"
             then
                 Println "$(eval_gettext "\$error 当前 V2Ray (\$v2_ver / \$v2_fmt) 不支持 services.tun, 请先切换为 jsonv5 格式并使用支持的内核版本")\n"
                 return 1

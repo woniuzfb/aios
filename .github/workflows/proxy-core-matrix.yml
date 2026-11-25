@@ -25,6 +25,7 @@ jobs:
       - name: Fetch pinned multi-version Xray/V2Ray cores & GeoData
         env:
           AIOS_CORES_SHA256_FILE: scripts/test_cores.sha256
+          AIOS_REQUIRE_PINNED_SHA256: "1"
         run: bash scripts/fetch_test_cores.sh
 
       - name: Syntax, Lint, Build & Full Test Suite (Strict Core Matrix)

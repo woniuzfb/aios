@@ -42,14 +42,21 @@ V2rayInstall()
 V2rayUpdate()
 {
     local req_tag="${1:-v${V2RAY_LATEST_TESTED_VER}}"
+    local norm_ver="" target_tag="$req_tag"
+    if norm_ver=$(ProxyNormalizeVersion "$req_tag")
+    then
+        target_tag="v${norm_ver}"
+        req_tag="$target_tag"
+    fi
+
     DepsCheck
     JQInstall
     ShFileUpdate v2ray
     ProxyEnsureDirs
 
-    if ProxyCoreInstall "v2ray" "$req_tag"
+    if ProxyCoreInstall "v2ray" "$target_tag"
     then
-        if ProxyCoreSwitch "v2ray" "$req_tag"
+        if ProxyCoreSwitch "v2ray" "$target_tag"
         then
             Println "$(eval_gettext "\$info aios-v2ray 已安全切换至 \$req_tag")\n"
         else

@@ -437,8 +437,14 @@ ProxyParseUriToOutbound()
                 local st
                 st=$(ProxyBuildStreamSettings "v2ray" "$ver" "$format" "hy2" "tls" \
                     "$($JQ_FILE -n --arg sni "${sni:-$host}" --arg pw "$auth" '{sni:$sni,password:$pw}')")
-                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --argjson st "$st" \
-                    '{tag:$tag,protocol:"hysteria2",settings:{servers:[{address:$addr,port:$port}]},streamSettings:$st}'
+                if [ "$format" == "jsonv5" ]
+                then
+                    $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --argjson st "$st" \
+                        '{tag:$tag,protocol:"hysteria2",settings:{server:[{address:$addr,port:$port}]},streamSettings:$st}'
+                else
+                    $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --argjson st "$st" \
+                        '{tag:$tag,protocol:"hysteria2",settings:{servers:[{address:$addr,port:$port}]},streamSettings:$st}'
+                fi
             fi
         ;;
         *)
@@ -564,8 +570,9 @@ ProxyImportUrisInteractive()
     ')
 
     local tmp_old="" tmp_new="" diff_out=""
-    tmp_old=$(mktemp "${TMPDIR:-/tmp}/aios_uri_old.XXXXXX")
-    tmp_new=$(mktemp "${TMPDIR:-/tmp}/aios_uri_new.XXXXXX")
+    mkdir -p "$PROXY_TMP_ROOT" || return 1
+    tmp_old=$(umask 077 && mktemp "${PROXY_TMP_ROOT}/aios_uri_old.XXXXXX") || return 1
+    tmp_new=$(umask 077 && mktemp "${PROXY_TMP_ROOT}/aios_uri_new.XXXXXX") || { rm -f "$tmp_old"; return 1; }
     printf '%s\n' "$existing_json" | $JQ_FILE '.' | ProxyRedactSecrets > "$tmp_old"
     printf '%s\n' "$candidate_json" | $JQ_FILE '.' | ProxyRedactSecrets > "$tmp_new"
 

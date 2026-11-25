@@ -4,9 +4,18 @@ RunSuiteV2ray()
 
     local tmpdir
     tmpdir=$(mktemp -d)
-    local orig_v2_root="${V2_ROOT:-}" orig_v2_backup="${V2_BACKUP_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    local orig_v2_root="${V2_ROOT:-}" orig_v2_backup="${V2_BACKUP_ROOT:-}" orig_v2_log="${V2_LOG_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    local orig_v2_svc_resolve
+    orig_v2_svc_resolve=$(declare -f ServiceResolveLabel)
+    # shellcheck disable=SC2329
+    ServiceResolveLabel()
+    {
+        service_label="$1"
+        service_file="$tmpdir/systemd/${service_label}.service"
+    }
     V2_ROOT="$tmpdir"
     V2_BACKUP_ROOT="$tmpdir/backups"
+    V2_LOG_ROOT="$tmpdir/logs"
     PROXY_LOCK_FILE="$tmpdir/proxy.lock"
     V2_CONFIG="$tmpdir/v2ray.json"
 
@@ -334,10 +343,176 @@ V2SEOF
     AssertNotContains "$v2_share_out" "type=raw" "V2Ray share link never emits Xray-only type=raw"
     AssertContains "$v2_share_out" "hysteria2://hy2-secret@203.0.113.20:8443?sni=hy2.example.test#v2-hy2" "V2Ray hysteria2 share link formats cleanly without type/security"
 
+    # ARCH-06a: hysteria2 hy2Settings (jsonv4) & transportSettings (jsonv5) share link export
+    local v2_hy2_share_cfg="$tmpdir/v2_hy2_share.json"
+    cat > "$v2_hy2_share_cfg" <<'V2HY2EOF'
+{
+  "inbounds": [
+    {
+      "tag": "v2-hy2-v4",
+      "listen": "0.0.0.0",
+      "port": 8444,
+      "protocol": "hysteria2",
+      "settings": {},
+      "streamSettings": {"network": "hy2", "security": "tls", "tlsSettings": {"serverName": "hy2v4.example.test"}, "hy2Settings": {"password": "pw-hy2-v4"}}
+    },
+    {
+      "tag": "v2-hy2-v5",
+      "listen": "0.0.0.0",
+      "port": 8445,
+      "protocol": "hysteria2",
+      "settings": {},
+      "streamSettings": {"transport": "hysteria2", "security": "tls", "securitySettings": {"serverName": "hy2v5.example.test"}, "transportSettings": {"password": "pw-hy2-v5"}}
+    }
+  ]
+}
+V2HY2EOF
+    local v2_hy2_share_out
+    v2_hy2_share_out=$(ProxyRenderShareLinks "$v2_hy2_share_cfg" "203.0.113.20" "" "v2ray")
+    AssertContains "$v2_hy2_share_out" "hysteria2://pw-hy2-v4@203.0.113.20:8444?sni=hy2v4.example.test#v2-hy2-v4" "ARCH-06: hysteria2 hy2Settings share link exported"
+    AssertContains "$v2_hy2_share_out" "hysteria2://pw-hy2-v5@203.0.113.20:8445?sni=hy2v5.example.test#v2-hy2-v5" "ARCH-06: hysteria2 jsonv5 transportSettings share link exported"
+
+    # ARCH-05: V2raySetAdvanced services.tun allowed on both jsonv4 (>=5.17.0) and jsonv5 (>=5.9.0)
+    local orig_v2_fmt="${AIOS_V2RAY_FORMAT:-}" orig_v2_ver="${AIOS_V2RAY_TARGET_VERSION:-}" orig_v2_dist="${dist:-}"
+    dist="mac"
+    AIOS_V2RAY_FORMAT="jsonv4"
+    AIOS_V2RAY_TARGET_VERSION="5.18.0"
+    MockInquirerReset
+    MockInquirerPush "4" "tun-v4" "1500"
+    AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv4 >= 5.17.0" V2raySetAdvanced
+    AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv4 tun drained"
+    AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v4" "ARCH-05: jsonv4 writes services.tun.name"
+
+    AIOS_V2RAY_FORMAT="jsonv5"
+    AIOS_V2RAY_TARGET_VERSION="5.56.0"
+    MockInquirerReset
+    MockInquirerPush "4" "tun-v5" "1420"
+    AssertOk "ARCH-05: V2raySetAdvanced allows services.tun on jsonv5 >= 5.9.0" V2raySetAdvanced
+    AssertInquirerDrained "ARCH-05: V2raySetAdvanced jsonv5 tun drained"
+    AssertJsonEq "$V2_CONFIG" '.services.tun.name' "tun-v5" "ARCH-05: jsonv5 writes services.tun.name"
+    dist="$orig_v2_dist"
+
+    # ARCH-06b: jsonv5 certificate read/write via V2rayGetInbounds & V2rayConfigDomain
+    local orig_nginx_prefix="${nginx_prefix:-}"
+    nginx_prefix="/nonexistent/nginx"
+    cat > "$V2_CONFIG" <<'V2V5CERT'
+{
+  "inbounds": [
+    {
+      "tag": "v5-tls-in",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {"users": ["00000000-0000-4000-8000-000000000555"]},
+      "streamSettings": {
+        "transport": "tcp",
+        "security": "tls",
+        "securitySettings": {
+          "serverName": "v5cert.example.test",
+          "certificate": [
+            {"usage": "encipherment", "certificateFile": "/tmp/old-v5.crt", "keyFile": "/tmp/old-v5.key"}
+          ]
+        }
+      }
+    }
+  ]
+}
+V2V5CERT
+    V2rayGetInbounds
+    AssertEq "v5cert.example.test" "${inbounds_stream_tls_server_name[0]}" "ARCH-06: V2rayGetInbounds reads jsonv5 securitySettings.serverName"
+    AssertEq "/tmp/old-v5.crt" "${inbounds_stream_tls_certificates_certificate_file[0]}" "ARCH-06: V2rayGetInbounds reads jsonv5 securitySettings.certificate[].certificateFile"
+    AssertEq "/tmp/old-v5.key" "${inbounds_stream_tls_certificates_key_file[0]}" "ARCH-06: V2rayGetInbounds reads jsonv5 securitySettings.certificate[].keyFile"
+
+    printf 'CERT-DATA\n' > "$tmpdir/v5new.crt"
+    printf 'KEY-DATA\n' > "$tmpdir/v5new.key"
+    MockInquirerReset
+    MockInquirerPush "0" "1" "$tmpdir/v5new.crt"
+    AssertOk "ARCH-06: V2rayConfigDomain updates jsonv5 certificateFile" V2rayConfigDomain <<< "1"
+    AssertInquirerDrained "ARCH-06: V2rayConfigDomain jsonv5 cert path drained"
+    AssertJsonEq "$V2_CONFIG" '.inbounds[0].streamSettings.securitySettings.certificate[0].certificateFile' "$V2_ROOT/certs/v5new.crt" "ARCH-06: jsonv5 certificateFile updated in securitySettings.certificate"
+    AssertJsonEq "$V2_CONFIG" '.inbounds[0].streamSettings | has("tlsSettings")' "false" "ARCH-06: jsonv5 cert update does not create tlsSettings"
+
+    MockInquirerReset
+    MockInquirerPush "0" "2" "$tmpdir/v5new.key"
+    AssertOk "ARCH-06: V2rayConfigDomain updates jsonv5 keyFile" V2rayConfigDomain <<< "1"
+    AssertInquirerDrained "ARCH-06: V2rayConfigDomain jsonv5 key path drained"
+    AssertJsonEq "$V2_CONFIG" '.inbounds[0].streamSettings.securitySettings.certificate[0].keyFile' "$V2_ROOT/certs/v5new.key" "ARCH-06: jsonv5 keyFile updated in securitySettings.certificate"
+
+    # ARCH-04: V2rayDomainUpdateCert --reloadcmd & V2raySetCertificateFile/V2raySetKeyFile ProxySyncCertPerms check
+    local orig_home="$HOME" orig_ca_server="${ca_server:-}" orig_sync_perms
+    orig_sync_perms=$(declare -f ProxySyncCertPerms)
+    HOME="$tmpdir/fake_home"
+    mkdir -p "$HOME/.acme.sh"
+    cat > "$HOME/.acme.sh/acme.sh" <<'MOCKACME'
+#!/bin/bash
+printf '%s\n' "$*" >> "$HOME/acme_calls.log"
+prev=""
+for arg in "$@"
+do
+    if [ "$prev" == "--fullchainpath" ] || [ "$prev" == "--keypath" ]
+    then
+        mkdir -p "$(dirname "$arg")"
+        printf 'MOCK-PEM\n' > "$arg"
+    fi
+    prev="$arg"
+done
+exit 0
+MOCKACME
+    chmod +x "$HOME/.acme.sh/acme.sh"
+    ca_server="letsencrypt"
+    AssertOk "ARCH-04: V2rayDomainUpdateCert succeeds with mocked acme.sh" V2rayDomainUpdateCert "cert.example.test"
+    local acme_log=""
+    acme_log=$(cat "$HOME/acme_calls.log")
+    AssertContains "$acme_log" "--reloadcmd" "ARCH-04: update_cert passes --reloadcmd to acme.sh"
+    AssertContains "$acme_log" "setfacl -m u:aios-v2ray:x" "ARCH-04: --reloadcmd restores aios-v2ray dir ACL"
+    AssertContains "$acme_log" "setfacl -m u:aios-v2ray:r" "ARCH-04: --reloadcmd restores aios-v2ray cert/key ACL"
+    AssertContains "$acme_log" "chgrp aios-cert" "ARCH-04: --reloadcmd falls back to aios-cert group"
+    AssertContains "$acme_log" "systemctl try-reload-or-restart aios-v2ray" "ARCH-04: --reloadcmd reloads aios-v2ray"
+    AssertContains "$acme_log" "getent group aios-cert > /dev/null 2>&1 || groupadd -r aios-cert" "ARCH-R1: --reloadcmd idempotently creates aios-cert group without setfacl"
+    AssertContains "$acme_log" "usermod -aG aios-cert aios-v2ray" "ARCH-R1: --reloadcmd adds aios-v2ray to aios-cert group"
+    AssertContains "$acme_log" "chmod 750" "ARCH-R1: --reloadcmd applies chmod 750 on cert dir"
+    AssertContains "$acme_log" "chmod 640" "ARCH-R1: --reloadcmd applies chmod 640 on cert/key files"
+    AssertNotContains "$acme_log" "chmod 644" "ARCH-R1: --reloadcmd omits world-readable chmod 644"
+    AssertOk "ARCH-R1: --reloadcmd orders groupadd -> usermod -> chgrp -> chmod 750 -> chmod 640" bash -c '[[ "$1" == *"groupadd -r aios-cert"*"usermod -aG aios-cert aios-v2ray"*"chgrp aios-cert"*"chmod 750"*"chmod 640"* ]]' _ "$acme_log"
+
+    # shellcheck disable=SC2329
+    ProxySyncCertPerms()
+    {
+        return 1
+    }
+    AssertFail "ARCH-04: V2rayDomainUpdateCert fails when ProxySyncCertPerms fails" V2rayDomainUpdateCert "cert.example.test"
+    MockInquirerReset
+    MockInquirerPush "$tmpdir/v5new.crt"
+    AssertFail "ARCH-04: V2raySetCertificateFile fails when ProxySyncCertPerms fails" V2raySetCertificateFile
+    AssertInquirerDrained "ARCH-04: V2raySetCertificateFile failure drained"
+    MockInquirerReset
+    MockInquirerPush "$tmpdir/v5new.key"
+    AssertFail "ARCH-04: V2raySetKeyFile fails when ProxySyncCertPerms fails" V2raySetKeyFile
+    AssertInquirerDrained "ARCH-04: V2raySetKeyFile failure drained"
+
+    eval "$orig_sync_perms"
+    HOME="$orig_home"
+    ca_server="$orig_ca_server"
+    nginx_prefix="$orig_nginx_prefix"
+    if [ -n "$orig_v2_fmt" ]
+    then
+        AIOS_V2RAY_FORMAT="$orig_v2_fmt"
+    else
+        unset AIOS_V2RAY_FORMAT
+    fi
+    if [ -n "$orig_v2_ver" ]
+    then
+        AIOS_V2RAY_TARGET_VERSION="$orig_v2_ver"
+    else
+        unset AIOS_V2RAY_TARGET_VERSION
+    fi
+
     ShowCaptured "Final Generated V2Ray Config JSON" "$(cat "$V2_CONFIG")"
 
+    eval "$orig_v2_svc_resolve"
     V2_ROOT="${orig_v2_root}"
     V2_BACKUP_ROOT="${orig_v2_backup}"
+    V2_LOG_ROOT="${orig_v2_log}"
     PROXY_LOCK_FILE="${orig_proxy_lock}"
     rm -rf "$tmpdir"
 }

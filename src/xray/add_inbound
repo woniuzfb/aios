@@ -412,6 +412,14 @@ XrayAddInbound()
         inquirer text_input "$(gettext "TLS serverName (可留空)")" tls_sni ""
         inquirer text_input "$(gettext "证书文件路径 certificateFile")" tls_cert ""
         inquirer text_input "$(gettext "私钥文件路径 keyFile")" tls_key ""
+
+        if [ -n "$tls_cert" ] || [ -n "$tls_key" ]
+        then
+            if ! ProxySyncCertPerms "xray" "$tls_cert" "$tls_key"
+            then
+                return 1
+            fi
+        fi
     elif [ "$security" == "reality" ]
     then
         inquirer text_input "$(gettext "REALITY target (如 www.example.com:443)")" r_target ""

@@ -32,18 +32,37 @@ ProxyBuildPresetConfig()
                 return 1
             fi
 
+            local gen_uuid="" gen_sid=""
+            gen_uuid=$("$xray_bin" uuid 2> /dev/null | tr -d '\r\n ')
+            if [ -z "$gen_uuid" ]
+            then
+                gen_uuid=$(GenUuid)
+            fi
+
+            if [ -z "$gen_uuid" ]
+            then
+                Println "$(eval_gettext "\$error 生成随机 UUID 失败")\n" >&2
+                return 1
+            fi
+
+            if ! gen_sid=$(openssl rand -hex 4 | tr -d '\r\n ') || [ -z "$gen_sid" ]
+            then
+                Println "$(eval_gettext "\$error 生成随机 shortId 失败")\n" >&2
+                return 1
+            fi
+
             local u_key stream_opts stream_json
             u_key=$(ProxyXrayInboundUserKey "vless" "$ver")
-            stream_opts=$($JQ_FILE -n --arg pk "$priv_key" '{"target":"www.example.com:443","server_names":["www.example.com"],"private_key":$pk,"short_ids":["01234567"]}')
+            stream_opts=$($JQ_FILE -n --arg pk "$priv_key" --arg sid "$gen_sid" '{"target":"www.example.com:443","server_names":["www.example.com"],"private_key":$pk,"short_ids":[$sid]}')
             stream_json=$(ProxyBuildStreamSettings "xray" "$ver" "json" "raw" "reality" "$stream_opts")
-            $JQ_FILE -n --arg uk "$u_key" --argjson st "$stream_json" '{
+            $JQ_FILE -n --arg uk "$u_key" --arg uid "$gen_uuid" --argjson st "$stream_json" '{
                 log: {logLevel: "warning"},
                 inbounds: [{
                     tag: "vless-reality-in",
                     listen: "0.0.0.0",
                     port: 443,
                     protocol: "vless",
-                    settings: {decryption: "none", ($uk): [{id: "11111111-1111-4111-8111-111111111111", flow: "xtls-rprx-vision", email: "user@example.com"}]},
+                    settings: {decryption: "none", ($uk): [{id: $uid, flow: "xtls-rprx-vision", email: "user@example.com"}]},
                     streamSettings: $st,
                     sniffing: {enabled: true, destOverride: ["http", "tls", "quic"]}
                 }],

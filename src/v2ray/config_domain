@@ -217,6 +217,9 @@ V2rayConfigDomain()
     certificate_file="${certificate_files[certificates_index]:-}"
     local is_inline_cert="${certificates[certificates_index]:-}"
 
+    local v2_fmt=""
+    v2_fmt=$(ProxyGetV2rayFormat)
+
     echo
     local certificates_options=( "$(gettext "更新证书")" "$(gettext "修改证书路径")" "$(gettext "修改密钥路径")" )
     local certificates_options_index=0
@@ -261,8 +264,13 @@ V2rayConfigDomain()
             local certificate=""
             certificate=$($JQ_FILE --arg usage "${usages[certificates_index]}" '{"usage": $usage} * .' <<< "$crt")
 
-            if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$ci] = $cert' \
-                --argjson i "$inbounds_index" --argjson ci "$certificates_index" --argjson cert "$certificate"
+            if ! ProxyMutateConfigTx "v2ray" '
+                if $fmt == "jsonv5" then
+                    .inbounds[$i].streamSettings.securitySettings.certificate[$ci] = $cert
+                else
+                    .inbounds[$i].streamSettings.tlsSettings.certificates[$ci] = $cert
+                end
+            ' --arg fmt "$v2_fmt" --argjson i "$inbounds_index" --argjson ci "$certificates_index" --argjson cert "$certificate"
             then
                 local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
                 Println "$(eval_gettext "\$error 证书更新失败: \$err_detail")\n"
@@ -297,8 +305,13 @@ V2rayConfigDomain()
                 --arg crt "$V2_ROOT/certs/$certificate_domain.crt" \
                 --arg key "$V2_ROOT/certs/$certificate_domain.key"
 
-            if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$ci] = ((.inbounds[$i].streamSettings.tlsSettings.certificates[$ci] // {}) * $patch)' \
-                --argjson i "$inbounds_index" --argjson ci "$certificates_index" --argjson patch "$cert_patch"
+            if ! ProxyMutateConfigTx "v2ray" '
+                if $fmt == "jsonv5" then
+                    .inbounds[$i].streamSettings.securitySettings.certificate[$ci] = ((.inbounds[$i].streamSettings.securitySettings.certificate[$ci] // {}) * $patch)
+                else
+                    .inbounds[$i].streamSettings.tlsSettings.certificates[$ci] = ((.inbounds[$i].streamSettings.tlsSettings.certificates[$ci] // {}) * $patch)
+                end
+            ' --arg fmt "$v2_fmt" --argjson i "$inbounds_index" --argjson ci "$certificates_index" --argjson patch "$cert_patch"
             then
                 local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
                 Println "$(eval_gettext "\$error \$certificate_domain 证书更新失败: \$err_detail")\n"
@@ -309,10 +322,15 @@ V2rayConfigDomain()
         fi
     elif [ "$certificates_options_index" -eq 1 ]
     then
-        V2raySetCertificateFile
+        V2raySetCertificateFile || return 1
 
-        if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$ci].certificateFile = $f' \
-            --argjson i "$inbounds_index" --argjson ci "$certificates_index" --arg f "$certificate_file"
+        if ! ProxyMutateConfigTx "v2ray" '
+            if $fmt == "jsonv5" then
+                .inbounds[$i].streamSettings.securitySettings.certificate[$ci].certificateFile = $f
+            else
+                .inbounds[$i].streamSettings.tlsSettings.certificates[$ci].certificateFile = $f
+            end
+        ' --arg fmt "$v2_fmt" --argjson i "$inbounds_index" --argjson ci "$certificates_index" --arg f "$certificate_file"
         then
             local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
             Println "$(eval_gettext "\$error 证书路径修改失败: \$err_detail")\n"
@@ -321,10 +339,15 @@ V2rayConfigDomain()
 
         Println "$(eval_gettext "\$info 证书路径修改成功")\n"
     else
-        V2raySetKeyFile
+        V2raySetKeyFile || return 1
 
-        if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$ci].keyFile = $f' \
-            --argjson i "$inbounds_index" --argjson ci "$certificates_index" --arg f "$key_file"
+        if ! ProxyMutateConfigTx "v2ray" '
+            if $fmt == "jsonv5" then
+                .inbounds[$i].streamSettings.securitySettings.certificate[$ci].keyFile = $f
+            else
+                .inbounds[$i].streamSettings.tlsSettings.certificates[$ci].keyFile = $f
+            end
+        ' --arg fmt "$v2_fmt" --argjson i "$inbounds_index" --argjson ci "$certificates_index" --arg f "$key_file"
         then
             local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
             Println "$(eval_gettext "\$error 密钥路径修改失败: \$err_detail")\n"

@@ -5,6 +5,14 @@ RunSuiteXray()
     local tmpdir
     tmpdir=$(mktemp -d)
     local orig_x_root="${X_ROOT:-}" orig_x_backup="${X_BACKUP_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    local orig_x_svc_resolve
+    orig_x_svc_resolve=$(declare -f ServiceResolveLabel)
+    # shellcheck disable=SC2329
+    ServiceResolveLabel()
+    {
+        service_label="$1"
+        service_file="$tmpdir/systemd/${service_label}.service"
+    }
     X_ROOT="$tmpdir"
     X_BACKUP_ROOT="$tmpdir/backups"
     PROXY_LOCK_FILE="$tmpdir/proxy.lock"
@@ -472,6 +480,38 @@ MOCKX
     AssertInquirerDrained "XrayConfigDomain update cert path drained"
     AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates[0].certificateFile' "/etc/ssl/updated.crt" "XrayConfigDomain updates certificateFile"
 
+    # ARCH-04: XrayConfigDomain & XrayAddInbound abort when ProxySyncCertPerms fails
+    local orig_x_sync_perms
+    orig_x_sync_perms=$(declare -f ProxySyncCertPerms)
+    # shellcheck disable=SC2329
+    ProxySyncCertPerms()
+    {
+        return 1
+    }
+    MockInquirerReset
+    MockInquirerPush "2" "0" "/etc/ssl/fail-cert.crt"
+    AssertFail "ARCH-04: XrayConfigDomain edit cert fails when ProxySyncCertPerms fails" XrayConfigDomain
+    AssertInquirerDrained "ARCH-04: XrayConfigDomain edit cert fail drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates[0].certificateFile' "/etc/ssl/updated.crt" "ARCH-04: XrayConfigDomain leaves certificateFile unchanged on perm failure"
+
+    MockInquirerReset
+    MockInquirerPush "2" "3" "0" "/etc/ssl/fail-add.crt" "/etc/ssl/fail-add.key" ""
+    AssertFail "ARCH-04: XrayConfigDomain add cert fails when ProxySyncCertPerms fails" XrayConfigDomain
+    AssertInquirerDrained "ARCH-04: XrayConfigDomain add cert fail drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds[2].streamSettings.tlsSettings.certificates | length' "1" "ARCH-04: XrayConfigDomain does not append cert on perm failure"
+
+    local x_inb_count_before
+    x_inb_count_before=$($JQ_FILE -r '.inbounds | length' "$X_CONFIG")
+    MockInquirerReset
+    MockInquirerPush \
+        "0" "0" "0.0.0.0" "9443" "vless-tls-fail" \
+        "00000000-0000-4000-8000-000000000999" "" "fail@example.test" "none" \
+        "0" "1" "tls-fail.example.test" "/etc/ssl/fail-in.crt" "/etc/ssl/fail-in.key"
+    AssertFail "ARCH-04: XrayAddInbound aborts when ProxySyncCertPerms fails" XrayAddInbound
+    AssertInquirerDrained "ARCH-04: XrayAddInbound perm failure drained"
+    AssertJsonEq "$X_CONFIG" '.inbounds | length' "$x_inb_count_before" "ARCH-04: XrayAddInbound does not add inbound on perm failure"
+    eval "$orig_x_sync_perms"
+
     ShowCaptured "Final Generated Xray Config JSON" "$(cat "$X_CONFIG")"
 
     # 6j. Regression checks for doc-audit fixes
@@ -527,6 +567,7 @@ REGEOF
     XrayGetInbounds
     AssertEq "0" "$inbounds_count" "Xray handles empty config gracefully"
 
+    eval "$orig_x_svc_resolve"
     X_ROOT="${orig_x_root}"
     X_BACKUP_ROOT="${orig_x_backup}"
     PROXY_LOCK_FILE="${orig_proxy_lock}"

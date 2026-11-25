@@ -283,7 +283,12 @@ ProxyCoreHasFeature()
                 ProxyVersionGe "$ver" "5.0.1"
             ;;
             v5ServicesTun)
-                [ "$format" == "jsonv5" ] && ProxyVersionGe "$ver" "5.9.0"
+                if [ "$format" == "jsonv5" ]
+                then
+                    ProxyVersionGe "$ver" "5.9.0"
+                else
+                    ProxyVersionGe "$ver" "5.17.0"
+                fi
             ;;
             shadowsocks2022)
                 [ "$format" == "jsonv5" ] && ProxyVersionGe "$ver" "5.12.0"

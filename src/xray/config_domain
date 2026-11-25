@@ -104,7 +104,10 @@ XrayConfigDomain()
             local new_crt=""
             inquirer text_input "$(gettext "输入新的证书文件路径 (certificateFile): ")" new_crt
             [ -z "$new_crt" ] && return 1
-            ProxySyncCertPerms "xray" "$new_crt" ""
+            if ! ProxySyncCertPerms "xray" "$new_crt" ""
+            then
+                return 1
+            fi
             if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$c].certificateFile = $v' \
                 --argjson i "$ib_idx" --argjson c "$target_c" --arg v "$new_crt"
             then
@@ -129,7 +132,10 @@ XrayConfigDomain()
             local new_key=""
             inquirer text_input "$(gettext "输入新的密钥文件路径 (keyFile): ")" new_key
             [ -z "$new_key" ] && return 1
-            ProxySyncCertPerms "xray" "" "$new_key"
+            if ! ProxySyncCertPerms "xray" "" "$new_key"
+            then
+                return 1
+            fi
             if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$c].keyFile = $v' \
                 --argjson i "$ib_idx" --argjson c "$target_c" --arg v "$new_key"
             then
@@ -203,7 +209,10 @@ XrayConfigDomain()
                 "keyFile": $k,
                 "ocspStapling": (if $o != "" then ($o | tonumber) else null end)
             }' --arg u "$new_usage" --arg c "$new_crt" --arg k "$new_key" --arg o "$new_ocsp"
-            ProxySyncCertPerms "xray" "$new_crt" "$new_key"
+            if ! ProxySyncCertPerms "xray" "$new_crt" "$new_key"
+            then
+                return 1
+            fi
             if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates = ((.inbounds[$i].streamSettings.tlsSettings.certificates // []) + [$item])' \
                 --argjson i "$ib_idx" --argjson item "$cert_json"
             then

@@ -223,12 +223,12 @@ ProxyRenderInbounds()
     def render_stream($st):
         if ($st | type) != "object" then []
         else [
-            "\($i18n.transport): \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
-            (if ($st.tlsSettings | type) == "object" then
-                ($st.tlsSettings) as $t
+            "\($i18n.transport): \(cv($st.method // $st.network // $st.transport // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
+            (if (($st.tlsSettings // $st.securitySettings) | type) == "object" then
+                ($st.tlsSettings // $st.securitySettings) as $t
                 | "TLS: " + ([
                     line("SNI"; $t.serverName),
-                    line("ALPN"; arr($t.alpn // [])),
+                    line("ALPN"; arr($t.alpn // $t.nextProtocol // [])),
                     line("minVersion"; $t.minVersion),
                     line("maxVersion"; $t.maxVersion),
                     line("cipherSuites"; $t.cipherSuites),
@@ -246,7 +246,7 @@ ProxyRenderInbounds()
                     (if ($t.echServerKeys // "") != "" then "echServerKeys: \(cv($i18n.configured))" else empty end),
                     (if ($t.echConfigList // "") != "" then "echConfigList: \(cv($i18n.configured))" else empty end)
                 ] | join(" ")),
-                ((if ($t.certificates | type) == "array" then $t.certificates else [] end) | to_entries[]
+                ((if (($t.certificates // $t.certificate) | type) == "array" then ($t.certificates // $t.certificate) else [] end) | to_entries[]
                     | select(.value | type == "object")
                     | "  \($i18n.cert)\(.key + 1): " + ([
                         line("usage"; .value.usage),
@@ -579,7 +579,7 @@ ProxyRenderOutbounds()
         elif $p == "wireguard" then
             [([line("mtu"; $s.mtu), line("address"; arr($s.address // [])), (if ($s.peers | type) == "array" and ($s.peers | length) > 0 then "Peers: \(cv($s.peers | length))" else empty end)] | join(" "))]
         elif $p == "hysteria" or $p == "hy2" or $p == "hysteria2" or $p == "masque" then
-            arr_objs($s.servers) as $sv
+            arr_objs($s.servers // $s.server) as $sv
             | if ($sv | length) > 0 then
                 [($sv | map("\(.address // ""):\(.port // "")") | join("; ")) | "\($i18n.server): \(cv(.))"]
               else
@@ -608,13 +608,13 @@ ProxyRenderOutbounds()
         + (if ($out.streamSettings | type) == "object" then
             ($out.streamSettings) as $st
             | [
-                "\($i18n.transport): \(cv($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
-                (if ($st.tlsSettings | type) == "object" then
-                    ($st.tlsSettings) as $t
+                "\($i18n.transport): \(cv($st.method // $st.network // $st.transport // (if $core == "xray" then "raw" else "tcp" end))) \($i18n.security): \(cv($st.security // "none"))",
+                (if (($st.tlsSettings // $st.securitySettings) | type) == "object" then
+                    ($st.tlsSettings // $st.securitySettings) as $t
                     | ([
                         line("serverName"; $t.serverName),
                         line("fingerprint"; $t.fingerprint),
-                        line("ALPN"; arr($t.alpn // [])),
+                        line("ALPN"; arr($t.alpn // $t.nextProtocol // [])),
                         (if $t.allowInsecure == true then "allowInsecure: \(cv($i18n.yes))" else empty end)
                       ] | join(" ")) as $tsum
                     | if $tsum != "" then "TLS: \($tsum)" else empty end
@@ -630,8 +630,8 @@ ProxyRenderOutbounds()
                       ] | join(" ")) as $rsum
                     | if $rsum != "" then "REALITY: \($rsum)" else empty end
                  else empty end),
-                (if (($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) | type) == "object" then
-                    ($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) as $hy2
+                (if (($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings // (if ($st.transport // "") == "hysteria2" then $st.transportSettings else null end)) | type) == "object" then
+                    ($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings // (if ($st.transport // "") == "hysteria2" then $st.transportSettings else null end)) as $hy2
                     | (if ($hy2.congestion | type) == "object" then $hy2.congestion else {} end) as $cg
                     | ([
                         line("password"; $hy2.password),
@@ -859,10 +859,10 @@ ProxyRenderShareLinks()
         | ($inb.tag // $p | tostring) as $tag
         | obj($inb.settings) as $set
         | obj($inb.streamSettings) as $st
-        | ($st.method // $st.network // (if $core == "xray" then "raw" else "tcp" end) | tostring) as $net
+        | ($st.method // $st.network // $st.transport // (if $core == "xray" then "raw" else "tcp" end) | tostring) as $net
         | ($st.security // "none" | tostring) as $sec
         | obj($st.realitySettings) as $rl
-        | obj($st.tlsSettings) as $tls
+        | obj($st.tlsSettings // $st.securitySettings) as $tls
         | (if (arr_objs($set.users) | length) > 0 then arr_objs($set.users)
            elif (arr_objs($set.clients) | length) > 0 then arr_objs($set.clients)
            else [] end) as $users
@@ -889,7 +889,7 @@ ProxyRenderShareLinks()
                       q("pqv"; $pqv)
                 elif $sec == "tls" then
                     q("sni"; ($tls.serverName // "")),
-                    q("alpn"; (if ($tls.alpn | type) == "array" and ($tls.alpn | length) > 0 then ($tls.alpn | map(tostring) | join(",")) else "" end))
+                    q("alpn"; (if (($tls.alpn // $tls.nextProtocol) | type) == "array" and (($tls.alpn // $tls.nextProtocol) | length) > 0 then (($tls.alpn // $tls.nextProtocol) | map(tostring) | join(",")) else "" end))
                 else empty end),
                 (if $net == "xhttp" or $net == "splithttp" then
                     obj($st.xhttpSettings // $st.splithttpSettings) as $xh
@@ -898,26 +898,26 @@ ProxyRenderShareLinks()
                       q("mode"; ($xh.mode // "auto")),
                       (if ($xh.extra | type) == "object" and ($xh.extra | length) > 0 then q("extra"; ($xh.extra | tojson)) else empty end)
                 elif $net == "ws" or $net == "websocket" then
-                    obj($st.wsSettings) as $ws
+                    obj($st.wsSettings // $st.transportSettings) as $ws
                     | obj($ws.headers) as $wsh
                     | q("path"; ($ws.path // "/")),
                       q("host"; ($ws.host // $wsh.Host // $wsh.host // ""))
                 elif $net == "grpc" then
-                    obj($st.grpcSettings) as $gr
+                    obj($st.grpcSettings // $st.transportSettings) as $gr
                     | q("serviceName"; ($gr.serviceName // "")),
                       q("authority"; ($gr.authority // "")),
                       (if $gr.multiMode == true then q("mode"; "multi") else empty end)
                 elif $net == "httpupgrade" then
-                    obj($st.httpupgradeSettings) as $hu
+                    obj($st.httpupgradeSettings // $st.transportSettings) as $hu
                     | q("path"; ($hu.path // "/")),
                       q("host"; ($hu.host // ""))
                 elif $net == "kcp" or $net == "mkcp" then
-                    obj($st.kcpSettings) as $ks
+                    obj($st.kcpSettings // $st.transportSettings) as $ks
                     | obj($ks.header) as $kh
                     | q("headerType"; ($kh.type // "")),
                       q("seed"; ($ks.seed // ""))
                 elif $net == "h2" or $net == "http" then
-                    obj($st.httpSettings) as $hs
+                    obj($st.httpSettings // $st.transportSettings) as $hs
                     | q("path"; ($hs.path // "/")),
                       q("host"; first_str($hs.host))
                 else empty end)
@@ -934,13 +934,13 @@ ProxyRenderShareLinks()
           elif $p == "vmess" then
             obj($st.rawSettings) as $rs
             | obj($st.tcpSettings) as $ts
-            | obj($st.wsSettings) as $ws
+            | obj($st.wsSettings // (if $net == "ws" or $net == "websocket" then $st.transportSettings else null end)) as $ws
             | obj($ws.headers) as $wsh
             | obj($st.xhttpSettings // $st.splithttpSettings) as $xh
-            | obj($st.httpupgradeSettings) as $hu
-            | obj($st.httpSettings) as $hs
-            | obj($st.grpcSettings) as $gr
-            | obj($st.kcpSettings) as $ks
+            | obj($st.httpupgradeSettings // (if $net == "httpupgrade" then $st.transportSettings else null end)) as $hu
+            | obj($st.httpSettings // (if $net == "http" or $net == "h2" then $st.transportSettings else null end)) as $hs
+            | obj($st.grpcSettings // (if $net == "grpc" then $st.transportSettings else null end)) as $gr
+            | obj($st.kcpSettings // (if $net == "kcp" or $net == "mkcp" then $st.transportSettings else null end)) as $ks
             | (if $net == "raw" then "tcp"
                elif $net == "websocket" then "ws"
                elif $net == "mkcp" then "kcp"
@@ -983,7 +983,7 @@ ProxyRenderShareLinks()
                 $users[]
                 | "PLAIN\($sep)hysteria2://\(.auth // .password // "" | tostring | @uri)@\(fmt_host($host)):\($port)\($hy_qpart)#\((.email // $tag | tostring) | @uri)"
               else
-                (obj($st.hysteriaSettings).auth // obj($st.hysteria2Settings // $st.hy2steriaSettings).password // $set.auth // $set.password // "" | tostring) as $hy_auth
+                (obj($st.hysteriaSettings).auth // obj($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings // $st.transportSettings).password // $set.auth // $set.password // "" | tostring) as $hy_auth
                 | if $hy_auth != "" then
                     "PLAIN\($sep)hysteria2://\($hy_auth | @uri)@\(fmt_host($host)):\($port)\($hy_qpart)#\($tag | @uri)"
                   else empty end
@@ -1020,7 +1020,7 @@ ProxyPrintQrCode()
     fi
 
     echo
-    ExitOnList y "`gettext \"打印二维码\"`"
+    ExitOnList y "$(gettext "打印二维码")"
 
     if [ ! -e "$IMGCAT_FILE" ]
     then
@@ -1033,7 +1033,8 @@ ProxyPrintQrCode()
     fi
     DepInstall qrencode
     local qr_tmp qr_png
-    qr_tmp=$(mktemp "${TMPDIR:-/tmp}/aios_share_link.XXXXXX")
+    mkdir -p "$PROXY_TMP_ROOT" || return 1
+    qr_tmp=$(umask 077 && mktemp "${PROXY_TMP_ROOT}/aios_share_link.XXXXXX") || return 1
     qr_png="${qr_tmp}.png"
     mv -f "$qr_tmp" "$qr_png"
     qrencode -s 1 -o "$qr_png" "$link"

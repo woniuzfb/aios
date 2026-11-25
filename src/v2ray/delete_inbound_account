@@ -3,27 +3,39 @@ V2rayDeleteInboundAccount()
     ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择要删除账号的入站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${inbounds_protocol[idx]}"
-    local field="clients"
-    if [ "$protocol" == "socks" ] || [ "$protocol" == "http" ]
-    then
-        field="accounts"
-    fi
-
+    local field=""
     local opts=()
-    local line
-    while IFS= read -r line
+    local opt_keys=()
+    local rec_field="" rec_key="" rec_label=""
+    while IFS=$'\t' read -r rec_field rec_key rec_label
     do
-        [ -n "$line" ] && opts+=("$line")
+        [ -z "$rec_field" ] && continue
+        field="$rec_field"
+        opt_keys+=("$rec_key")
+        opts+=("$rec_label")
     done < <(JQs query "$V2_CONFIG" '
         (if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
             and (.inbounds[$i].settings | type) == "object"
-            and (.inbounds[$i].settings[$f] | type) == "array"
-         then .inbounds[$i].settings[$f]
-         else [] end)
+         then .inbounds[$i].settings
+         else {} end) as $s
+        | (
+            if ($s.users | type) == "array" then "users"
+            elif ($p == "socks" or $p == "http") and ($s.accounts | type) == "array" then "accounts"
+            elif ($s.clients | type) == "array" then "clients"
+            elif ($s.accounts | type) == "array" then "accounts"
+            else "" end
+          ) as $f
+        | select($f != "")
+        | $s[$f]
         | to_entries[]
-        | select(.value | type == "object")
-        | "\(.key + 1). \(.value.email // .value.id // .value.user // .value.password // "account")"
-    ' --argjson i "$idx" --arg f "$field")
+        | if (.value | type) == "string" then
+            "\($f)\t\(.key)\t\(.key + 1). \(.value)"
+          elif (.value | type) == "object" then
+            "\($f)\t\(.key)\t\(.key + 1). \(.value.email // .value.id // .value.uuid // .value.user // .value.username // .value.password // "account")"
+          else
+            empty
+          end
+    ' --argjson i "$idx" --arg p "$protocol")
 
     if [ "${#opts[@]}" -eq 0 ]
     then
@@ -34,12 +46,15 @@ V2rayDeleteInboundAccount()
     local acc_idx=0
     echo
     inquirer list_input_index "$(gettext "选择要删除的账号")" opts acc_idx
+    local target_key="${opt_keys[acc_idx]}"
+
     if ! ProxyMutateConfigTx "v2ray" 'del(.inbounds[$i].settings[$f][$a])' \
-        --argjson i "$idx" --arg f "$field" --argjson a "$acc_idx"
+        --argjson i "$idx" --arg f "$field" --argjson a "$target_key"
     then
         local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
         Println "$(eval_gettext "\$error 删除账号失败: \$err_detail")\n"
         return 1
     fi
+
     Println "$(eval_gettext "\$info 已删除账号") ${green}${opts[acc_idx]}${normal}\n"
 }

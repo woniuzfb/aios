@@ -225,7 +225,16 @@ ProxyWriteServiceUnit()
 
     if [ "$dist" == "mac" ]
     then
-        mkdir -p "$HOME/Library/LaunchAgents" "$log_dir" 2> /dev/null || true
+        if [ "$needs_bind" -eq 1 ] || [ "$needs_tun" -eq 1 ]
+        then
+            Println "$(eval_gettext "\$tip macOS LaunchAgent 不支持自动授予低端口绑定或 TUN 权限, 请改用高位端口或手动以管理员权限运行")\n"
+        fi
+
+        if ! mkdir -p "${service_file%/*}" "$log_dir"
+        then
+            Println "$(eval_gettext "\$error 创建服务目录失败")\n"
+            return 1
+        fi
         local args_xml=""
         if [ "$core" == "xray" ]
         then
@@ -261,7 +270,13 @@ ProxyWriteServiceUnit()
         <string>memconservative</string>"
         fi
 
-        cat > "$service_file" <<EOF
+        local tmp_unit=""
+        if ! tmp_unit=$(mktemp "${service_file%/*}/.unit.tmp.XXXXXX")
+        then
+            return 1
+        fi
+
+        if ! cat > "$tmp_unit" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -287,6 +302,16 @@ ${env_xml}
 </dict>
 </plist>
 EOF
+        then
+            rm -f "$tmp_unit" 2> /dev/null || true
+            return 1
+        fi
+
+        if ! mv -f "$tmp_unit" "$service_file"
+        then
+            rm -f "$tmp_unit" 2> /dev/null || true
+            return 1
+        fi
         return 0
     fi
 
@@ -317,8 +342,19 @@ Environment=XDG_DATA_DIRS=${PROXY_XDG_ROOT}
 Environment=V2RAY_CONF_GEOLOADER=memconservative"
     fi
 
-    mkdir -p "${service_file%/*}" 2> /dev/null || true
-    cat > "$service_file" <<EOF
+    if ! mkdir -p "${service_file%/*}"
+    then
+        Println "$(eval_gettext "\$error 创建服务单元目录失败")\n"
+        return 1
+    fi
+
+    local tmp_unit=""
+    if ! tmp_unit=$(mktemp "${service_file%/*}/.unit.tmp.XXXXXX")
+    then
+        return 1
+    fi
+
+    if ! cat > "$tmp_unit" <<EOF
 [Unit]
 Description=AIOS Isolated ${core} Service
 After=syslog.target network-online.target nss-lookup.target
@@ -338,10 +374,24 @@ RestartSec=3s
 [Install]
 WantedBy=multi-user.target
 EOF
+    then
+        rm -f "$tmp_unit" 2> /dev/null || true
+        return 1
+    fi
+
+    if ! mv -f "$tmp_unit" "$service_file"
+    then
+        rm -f "$tmp_unit" 2> /dev/null || true
+        return 1
+    fi
 
     if command -v systemctl > /dev/null 2>&1
     then
-        systemctl daemon-reload > /dev/null 2>&1 || true
+        if ! systemctl daemon-reload
+        then
+            Println "$(eval_gettext "\$error 执行 systemctl daemon-reload 失败")\n"
+            return 1
+        fi
     fi
 }
 
@@ -533,17 +583,37 @@ ProxyCoreInstall()
 
     if [ ! -f "${PROXY_GEODATA_CURRENT}/geoip.dat" ] || [ ! -f "${PROXY_GEODATA_CURRENT}/geosite.dat" ]
     then
-        ProxyGeodataUpdate > /dev/null 2>&1 || true
+        if ! ProxyGeodataUpdate
+        then
+            Println "$(eval_gettext "\$tip Geodata 自动更新失败, 请稍后手动执行更新")\n"
+        fi
     fi
 
-    ProxyWriteServiceUnit "$core" || true
-    ProxySetupLogrotate || true
+    if ! ProxyWriteServiceUnit "$core"
+    then
+        Println "$(eval_gettext "\$error 写入 \$core 服务单元失败")\n"
+        return 1
+    fi
+
+    if ! ProxySetupLogrotate
+    then
+        Println "$(eval_gettext "\$tip 配置 logrotate 失败, 请检查 /etc/logrotate.d 权限")\n"
+    fi
+
     return 0
 }
 
 ProxyGeodataUpdate()
 {
     local req_tag="${1:-latest}"
+    if [ "$req_tag" != "latest" ]
+    then
+        if [ -z "$req_tag" ] || [[ ! "$req_tag" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$req_tag" == *".."* ]]
+        then
+            return 1
+        fi
+    fi
+
     ProxyEnsureDirs
 
     local lock_owned=0
@@ -551,6 +621,13 @@ ProxyGeodataUpdate()
     then
         ProxyAcquireLock "$PROXY_LOCK_FILE" || return 1
         lock_owned=1
+    fi
+
+    if ! ProxyRecoverPendingTx "xray" || ! ProxyRecoverPendingTx "v2ray"
+    then
+        PROXY_LAST_VALIDATE_ERROR="unresolved recovery_failed state; manual recovery required"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
     fi
 
     if [ "$req_tag" == "latest" ]
@@ -562,7 +639,7 @@ ProxyGeodataUpdate()
         fi
     fi
 
-    if [ -z "$req_tag" ]
+    if [ -z "$req_tag" ] || [[ ! "$req_tag" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$req_tag" == *".."* ]]
     then
         [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
         return 1
@@ -700,6 +777,25 @@ ProxyCoreRemove()
     local core="$1"
     local target_tag="$2"
 
+    if [ "$core" != "xray" ] && [ "$core" != "v2ray" ]
+    then
+        Println "$(eval_gettext "\$error 不支持的内核类型: \$core")\n"
+        return 1
+    fi
+
+    local norm_ver=""
+    if ! norm_ver=$(ProxyNormalizeVersion "$target_tag")
+    then
+        Println "$(eval_gettext "\$error 非法版本标签: \$target_tag")\n"
+        return 1
+    fi
+    target_tag="v${norm_ver}"
+    if [[ ! "$target_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+    then
+        Println "$(eval_gettext "\$error 非法版本标签: \$target_tag")\n"
+        return 1
+    fi
+
     local cur_tag=""
     cur_tag=$(readlink "${PROXY_CORES_ROOT}/${core}/current" 2> /dev/null || true)
     if [ "$target_tag" == "$cur_tag" ]
@@ -722,7 +818,11 @@ ProxyCoreRemove()
     fi
 
     rm -rf "${PROXY_CORES_ROOT:?}/${core}/${target_tag}"
-    local tmp_m="${PROXY_CORES_MANIFEST}.tmp.$$"
+    local tmp_m=""
+    if ! tmp_m=$(umask 077 && mktemp "${PROXY_CORES_MANIFEST}.tmp.XXXXXX")
+    then
+        return 1
+    fi
     $JQ_FILE --arg core "$core" --arg tag "$target_tag" 'del(.cores[$core].versions[$tag])' "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"
 }
 
@@ -905,9 +1005,16 @@ ProxyAdaptConfigForTarget()
 
     if [ "$core" == "v2ray" ]
     then
+        local jq_err_file=""
+        if ! jq_err_file=$(umask 077 && mktemp "${dst_cfg}.err.XXXXXX")
+        then
+            PROXY_LAST_VALIDATE_ERROR="failed to create temporary jq error file"
+            return 1
+        fi
+
         if [ "$target_fmt" == "jsonv5" ]
         then
-            $JQ_FILE '
+            if ! $JQ_FILE '
                 def map_level($l):
                     (($l // "warning") | ascii_downcase) as $lv
                     | if $lv == "debug" then "Debug"
@@ -931,104 +1038,314 @@ ProxyAdaptConfigForTarget()
                             )
                         }
                     else .log end;
+                def map_tls_v5($t):
+                    if ($t | type) != "object" then {}
+                    else
+                        ($t
+                         | (if has("alpn") and (has("nextProtocol") | not) then .nextProtocol = .alpn | del(.alpn) else . end)
+                         | (if has("certificates") and (has("certificate") | not) then .certificate = .certificates | del(.certificates) else . end))
+                    end;
+                def map_ws_v5($ws):
+                    if ($ws | type) != "object" then {}
+                    else
+                        ($ws
+                         | if (.headers | type) == "object" then
+                               .header = ((.header // []) + (.headers | to_entries | map({key: .key, value: (.value | tostring)})))
+                               | del(.headers)
+                           else . end)
+                    end;
                 def map_stream($st):
                     if ($st | type) != "object" then null
-                    elif ($st | has("transport")) then $st
+                    elif ($st | has("transport")) then
+                        ($st
+                         | (if .transport == "websocket" then .transport = "ws" else . end)
+                         | (if (.security // "none") == "tls" and (.securitySettings | type) == "object" then
+                                .securitySettings = map_tls_v5(.securitySettings)
+                            else . end))
                     else
                         ($st.network // "tcp") as $n
                         | (if $n == "raw" then "tcp"
-                           elif $n == "ws" then "websocket"
+                           elif $n == "ws" or $n == "websocket" then "ws"
                            elif $n == "kcp" then "mkcp"
                            elif $n == "h2" then "http"
                            elif $n == "ds" then "domainsocket"
                            elif $n == "hy2" then "hysteria2"
                            else $n end) as $tn
                         | (if $tn == "tcp" then ($st.tcpSettings // $st.rawSettings // {})
-                           elif $tn == "websocket" then ($st.wsSettings // {})
+                           elif $tn == "ws" then map_ws_v5($st.wsSettings // {})
                            elif $tn == "mkcp" then ($st.kcpSettings // {})
                            elif $tn == "http" then ($st.httpSettings // {})
                            elif $tn == "quic" then ($st.quicSettings // {})
                            elif $tn == "domainsocket" then ($st.dsSettings // {})
                            elif $tn == "grpc" then ($st.grpcSettings // {})
+                           elif $tn == "httpupgrade" then ($st.httpupgradeSettings // {})
                            elif $tn == "hysteria2" then ($st.hy2Settings // $st.hysteria2Settings // {})
                            else {} end) as $ts
                         | ({transport: $tn, transportSettings: $ts}
                            + (if ($st.security // "none") != "none" and ($st.security // "") != "" then
-                                {security: $st.security, securitySettings: ($st.tlsSettings // {})}
+                                {security: $st.security, securitySettings: map_tls_v5($st.tlsSettings // {})}
                               else {} end)
                            + (if ($st.sockopt | type) == "object" then
                                 {socketSettings: $st.sockopt}
                               else {} end))
                     end;
                 def adapt_v5_in:
-                    if .protocol == "socks" and (.settings | type) == "object" then
-                        .settings |= (
-                            (if has("udp") and (has("udpEnabled") | not) then .udpEnabled = .udp | del(.udp) else . end)
-                            | del(.auth)
-                        )
+                    if (.settings | type) != "object" then .settings = {} else . end
+                    | if .protocol == "vmess" then
+                        if (.settings.clients | type) == "array" then
+                            if any(.settings.clients[]; (type != "object") or ((.id // "") == "")) then
+                                error("invalid vmess inbound client entry")
+                            elif any(.settings.clients[]; (.alterId // 0) != 0) then
+                                error("cannot losslessly convert vmess inbound with non-zero alterId to jsonv5")
+                            elif (.settings.detour | type) == "object" and (.settings.detour | length) > 0 then
+                                error("cannot losslessly convert vmess inbound with detour to jsonv5")
+                            else
+                                .settings = {users: [.settings.clients[].id]}
+                            end
+                        else . end
+                    elif .protocol == "vless" then
+                        if (.settings.decryption // "none") != "none" and (.settings.decryption // "") != "" then
+                            error("cannot losslessly convert vless inbound with custom decryption to jsonv5")
+                        elif (.settings.fallbacks | type) == "array" and (.settings.fallbacks | length) > 0 then
+                            error("cannot losslessly convert vless inbound with fallbacks to jsonv5")
+                        elif (.settings.clients | type) == "array" then
+                            if any(.settings.clients[]; (type != "object") or ((.id // "") == "")) then
+                                error("invalid vless inbound client entry")
+                            else
+                                .settings = {users: [.settings.clients[].id]}
+                            end
+                        else . end
+                    elif .protocol == "trojan" then
+                        if (.settings.fallbacks | type) == "array" and (.settings.fallbacks | length) > 0 then
+                            error("cannot losslessly convert trojan inbound with fallbacks to jsonv5")
+                        elif (.settings.clients | type) == "array" then
+                            if any(.settings.clients[]; (type != "object") or ((.password // "") == "")) then
+                                error("invalid trojan inbound client entry")
+                            else
+                                .settings = {users: [.settings.clients[].password]}
+                            end
+                        else . end
+                    elif .protocol == "http" then
+                        if (.settings.accounts | type) == "array" and (.settings.accounts | length) > 0 then
+                            error("cannot losslessly convert http inbound with accounts to jsonv5")
+                        else
+                            .settings = {}
+                        end
+                    elif .protocol == "socks" then
+                        if (.settings.auth // "noauth") == "password" or ((.settings.accounts | type) == "array" and (.settings.accounts | length) > 0) then
+                            error("cannot losslessly convert socks inbound with password auth to jsonv5")
+                        else
+                            .settings |= (
+                                (if has("udp") and (has("udpEnabled") | not) then .udpEnabled = .udp | del(.udp) else . end)
+                                | del(.auth, .accounts, .ip, .userLevel)
+                            )
+                        end
+                    elif .protocol == "hysteria2" then
+                        .settings = {}
+                    elif .protocol == "shadowsocks" and ((.settings.clients | type) == "array" and (.settings.clients | length) > 0) then
+                        error("cannot losslessly convert multi-user shadowsocks inbound to jsonv5")
                     else . end
                     | if (.streamSettings | type) == "object" then
                         .streamSettings = map_stream(.streamSettings)
                       else . end;
                 def adapt_v5_out:
                     if (.settings | type) != "object" then .settings = {} else . end
+                    | if .protocol == "vmess" then
+                        if (.settings.vnext | type) == "array" then
+                            if (.settings.vnext | length) != 1 then
+                                error("cannot losslessly convert vmess outbound with != 1 vnext server to jsonv5")
+                            else
+                                (.settings.vnext[0]) as $v
+                                | if ($v.users | type) != "array" or ($v.users | length) != 1 then
+                                      error("cannot losslessly convert vmess outbound with != 1 user to jsonv5")
+                                  elif (($v.users[0].alterId // 0) != 0) then
+                                      error("cannot losslessly convert vmess outbound with non-zero alterId to jsonv5")
+                                  else
+                                      .settings = {address: $v.address, port: $v.port, uuid: $v.users[0].id}
+                                  end
+                            end
+                        else . end
+                    elif .protocol == "vless" then
+                        if (.settings.vnext | type) == "array" then
+                            if (.settings.vnext | length) != 1 then
+                                error("cannot losslessly convert vless outbound with != 1 vnext server to jsonv5")
+                            else
+                                (.settings.vnext[0]) as $v
+                                | if ($v.users | type) != "array" or ($v.users | length) != 1 then
+                                      error("cannot losslessly convert vless outbound with != 1 user to jsonv5")
+                                  elif (($v.users[0].encryption // "none") != "none" and ($v.users[0].encryption // "") != "") then
+                                      error("cannot losslessly convert vless outbound with custom encryption to jsonv5")
+                                  else
+                                      .settings = {address: $v.address, port: $v.port, uuid: $v.users[0].id}
+                                  end
+                            end
+                        else . end
+                    elif .protocol == "trojan" then
+                        if (.settings.servers | type) == "array" then
+                            if (.settings.servers | length) != 1 then
+                                error("cannot losslessly convert trojan outbound with != 1 server to jsonv5")
+                            else
+                                (.settings.servers[0]) as $s
+                                | .settings = {address: $s.address, port: $s.port, password: $s.password}
+                            end
+                        else . end
+                    elif (.protocol == "http" or .protocol == "socks") then
+                        if (.settings.servers | type) == "array" then
+                            if (.settings.servers | length) != 1 then
+                                error("cannot losslessly convert \(.protocol) outbound with != 1 server to jsonv5")
+                            else
+                                (.settings.servers[0]) as $s
+                                | if ($s.users | type) == "array" and ($s.users | length) > 0 then
+                                      error("cannot losslessly convert \(.protocol) outbound with auth users to jsonv5")
+                                  else
+                                      .settings = {address: $s.address, port: $s.port}
+                                  end
+                            end
+                        else . end
+                    elif .protocol == "hysteria2" then
+                        if (.settings.servers | type) == "array" and (.settings | has("server") | not) then
+                            .settings |= (.server = .servers | del(.servers))
+                        else . end
+                    elif .protocol == "blackhole" then
+                        if (.settings | has("response")) then
+                            .settings = {}
+                        else . end
+                    elif .protocol == "shadowsocks" and ((.settings.servers | type) == "array" and (.settings.servers | length) > 1) then
+                        error("cannot losslessly convert multi-server shadowsocks outbound to jsonv5")
+                    else . end
                     | if (.streamSettings | type) == "object" then
                         .streamSettings = map_stream(.streamSettings)
                       else . end;
                 (if has("log") then .log = map_log else . end)
                 | (if (.inbounds | type) == "array" then .inbounds |= map(if type == "object" then adapt_v5_in else . end) else . end)
                 | (if (.outbounds | type) == "array" then .outbounds |= map(if type == "object" then adapt_v5_out else . end) else . end)
-            ' "$src_cfg" > "$dst_cfg"
-            return $?
+            ' "$src_cfg" > "$dst_cfg" 2> "$jq_err_file"
+            then
+                local jq_err=""
+                jq_err=$(cat "$jq_err_file" 2> /dev/null || true)
+                rm -f "$jq_err_file" "$dst_cfg" 2> /dev/null || true
+                PROXY_LAST_VALIDATE_ERROR="${jq_err:-v2ray jsonv5 config adaptation failed}"
+                return 1
+            fi
+            rm -f "$jq_err_file" 2> /dev/null || true
+            return 0
         else
-            $JQ_FILE '
+            if ! $JQ_FILE '
                 def map_log_v4:
                     if (.log | type) == "object" and (.log.error | type) == "object" then
                         ({loglevel: ((.log.error.level // "warning") | ascii_downcase)}
                          + (if (.log.error.type // "") == "File" and (.log.error.path // "") != "" then {error: .log.error.path} else {} end)
                          + (if (.log.access | type) == "object" and (.log.access.type // "") == "File" and (.log.access.path // "") != "" then {access: .log.access.path} else {} end))
                     else .log end;
+                def map_tls_v4($t):
+                    if ($t | type) != "object" then {}
+                    else
+                        ($t
+                         | (if has("nextProtocol") and (has("alpn") | not) then .alpn = .nextProtocol | del(.nextProtocol) else . end)
+                         | (if has("certificate") and (has("certificates") | not) then .certificates = .certificate | del(.certificate) else . end))
+                    end;
+                def map_ws_v4($ws):
+                    if ($ws | type) != "object" then {}
+                    else
+                        ($ws
+                         | if (.header | type) == "array" then
+                               .headers = ((.headers // {}) + (reduce .header[] as $h ({}; if ($h | type) == "object" and ($h.key // "") != "" then .[$h.key] = ($h.value // "") else . end)))
+                               | del(.header)
+                           else . end)
+                    end;
                 def map_stream_v4($st):
                     if ($st | type) != "object" then null
                     elif ($st | has("network")) then $st
                     else
                         ($st.transport // "tcp") as $tn
-                        | (if $tn == "websocket" then "ws"
+                        | (if $tn == "websocket" or $tn == "ws" then "ws"
                            elif $tn == "mkcp" then "kcp"
                            elif $tn == "hysteria2" then "hy2"
                            else $tn end) as $n
                         | ({network: $n, security: ($st.security // "none")}
                            + (if $n == "tcp" then {tcpSettings: ($st.transportSettings // {})}
-                              elif $n == "ws" then {wsSettings: ($st.transportSettings // {})}
+                              elif $n == "ws" then {wsSettings: map_ws_v4($st.transportSettings // {})}
                               elif $n == "kcp" then {kcpSettings: ($st.transportSettings // {})}
                               elif $n == "http" then {httpSettings: ($st.transportSettings // {})}
                               elif $n == "quic" then {quicSettings: ($st.transportSettings // {})}
                               elif $n == "domainsocket" then {dsSettings: ($st.transportSettings // {})}
                               elif $n == "grpc" then {grpcSettings: ($st.transportSettings // {})}
+                              elif $n == "httpupgrade" then {httpupgradeSettings: ($st.transportSettings // {})}
                               elif $n == "hy2" then {hy2Settings: ($st.transportSettings // {})}
                               else {} end)
-                           + (if ($st.security // "none") == "tls" then {tlsSettings: ($st.securitySettings // {})} else {} end)
+                           + (if ($st.security // "none") == "tls" then {tlsSettings: map_tls_v4($st.securitySettings // {})} else {} end)
                            + (if ($st.socketSettings | type) == "object" then {sockopt: $st.socketSettings} else {} end))
                     end;
                 def adapt_v4_in:
-                    if .protocol == "socks" and (.settings | type) == "object" then
+                    if (.settings | type) != "object" then .
+                    elif .protocol == "vmess" then
+                        if (.settings.users | type) == "array" and (.settings | has("clients") | not) then
+                            .settings = {clients: [.settings.users[] | if type == "string" then {id: ., alterId: 0} else . end]}
+                        else . end
+                    elif .protocol == "vless" then
+                        if (.settings.users | type) == "array" and (.settings | has("clients") | not) then
+                            .settings = {clients: [.settings.users[] | if type == "string" then {id: .} else . end], decryption: "none"}
+                        else . end
+                    elif .protocol == "trojan" then
+                        if (.settings.users | type) == "array" and (.settings | has("clients") | not) then
+                            .settings = {clients: [.settings.users[] | if type == "string" then {password: .} else . end]}
+                        else . end
+                    elif .protocol == "socks" then
                         .settings |= (
                             (if has("udpEnabled") and (has("udp") | not) then .udp = .udpEnabled | del(.udpEnabled) else . end)
                             | if has("auth") then . else .auth = "noauth" end
                         )
+                    elif .protocol == "shadowsocks2022" then
+                        error("cannot convert shadowsocks2022 inbound to jsonv4")
                     else . end
                     | if (.streamSettings | type) == "object" then
                         .streamSettings = map_stream_v4(.streamSettings)
                       else . end;
                 def adapt_v4_out:
-                    if (.streamSettings | type) == "object" then
+                    if (.settings | type) != "object" then .
+                    elif .protocol == "vmess" then
+                        if (.settings | has("address")) and (.settings | has("vnext") | not) then
+                            .settings as $s
+                            | .settings = {vnext: [{address: $s.address, port: $s.port, users: [{id: $s.uuid, alterId: 0, security: ($s.security // "auto")}]}]}
+                        else . end
+                    elif .protocol == "vless" then
+                        if (.settings | has("address")) and (.settings | has("vnext") | not) then
+                            .settings as $s
+                            | .settings = {vnext: [{address: $s.address, port: $s.port, users: [{id: $s.uuid, encryption: "none"}]}]}
+                        else . end
+                    elif .protocol == "trojan" then
+                        if (.settings | has("address")) and (.settings | has("servers") | not) then
+                            .settings as $s
+                            | .settings = {servers: [{address: $s.address, port: $s.port, password: $s.password}]}
+                        else . end
+                    elif (.protocol == "http" or .protocol == "socks") then
+                        if (.settings | has("address")) and (.settings | has("servers") | not) then
+                            .settings as $s
+                            | .settings = {servers: [{address: $s.address, port: $s.port}]}
+                        else . end
+                    elif .protocol == "hysteria2" then
+                        if (.settings.server | type) == "array" and (.settings | has("servers") | not) then
+                            .settings |= (.servers = .server | del(.server))
+                        else . end
+                    elif .protocol == "shadowsocks2022" then
+                        error("cannot convert shadowsocks2022 outbound to jsonv4")
+                    else . end
+                    | if (.streamSettings | type) == "object" then
                         .streamSettings = map_stream_v4(.streamSettings)
                       else . end;
                 (if has("log") then .log = map_log_v4 else . end)
                 | (if (.inbounds | type) == "array" then .inbounds |= map(if type == "object" then adapt_v4_in else . end) else . end)
                 | (if (.outbounds | type) == "array" then .outbounds |= map(if type == "object" then adapt_v4_out else . end) else . end)
-            ' "$src_cfg" > "$dst_cfg"
-            return $?
+            ' "$src_cfg" > "$dst_cfg" 2> "$jq_err_file"
+            then
+                local jq_err=""
+                jq_err=$(cat "$jq_err_file" 2> /dev/null || true)
+                rm -f "$jq_err_file" "$dst_cfg" 2> /dev/null || true
+                PROXY_LAST_VALIDATE_ERROR="${jq_err:-v2ray jsonv4 config adaptation failed}"
+                return 1
+            fi
+            rm -f "$jq_err_file" 2> /dev/null || true
+            return 0
         fi
     fi
 
@@ -1130,17 +1447,32 @@ ProxyTxWriteState()
     local tx_id="$3"
     local snap_dir="$4"
     local detail="${5:-}"
-    local tmp_s="${state_file}.tmp.$$"
+    local state_dir="${state_file%/*}"
+    mkdir -p "$state_dir" || return 1
 
-    $JQ_FILE -n \
+    local tmp_s=""
+    if ! tmp_s=$(umask 077 && mktemp "${state_file}.tmp.XXXXXX")
+    then
+        return 1
+    fi
+
+    if ! $JQ_FILE -n \
         --arg state "$state" \
         --arg tx_id "$tx_id" \
         --arg snap "$snap_dir" \
         --arg detail "$detail" \
         --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || echo "")" \
         '{state: $state, tx_id: $tx_id, snapshot_dir: $snap, detail: $detail, updated_at: $ts}' > "$tmp_s"
-    chmod 600 "$tmp_s" 2> /dev/null || true
-    mv -f "$tmp_s" "$state_file"
+    then
+        rm -f "$tmp_s" 2> /dev/null || true
+        return 1
+    fi
+
+    if ! mv -f "$tmp_s" "$state_file"
+    then
+        rm -f "$tmp_s" 2> /dev/null || true
+        return 1
+    fi
 }
 
 ProxyRollbackFromSnapshot()
@@ -1176,24 +1508,35 @@ ProxyRollbackFromSnapshot()
         ProxyAtomicSymlinkSwap "$old_tag" "${PROXY_CORES_ROOT}/${core}/current" || return 1
     fi
 
+    local rb_tmp=""
     if [ -f "${snap_dir}/config.json" ]
     then
-        cp "${snap_dir}/config.json" "${cfg_file}.rb.$$" || return 1
-        ProxyApplyConfigPerms "$core" "${cfg_file}.rb.$$" || true
-        mv -f "${cfg_file}.rb.$$" "$cfg_file" || return 1
+        rb_tmp=$(umask 077 && mktemp "${cfg_file}.rb.XXXXXX") || return 1
+        if ! cp "${snap_dir}/config.json" "$rb_tmp" || ! ProxyApplyConfigPerms "$core" "$rb_tmp" || ! mv -f "$rb_tmp" "$cfg_file"
+        then
+            rm -f "$rb_tmp" 2> /dev/null || true
+            return 1
+        fi
     fi
 
     if [ -f "${snap_dir}/meta.json" ]
     then
-        cp "${snap_dir}/meta.json" "${meta_file}.rb.$$" || return 1
-        chmod 600 "${meta_file}.rb.$$" 2> /dev/null || true
-        mv -f "${meta_file}.rb.$$" "$meta_file" || return 1
+        rb_tmp=$(umask 077 && mktemp "${meta_file}.rb.XXXXXX") || return 1
+        if ! cp "${snap_dir}/meta.json" "$rb_tmp" || ! mv -f "$rb_tmp" "$meta_file"
+        then
+            rm -f "$rb_tmp" 2> /dev/null || true
+            return 1
+        fi
     fi
 
     if [ -f "${snap_dir}/manifest.json" ]
     then
-        cp "${snap_dir}/manifest.json" "${PROXY_CORES_MANIFEST}.rb.$$" || return 1
-        mv -f "${PROXY_CORES_MANIFEST}.rb.$$" "$PROXY_CORES_MANIFEST" || return 1
+        rb_tmp=$(umask 077 && mktemp "${PROXY_CORES_MANIFEST}.rb.XXXXXX") || return 1
+        if ! cp "${snap_dir}/manifest.json" "$rb_tmp" || ! mv -f "$rb_tmp" "$PROXY_CORES_MANIFEST"
+        then
+            rm -f "$rb_tmp" 2> /dev/null || true
+            return 1
+        fi
     fi
 
     ServiceResolveLabel "$svc_name"
@@ -1272,6 +1615,25 @@ ProxyCoreSwitch()
     local target_tag="$2"
     local target_fmt="${3:-}"
     local cand_cfg_override="${4:-}"
+
+    if [ "$core" != "xray" ] && [ "$core" != "v2ray" ]
+    then
+        PROXY_LAST_VALIDATE_ERROR="unsupported core: ${core}"
+        return 1
+    fi
+
+    local norm_ver=""
+    if ! norm_ver=$(ProxyNormalizeVersion "$target_tag")
+    then
+        PROXY_LAST_VALIDATE_ERROR="invalid target version tag: ${target_tag}"
+        return 1
+    fi
+    target_tag="v${norm_ver}"
+    if [[ ! "$target_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+    then
+        PROXY_LAST_VALIDATE_ERROR="invalid target version tag: ${target_tag}"
+        return 1
+    fi
 
     ProxyEnsureDirs
 
@@ -1366,14 +1728,34 @@ ProxyCoreSwitch()
 
     ProxyTxWriteState "$tx_file" "preparing" "$tx_id" "$snap_dir"
 
-    local cand_cfg="${root_dir}/.switch.config.tmp.$$.json"
+    local cand_dir="" cand_cfg=""
+    if ! cand_dir=$(umask 077 && mktemp -d "${root_dir}/.switch.config.tmp.XXXXXX")
+    then
+        PROXY_LAST_VALIDATE_ERROR="failed to create secure temporary candidate config directory"
+        ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "temp dir creation failed"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if ! ProxyApplyTempDirPerms "$core" "$cand_dir"
+    then
+        rm -rf "$cand_dir" 2> /dev/null || true
+        PROXY_LAST_VALIDATE_ERROR="failed to apply candidate config directory permissions"
+        ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "candidate dir perms failed"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    cand_cfg="${cand_dir}/config.json"
+    (umask 077 && : > "$cand_cfg")
+
     if [ -n "$cand_cfg_override" ] && [ -s "$cand_cfg_override" ]
     then
         cp "$cand_cfg_override" "$cand_cfg"
     else
         if ! ProxyAdaptConfigForTarget "$core" "$cfg_file" "$cand_cfg" "$target_ver" "$target_fmt"
         then
-            rm -f "$cand_cfg"
+            rm -rf "$cand_dir"
             ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "adapt failed"
             [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
             return 1
@@ -1385,7 +1767,7 @@ ProxyCoreSwitch()
         if ! ProxyApplyConfigPerms "$core" "$cand_cfg"
         then
             PROXY_LAST_VALIDATE_ERROR="failed to apply candidate config permissions"
-            rm -f "$cand_cfg"
+            rm -rf "$cand_dir"
             ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "candidate perms failed"
             [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
             return 1
@@ -1394,7 +1776,7 @@ ProxyCoreSwitch()
         if ! ProxyValidateCandidateRules "$core" "$cand_cfg" "$target_ver" "$target_fmt" || ! ProxyTestConfigWithBinary "$core" "$target_bin" "$cand_cfg" "$target_fmt"
         then
             PROXY_LAST_VALIDATE_ERROR="${PROXY_LAST_VALIDATE_ERROR:-${PROXY_LAST_TEST_OUTPUT:-target -test failed}}"
-            rm -f "$cand_cfg"
+            rm -rf "$cand_dir"
             ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "preflight -test failed"
             [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
             return 1
@@ -1438,17 +1820,16 @@ ProxyCoreSwitch()
                 swap_ok=0
                 swap_err="config replace failed"
             fi
-        else
-            rm -f "$cand_cfg"
         fi
+        rm -rf "$cand_dir" 2> /dev/null || true
     fi
 
     if [ "$swap_ok" -eq 1 ]
     then
-        local tmp_meta="${meta_file}.tmp.$$"
-        if ! { $JQ_FILE --arg fmt "$target_fmt" '.format = $fmt' "$meta_file" > "$tmp_meta" && chmod 600 "$tmp_meta" && mv -f "$tmp_meta" "$meta_file"; }
+        local tmp_meta=""
+        if ! tmp_meta=$(umask 077 && mktemp "${meta_file}.tmp.XXXXXX") || ! { $JQ_FILE --arg fmt "$target_fmt" '.format = $fmt' "$meta_file" > "$tmp_meta" && mv -f "$tmp_meta" "$meta_file"; }
         then
-            rm -f "$tmp_meta" 2> /dev/null || true
+            rm -f "${tmp_meta:-}" 2> /dev/null || true
             swap_ok=0
             swap_err="meta.json update failed"
         fi
@@ -1456,10 +1837,10 @@ ProxyCoreSwitch()
 
     if [ "$swap_ok" -eq 1 ]
     then
-        local tmp_m="${PROXY_CORES_MANIFEST}.tmp.$$"
-        if ! { $JQ_FILE --arg core "$core" --arg tag "$target_tag" '.cores[$core].current = $tag' "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"; }
+        local tmp_m=""
+        if ! tmp_m=$(umask 077 && mktemp "${PROXY_CORES_MANIFEST}.tmp.XXXXXX") || ! { $JQ_FILE --arg core "$core" --arg tag "$target_tag" '.cores[$core].current = $tag' "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"; }
         then
-            rm -f "$tmp_m" 2> /dev/null || true
+            rm -f "${tmp_m:-}" 2> /dev/null || true
             swap_ok=0
             swap_err="manifest.json update failed"
         fi
@@ -1476,7 +1857,7 @@ ProxyCoreSwitch()
 
     if [ "$swap_ok" -eq 0 ]
     then
-        rm -f "$cand_cfg" 2> /dev/null || true
+        rm -rf "$cand_dir" 2> /dev/null || true
         if ProxyRollbackFromSnapshot "$core" "$snap_dir"
         then
             ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "swap failed (${swap_err}); rolled back"

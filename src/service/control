@@ -127,7 +127,7 @@ ServiceControlStart()
         if [ ! -f "$service_file" ] || [ -n "${3:-}" ]
         then
             arr="<array>"
-            for arg in "${args[@]}"
+            for arg in ${args[@]+"${args[@]}"}
             do
                 arr="$arr\n        <string>$arg</string>"
             done
@@ -166,7 +166,7 @@ After=syslog.target network-online.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-ExecStart=${args[*]}
+ExecStart=${args[*]+"${args[*]}"}
 WorkingDirectory=${work_dir}
 StartLimitInterval=60s
 StartLimitBurst=5

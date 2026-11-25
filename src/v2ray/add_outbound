@@ -200,9 +200,17 @@ V2rayAddOutbound()
         hysteria2)
             V2raySetAddress
             V2raySetAddressPort || return 1
-            JQs build settings_json '{
-                "servers": [{"address": $addr, "port": ($port | tonumber)}]
-            }' --arg addr "$address" --arg port "$address_port"
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '{
+                    "server": [{"address": $addr, "port": ($port | tonumber)}]
+                }' --arg addr "$address" --arg port "$address_port"
+            else
+                JQs build settings_json '{
+                    "servers": [{"address": $addr, "port": ($port | tonumber)}]
+                }' --arg addr "$address" --arg port "$address_port"
+            fi
         ;;
         blackhole)
             V2raySetResponseType

@@ -2,6 +2,8 @@ V2rayDomainUpdateCert()
 {
     local domain="$1"
     local cert_dir="$V2_ROOT/certs"
+    local crt_path="$cert_dir/$domain.crt"
+    local key_path="$cert_dir/$domain.key"
     local acme_out=""
 
     if ! mkdir -p "$cert_dir"
@@ -9,6 +11,14 @@ V2rayDomainUpdateCert()
         Println "$(eval_gettext "\$error 创建证书目录失败: \$cert_dir")\n"
         return 1
     fi
+
+    local q_dir="" q_crt="" q_key=""
+    printf -v q_dir '%q' "$cert_dir"
+    printf -v q_crt '%q' "$crt_path"
+    printf -v q_key '%q' "$key_path"
+
+    local reload_cmd=""
+    reload_cmd="if command -v setfacl > /dev/null 2>&1; then setfacl -m u:aios-v2ray:x ${q_dir} && setfacl -m u:aios-v2ray:r ${q_crt} ${q_key}; else (getent group aios-cert > /dev/null 2>&1 || groupadd -r aios-cert) && { if id -u aios-v2ray > /dev/null 2>&1; then usermod -aG aios-cert aios-v2ray; fi; } && chgrp aios-cert ${q_dir} ${q_crt} ${q_key} && chmod 750 ${q_dir} && chmod 640 ${q_crt} ${q_key}; fi && if command -v systemctl > /dev/null 2>&1; then systemctl try-reload-or-restart aios-v2ray; else service aios-v2ray restart; fi"
 
     if [ "${ca_server:-}" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && ServiceControl is-active mmproxy-acme > /dev/null 2>&1
     then
@@ -31,7 +41,7 @@ V2rayDomainUpdateCert()
             return 1
         fi
 
-        if ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$cert_dir/$domain.crt" --keypath "$cert_dir/$domain.key" --ecc 2>&1)
+        if ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$crt_path" --keypath "$key_path" --reloadcmd "$reload_cmd" --ecc 2>&1)
         then
             Println "$(eval_gettext "\$error 安装 \$domain 证书失败: \${acme_out}")\n"
             return 1
@@ -60,7 +70,7 @@ V2rayDomainUpdateCert()
         then
             acme_rc=1
             Println "$(eval_gettext "\$error 申请 \$domain 证书失败: \${acme_out}")\n"
-        elif ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$cert_dir/$domain.crt" --keypath "$cert_dir/$domain.key" --ecc 2>&1)
+        elif ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$crt_path" --keypath "$key_path" --reloadcmd "$reload_cmd" --ecc 2>&1)
         then
             acme_rc=1
             Println "$(eval_gettext "\$error 安装 \$domain 证书失败: \${acme_out}")\n"

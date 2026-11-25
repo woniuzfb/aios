@@ -226,24 +226,24 @@ inquirer()
             local chosen_label=""
             eval "chosen_label=\"\${${arr_name}[$next_val]}\""
             trace_line="[STEP $pos] $kind \"$prompt\" => [$next_val] $chosen_label"
-            read -r "${out_var}" <<< "$next_val"
+            read -r "${out_var?}" <<< "$next_val"
         ;;
         list_input|list_input_ny)
             local arr_name="$1"
             out_var="$2"
             trace_line="[STEP $pos] $kind \"$prompt\" => $next_val"
-            read -r "${out_var}" <<< "$next_val"
+            read -r "${out_var?}" <<< "$next_val"
         ;;
         text_input)
             out_var="$1"
             trace_line="[STEP $pos] $kind \"$prompt\" => \"$next_val\""
-            read -r "${out_var}" <<< "$next_val"
+            read -r "${out_var?}" <<< "$next_val"
         ;;
         checkbox_input|checkbox_input_indices)
             local arr_name="$1"
             out_var="$2"
             trace_line="[STEP $pos] $kind \"$prompt\" => [$next_val]"
-            IFS="," read -r -a "${out_var}" <<< "$next_val"
+            IFS="," read -r -a "${out_var?}" <<< "$next_val"
         ;;
         *)
             return 1
@@ -268,6 +268,11 @@ ExitOnList()
     return 0
 }
 
+ExitOnText()
+{
+    inquirer text_input "$1" "$2" "$i18n_cancel" "${3:-}" "${4:-}"
+}
+
 gettext()
 {
     printf '%s' "$1"
@@ -275,5 +280,6 @@ gettext()
 
 eval_gettext()
 {
-    gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
+    # shellcheck disable=SC2046
+    gettext "$1" | (export PATH $(envsubst --variables "$1"); envsubst "$1")
 }

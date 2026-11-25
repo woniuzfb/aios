@@ -3,27 +3,36 @@ V2rayDeleteOutboundAccount()
     ProxySelectBound "$V2_CONFIG" outbounds "$(gettext "选择要删除服务端/账号的出站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${outbounds_protocol[idx]}"
-    local field="servers"
-    if [ "$protocol" == "vmess" ] || [ "$protocol" == "vless" ]
-    then
-        field="vnext"
-    fi
-
+    local field=""
     local opts=()
-    local line
-    while IFS= read -r line
+    local opt_keys=()
+    local rec_field="" rec_key="" rec_label=""
+    while IFS=$'\t' read -r rec_field rec_key rec_label
     do
-        [ -n "$line" ] && opts+=("$line")
+        [ -z "$rec_field" ] && continue
+        field="$rec_field"
+        opt_keys+=("$rec_key")
+        opts+=("$rec_label")
     done < <(JQs query "$V2_CONFIG" '
         (if (.outbounds | type) == "array" and (.outbounds[$i] | type) == "object"
             and (.outbounds[$i].settings | type) == "object"
-            and (.outbounds[$i].settings[$f] | type) == "array"
-         then .outbounds[$i].settings[$f]
-         else [] end)
-        | to_entries[]
-        | select(.value | type == "object")
-        | "\(.key + 1). \(.value.address // ""):\(.value.port // "")"
-    ' --argjson i "$idx" --arg f "$field")
+         then .outbounds[$i].settings
+         else {} end) as $s
+        | if ($s.vnext | type) == "array" and ($s.vnext | length) > 0 then
+            $s.vnext | to_entries[] | select(.value | type == "object")
+            | "vnext\t\(.key)\t\(.key + 1). \(.value.address // ""):\(.value.port // "")"
+          elif ($s.servers | type) == "array" and ($s.servers | length) > 0 then
+            $s.servers | to_entries[] | select(.value | type == "object")
+            | "servers\t\(.key)\t\(.key + 1). \(.value.address // ""):\(.value.port // "")"
+          elif ($s.server | type) == "array" and ($s.server | length) > 0 then
+            $s.server | to_entries[] | select(.value | type == "object")
+            | "server\t\(.key)\t\(.key + 1). \(.value.address // ""):\(.value.port // "")"
+          elif ($s.address | type) == "string" and $s.address != "" then
+            "flat\t0\t1. \($s.address):\($s.port // "")"
+          else
+            empty
+          end
+    ' --argjson i "$idx")
 
     if [ "${#opts[@]}" -eq 0 ]
     then
@@ -34,12 +43,26 @@ V2rayDeleteOutboundAccount()
     local srv_idx=0
     echo
     inquirer list_input_index "$(gettext "选择要删除的服务端/账号")" opts srv_idx
-    if ! ProxyMutateConfigTx "v2ray" 'del(.outbounds[$i].settings[$f][$s])' \
-        --argjson i "$idx" --arg f "$field" --argjson s "$srv_idx"
+    local target_key="${opt_keys[srv_idx]}"
+
+    if [ "$field" == "flat" ]
     then
-        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
-        Println "$(eval_gettext "\$error 删除服务端失败: \$err_detail")\n"
-        return 1
+        if ! ProxyMutateConfigTx "v2ray" 'del(.outbounds[$i].settings.address, .outbounds[$i].settings.port, .outbounds[$i].settings.uuid, .outbounds[$i].settings.password, .outbounds[$i].settings.username, .outbounds[$i].settings.psk)' \
+            --argjson i "$idx"
+        then
+            local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+            Println "$(eval_gettext "\$error 删除服务端失败: \$err_detail")\n"
+            return 1
+        fi
+    else
+        if ! ProxyMutateConfigTx "v2ray" 'del(.outbounds[$i].settings[$f][$s])' \
+            --argjson i "$idx" --arg f "$field" --argjson s "$target_key"
+        then
+            local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+            Println "$(eval_gettext "\$error 删除服务端失败: \$err_detail")\n"
+            return 1
+        fi
     fi
+
     Println "$(eval_gettext "\$info 已删除服务端") ${green}${opts[srv_idx]}${normal}\n"
 }

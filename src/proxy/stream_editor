@@ -127,10 +127,10 @@ ProxyBuildStreamSettings()
             --argjson o "$opts_json" '
             def t_name:
                 if $net == "hy2" or $net == "hysteria2" then "hysteria2"
-                elif $net == "ws" then "websocket"
+                elif $net == "websocket" or $net == "ws" then "ws"
                 else $net end;
             def t_settings:
-                if (t_name == "websocket") then
+                if (t_name == "ws") then
                     {} + (if ($o.path // "") != "" then {path: $o.path} else {} end)
                 elif (t_name == "grpc") then
                     {} + (if ($o.service_name // "") != "" then {serviceName: $o.service_name} else {} end)

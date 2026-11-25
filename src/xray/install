@@ -41,14 +41,21 @@ XrayInstall()
 XrayUpdate()
 {
     local req_tag="${1:-v${XRAY_LATEST_TESTED_VER}}"
+    local norm_ver="" target_tag="$req_tag"
+    if norm_ver=$(ProxyNormalizeVersion "$req_tag")
+    then
+        target_tag="v${norm_ver}"
+        req_tag="$target_tag"
+    fi
+
     DepsCheck
     JQInstall
     ShFileUpdate xray
     ProxyEnsureDirs
 
-    if ProxyCoreInstall "xray" "$req_tag"
+    if ProxyCoreInstall "xray" "$target_tag"
     then
-        if ProxyCoreSwitch "xray" "$req_tag"
+        if ProxyCoreSwitch "xray" "$target_tag"
         then
             Println "$(eval_gettext "\$info aios-xray 已安全切换至 \$req_tag")\n"
         else

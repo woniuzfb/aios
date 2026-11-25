@@ -153,29 +153,30 @@ V2rayAddInbound()
     case "$protocol" in
         vmess)
             V2raySetId || return 1
-            V2raySetAlterId
-            V2raySetEmail
-            V2raySetLevel
-            V2raySetDisableInsecureEncryption
-            V2raySetDetourTo
-
-            local detour_level=0 detour_alter_id=0
-            if [ -n "$detour_to" ]
-            then
-                local saved_level="$level" saved_aid="$alter_id"
-                V2raySetDetourDefault
-                detour_level="$level"
-                detour_alter_id="$alter_id"
-                level="$saved_level"
-                alter_id="$saved_aid"
-            fi
 
             if [ "$v2_fmt" == "jsonv5" ]
             then
                 JQs build settings_json '{
-                    "users": [{"uuid": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}]
-                }' --arg id "$id" --arg aid "$alter_id" --arg email "$email" --arg lvl "$level"
+                    "users": [$id]
+                }' --arg id "$id"
             else
+                V2raySetAlterId
+                V2raySetEmail
+                V2raySetLevel
+                V2raySetDisableInsecureEncryption
+                V2raySetDetourTo
+
+                local detour_level=0 detour_alter_id=0
+                if [ -n "$detour_to" ]
+                then
+                    local saved_level="$level" saved_aid="$alter_id"
+                    V2raySetDetourDefault
+                    detour_level="$level"
+                    detour_alter_id="$alter_id"
+                    level="$saved_level"
+                    alter_id="$saved_aid"
+                fi
+
                 JQs build settings_json '
                     {
                         "clients": [{"id": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}],
@@ -192,25 +193,22 @@ V2rayAddInbound()
         ;;
         vless)
             V2raySetId || return 1
-            V2raySetEmail
-            V2raySetLevel
-
-            local v2ray_fallbacks="[]"
-            if [ "$security" == "tls" ] && [ "$network" == "tcp" ] && [[ "$tls_alpn_raw" == *"http/1.1"* ]]
-            then
-                V2raySetFallbacks || return 1
-            fi
 
             if [ "$v2_fmt" == "jsonv5" ]
             then
-                JQs build settings_json '
-                    {
-                        "decryption": "none",
-                        "users": [{"uuid": $id, "email": $email, "level": ($lvl | tonumber)}]
-                    }
-                    + (if ($fb | length) > 0 then {"fallbacks": $fb} else {} end)
-                ' --arg id "$id" --arg email "$email" --arg lvl "$level" --argjson fb "$v2ray_fallbacks"
+                JQs build settings_json '{
+                    "users": [$id]
+                }' --arg id "$id"
             else
+                V2raySetEmail
+                V2raySetLevel
+
+                local v2ray_fallbacks="[]"
+                if [ "$security" == "tls" ] && [ "$network" == "tcp" ] && [[ "$tls_alpn_raw" == *"http/1.1"* ]]
+                then
+                    V2raySetFallbacks || return 1
+                fi
+
                 JQs build settings_json '
                     {
                         "decryption": "none",
@@ -222,24 +220,22 @@ V2rayAddInbound()
         ;;
         trojan)
             V2raySetPassword
-            V2raySetEmail
-            V2raySetLevel
-
-            local v2ray_fallbacks="[]"
-            if [ "$security" == "tls" ] && [ "$network" == "tcp" ] && [[ "$tls_alpn_raw" == *"http/1.1"* ]]
-            then
-                V2raySetFallbacks || return 1
-            fi
 
             if [ "$v2_fmt" == "jsonv5" ]
             then
-                JQs build settings_json '
-                    {
-                        "users": [{"password": $pw, "email": $email, "level": ($lvl | tonumber)}]
-                    }
-                    + (if ($fb | length) > 0 then {"fallbacks": $fb} else {} end)
-                ' --arg pw "$password" --arg email "$email" --arg lvl "$level" --argjson fb "$v2ray_fallbacks"
+                JQs build settings_json '{
+                    "users": [$pw]
+                }' --arg pw "$password"
             else
+                V2raySetEmail
+                V2raySetLevel
+
+                local v2ray_fallbacks="[]"
+                if [ "$security" == "tls" ] && [ "$network" == "tcp" ] && [[ "$tls_alpn_raw" == *"http/1.1"* ]]
+                then
+                    V2raySetFallbacks || return 1
+                fi
+
                 JQs build settings_json '
                     {
                         "clients": [{"password": $pw, "email": $email, "level": ($lvl | tonumber)}]
@@ -249,18 +245,15 @@ V2rayAddInbound()
             fi
         ;;
         http)
-            V2raySetTimeout
-            V2raySetAllowTransparent
-            V2raySetLevel
-            V2raySetHttpAccount
-
             if [ "$v2_fmt" == "jsonv5" ]
             then
-                JQs build settings_json '{
-                    "accounts": [{"username": $u, "password": $p}],
-                    "allowTransparent": ($at == "true")
-                }' --arg u "$user" --arg p "$pass" --arg at "$allow_transparent"
+                settings_json="{}"
             else
+                V2raySetTimeout
+                V2raySetAllowTransparent
+                V2raySetLevel
+                V2raySetHttpAccount
+
                 JQs build settings_json '{
                     "timeout": ($to | tonumber),
                     "accounts": [{"user": $u, "pass": $p}],
@@ -271,32 +264,37 @@ V2rayAddInbound()
             fi
         ;;
         socks)
-            V2raySetLevel
-            V2raySetAuth
-            V2raySetUdp
-
-            local ip="127.0.0.1"
-            if [ "$udp" = true ]
-            then
-                V2raySetIp
-            fi
-
-            local user="" pass=""
-            if [ "$auth" == "password" ]
-            then
-                V2raySetHttpAccount
-            fi
-
             if [ "$v2_fmt" == "jsonv5" ]
             then
-                JQs build settings_json '
-                    {
-                        "udpEnabled": ($udp == "true"),
-                        "address": $ip
-                    }
-                    + (if $auth == "password" then {"accounts": [{"username": $u, "password": $p}]} else {} end)
-                ' --arg udp "$udp" --arg ip "$ip" --arg auth "$auth" --arg u "$user" --arg p "$pass"
+                V2raySetUdp
+
+                local ip="127.0.0.1"
+                if [ "$udp" = true ]
+                then
+                    V2raySetIp
+                fi
+
+                JQs build settings_json '{
+                    "udpEnabled": ($udp == "true"),
+                    "address": $ip
+                }' --arg udp "$udp" --arg ip "$ip"
             else
+                V2raySetLevel
+                V2raySetAuth
+                V2raySetUdp
+
+                local ip="127.0.0.1"
+                if [ "$udp" = true ]
+                then
+                    V2raySetIp
+                fi
+
+                local user="" pass=""
+                if [ "$auth" == "password" ]
+                then
+                    V2raySetHttpAccount
+                fi
+
                 JQs build settings_json '
                     {
                         "auth": $auth,
@@ -310,22 +308,23 @@ V2rayAddInbound()
             fi
         ;;
         shadowsocks)
-            V2raySetEmail
-            V2raySetShadowsocksMethod
-            V2raySetPassword
-            V2raySetLevel
-            V2raySetSettingsNetwork
-            V2raySetIvCheck
-
             if [ "$v2_fmt" == "jsonv5" ]
             then
+                V2raySetShadowsocksMethod
+                V2raySetPassword
+
                 JQs build settings_json '{
                     "method": $method,
-                    "password": $pw,
-                    "email": $email,
-                    "level": ($lvl | tonumber)
-                }' --arg method "$shadowsocks_method" --arg pw "$password" --arg email "$email" --arg lvl "$level"
+                    "password": $pw
+                }' --arg method "$shadowsocks_method" --arg pw "$password"
             else
+                V2raySetEmail
+                V2raySetShadowsocksMethod
+                V2raySetPassword
+                V2raySetLevel
+                V2raySetSettingsNetwork
+                V2raySetIvCheck
+
                 JQs build settings_json '{
                     "email": $email,
                     "method": $method,
@@ -336,21 +335,6 @@ V2rayAddInbound()
                 }' --arg email "$email" --arg method "$shadowsocks_method" --arg pw "$password" \
                     --arg lvl "$level" --arg net "$settings_network" --arg iv "$iv_check"
             fi
-        ;;
-        shadowsocks2022)
-            V2raySetSs2022MethodAndPsk || return 1
-            V2raySetEmail
-            V2raySetLevel
-            V2raySetSettingsNetwork
-
-            JQs build settings_json '{
-                "method": $method,
-                "key": $key,
-                "email": $email,
-                "level": ($lvl | tonumber),
-                "network": ($net | split(","))
-            }' --arg method "$ss2022_method" --arg key "$ss2022_psk" \
-                --arg email "$email" --arg lvl "$level" --arg net "$settings_network"
         ;;
         hysteria2)
             settings_json="{}"

@@ -189,6 +189,25 @@ ProxyApplyConfigPerms()
     return 0
 }
 
+ProxyApplyTempDirPerms()
+{
+    local core="$1"
+    local target_dir="$2"
+
+    if [ ! -d "$target_dir" ]
+    then
+        return 1
+    fi
+
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ] && id -u "aios-${core}" > /dev/null 2>&1
+    then
+        chown "root:aios-${core}" "$target_dir" || return 1
+        chmod 750 "$target_dir" || return 1
+    fi
+
+    return 0
+}
+
 ProxyEnsureXdgLink()
 {
     local geodata_dir="${1:-$PROXY_GEODATA_CURRENT}"
@@ -690,12 +709,13 @@ ProxyConfigTx()
     local candidate_json="$2"
     local skip_restart="${3:-0}"
 
-    local root_dir="" cfg_file="" backup_root="" svc_name="" format="json" bin="" ver=""
+    local root_dir="" cfg_file="" backup_root="" tx_file="" svc_name="" format="json" bin="" ver=""
     if [ "$core" == "xray" ]
     then
         root_dir="$X_ROOT"
         cfg_file="$X_CONFIG"
         backup_root="$X_BACKUP_ROOT"
+        tx_file="$X_TX_STATE"
         svc_name="aios-xray"
         format="json"
     elif [ "$core" == "v2ray" ]
@@ -703,6 +723,7 @@ ProxyConfigTx()
         root_dir="$V2_ROOT"
         cfg_file="$V2_CONFIG"
         backup_root="$V2_BACKUP_ROOT"
+        tx_file="$V2_TX_STATE"
         svc_name="aios-v2ray"
         format=$(ProxyGetV2rayFormat)
     else
@@ -729,16 +750,46 @@ ProxyConfigTx()
         lock_owned=1
     fi
 
-    mkdir -p "$root_dir" "$backup_root" 2> /dev/null || true
+    if ! ProxyRecoverPendingTx "$core"
+    then
+        PROXY_LAST_VALIDATE_ERROR="unresolved recovery_failed state; manual recovery required"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
 
-    local tmp_cfg="${root_dir}/.config.tmp.$$.json"
+    if ! mkdir -p "$root_dir" "$backup_root"
+    then
+        PROXY_LAST_VALIDATE_ERROR="failed to prepare config directories"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    local tmp_cfg_dir="" tmp_cfg=""
+    if ! tmp_cfg_dir=$(umask 077 && mktemp -d "${root_dir}/.config.tmp.XXXXXX")
+    then
+        PROXY_LAST_VALIDATE_ERROR="failed to create secure temporary config directory"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if ! ProxyApplyTempDirPerms "$core" "$tmp_cfg_dir"
+    then
+        rm -rf "$tmp_cfg_dir" 2> /dev/null || true
+        PROXY_LAST_VALIDATE_ERROR="failed to apply temporary config directory permissions"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    tmp_cfg="${tmp_cfg_dir}/config.json"
+    (umask 077 && : > "$tmp_cfg")
+
     local bak_cfg=""
     local ts
     ts=$(date +%Y%m%d_%H%M%S 2> /dev/null || echo "$$")
 
     if ! printf '%s\n' "$candidate_json" | $JQ_FILE '.' > "$tmp_cfg" 2> /dev/null
     then
-        rm -f "$tmp_cfg" 2> /dev/null || true
+        rm -rf "$tmp_cfg_dir" 2> /dev/null || true
         PROXY_LAST_VALIDATE_ERROR="invalid JSON payload"
         [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
         return 1
@@ -746,14 +797,14 @@ ProxyConfigTx()
 
     if ! ProxyValidateCandidateRules "$core" "$tmp_cfg" "$ver" "$format"
     then
-        rm -f "$tmp_cfg" 2> /dev/null || true
+        rm -rf "$tmp_cfg_dir" 2> /dev/null || true
         [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
         return 1
     fi
 
     if ! ProxyApplyConfigPerms "$core" "$tmp_cfg"
     then
-        rm -f "$tmp_cfg" 2> /dev/null || true
+        rm -rf "$tmp_cfg_dir" 2> /dev/null || true
         PROXY_LAST_VALIDATE_ERROR="failed to apply candidate config permissions"
         [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
         return 1
@@ -764,7 +815,7 @@ ProxyConfigTx()
         if ! ProxyTestConfigWithBinary "$core" "$bin" "$tmp_cfg" "$format"
         then
             PROXY_LAST_VALIDATE_ERROR="${PROXY_LAST_TEST_OUTPUT:-core -test failed}"
-            rm -f "$tmp_cfg" 2> /dev/null || true
+            rm -rf "$tmp_cfg_dir" 2> /dev/null || true
             [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
             return 1
         fi
@@ -790,7 +841,13 @@ ProxyConfigTx()
     if [ -n "$unit_file" ] && [ -f "$unit_file" ]
     then
         need_unit_sync=1
-        bak_unit="${root_dir}/.unit.bak.$$"
+        if ! bak_unit=$(umask 077 && mktemp "${root_dir}/.unit.bak.XXXXXX")
+        then
+            rm -rf "$tmp_cfg_dir" 2> /dev/null || true
+            PROXY_LAST_VALIDATE_ERROR="failed to create secure service unit backup"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
         cp -p "$unit_file" "$bak_unit" 2> /dev/null || cp "$unit_file" "$bak_unit"
     elif [ "$old_bind" -ne "$new_bind" ] || [ "$old_tun" -ne "$new_tun" ] || { [ "$skip_restart" -ne 1 ] && [ "$svc_active" -eq 1 ]; }
     then
@@ -800,27 +857,33 @@ ProxyConfigTx()
     if [ -f "$cfg_file" ]
     then
         bak_cfg="${backup_root}/cfg_${ts}_$$.json"
-        cp -p "$cfg_file" "$bak_cfg" 2> /dev/null || cp "$cfg_file" "$bak_cfg"
-        chmod 600 "$bak_cfg" 2> /dev/null || true
+        (umask 077 && cp "$cfg_file" "$bak_cfg")
     fi
 
     if ! mv -f "$tmp_cfg" "$cfg_file"
     then
-        rm -f "$tmp_cfg" "$bak_unit" 2> /dev/null || true
+        rm -rf "$tmp_cfg_dir" 2> /dev/null || true
+        rm -f "$bak_unit" 2> /dev/null || true
         PROXY_LAST_VALIDATE_ERROR="atomic replace config failed"
         [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
         return 1
     fi
+    rm -rf "$tmp_cfg_dir" 2> /dev/null || true
 
     if [ "$need_unit_sync" -eq 1 ]
     then
         if ! ProxyWriteServiceUnit "$core"
         then
+            local rb_tmp=""
             if [ -n "$bak_cfg" ] && [ -f "$bak_cfg" ]
             then
-                cp "$bak_cfg" "${root_dir}/.rollback.tmp.$$"
-                ProxyApplyConfigPerms "$core" "${root_dir}/.rollback.tmp.$$" || true
-                mv -f "${root_dir}/.rollback.tmp.$$" "$cfg_file"
+                if rb_tmp=$(umask 077 && mktemp "${root_dir}/.rollback.tmp.XXXXXX") && cp "$bak_cfg" "$rb_tmp"
+                then
+                    ProxyApplyConfigPerms "$core" "$rb_tmp" || true
+                    mv -f "$rb_tmp" "$cfg_file"
+                else
+                    rm -f "${rb_tmp:-}" 2> /dev/null || true
+                fi
             else
                 rm -f "$cfg_file" 2> /dev/null || true
             fi
@@ -848,27 +911,47 @@ ProxyConfigTx()
     then
         if ! ServiceControl restart "$svc_name" > /dev/null 2>&1 || ! ProxyCheckReadiness "$core" "$cfg_file"
         then
+            local rb_ok=1 rb_tmp=""
             if [ -n "$bak_cfg" ] && [ -f "$bak_cfg" ]
             then
-                cp "$bak_cfg" "${root_dir}/.rollback.tmp.$$"
-                ProxyApplyConfigPerms "$core" "${root_dir}/.rollback.tmp.$$" || true
-                mv -f "${root_dir}/.rollback.tmp.$$" "$cfg_file"
+                if rb_tmp=$(umask 077 && mktemp "${root_dir}/.rollback.tmp.XXXXXX") \
+                    && cp "$bak_cfg" "$rb_tmp" \
+                    && ProxyApplyConfigPerms "$core" "$rb_tmp" \
+                    && mv -f "$rb_tmp" "$cfg_file"
+                then
+                    :
+                else
+                    rm -f "${rb_tmp:-}" 2> /dev/null || true
+                    rb_ok=0
+                fi
             fi
 
             if [ -n "$bak_unit" ] && [ -f "$bak_unit" ] && [ -n "$unit_file" ]
             then
-                cp "$bak_unit" "$unit_file" 2> /dev/null || true
-                if [ "${dist:-}" != "mac" ] && command -v systemctl > /dev/null 2>&1
+                if cp "$bak_unit" "$unit_file"
                 then
-                    systemctl daemon-reload > /dev/null 2>&1 || true
+                    if [ "${dist:-}" != "mac" ] && command -v systemctl > /dev/null 2>&1
+                    then
+                        systemctl daemon-reload || rb_ok=0
+                    fi
+                else
+                    rb_ok=0
                 fi
             else
-                ProxyWriteServiceUnit "$core" > /dev/null 2>&1 || true
+                ProxyWriteServiceUnit "$core" || rb_ok=0
             fi
 
-            ServiceControl restart "$svc_name" > /dev/null 2>&1 || true
+            if [ "$rb_ok" -eq 1 ] && ServiceControl restart "$svc_name" > /dev/null 2>&1 && ProxyCheckReadiness "$core" "$cfg_file"
+            then
+                rm -f "$bak_unit" 2> /dev/null || true
+                PROXY_LAST_VALIDATE_ERROR="service restart failed; rolled back previous config"
+                [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+                return 1
+            fi
+
             rm -f "$bak_unit" 2> /dev/null || true
-            PROXY_LAST_VALIDATE_ERROR="service restart failed; rolled back previous config"
+            ProxyTxWriteState "$tx_file" "recovery_failed" "cfg_${ts}_$$" "$bak_cfg" "manual_recovery_required: rollback restart failed"
+            PROXY_LAST_VALIDATE_ERROR="service restart failed and rollback recovery failed; manual recovery required"
             [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
             return 1
         fi
