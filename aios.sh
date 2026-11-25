@@ -788,6 +788,28 @@ FormatEpoch()
     date --date="@$ts" "$fmt" 2> /dev/null
 }
 
+PrintfTime()
+{
+    local _pt_var="$1"
+    local _pt_fmt="$2"
+    local _pt_ts="${3:--1}"
+
+    if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 2 ]; }
+    then
+        printf -v "$_pt_var" "%(${_pt_fmt})T" "$_pt_ts"
+        return 0
+    fi
+
+    local _pt_val=""
+    if [ "$_pt_ts" == "-1" ] || [ -z "$_pt_ts" ]
+    then
+        _pt_val=$(date "+${_pt_fmt}")
+    else
+        _pt_val=$(FormatEpoch "$_pt_ts" "+${_pt_fmt}")
+    fi
+    printf -v "$_pt_var" '%s' "$_pt_val"
+}
+
 FilterFileLines()
 {
     local needle="$1"
@@ -4561,7 +4583,7 @@ inquirer()
         var_name=$2
         date_pick_validator=${3:-inquirer:date_pick_default_validator}
         date_pick_validate_failed_msg=${4:-$(gettext "时间验证错误")}
-        date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' "${!var_name:--1}")
+        PrintfTime date_pick '%Y-%m-%d %H:%M:%S' "${!var_name:--1}"
         current_pos=12
         failed_count=0
         first_keystroke=true
@@ -4824,7 +4846,7 @@ Spinner()
     then
         chmod +r "$TMP_FILE"
     else
-        printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime TMP_FILE '%m-%d-%H:%M:%S' -1
     fi
 
     trap '
@@ -5870,7 +5892,7 @@ CurlImpersonateCompile()
 
     if [ -d curl-impersonate.git ] 
     then
-        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime update_date '%m-%d-%H:%M:%S' -1
         mv curl-impersonate.git curl-impersonate.git_"$update_date"
     fi
 
@@ -5941,7 +5963,7 @@ NodeLibcurlImpersonateCompile()
 
     if [ -d node-libcurl-impersonate ] 
     then
-        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime update_date '%m-%d-%H:%M:%S' -1
         mv node-libcurl-impersonate node-libcurl-impersonate_"$update_date"
     fi
 
@@ -5982,14 +6004,14 @@ ChangeLogFile()
 LogInfo()
 {
     ChangeLogFile
-    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    PrintfTime date_now '%m-%d %H:%M:%S' -1
     printf '%s\n' "$date_now $1" >> "$LOG_FILE"
 }
 
 LogErr()
 {
     ChangeLogFile
-    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    PrintfTime date_now '%m-%d %H:%M:%S' -1
     printf '%s\n' "$date_now [ERROR: $1]" >> "$LOG_FILE"
 }
 
@@ -19887,7 +19909,7 @@ XtreamCodesListChnls()
                             then
                                 chmod +r "$TMP_FILE"
                             else
-                                printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                PrintfTime TMP_FILE '%m-%d-%H:%M:%S' -1
                             fi
 
                             trap '
@@ -21658,7 +21680,7 @@ then
             ln -s /usr/bin/python3 /usr/bin/python
         fi
 
-        printf -v now '%(%s)T' -1
+        PrintfTime now '%s' -1
         youtube_dl_update_time=${youtube_dl_update_time:-0}
 
         if [[ -x $(command -v youtube-dl) ]] 
@@ -21707,7 +21729,7 @@ then
             ln -s /usr/bin/python3 /usr/bin/python
         fi
 
-        printf -v now '%(%s)T' -1
+        PrintfTime now '%s' -1
         yt_dlp_update_time=${yt_dlp_update_time:-0}
 
         if [[ -x $(command -v yt-dlp) ]] 
@@ -27350,7 +27372,7 @@ then
                 inquirer list_input "$(gettext "是否下个小时开始随机重启")" ny_options anti_leech_restart_next_hour_yn
                 if [ "$anti_leech_restart_next_hour_yn" == "$i18n_yes" ]
                 then
-                    printf -v current_hour '%(%-H)T' -1
+                    PrintfTime current_hour '%-H' -1
                     skip_hour=$current_hour
                     minutes=()
                 fi
@@ -31035,9 +31057,9 @@ then
             "laligatv:1015:LaLigaTV HD"
         )
 
-        printf -v today '%(%Y-%m-%d)T' -1
+        PrintfTime today '%Y-%m-%d' -1
         today_time=$(date -d "today 0" +%s)
-        printf -v sys_time '%(%s)T' -1
+        PrintfTime sys_time '%s' -1
         min_start_time=$((sys_time-5400))
 
         if [ "$search_options_index" -eq 0 ] 
@@ -31474,7 +31496,7 @@ then
             ParseSchedule
         done
 
-        printf -v today '%(%Y%m%d)T' -1
+        PrintfTime today '%Y%m%d' -1
         yesterday=$(date --date="yesterday" +"%Y%m%d")
         tomorrow=$(date --date="tomorrow" +"%Y%m%d")
 
@@ -32548,7 +32570,7 @@ then
             count=0
             log=""
             last_line=""
-            printf -v this_hour '%(%H)T' -1
+            PrintfTime this_hour '%H' -1
             while IFS= read -r line 
             do
                 if [ "$count" -lt "${1:-10}" ] 
@@ -36495,7 +36517,7 @@ then
                 1) 
                     vip_user_expire_days=1
                     vip_user_sum="ssum"
-                    printf -v now '%(%s)T' -1
+                    PrintfTime now '%s' -1
                     vip_user_expire=$((now+86400))
                     break
                 ;;
@@ -36507,7 +36529,7 @@ then
                         case $vip_user_expire_days in
                             ""|1) 
                                 vip_user_expire_days=1
-                                printf -v now '%(%s)T' -1
+                                PrintfTime now '%s' -1
                                 vip_user_expire=$((now+86400))
                                 break 2
                             ;;
@@ -36517,7 +36539,7 @@ then
                             *) 
                                 if [[ $vip_user_expire_days -gt 1 ]]
                                 then
-                                    printf -v now '%(%s)T' -1
+                                    PrintfTime now '%s' -1
                                     vip_user_expire=$((now+86400*vip_user_expire_days))
                                     break 2
                                 else
@@ -37328,7 +37350,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
             day=$((vip_user_expire/86400))
             st2="$vip_user_expire"
         else
-            printf -v now '%(%s)T' -1
+            PrintfTime now '%s' -1
             st2=$((now+86400*720))
         fi
 
@@ -37633,12 +37655,12 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                     programs_count=${#sys_times[@]}
                     for((n=0;n<programs_count;n++));
                     do
-                        printf -v start '%(%Y%m%d%H%M%S)T' "${sys_times[n]}"
+                        PrintfTime start '%Y%m%d%H%M%S' "${sys_times[n]}"
                         if [ "$n" -eq $((programs_count-1)) ] 
                         then
                             stop=$(date -d 'tomorrow 00:00:00' "+%Y%m%d%H%M%S")
                         else
-                            printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[n+1]}"
+                            PrintfTime stop '%Y%m%d%H%M%S' "${sys_times[n+1]}"
                         fi
                         epg_list="$epg_list<programme start=\"$start +0800\" stop=\"$stop +0800\" channel=\"$program_id\">\n<title lang=\"zh\">${titles[n]}</title>\n</programme>\n"
                     done
@@ -37677,7 +37699,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
             flock -x 205
             {
                 MonitorLog "$(eval_gettext "启动 VIP PID \$vip_pid !")"
-                printf -v now '%(%s)T' -1
+                PrintfTime now '%s' -1
                 never=$((now+86400*720))
 
                 VipGetSchedules
@@ -37898,7 +37920,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         done
                         rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
                     done
-                    printf -v now '%(%s)T' -1
+                    PrintfTime now '%s' -1
                 done
             } 205>&-
         } 205<"$pid_file"
@@ -38013,7 +38035,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
             Println "$(eval_gettext "\$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb")\n"
         else
             VipGetUsers
-            printf -v now '%(%s)T' -1
+            PrintfTime now '%s' -1
             vip_users_list=""
             for((i=0;i<vip_users_count;i++));
             do
@@ -40549,7 +40571,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         niotv_proxy+=( -x $(< $IPTV_ROOT/niotv_proxy) )
                     fi
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
 
                     for chnl in "${niotv_chnls[@]}"
                     do
@@ -40612,7 +40634,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleIcable()
                 {
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
                     sys_time=$(date --date="today 0" +"%s")
                     yesterday=$(date --date="yesterday" +"%Y%m%d")
 
@@ -40716,7 +40738,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         chnl_name=${chnl_name// /-}
                         chnl_name_encode=$(UrlencodeUpper "$chnl_name")
 
-                        printf -v today '%(%Y-%m-%d)T' -1
+                        PrintfTime today '%Y-%m-%d' -1
 
                         SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
 
@@ -40768,7 +40790,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleTvbhk()
                 {
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
                     sys_time=$(date -d $today +%s)
                     min_sys_time=$((sys_time-7200))
                     max_sys_time=$((sys_time+86400))
@@ -40817,7 +40839,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                     cd "$IPTV_ROOT"
                     pdf2htmlEX --zoom 1.3 "./tvb_hd.pdf"
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -41130,7 +41152,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                             break
                         fi
                     done < "./tvb_hd.html"
-                    weekday=$(printf '%(%u)T' -1)
+                    PrintfTime weekday '%u' -1
                     if [ "$weekday" -eq 1 ]
                     then
                         p_title=("${sunday_program_title[@]}")
@@ -41189,7 +41211,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         fi
 
                         program_sys_time=$(date -d "${date}T$new_program_time-08:00" +%s)
-                        new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                        PrintfTime new_program_time '%H:%M' "$program_sys_time"
 
                         program_title=${p_title[i]}
 
@@ -41250,7 +41272,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         return 0
                     fi
 
-                    printf -v today '%(%d%m%Y)T' -1
+                    PrintfTime today '%d%m%Y' -1
                     epg_data=$(curl -s -L "https://www.singtel.com$singteltv_epg_end_point/$today.json")
 
                     IFS=$'\t' read -r title channel_id epg_channel_id < <($JQ_FILE -r '[
@@ -41324,7 +41346,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleCntv()
                 {
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
 
                     if [ ! -s "$SCHEDULE_JSON" ]
                     then
@@ -41363,7 +41385,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleTvbs()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
 
                     if [ ! -s "$SCHEDULE_JSON" ]
                     then
@@ -41408,7 +41430,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 Schedule_4gtv()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
 
                     if [ ! -s "$SCHEDULE_JSON" ]
                     then
@@ -41460,7 +41482,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                 }
                 ScheduleAstro()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
 
                     if [ ! -s "$SCHEDULE_JSON" ]
                     then
@@ -41504,7 +41526,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleNbcsn()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
                     min_sys_time=$((sys_time-7200))
@@ -41571,7 +41593,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "beinsportsenglish1" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -41646,7 +41668,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "beinsports1au" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -41724,7 +41746,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "supersportfootball" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     yesterday=$(date -d "yesterday" +"%Y-%m-%d")
                     min_start_time=$(date -d "yesterday 22:00:00" +%s)
                     max_start_time=$(date -d "today 23:59:59" +%s)
@@ -41765,7 +41787,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
                     api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
@@ -41827,7 +41849,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "premiersports1" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y%m%d")
                     min_sys_time=$((sys_time-7200))
@@ -41859,7 +41881,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                                 break
                             fi
 
-                            printf -v schedule_time '%(%H:%M)T' "$schedule_sys_time"
+                            PrintfTime schedule_time '%H:%M' "$schedule_sys_time"
 
                             new_schedule="${pr_schedule%%</li>*}"
                             schedule_title=""
@@ -41916,7 +41938,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
                     fi
 
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
                     sys_time=$(date -d $today +%s)
                     yesterday=$(date --date="yesterday" +"%Y%m%d")
                     min_sys_time=$((sys_time-7200))
@@ -41960,7 +41982,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                 }
                 ScheduleHboasia()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
 
                     if [ ! -s "$SCHEDULE_JSON" ]
                     then
@@ -41986,7 +42008,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                             fi
 
                             program_sys_time=$(date -d "$program_time" +%s)
-                            new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                            PrintfTime new_program_time '%H:%M' "$program_sys_time"
 
                             [ -n "$schedule" ] && schedule="$schedule,"
                             schedule=$schedule'{
@@ -42014,7 +42036,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleHbous()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     min_sys_time=$((sys_time-7200))
                     max_sys_time=$((sys_time+86400))
@@ -42055,7 +42077,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                             program_sys_time=$(date -d "$program_time" +%s)
                             if [ "$program_sys_time" -ge "$min_sys_time" ]
                             then
-                                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                                PrintfTime program_time '%H:%M' "$program_sys_time"
                                 [ -n "$schedule" ] && schedule="$schedule,"
                                 schedule=$schedule'{
                                     "title":"'"$program_title"'",
@@ -42074,7 +42096,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                             program_sys_time=$(date -d "$program_time" +%s)
                             if [ "$program_sys_time" -le "$max_sys_time" ] && [ "$program_sys_time" -gt "$min_sys_time" ]
                             then
-                                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                                PrintfTime program_time '%H:%M' "$program_sys_time"
                                 [ -n "$schedule" ] && schedule="$schedule,"
                                 schedule=$schedule'{
                                     "title":"'"$program_title"'",
@@ -42098,7 +42120,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleOntvtonight()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     sys_time=$(date -d $today +%s)
                     min_sys_time=$((sys_time-7200))
                     max_sys_time=$((sys_time+86400))
@@ -42153,7 +42175,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                                 program_sys_time=$(date -d "${yesterday}T$new_program_time$chnl_zone" +%s)
                                 if [ "$program_sys_time" -ge "$min_sys_time" ]
                                 then
-                                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                                    PrintfTime program_time '%H:%M' "$program_sys_time"
                                     [ -n "$schedule" ] && schedule="$schedule,"
                                     schedule=$schedule'{
                                         "title":"'"$program_title"'",
@@ -42196,7 +42218,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                                 program_sys_time=$(date -d "${today}T$new_program_time$chnl_zone" +%s)
                                 if [ "$program_sys_time" -le "$max_sys_time" ]
                                 then
-                                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                                    PrintfTime program_time '%H:%M' "$program_sys_time"
                                     [ -n "$schedule" ] && schedule="$schedule,"
                                     schedule=$schedule'{
                                         "title":"'"$program_title"'",
@@ -42224,7 +42246,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleDisneyjr()
                 {
-                    printf -v today '%(%Y%m%d)T' -1
+                    PrintfTime today '%Y%m%d' -1
                     SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
                     if [ ! -s "$SCHEDULE_JSON" ]
@@ -42264,7 +42286,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleFoxmovies()
                 {
-                    printf -v today '%(%Y-%-m-%-d)T' -1
+                    PrintfTime today '%Y-%-m-%-d' -1
                     SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
 
                     if [ ! -s "$SCHEDULE_JSON" ]
@@ -42312,7 +42334,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleAmlh()
                 {
-                    printf -v today '%(%Y-%-m-%-d)T' -1
+                    PrintfTime today '%Y-%-m-%-d' -1
                     timestamp=$(date -d $today +%s)
 
                     SCHEDULE_LINK="http://www.macaulotustv.cc/index.php/index/getdetail.html"
@@ -42408,7 +42430,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
 
                 ScheduleFoxnews()
                 {
-                    printf -v today '%(%Y-%m-%d)T' -1
+                    PrintfTime today '%Y-%m-%d' -1
                     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
                     min_start_time=$(date -d "yesterday 22:00:00" +%s)
                     max_start_time=$(date -d "today 23:59:59" +%s)
@@ -42904,7 +42926,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                         schedule_backup_names+=("$backup_name")
                         schedule_backup_dates+=("$backup_date")
                         schedule_backup_schedules+=("$backup_schedule")
-                        printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
+                        PrintfTime date '%m-%d %H:%M:%S' "$backup_date"
                         schedule_backup_list="$schedule_backup_list $schedule_backup_count. $(gettext "备份名称"): ${green}$backup_name${normal} $(gettext "备份日期"): ${green}$date${normal}\n\n"
                     done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
 
@@ -55728,7 +55750,7 @@ EOF
 
                 if [ -f /etc/resolv.conf ] 
                 then
-                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                    PrintfTime now '%m-%d-%H:%M:%S' -1
                     mv /etc/resolv.conf /etc/resolv.conf-$now
                 fi
 
@@ -56495,7 +56517,7 @@ ${pve_menu_body_cache}"
 
                 if [ -f /etc/resolv.conf ]
                 then
-                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                    PrintfTime now '%m-%d-%H:%M:%S' -1
                     mv /etc/resolv.conf /etc/resolv.conf-$now
                 fi
 
@@ -56756,7 +56778,7 @@ ${pve_menu_body_cache}"
                 exit 1
             fi
 
-            printf -v timestamp '%(%s)T' -1
+            PrintfTime timestamp '%s' -1
 
             echo
             qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "save" "$timestamp" "$config_name" > /dev/null
@@ -56796,7 +56818,7 @@ ${pve_menu_body_cache}"
                     configs_time+=("$config_time")
                     configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
-                    printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                    PrintfTime config_date '%Y-%m-%d %H:%M:%S' "$config_time"
                     configs_list="$configs_list $configs_count.${indent_6}${i18n_name}: ${green}${config_name_list:-$i18n_none}${normal} ${pve_i18n_date}: ${green}$config_date${normal}\n\n"
                 done
 
@@ -57145,7 +57167,7 @@ ${arm_menu_body_cache}"
 
                 if [ -f /etc/resolv.conf ] 
                 then
-                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                    PrintfTime now '%m-%d-%H:%M:%S' -1
                     mv /etc/resolv.conf /etc/resolv.conf-$now
                 fi
 
@@ -57746,7 +57768,7 @@ EOF
 
             mkdir -p "$HOME/openwrt_saved/openwrt-v2ray"
 
-            printf -v timestamp '%(%s)T' -1
+            PrintfTime timestamp '%s' -1
 
             if ! docker cp openwrt:/etc/config/v2ray "$HOME/openwrt_saved/openwrt-v2ray/config-$timestamp$config_name" 2> /dev/null
             then
@@ -57793,7 +57815,7 @@ EOF
                     configs_time+=("$config_time")
                     configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
-                    printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                    PrintfTime config_date '%Y-%m-%d %H:%M:%S' "$config_time"
                     configs_list="$configs_list $configs_count.${indent_6}${i18n_name}: ${green}${config_name_list:-$i18n_none}${normal} ${arm_i18n_date}: ${green}$config_date${normal}\n\n"
                 done
 
@@ -61761,7 +61783,7 @@ ${CLOUDFLARE_PARTNER_MENU_TEXT}"
         do
             case $cf_worker_project_name in
                 "") 
-                    printf -v cf_worker_project_name '%(%s)T' -1
+                    PrintfTime cf_worker_project_name '%s' -1
                     cf_worker_project_name="$(RandStr)_$cf_worker_project_name"
                     break
                 ;;
@@ -63326,7 +63348,7 @@ ${CLOUDFLARE_PARTNER_MENU_TEXT}"
 
                 while true 
                 do
-                    printf -v now '%(%s)T' -1
+                    PrintfTime now '%s' -1
                     if [ "$now" -ge "$clear" ] 
                     then
                         clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
@@ -63730,7 +63752,7 @@ ${CLOUDFLARE_PARTNER_MENU_TEXT}"
                 workers_monitor_stream_proxy_pairs+=("$history_pair")
                 history_pair=${history_pair// / => }
                 workers_monitor_stream_proxy_pairs_list=${history_pair//|/$'\n' }
-                printf -v date '%(%m-%d %H:%M:%S)T' "$history_date"
+                PrintfTime date '%m-%d %H:%M:%S' "$history_date"
                 workers_monitor_stream_proxy_list="$workers_monitor_stream_proxy_list $workers_monitor_stream_proxy_count. ${green}$date${normal}\n $workers_monitor_stream_proxy_pairs_list\n\n"
             fi
         done < <($JQ_FILE '(.workers_monitor.stream_proxy| if .== null then [] else . end)[]|([.date,(.pairs|to_entries|map([.value.project_name,.value.upstream]|join(" "))|join("|"))]|join("^"))' "$CF_CONFIG")
@@ -64270,7 +64292,7 @@ ${green}8.${normal} $(gettext "浏览频道")
             ExitOnList n "`gettext \"耗时可能很长, 是否继续\"`"
 
             Println "$(eval_gettext "\$info 检测中...")"
-            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+            PrintfTime now '%m-%d-%H:%M:%S' -1
 
             cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
 
@@ -64311,7 +64333,7 @@ ${green}8.${normal} $(gettext "浏览频道")
 
             if [ -s "$XTREAM_CODES" ] 
             then
-                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                PrintfTime now '%m-%d-%H:%M:%S' -1
                 cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
             fi
 
@@ -64469,7 +64491,7 @@ then
                 systemctl stop openlist 2>/dev/null || true
             fi
 
-            printf -v date '%(%m-%d-%H:%M:%S)T' -1
+            PrintfTime date '%m-%d-%H:%M:%S' -1
             openlist_backup="$OPENLIST_ROOT-$date"
             mv "$OPENLIST_ROOT" "$openlist_backup"
         else
@@ -64498,7 +64520,7 @@ then
 
         if ! TMP_DIR=$(mktemp -q -d) 
         then
-            printf -v TMP_DIR '%(%m-%d-%H:%M:%S)T' -1
+            PrintfTime TMP_DIR '%m-%d-%H:%M:%S' -1
             mkdir -p "$TMP_DIR"
         fi
 
@@ -68951,7 +68973,7 @@ then
             then
                 chmod +r "$TMP_FILE"
             else
-                printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                PrintfTime TMP_FILE '%m-%d-%H:%M:%S' -1
             fi
 
             trap '

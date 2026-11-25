@@ -22,12 +22,12 @@ VipProcessLists()
                 programs_count=${#sys_times[@]}
                 for((n=0;n<programs_count;n++));
                 do
-                    printf -v start '%(%Y%m%d%H%M%S)T' "${sys_times[n]}"
+                    PrintfTime start '%Y%m%d%H%M%S' "${sys_times[n]}"
                     if [ "$n" -eq $((programs_count-1)) ] 
                     then
                         stop=$(date -d 'tomorrow 00:00:00' "+%Y%m%d%H%M%S")
                     else
-                        printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[n+1]}"
+                        PrintfTime stop '%Y%m%d%H%M%S' "${sys_times[n+1]}"
                     fi
                     epg_list="$epg_list<programme start=\"$start +0800\" stop=\"$stop +0800\" channel=\"$program_id\">\n<title lang=\"zh\">${titles[n]}</title>\n</programme>\n"
                 done

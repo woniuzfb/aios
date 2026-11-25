@@ -34,7 +34,7 @@ CloudflareSetWorkerProjectName()
     do
         case $cf_worker_project_name in
             "") 
-                printf -v cf_worker_project_name '%(%s)T' -1
+                PrintfTime cf_worker_project_name '%s' -1
                 cf_worker_project_name="$(RandStr)_$cf_worker_project_name"
                 break
             ;;

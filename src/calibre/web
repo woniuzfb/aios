@@ -14,7 +14,7 @@ CalibreWebPatch()
         then
             chmod +r "$TMP_FILE"
         else
-            printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+            PrintfTime TMP_FILE '%m-%d-%H:%M:%S' -1
         fi
 
         trap '

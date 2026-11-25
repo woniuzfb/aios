@@ -1963,7 +1963,15 @@ inquirer()
         var_name=$2
         date_pick_validator=${3:-inquirer:date_pick_default_validator}
         date_pick_validate_failed_msg=${4:-$(gettext "时间验证错误")}
-        date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' "${!var_name:--1}")
+        if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 2 ]; }
+        then
+            date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' "${!var_name:--1}")
+        elif [ -z "${!var_name:-}" ] || [ "${!var_name:-}" == "-1" ]
+        then
+            date_pick=$(date '+%Y-%m-%d %H:%M:%S')
+        else
+            date_pick=$(date -r "${!var_name}" '+%Y-%m-%d %H:%M:%S' 2> /dev/null || date --date="@${!var_name}" '+%Y-%m-%d %H:%M:%S' 2> /dev/null)
+        fi
         current_pos=12
         failed_count=0
         first_keystroke=true

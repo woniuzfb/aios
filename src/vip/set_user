@@ -46,7 +46,7 @@ VipSetUserSum()
             1) 
                 vip_user_expire_days=1
                 vip_user_sum="ssum"
-                printf -v now '%(%s)T' -1
+                PrintfTime now '%s' -1
                 vip_user_expire=$((now+86400))
                 break
             ;;
@@ -58,7 +58,7 @@ VipSetUserSum()
                     case $vip_user_expire_days in
                         ""|1) 
                             vip_user_expire_days=1
-                            printf -v now '%(%s)T' -1
+                            PrintfTime now '%s' -1
                             vip_user_expire=$((now+86400))
                             break 2
                         ;;
@@ -68,7 +68,7 @@ VipSetUserSum()
                         *) 
                             if [[ $vip_user_expire_days -gt 1 ]]
                             then
-                                printf -v now '%(%s)T' -1
+                                PrintfTime now '%s' -1
                                 vip_user_expire=$((now+86400*vip_user_expire_days))
                                 break 2
                             else

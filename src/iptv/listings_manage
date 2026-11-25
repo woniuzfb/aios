@@ -455,7 +455,7 @@ ScheduleListBackup()
         schedule_backup_names+=("$backup_name")
         schedule_backup_dates+=("$backup_date")
         schedule_backup_schedules+=("$backup_schedule")
-        printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
+        PrintfTime date '%m-%d %H:%M:%S' "$backup_date"
         schedule_backup_list="$schedule_backup_list $schedule_backup_count. $(gettext "备份名称"): ${green}$backup_name${normal} $(gettext "备份日期"): ${green}$date${normal}\n\n"
     done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
 

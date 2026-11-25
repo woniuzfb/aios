@@ -12,7 +12,7 @@ VipMonitor()
         flock -x 205
         {
             MonitorLog "$(eval_gettext "启动 VIP PID \$vip_pid !")"
-            printf -v now '%(%s)T' -1
+            PrintfTime now '%s' -1
             never=$((now+86400*720))
 
             VipGetSchedules
@@ -233,7 +233,7 @@ VipMonitor()
                     done
                     rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
                 done
-                printf -v now '%(%s)T' -1
+                PrintfTime now '%s' -1
             done
         } 205>&-
     } 205<"$pid_file"

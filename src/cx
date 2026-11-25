@@ -62,7 +62,7 @@ case $xtream_codes_num in
         ExitOnList n "`gettext \"耗时可能很长, 是否继续\"`"
 
         Println "$(eval_gettext "\$info 检测中...")"
-        printf -v now '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime now '%m-%d-%H:%M:%S' -1
 
         cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
 
@@ -103,7 +103,7 @@ case $xtream_codes_num in
 
         if [ -s "$XTREAM_CODES" ] 
         then
-            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+            PrintfTime now '%m-%d-%H:%M:%S' -1
             cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
         fi
 

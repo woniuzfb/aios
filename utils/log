@@ -16,13 +16,13 @@ ChangeLogFile()
 LogInfo()
 {
     ChangeLogFile
-    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    PrintfTime date_now '%m-%d %H:%M:%S' -1
     printf '%s\n' "$date_now $1" >> "$LOG_FILE"
 }
 
 LogErr()
 {
     ChangeLogFile
-    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    PrintfTime date_now '%m-%d %H:%M:%S' -1
     printf '%s\n' "$date_now [ERROR: $1]" >> "$LOG_FILE"
 }

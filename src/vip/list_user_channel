@@ -5,7 +5,7 @@ VipListUserChannel()
         Println "$(eval_gettext "\$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb")\n"
     else
         VipGetUsers
-        printf -v now '%(%s)T' -1
+        PrintfTime now '%s' -1
         vip_users_list=""
         for((i=0;i<vip_users_count;i++));
         do

@@ -532,7 +532,7 @@ CloudflareWorkersMonitor()
 
             while true 
             do
-                printf -v now '%(%s)T' -1
+                PrintfTime now '%s' -1
                 if [ "$now" -ge "$clear" ] 
                 then
                     clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
@@ -936,7 +936,7 @@ CloudflareEnableWorkersMonitor()
             workers_monitor_stream_proxy_pairs+=("$history_pair")
             history_pair=${history_pair// / => }
             workers_monitor_stream_proxy_pairs_list=${history_pair//|/$'\n' }
-            printf -v date '%(%m-%d %H:%M:%S)T' "$history_date"
+            PrintfTime date '%m-%d %H:%M:%S' "$history_date"
             workers_monitor_stream_proxy_list="$workers_monitor_stream_proxy_list $workers_monitor_stream_proxy_count. ${green}$date${normal}\n $workers_monitor_stream_proxy_pairs_list\n\n"
         fi
     done < <($JQ_FILE '(.workers_monitor.stream_proxy| if .== null then [] else . end)[]|([.date,(.pairs|to_entries|map([.value.project_name,.value.upstream]|join(" "))|join("|"))]|join("^"))' "$CF_CONFIG")

@@ -116,7 +116,7 @@ then
 
     if [ -f /etc/resolv.conf ] 
     then
-        printf -v now '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime now '%m-%d-%H:%M:%S' -1
         mv /etc/resolv.conf /etc/resolv.conf-$now
     fi
 

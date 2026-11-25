@@ -1,6 +1,6 @@
 ScheduleAstro()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
 
     if [ ! -s "$SCHEDULE_JSON" ]
     then
@@ -44,7 +44,7 @@ ScheduleAstro()
 
 ScheduleNbcsn()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
     min_sys_time=$((sys_time-7200))
@@ -111,7 +111,7 @@ ScheduleBeinsports()
         printf '{"%s":[]}' "beinsportsenglish1" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -186,7 +186,7 @@ ScheduleBeinsportsau()
         printf '{"%s":[]}' "beinsports1au" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -264,7 +264,7 @@ ScheduleSupersport()
         printf '{"%s":[]}' "supersportfootball" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     yesterday=$(date -d "yesterday" +"%Y-%m-%d")
     min_start_time=$(date -d "yesterday 22:00:00" +%s)
     max_start_time=$(date -d "today 23:59:59" +%s)
@@ -305,7 +305,7 @@ ScheduleBtsport()
         printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
     api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
@@ -367,7 +367,7 @@ SchedulePremiersports()
         printf '{"%s":[]}' "premiersports1" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y%m%d")
     min_sys_time=$((sys_time-7200))
@@ -399,7 +399,7 @@ SchedulePremiersports()
                 break
             fi
 
-            printf -v schedule_time '%(%H:%M)T' "$schedule_sys_time"
+            PrintfTime schedule_time '%H:%M' "$schedule_sys_time"
 
             new_schedule="${pr_schedule%%</li>*}"
             schedule_title=""
@@ -456,7 +456,7 @@ ScheduleSky()
         printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y%m%d")
     min_sys_time=$((sys_time-7200))

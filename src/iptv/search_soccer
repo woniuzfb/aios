@@ -57,9 +57,9 @@ SearchSoccerSchedules()
         "laligatv:1015:LaLigaTV HD"
     )
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     today_time=$(date -d "today 0" +%s)
-    printf -v sys_time '%(%s)T' -1
+    PrintfTime sys_time '%s' -1
     min_start_time=$((sys_time-5400))
 
     if [ "$search_options_index" -eq 0 ] 
@@ -496,7 +496,7 @@ SearchSoccerSchedules()
         ParseSchedule
     done
 
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     yesterday=$(date --date="yesterday" +"%Y%m%d")
     tomorrow=$(date --date="tomorrow" +"%Y%m%d")
 

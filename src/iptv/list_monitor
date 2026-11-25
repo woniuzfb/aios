@@ -6,7 +6,7 @@ MonitorList()
         count=0
         log=""
         last_line=""
-        printf -v this_hour '%(%H)T' -1
+        PrintfTime this_hour '%H' -1
         while IFS= read -r line 
         do
             if [ "$count" -lt "${1:-10}" ] 

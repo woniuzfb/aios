@@ -8,7 +8,7 @@ VipGetStreamLink()
         day=$((vip_user_expire/86400))
         st2="$vip_user_expire"
     else
-        printf -v now '%(%s)T' -1
+        PrintfTime now '%s' -1
         st2=$((now+86400*720))
     fi
 

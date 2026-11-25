@@ -196,7 +196,7 @@ CurlImpersonateCompile()
 
     if [ -d curl-impersonate.git ] 
     then
-        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime update_date '%m-%d-%H:%M:%S' -1
         mv curl-impersonate.git curl-impersonate.git_"$update_date"
     fi
 
@@ -267,7 +267,7 @@ NodeLibcurlImpersonateCompile()
 
     if [ -d node-libcurl-impersonate ] 
     then
-        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime update_date '%m-%d-%H:%M:%S' -1
         mv node-libcurl-impersonate node-libcurl-impersonate_"$update_date"
     fi
 

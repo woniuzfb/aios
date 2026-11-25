@@ -90,7 +90,7 @@ OpenListAppInstall()
             systemctl stop openlist 2>/dev/null || true
         fi
 
-        printf -v date '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime date '%m-%d-%H:%M:%S' -1
         openlist_backup="$OPENLIST_ROOT-$date"
         mv "$OPENLIST_ROOT" "$openlist_backup"
     else
@@ -119,7 +119,7 @@ OpenListAppInstall()
 
     if ! TMP_DIR=$(mktemp -q -d) 
     then
-        printf -v TMP_DIR '%(%m-%d-%H:%M:%S)T' -1
+        PrintfTime TMP_DIR '%m-%d-%H:%M:%S' -1
         mkdir -p "$TMP_DIR"
     fi
 

@@ -1,6 +1,6 @@
 ScheduleHboasia()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
 
     if [ ! -s "$SCHEDULE_JSON" ]
     then
@@ -26,7 +26,7 @@ ScheduleHboasia()
             fi
 
             program_sys_time=$(date -d "$program_time" +%s)
-            new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+            PrintfTime new_program_time '%H:%M' "$program_sys_time"
 
             [ -n "$schedule" ] && schedule="$schedule,"
             schedule=$schedule'{
@@ -54,7 +54,7 @@ ScheduleHboasia()
 
 ScheduleHbous()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     min_sys_time=$((sys_time-7200))
     max_sys_time=$((sys_time+86400))
@@ -95,7 +95,7 @@ ScheduleHbous()
             program_sys_time=$(date -d "$program_time" +%s)
             if [ "$program_sys_time" -ge "$min_sys_time" ]
             then
-                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                PrintfTime program_time '%H:%M' "$program_sys_time"
                 [ -n "$schedule" ] && schedule="$schedule,"
                 schedule=$schedule'{
                     "title":"'"$program_title"'",
@@ -114,7 +114,7 @@ ScheduleHbous()
             program_sys_time=$(date -d "$program_time" +%s)
             if [ "$program_sys_time" -le "$max_sys_time" ] && [ "$program_sys_time" -gt "$min_sys_time" ]
             then
-                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                PrintfTime program_time '%H:%M' "$program_sys_time"
                 [ -n "$schedule" ] && schedule="$schedule,"
                 schedule=$schedule'{
                     "title":"'"$program_title"'",
@@ -138,7 +138,7 @@ ScheduleHbous()
 
 ScheduleOntvtonight()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     min_sys_time=$((sys_time-7200))
     max_sys_time=$((sys_time+86400))
@@ -193,7 +193,7 @@ ScheduleOntvtonight()
                 program_sys_time=$(date -d "${yesterday}T$new_program_time$chnl_zone" +%s)
                 if [ "$program_sys_time" -ge "$min_sys_time" ]
                 then
-                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    PrintfTime program_time '%H:%M' "$program_sys_time"
                     [ -n "$schedule" ] && schedule="$schedule,"
                     schedule=$schedule'{
                         "title":"'"$program_title"'",
@@ -236,7 +236,7 @@ ScheduleOntvtonight()
                 program_sys_time=$(date -d "${today}T$new_program_time$chnl_zone" +%s)
                 if [ "$program_sys_time" -le "$max_sys_time" ]
                 then
-                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    PrintfTime program_time '%H:%M' "$program_sys_time"
                     [ -n "$schedule" ] && schedule="$schedule,"
                     schedule=$schedule'{
                         "title":"'"$program_title"'",
@@ -264,7 +264,7 @@ ScheduleOntvtonight()
 
 ScheduleDisneyjr()
 {
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
     if [ ! -s "$SCHEDULE_JSON" ]
@@ -304,7 +304,7 @@ ScheduleDisneyjr()
 
 ScheduleFoxmovies()
 {
-    printf -v today '%(%Y-%-m-%-d)T' -1
+    PrintfTime today '%Y-%-m-%-d' -1
     SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
 
     if [ ! -s "$SCHEDULE_JSON" ]
@@ -352,7 +352,7 @@ ScheduleFoxmovies()
 
 ScheduleAmlh()
 {
-    printf -v today '%(%Y-%-m-%-d)T' -1
+    PrintfTime today '%Y-%-m-%-d' -1
     timestamp=$(date -d $today +%s)
 
     SCHEDULE_LINK="http://www.macaulotustv.cc/index.php/index/getdetail.html"
@@ -448,7 +448,7 @@ ScheduleAmlh()
 
 ScheduleFoxnews()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
     min_start_time=$(date -d "yesterday 22:00:00" +%s)
     max_start_time=$(date -d "today 23:59:59" +%s)

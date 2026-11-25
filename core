@@ -530,6 +530,28 @@ FormatEpoch()
     date --date="@$ts" "$fmt" 2> /dev/null
 }
 
+PrintfTime()
+{
+    local _pt_var="$1"
+    local _pt_fmt="$2"
+    local _pt_ts="${3:--1}"
+
+    if [ "${BASH_VERSINFO[0]:-0}" -gt 4 ] || { [ "${BASH_VERSINFO[0]:-0}" -eq 4 ] && [ "${BASH_VERSINFO[1]:-0}" -ge 2 ]; }
+    then
+        printf -v "$_pt_var" "%(${_pt_fmt})T" "$_pt_ts"
+        return 0
+    fi
+
+    local _pt_val=""
+    if [ "$_pt_ts" == "-1" ] || [ -z "$_pt_ts" ]
+    then
+        _pt_val=$(date "+${_pt_fmt}")
+    else
+        _pt_val=$(FormatEpoch "$_pt_ts" "+${_pt_fmt}")
+    fi
+    printf -v "$_pt_var" '%s' "$_pt_val"
+}
+
 FilterFileLines()
 {
     local needle="$1"

@@ -52,7 +52,7 @@ ScheduleNiotv()
         niotv_proxy+=( -x $(< $IPTV_ROOT/niotv_proxy) )
     fi
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
 
     for chnl in "${niotv_chnls[@]}"
     do
@@ -115,7 +115,7 @@ ScheduleNiotv()
 
 ScheduleIcable()
 {
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     sys_time=$(date --date="today 0" +"%s")
     yesterday=$(date --date="yesterday" +"%Y%m%d")
 
@@ -219,7 +219,7 @@ ScheduleJiushi()
         chnl_name=${chnl_name// /-}
         chnl_name_encode=$(UrlencodeUpper "$chnl_name")
 
-        printf -v today '%(%Y-%m-%d)T' -1
+        PrintfTime today '%Y-%m-%d' -1
 
         SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
 
@@ -271,7 +271,7 @@ ScheduleJiushi()
 
 ScheduleTvbhk()
 {
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
     sys_time=$(date -d $today +%s)
     min_sys_time=$((sys_time-7200))
     max_sys_time=$((sys_time+86400))
@@ -320,7 +320,7 @@ ScheduleTvbhd()
     cd "$IPTV_ROOT"
     pdf2htmlEX --zoom 1.3 "./tvb_hd.pdf"
 
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
     sys_time=$(date -d $today +%s)
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
@@ -633,7 +633,7 @@ ScheduleTvbhd()
             break
         fi
     done < "./tvb_hd.html"
-    weekday=$(printf '%(%u)T' -1)
+    PrintfTime weekday '%u' -1
     if [ "$weekday" -eq 1 ]
     then
         p_title=("${sunday_program_title[@]}")
@@ -692,7 +692,7 @@ ScheduleTvbhd()
         fi
 
         program_sys_time=$(date -d "${date}T$new_program_time-08:00" +%s)
-        new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+        PrintfTime new_program_time '%H:%M' "$program_sys_time"
 
         program_title=${p_title[i]}
 
@@ -753,7 +753,7 @@ ScheduleSingteltv()
         return 0
     fi
 
-    printf -v today '%(%d%m%Y)T' -1
+    PrintfTime today '%d%m%Y' -1
     epg_data=$(curl -s -L "https://www.singtel.com$singteltv_epg_end_point/$today.json")
 
     IFS=$'\t' read -r title channel_id epg_channel_id < <($JQ_FILE -r '[
@@ -827,7 +827,7 @@ ScheduleSingteltv()
 
 ScheduleCntv()
 {
-    printf -v today '%(%Y%m%d)T' -1
+    PrintfTime today '%Y%m%d' -1
 
     if [ ! -s "$SCHEDULE_JSON" ]
     then
@@ -866,7 +866,7 @@ ScheduleCntv()
 
 ScheduleTvbs()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
 
     if [ ! -s "$SCHEDULE_JSON" ]
     then
@@ -911,7 +911,7 @@ ScheduleTvbs()
 
 Schedule_4gtv()
 {
-    printf -v today '%(%Y-%m-%d)T' -1
+    PrintfTime today '%Y-%m-%d' -1
 
     if [ ! -s "$SCHEDULE_JSON" ]
     then

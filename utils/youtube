@@ -7,7 +7,7 @@ YoutubeDlInstall()
         ln -s /usr/bin/python3 /usr/bin/python
     fi
 
-    printf -v now '%(%s)T' -1
+    PrintfTime now '%s' -1
     youtube_dl_update_time=${youtube_dl_update_time:-0}
 
     if [[ -x $(command -v youtube-dl) ]] 
@@ -56,7 +56,7 @@ YtDlpInstall()
         ln -s /usr/bin/python3 /usr/bin/python
     fi
 
-    printf -v now '%(%s)T' -1
+    PrintfTime now '%s' -1
     yt_dlp_update_time=${yt_dlp_update_time:-0}
 
     if [[ -x $(command -v yt-dlp) ]] 

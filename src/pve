@@ -421,7 +421,7 @@ case $pve_num in
 
             if [ -f /etc/resolv.conf ]
             then
-                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                PrintfTime now '%m-%d-%H:%M:%S' -1
                 mv /etc/resolv.conf /etc/resolv.conf-$now
             fi
 
@@ -682,7 +682,7 @@ case $pve_num in
             exit 1
         fi
 
-        printf -v timestamp '%(%s)T' -1
+        PrintfTime timestamp '%s' -1
 
         echo
         qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "save" "$timestamp" "$config_name" > /dev/null
@@ -722,7 +722,7 @@ case $pve_num in
                 configs_time+=("$config_time")
                 configs_name+=("$config_name")
                 configs_count=$((configs_count+1))
-                printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                PrintfTime config_date '%Y-%m-%d %H:%M:%S' "$config_time"
                 configs_list="$configs_list $configs_count.${indent_6}${i18n_name}: ${green}${config_name_list:-$i18n_none}${normal} ${pve_i18n_date}: ${green}$config_date${normal}\n\n"
             done
 
