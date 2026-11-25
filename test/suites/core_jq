@@ -36,7 +36,12 @@ RunSuiteCoreJq()
         "$DEV_PATH/src/v2ray/list_routing" "$DEV_PATH/src/v2ray/set_routing" \
         "$DEV_PATH/src/v2ray/list_policy" "$DEV_PATH/src/v2ray/set_policy" \
         "$DEV_PATH/src/v2ray/list_reverse" "$DEV_PATH/src/v2ray/set_reverse" \
-        "$DEV_PATH/src/v2ray/stream" "$DEV_PATH/src/v2ray/proxy" "$DEV_PATH/src/v2ray/menu" \
+        "$DEV_PATH/src/v2ray/stats" "$DEV_PATH/src/v2ray/set_advanced" \
+        "$DEV_PATH/src/xray/set_advanced" \
+        "$DEV_PATH/src/proxy/core_features" "$DEV_PATH/src/proxy/validate" \
+        "$DEV_PATH/src/proxy/core_manager" "$DEV_PATH/src/proxy/stream_editor" \
+        "$DEV_PATH/src/proxy/uri_codec" "$DEV_PATH/src/proxy/presets" \
+        "$DEV_PATH/src/v2ray/menu" \
         "$DEV_PATH/src/openlist/api" "$DEV_PATH/src/openlist/app" "$DEV_PATH/src/openlist/acc" \
         "$DEV_PATH/src/cloudflare/get_workers" "$DEV_PATH/src/cloudflare/list_user" \
         "$DEV_PATH/src/cloudflare/monitor_workers" "$DEV_PATH/src/lhh"

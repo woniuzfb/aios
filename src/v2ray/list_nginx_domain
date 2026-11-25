@@ -100,7 +100,7 @@ V2rayNginxListDomain()
                                     if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://127.0.0.1:(.+) ]]
                                     then
                                         v2ray_nginx_domain_server_proxies="$v2ray_nginx_domain_server_proxies$level_3_index|$level_4_index|${BASH_REMATCH[1]}|$v2ray_nginx_domain_server_proxy_path "
-                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}$(gettext "路径"): ${green}$v2ray_nginx_domain_server_proxy_path${normal} => ${v2ray_name:-v2ray} $(gettext "端口"): ${green}${BASH_REMATCH[1]}${normal}\n"
+                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}$(gettext "路径"): ${green}$v2ray_nginx_domain_server_proxy_path${normal} => v2ray $i18n_port: ${green}${BASH_REMATCH[1]}${normal}\n"
                                     fi
                                     break
                                 fi
@@ -118,7 +118,7 @@ V2rayNginxListDomain()
             v2ray_nginx_domain_servers_name+=("${v2ray_nginx_domain_server_name_list//, /,}")
             v2ray_nginx_domain_servers_proxy+=("$v2ray_nginx_domain_server_proxies")
 
-            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}$(gettext "域名"): ${green}${v2ray_nginx_domain_server_name_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "端口"): ${green}${v2ray_nginx_domain_server_listen_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "代理"): $v2ray_nginx_domain_server_proxies_list\n\n"
+            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}$i18n_domain: ${green}${v2ray_nginx_domain_server_name_list:-$i18n_not_set}${normal}\n${indent_6}$i18n_port: ${green}${v2ray_nginx_domain_server_listen_list:-$i18n_not_set}${normal}\n${indent_6}$(gettext "代理"): $v2ray_nginx_domain_server_proxies_list\n\n"
         fi
     done
 

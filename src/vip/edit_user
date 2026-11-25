@@ -23,7 +23,7 @@ VipEditUser()
                     then
                         vip_user_expire_text=$(date +%c --date=@"$vip_user_expire")
                     else
-                        vip_user_expire_text="$(gettext "无")"
+                        vip_user_expire_text="$i18n_none"
                     fi
                     vip_user_name=${vip_users_name[vip_users_index]}
                     break
@@ -35,7 +35,7 @@ VipEditUser()
     done
 
     Println "
-$(gettext "选择修改内容")
+$i18n_select_edit
 
     ${green}1.${normal} $(gettext "修改 用户名")
     ${green}2.${normal} $(gettext "修改 IP")
@@ -58,7 +58,7 @@ $(gettext "选择修改内容")
             VipSetUserIp
             jq_path='["users",'"$vip_users_index"',"ip"]'
             JQ update "$VIP_FILE" "$vip_user_ip"
-            Println "$(eval_gettext "\$info IP 修改成功")\n"
+            Println "$(eval_gettext "\$info IP 更新成功")\n"
         ;;
         3) 
             Println "$(eval_gettext "原授权码: \${red}\$vip_user_license\${normal}")"

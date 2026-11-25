@@ -1,24 +1,53 @@
-ServiceControlIsActive()
+ServiceResolveLabel()
 {
-    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
-    service_label="$1"
+    [ -z "${dist:-}" ] && DistCheck
+
+    local raw_id="$1"
+    service_label="$raw_id"
+
+    case "$raw_id" in
+        aios-xray|aios-v2ray)
+            if [ "$dist" == "mac" ]
+            then
+                service_label="com.aios.${raw_id}"
+                service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
+            else
+                service_label="$raw_id"
+                service_file="/etc/systemd/system/${service_label}.service"
+            fi
+            return 0
+        ;;
+        v2ray|xray|nginx|openresty|trojan|dnscrypt-proxy)
+            if [ "$dist" == "mac" ]
+            then
+                service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
+            else
+                service_file="/etc/systemd/system/${service_label}.service"
+            fi
+            return 0
+        ;;
+    esac
+
     if [ "$dist" == "mac" ]
     then
-        if ! EleInArray "$service_label" exceptions
-        then
-            service_label="com.aios.$service_label"
-        fi
+        service_label="com.aios.$raw_id"
         service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
+    else
+        service_label="aios.$raw_id"
+        service_file="/etc/systemd/system/${service_label}.service"
+    fi
+}
+
+ServiceControlIsActive()
+{
+    ServiceResolveLabel "$1"
+    if [ "$dist" == "mac" ]
+    then
         if [ ! -f "$service_file" ] || ! { launchctl print "gui/$UID/$service_label" 2> /dev/null | grep -q "pid ="; }
         then
             return 1
         fi
     else
-        if ! EleInArray "$service_label" exceptions
-        then
-            service_label="aios.$service_label"
-        fi
-        service_file="/etc/systemd/system/${service_label}.service"
         if [ ! -f "$service_file" ] || ! systemctl is-active --quiet "$service_label"
         then
             return 1
@@ -29,26 +58,22 @@ ServiceControlIsActive()
 
 ServiceControlIsEnabled()
 {
-    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
-    service_label="$1"
+    ServiceResolveLabel "$1"
+
     if [ "$dist" == "mac" ]
     then
-        if ! EleInArray "$service_label" exceptions
-        then
-            service_label="com.aios.$service_label"
-        fi
-        service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
         if [ ! -f "$service_file" ]
         then
             return 1
         fi
     else
-        if ! EleInArray "$service_label" exceptions
+        if command -v systemctl > /dev/null 2>&1
         then
-            service_label="aios.$service_label"
-        fi
-        service_file="/etc/systemd/system/${service_label}.service"
-        if [ ! -f "$service_file" ]
+            if ! systemctl is-enabled --quiet "$service_label" 2> /dev/null
+            then
+                return 1
+            fi
+        elif [ ! -f "$service_file" ]
         then
             return 1
         fi
@@ -58,21 +83,12 @@ ServiceControlIsEnabled()
 
 ServiceControlStatus()
 {
-    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
-    service_label="$1"
+    ServiceResolveLabel "$1"
     if [ "$dist" == "mac" ]
     then
-        if ! EleInArray "$service_label" exceptions
-        then
-            service_label="com.aios.$service_label"
-        fi
         launchctl print "gui/$UID/$service_label"
     else
-        if ! EleInArray "$service_label" exceptions
-        then
-            service_label="aios.$service_label"
-        fi
-        systemctl --no-pager -l status $service_label
+        systemctl --no-pager -l status "$service_label"
     fi
 }
 
@@ -80,7 +96,7 @@ ServiceControlStart()
 {
     if ServiceControlIsActive "$1"
     then
-        echo "$(gettext "服务已启动")"
+        printf '%s\n' "$(gettext "服务已启动")"
         return 0
     fi
 
@@ -102,7 +118,7 @@ ServiceControlStart()
 
     if [ "${#args[@]}" -eq 0 ] && [ ! -f "$service_file" ]
     then
-        echo "$(eval_gettext "\$service_file 不存在")"
+        printf '%s\n' "$(eval_gettext "\$service_file 不存在")"
         return 1
     fi
 
@@ -171,7 +187,7 @@ ServiceControlStop()
 {
     if ! ServiceControlIsActive "$1"
     then
-        echo "$(gettext "服务未启动")"
+        printf '%s\n' "$(gettext "服务未启动")"
         return 0
     fi
 
@@ -213,14 +229,12 @@ ServiceControlDisable()
 
 ServiceControlRename()
 {
-    local old_service_label="$1"
-    local new_service_label="$2"
-    if [ "$dist" == "mac" ]
-    then
-        mv "$HOME/Library/LaunchAgents/com.aios.$old_service_label.plist" "$HOME/Library/LaunchAgents/com.aios.$new_service_label.plist"
-    else
-        mv "/etc/systemd/system/aios.$old_service_label.service" "/etc/systemd/system/aios.$new_service_label.service"
-    fi
+    local old_service_file="" new_service_file=""
+    ServiceResolveLabel "$1"
+    old_service_file="$service_file"
+    ServiceResolveLabel "$2"
+    new_service_file="$service_file"
+    mv "$old_service_file" "$new_service_file"
 }
 
 ServiceControl()

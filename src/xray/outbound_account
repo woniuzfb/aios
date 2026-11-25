@@ -24,10 +24,11 @@ XrayAddOutboundAccount()
                 "preSharedKey": $psk,
                 "keepAlive": (if $ka != "" then ($ka | tonumber) else null end)
             }' --arg ep "$ep" --arg pk "$pk" --arg psk "$psk" --arg ka "$ka"
-            jq_path='["outbounds",'"$idx"',"settings","peers"]'
-            if ! JQ add "$X_CONFIG" "[$peer_json]"
+            if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.peers = ((.outbounds[$i].settings.peers // []) + [$item])' \
+                --argjson i "$idx" --argjson item "$peer_json"
             then
-                Println "$(eval_gettext "\$error 添加 WireGuard peer 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 添加 WireGuard peer 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已向出站 \${green}\${bound_tag}\${normal} 添加 WireGuard peer")\n"
@@ -43,16 +44,17 @@ XrayAddOutboundAccount()
             ' --argjson i "$idx")
             if [ "$has_vnext" == "1" ]
             then
-                if ! JQ mutate "$X_CONFIG" '.outbounds[$i].settings.vnext[0].users = (if (.outbounds[$i].settings.vnext[0].users | type) == "array" and (.outbounds[$i].settings.vnext[0].users | length) > 0 then (.outbounds[$i].settings.vnext[0].users | .[0].id = $id) else [{"id": $id}] end)' --argjson i "$idx" --arg id "$uuid"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.vnext[0].users = (if (.outbounds[$i].settings.vnext[0].users | type) == "array" and (.outbounds[$i].settings.vnext[0].users | length) > 0 then (.outbounds[$i].settings.vnext[0].users | .[0].id = $id) else [{"id": $id}] end)' --argjson i "$idx" --arg id "$uuid"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的 UUID 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的 UUID 失败: \$err_detail")\n"
                     return 1
                 fi
             else
-                jq_path='["outbounds",'"$idx"',"settings","id"]'
-                if ! JQ update "$X_CONFIG" "$uuid"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.id = $id' --argjson i "$idx" --arg id "$uuid"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的 UUID 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的 UUID 失败: \$err_detail")\n"
                     return 1
                 fi
             fi
@@ -60,7 +62,7 @@ XrayAddOutboundAccount()
         ;;
         trojan|shadowsocks)
             local pw has_servers
-            inquirer text_input "$(gettext "输入新的密码")" pw ""
+            inquirer text_input "$(gettext "输入新密码")" pw ""
             has_servers=$(JQs query "$X_CONFIG" '
                 if (.outbounds[$i].settings | type) == "object"
                     and (.outbounds[$i].settings.servers | type) == "array"
@@ -69,25 +71,26 @@ XrayAddOutboundAccount()
             ' --argjson i "$idx")
             if [ "$has_servers" == "1" ]
             then
-                if ! JQ mutate "$X_CONFIG" '.outbounds[$i].settings.servers[0].password = $pw' --argjson i "$idx" --arg pw "$pw"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.servers[0].password = $pw' --argjson i "$idx" --arg pw "$pw"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的密码失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的密码失败: \$err_detail")\n"
                     return 1
                 fi
             else
-                jq_path='["outbounds",'"$idx"',"settings","password"]'
-                if ! JQ update "$X_CONFIG" "$pw"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.password = $pw' --argjson i "$idx" --arg pw "$pw"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的密码失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的密码失败: \$err_detail")\n"
                     return 1
                 fi
             fi
             Println "$(eval_gettext "\$info 已更新出站 \${green}\${bound_tag}\${normal} 的密码")\n"
         ;;
         socks|http)
-            local user pass has_servers auth_json=""
+            local user pass has_servers
             inquirer text_input "$(gettext "输入用户名")" user ""
-            inquirer text_input "$(gettext "输入密码")" pass ""
+            inquirer text_input "$i18n_input_password" pass ""
             has_servers=$(JQs query "$X_CONFIG" '
                 if (.outbounds[$i].settings | type) == "object"
                     and (.outbounds[$i].settings.servers | type) == "array"
@@ -96,18 +99,17 @@ XrayAddOutboundAccount()
             ' --argjson i "$idx")
             if [ "$has_servers" == "1" ]
             then
-                if ! JQ mutate "$X_CONFIG" '.outbounds[$i].settings.servers[0].users = [{"user": $u, "pass": $p}]' --argjson i "$idx" --arg u "$user" --arg p "$pass"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings.servers[0].users = [{"user": $u, "pass": $p}]' --argjson i "$idx" --arg u "$user" --arg p "$pass"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的账号密码失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的账号密码失败: \$err_detail")\n"
                     return 1
                 fi
             else
-                JQs build auth_json '{"user": $u, "pass": $p}' --arg u "$user" --arg p "$pass"
-                jq_merge=true
-                jq_path='["outbounds",'"$idx"',"settings"]'
-                if ! JQ update "$X_CONFIG" "$auth_json"
+                if ! ProxyMutateConfigTx "xray" '.outbounds[$i].settings |= (. + {"user": $u, "pass": $p})' --argjson i "$idx" --arg u "$user" --arg p "$pass"
                 then
-                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的账号密码失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站 \${bound_tag} 的账号密码失败: \$err_detail")\n"
                     return 1
                 fi
             fi
@@ -118,8 +120,6 @@ XrayAddOutboundAccount()
             return 1
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }
 
 XrayDeleteOutboundAccount()
@@ -153,24 +153,25 @@ XrayDeleteOutboundAccount()
             fi
             local peer_idx=0
             inquirer list_input_index "$(gettext "选择要删除的 peer")" peer_options peer_idx
-            jq_path='["outbounds",'"$idx"',"settings","peers",'"$peer_idx"']'
-            if ! JQ delete "$X_CONFIG"
+            if ! ProxyMutateConfigTx "xray" 'del(.outbounds[$i].settings.peers[$p])' --argjson i "$idx" --argjson p "$peer_idx"
             then
-                Println "$(eval_gettext "\$error 删除 peer 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除 peer 失败: \$err_detail")\n"
                 return 1
             fi
             local del_peer="${peer_options[peer_idx]}"
             Println "$(eval_gettext "\$info 已删除 peer \${green}\${del_peer}\${normal}")\n"
         ;;
         socks|http)
-            if ! JQ mutate "$X_CONFIG" '
+            if ! ProxyMutateConfigTx "xray" '
                 del(.outbounds[$i].settings.user, .outbounds[$i].settings.pass)
                 | if (.outbounds[$i].settings.servers | type) == "array" and (.outbounds[$i].settings.servers | length) > 0 then
                     del(.outbounds[$i].settings.servers[0].users)
                   else . end
             ' --argjson i "$idx"
             then
-                Println "$(eval_gettext "\$error 清除出站 \${bound_tag} 的认证账号失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 清除出站 \${bound_tag} 的认证账号失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已清除出站 \${green}\${bound_tag}\${normal} 的认证账号")\n"
@@ -180,6 +181,4 @@ XrayDeleteOutboundAccount()
             return 1
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }

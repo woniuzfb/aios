@@ -34,8 +34,12 @@ V2rayDeleteOutboundAccount()
     local srv_idx=0
     echo
     inquirer list_input_index "$(gettext "选择要删除的服务端/账号")" opts srv_idx
-    jq_path='["outbounds",'"$idx"',"settings","'"$field"'",'"$srv_idx"']'
-    JQ delete "$V2_CONFIG"
-    ProxyRestartIfActive v2ray
+    if ! ProxyMutateConfigTx "v2ray" 'del(.outbounds[$i].settings[$f][$s])' \
+        --argjson i "$idx" --arg f "$field" --argjson s "$srv_idx"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 删除服务端失败: \$err_detail")\n"
+        return 1
+    fi
     Println "$(eval_gettext "\$info 已删除服务端") ${green}${opts[srv_idx]}${normal}\n"
 }

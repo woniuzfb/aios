@@ -2,7 +2,7 @@ VipListChannels()
 {
     VipListHosts
 
-    echo -e " ${green}$((vip_hosts_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e " ${green}$((vip_hosts_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     while read -p "$(gettext "选择 VIP 服务器"): " vip_hosts_num
     do
@@ -52,13 +52,13 @@ VipListChannels()
             vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
         else
             flag=0
-            vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\r\033[47C$(gettext "频道ID"): ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-$(gettext "无")}\n\n"
+            vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\r\033[47C$(gettext "频道ID"): ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$i18n_none}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-$i18n_none}\n\n"
         fi
     done
 
     if [ "$flag" -eq 1 ] 
     then
-        vip_channels_list="$vip_channels_list\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\n\n"
+        vip_channels_list="$vip_channels_list\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$i18n_none}\n\n"
     fi
 
     if [ -n "$vip_channels_list" ] 

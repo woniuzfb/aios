@@ -2,16 +2,18 @@ XrayGetObservatory()
 {
     SetDelimiters
 
-    jq_payload=$(JQs flat "$X_CONFIG" '.observatory')
+    jq_payload=$(JQs flat "$X_CONFIG" '.observatory | if type == "object" then (if has("probeURL") or has("probeUrl") then . + {probeURL: (.probeURL // .probeUrl), probeUrl: (.probeURL // .probeUrl)} else . end) else . end')
 
     jq_path='[
         ["subjectSelector"],
+        ["probeURL"],
         ["probeUrl"],
         ["probeInterval"],
         ["enableConcurrency"]
     ]'
 
-    while IFS=": " read -r path_name value; do
+    while IFS=": " read -r path_name value
+    do
         var_name="observatory_${path_name#*_}"
         read -r ${var_name?} <<< "$value"
     done < <(JQs gets jq_payload)

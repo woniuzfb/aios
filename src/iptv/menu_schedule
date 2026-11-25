@@ -1,8 +1,8 @@
 ScheduleMenu()
 {
     echo
-    chnls_schedule_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "排序")" "$(gettext "删除")" )
-    inquirer list_input_index "$(gettext "请选择")" chnls_schedule_options chnls_schedule_options_index
+    chnls_schedule_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$(gettext "排序")" "$i18n_delete" )
+    inquirer list_input_index "$i18n_please_select" chnls_schedule_options chnls_schedule_options_index
 
     if [ "$chnls_schedule_options_index" -eq 0 ] 
     then

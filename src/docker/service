@@ -79,14 +79,14 @@ DockerServiceConfig()
 {
     echo
     docker_config_options=( 'Traefik' 'Authelia' 'Postgresql' )
-    inquirer checkbox_input_indices "$(gettext "请选择")" docker_config_options docker_config_options_indices
+    inquirer checkbox_input_indices "$i18n_please_select" docker_config_options docker_config_options_indices
 
     for docker_config_options_index in "${docker_config_options_indices[@]}"
     do
         echo
         case $docker_config_options_index in
             0)
-                traefik_options=( "$(gettext "域名")" "$(gettext "本地插件")" )
+                traefik_options=( "$i18n_domain" "$(gettext "本地插件")" )
                 inquirer checkbox_input_indices "$(gettext "选择 traefik 设置选项")" traefik_options traefik_options_indices
 
                 for traefik_options_index in "${traefik_options_indices[@]}"
@@ -104,6 +104,9 @@ DockerServiceConfig()
                     else
                         traefik_local_plugins=( cors-preflight )
                         traefik_plugins=( github.com/Medzoner/traefik-plugin-cors-preflight )
+                        local msg_plugin_updated msg_plugin_installed
+                        msg_plugin_updated=$(gettext "插件已更新")
+                        msg_plugin_installed=$(gettext "插件已安装")
                         echo
                         inquirer checkbox_input_indices "$(gettext "选择 traefik 本地插件")" traefik_local_plugins traefik_local_plugins_indices
                         for traefik_local_plugins_index in "${traefik_local_plugins_indices[@]}"
@@ -112,17 +115,17 @@ DockerServiceConfig()
                             then
                                 cd "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}"
                                 git pull
-                                Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} $(gettext "插件已更新")\n"
+                                Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} $msg_plugin_updated\n"
                                 continue
                             fi
                             git clone "https://${traefik_plugins[$traefik_local_plugins_index]}" "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}"
-                            Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} $(gettext "插件已安装")\n"
+                            Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} $msg_plugin_installed\n"
                         done
                     fi
                 done
             ;;
             1)
-                authelia_options=( "$(gettext "域名")" "$(gettext "用户名")" "$(gettext "显示名")" "$(gettext "密码")" secrets )
+                authelia_options=( "$i18n_domain" "$(gettext "用户名")" "$(gettext "显示名")" "$i18n_password" secrets )
                 inquirer checkbox_input_indices "$(gettext "选择 authelia 设置选项")" authelia_options authelia_options_indices
                 for authelia_options_index in "${authelia_options_indices[@]}"
                 do
@@ -207,6 +210,8 @@ DockerServiceConfig()
                         4)
                             authelia_secrets=( JWT_SECRET SESSION_REDIS_PASSWORD SESSION_SECRET STORAGE_ENCRYPTION_KEY STORAGE_POSTGRES_PASSWORD )
                             echo
+                            local msg_set_success
+                            msg_set_success=$(gettext "设置成功")
                             inquirer checkbox_input_indices "$(gettext "选择设置的 secret")" authelia_secrets authelia_secrets_indices
 
                             for authelia_secret_index in "${authelia_secrets_indices[@]}"
@@ -235,7 +240,7 @@ DockerServiceConfig()
                                     ;;
                                 esac
                                 echo -n "${!authelia_secrets[authelia_secret_index]}" > "$DOCKER_ROOT"/data/authelia/secrets/${authelia_secrets[authelia_secret_index]}
-                                Println "$info ${authelia_secrets[authelia_secret_index]} $(gettext "设置成功")\n"
+                                Println "$info ${authelia_secrets[authelia_secret_index]} $msg_set_success\n"
                             done
                         ;;
                     esac
@@ -243,6 +248,8 @@ DockerServiceConfig()
             ;;
             2)
                 postgresql_options=( "$(gettext "添加 role authelia")" "$(gettext "添加 database authelia")" "$(gettext "设置 role authelia 的密码")" )
+                local prompt_pg_pass
+                prompt_pg_pass=$(gettext "请输入 role authelia 的密码")
                 echo
                 inquirer checkbox_input_indices "$(gettext "选择 postgresql 设置选项")" postgresql_options postgresql_options_indices
                 for postgresql_options_index in "${postgresql_options_indices[@]}"
@@ -256,7 +263,7 @@ DockerServiceConfig()
                             fi
                             default_storage_postgres_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
                             echo
-                            inquirer text_input "$(gettext "请输入 role authelia 的密码")" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
+                            inquirer text_input "$prompt_pg_pass" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
                             psql -c "CREATE ROLE authelia PASSWORD '$storage_postgres_password' CREATEDB REPLICATION LOGIN;"
                             Println "$(eval_gettext "\$info role authelia 已添加")\n"
                         ;;
@@ -282,7 +289,7 @@ DockerServiceConfig()
                             fi
                             default_storage_postgres_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
                             echo
-                            inquirer text_input "$(gettext "请输入 role authelia 的密码")" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
+                            inquirer text_input "$prompt_pg_pass" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
                             psql -c "ALTER ROLE authelia PASSWORD '$storage_postgres_password';"
                             Println "$(eval_gettext "\$info role authelia 的密码已设置")\n"
                         ;;
@@ -316,9 +323,9 @@ DockerService()
         export PATH="${PATH}:/Applications/Postgres.app/Contents/Versions/latest/bin"
     fi
 
-    docker_service_options=( "$(gettext "启动")" "$(gettext "启动(原版)")" "$(gettext "关闭")" "$(gettext "重启")" "$(gettext "重启(原版)")" "$(gettext "设置")" )
+    docker_service_options=( "$(gettext "启动")" "$(gettext "启动(原版)")" "$i18n_close" "$(gettext "重启")" "$(gettext "重启(原版)")" "$(gettext "设置")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" docker_service_options docker_service_options_index
+    inquirer list_input_index "$i18n_please_select" docker_service_options docker_service_options_index
 
     case $docker_service_options_index in
         0) DockerServiceStart

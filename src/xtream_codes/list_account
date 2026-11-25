@@ -74,7 +74,7 @@ XtreamCodesListAcc()
     accs_count=${#accs[@]}
     if [ "$accs_count" -gt 1 ] 
     then
-        accs_list="$(gettext "账号"): \n\n"
+        accs_list="$i18n_account: \n\n"
         for((i=0;i<accs_count;i++));
         do
             using=""
@@ -99,6 +99,6 @@ XtreamCodesListAcc()
                 break
             fi
         done
-        Println "$(gettext "账号"): \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
+        Println "$i18n_account: \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
     fi
 }

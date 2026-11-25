@@ -24,6 +24,13 @@ ServiceBrowse()
         return 1
     fi
 
+    local msg_parent_dir msg_rename msg_enter msg_file_exists msg_confirm_delete
+    msg_parent_dir=$(gettext "返回上级目录")
+    msg_rename=$(gettext "重命名")
+    msg_enter=$(gettext "进入")
+    msg_file_exists=$(gettext "文件名已存在")
+    msg_confirm_delete=$(gettext "确认删除")
+
     while true
     do
         lists_indices=()
@@ -53,7 +60,7 @@ ServiceBrowse()
 
         if [ "$depth" -gt 0 ]
         then
-            lists+=("$(gettext "返回上级目录")")
+            lists+=("$msg_parent_dir")
         fi
 
         for file in "${files[@]}"
@@ -67,7 +74,7 @@ ServiceBrowse()
         done
 
         echo
-        inquirer checkbox_input_indices "$(gettext "请选择")" lists lists_indices 20
+        inquirer checkbox_input_indices "$i18n_please_select" lists lists_indices 20
 
         if [ "$depth" -gt 0 ] && [ "${#lists_indices[@]}" -eq 1 ] && [ "${lists_indices[0]}" -eq 0 ]
         then
@@ -100,31 +107,31 @@ ServiceBrowse()
 
         if [ "${#lists_indices[@]}" -eq 1 ] && [ -d "$root/${files[${lists_indices[0]}]}" ]
         then
-            lists_options+=( "$(gettext "重命名")" "$(gettext "删除")" "$(gettext "取消")" )
-            lists_options=( "$(gettext "进入")" "${lists_options[@]}" )
+            lists_options+=( "$msg_rename" "$i18n_delete" "$i18n_cancel" )
+            lists_options=( "$msg_enter" "${lists_options[@]}" )
         else
-            lists_options+=( "$(gettext "重命名")" "$(gettext "删除")" "$(gettext "取消")" )
+            lists_options+=( "$msg_rename" "$i18n_delete" "$i18n_cancel" )
         fi
 
         echo
-        inquirer list_input_index "$(gettext "请选择")" lists_options list_options_index
-        if [ "${lists_options[list_options_index]}" == "$(gettext "进入")" ]
+        inquirer list_input_index "$i18n_please_select" lists_options list_options_index
+        if [ "${lists_options[list_options_index]}" == "$msg_enter" ]
         then
             root="$root/${files[${lists_indices[0]}]}"
             depth=$((depth+1))
-        elif [ "${lists_options[list_options_index]}" == "$(gettext "重命名")" ]
+        elif [ "${lists_options[list_options_index]}" == "$msg_rename" ]
         then
             for lists_index in "${lists_indices[@]}"
             do
                 echo
                 browse_list_rename="${lists[lists_index]}"
                 browse_list_rename_root="$root"
-                inquirer text_input "$(gettext "重命名") ${lists[lists_index]}" new_name "$browse_list_rename" ServiceBrowseRenameValidator "$(gettext "文件名已存在")"
+                inquirer text_input "$msg_rename ${lists[lists_index]}" new_name "$browse_list_rename" ServiceBrowseRenameValidator "$msg_file_exists"
             done
-        elif [ "${lists_options[list_options_index]}" == "$(gettext "删除")" ]
+        elif [ "${lists_options[list_options_index]}" == "$i18n_delete" ]
         then
             echo
-            inquirer list_input_index "$(gettext "确认删除")" ny_options ny_index
+            inquirer list_input_index "$msg_confirm_delete" ny_options ny_index
             if [ "$ny_index" -eq 1 ]
             then
                 for lists_index in "${lists_indices[@]}"
@@ -132,14 +139,14 @@ ServiceBrowse()
                     rm -rf "$root/${files[${lists_indices[lists_index]}]:-notfound}"
                 done
             fi
-        elif [ "${lists_options[list_options_index]}" == "$(gettext "取消")" ]
+        elif [ "${lists_options[list_options_index]}" == "$i18n_cancel" ]
         then
             if [ "$files_count" -eq 1 ] && [ "$depth" -eq 0 ]
             then
                 return 0
             fi
             continue
-        elif [ "${lists_options[0]}" == "$(gettext "进入")" ]
+        elif [ "${lists_options[0]}" == "$msg_enter" ]
         then
             "${extra_commands[list_options_index-1]}" "$root" "${lists_indices[@]}" || continue
         else

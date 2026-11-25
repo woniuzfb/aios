@@ -59,8 +59,8 @@ IbmListCfApp()
     ibm_cf_app_routes_list=""
     for((i=0;i<ibm_cf_app_routes_count;i++));
     do
-        ibm_cf_app_routes_list="$ibm_cf_app_routes_list ${green}$((i+1)).${normal}${indent_6}Host: ${green}${ibm_cf_app_routes_hostname[i]}${normal}  $(gettext "端口"): ${green}${ibm_cf_app_routes_port[i]}${normal}\n${indent_6}$(gettext "域名"): ${green}${ibm_cf_app_routes_domain[i]}${normal}  $(gettext "路径"): ${green}${ibm_cf_app_routes_path[i]:-$(gettext "无")}${normal}\n\n"
+        ibm_cf_app_routes_list="$ibm_cf_app_routes_list ${green}$((i+1)).${normal}${indent_6}Host: ${green}${ibm_cf_app_routes_hostname[i]}${normal}  $i18n_port: ${green}${ibm_cf_app_routes_port[i]}${normal}\n${indent_6}$i18n_domain: ${green}${ibm_cf_app_routes_domain[i]}${normal}  $(gettext "路径"): ${green}${ibm_cf_app_routes_path[i]:-$i18n_none}${normal}\n\n"
     done
 
-    Println "APP: ${green}$ibm_cf_app_name${normal}\n\n$(gettext "区域"): ${green}$ibm_user_region${normal}\n\n$(gettext "用户"): ${green}$ibm_user_email${normal}\n\n$(gettext "资源组"): ${green}$ibm_user_resource_group${normal}\n\n$(gettext "组织"): ${green}$ibm_user_org${normal}\n\n$(gettext "空间"): ${green}$ibm_user_space${normal}\n\n$(gettext "路由"):\n\n${ibm_cf_app_routes_list:-$(gettext "无")}\n"
+    Println "APP: ${green}$ibm_cf_app_name${normal}\n\n$(gettext "地区"): ${green}$ibm_user_region${normal}\n\n$(gettext "用户"): ${green}$ibm_user_email${normal}\n\n$(gettext "资源组"): ${green}$ibm_user_resource_group${normal}\n\n$(gettext "组织"): ${green}$ibm_user_org${normal}\n\n$(gettext "空间"): ${green}$ibm_user_space${normal}\n\n$(gettext "路由"):\n\n${ibm_cf_app_routes_list:-$i18n_none}\n"
 }

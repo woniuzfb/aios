@@ -3,6 +3,8 @@ V2rayAddInboundAccount()
     ProxySelectBound "$V2_CONFIG" inbounds "$(gettext "选择要添加账号的入站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${inbounds_protocol[idx]}"
+    local v2_fmt=""
+    v2_fmt=$(ProxyGetV2rayFormat)
     local item_json=""
 
     case "$protocol" in
@@ -12,45 +14,180 @@ V2rayAddInboundAccount()
             inquirer text_input "$(gettext "输入 alterId")" alter_id "0"
             inquirer text_input "$(gettext "输入 email (可留空)")" email ""
             inquirer text_input "$(gettext "输入 level")" level "0"
-            JQs build item_json '{"id": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}' \
-                --arg id "$uuid" --arg aid "$alter_id" --arg email "$email" --arg lvl "$level"
-            jq_path='["inbounds",'"$idx"',"settings","clients"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$alter_id" =~ ^[0-9]+$ ]] || [[ ! "$level" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error alterId 与 level 必须为非负整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{"uuid": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg id "$uuid" --arg aid "$alter_id" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.users = ((.inbounds[$i].settings.users // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{"id": $id, "alterId": ($aid | tonumber), "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg id "$uuid" --arg aid "$alter_id" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.clients = ((.inbounds[$i].settings.clients // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         vless)
             local uuid email level
             inquirer text_input "$(gettext "输入用户 UUID")" uuid ""
             inquirer text_input "$(gettext "输入 email (可留空)")" email ""
             inquirer text_input "$(gettext "输入 level")" level "0"
-            JQs build item_json '{"id": $id, "email": $email, "level": ($lvl | tonumber)}' \
-                --arg id "$uuid" --arg email "$email" --arg lvl "$level"
-            jq_path='["inbounds",'"$idx"',"settings","clients"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$level" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error level 必须为非负整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{"uuid": $id, "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg id "$uuid" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.users = ((.inbounds[$i].settings.users // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{"id": $id, "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg id "$uuid" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.clients = ((.inbounds[$i].settings.clients // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         trojan)
             local pw email level
-            inquirer text_input "$(gettext "输入密码")" pw ""
+            inquirer text_input "$i18n_input_password" pw ""
             inquirer text_input "$(gettext "输入 email (可留空)")" email ""
             inquirer text_input "$(gettext "输入 level")" level "0"
+
+            if [[ ! "$level" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error level 必须为非负整数")\n"
+                return 1
+            fi
+
             JQs build item_json '{"password": $pw, "email": $email, "level": ($lvl | tonumber)}' \
                 --arg pw "$pw" --arg email "$email" --arg lvl "$level"
-            jq_path='["inbounds",'"$idx"',"settings","clients"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.users = ((.inbounds[$i].settings.users // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.clients = ((.inbounds[$i].settings.clients // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
+        ;;
+        shadowsocks)
+            local method pw email level
+            inquirer text_input "$(gettext "输入加密方式")" method "aes-256-gcm"
+            inquirer text_input "$i18n_input_password" pw ""
+            inquirer text_input "$(gettext "输入 email (可留空)")" email ""
+            inquirer text_input "$(gettext "输入 level")" level "0"
+
+            if [[ ! "$level" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error level 必须为非负整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{"password": $pw, "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg pw "$pw" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '
+                    .inbounds[$i].settings.method = $m
+                    | .inbounds[$i].settings.users = ((.inbounds[$i].settings.users // []) + [$item])
+                ' --argjson i "$idx" --arg m "$method" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{"method": $m, "password": $pw, "email": $email, "level": ($lvl | tonumber)}' \
+                    --arg m "$method" --arg pw "$pw" --arg email "$email" --arg lvl "$level"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.clients = ((.inbounds[$i].settings.clients // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         socks|http)
             local user pass
             inquirer text_input "$(gettext "输入用户名")" user ""
-            inquirer text_input "$(gettext "输入密码")" pass ""
-            JQs build item_json '{"user": $u, "pass": $p}' --arg u "$user" --arg p "$pass"
-            if [ "$protocol" == "socks" ]
+            inquirer text_input "$i18n_input_password" pass ""
+
+            if [ "$v2_fmt" == "jsonv5" ]
             then
-                JQ mutate "$V2_CONFIG" '
-                    .inbounds[$i].settings.auth = "password"
-                    | .inbounds[$i].settings.accounts = ((.inbounds[$i].settings.accounts // []) + [$item])
-                ' --argjson i "$idx" --argjson item "$item_json"
+                JQs build item_json '{"username": $u, "password": $p}' --arg u "$user" --arg p "$pass"
+                if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.accounts = ((.inbounds[$i].settings.accounts // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                    return 1
+                fi
             else
-                jq_path='["inbounds",'"$idx"',"settings","accounts"]'
-                JQ add "$V2_CONFIG" "[$item_json]"
+                JQs build item_json '{"user": $u, "pass": $p}' --arg u "$user" --arg p "$pass"
+                if [ "$protocol" == "socks" ]
+                then
+                    if ! ProxyMutateConfigTx "v2ray" '
+                        .inbounds[$i].settings.auth = "password"
+                        | .inbounds[$i].settings.accounts = ((.inbounds[$i].settings.accounts // []) + [$item])
+                    ' --argjson i "$idx" --argjson item "$item_json"
+                    then
+                        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                        Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                        return 1
+                    fi
+                else
+                    if ! ProxyMutateConfigTx "v2ray" '.inbounds[$i].settings.accounts = ((.inbounds[$i].settings.accounts // []) + [$item])' \
+                        --argjson i "$idx" --argjson item "$item_json"
+                    then
+                        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                        Println "$(eval_gettext "\$error 添加入站账号失败: \$err_detail")\n"
+                        return 1
+                    fi
+                fi
             fi
         ;;
         *)
@@ -59,7 +196,6 @@ V2rayAddInboundAccount()
         ;;
     esac
 
-    ProxyRestartIfActive v2ray
     local target_tag="${inbounds_tag[idx]}"
     Println "$(eval_gettext "\$info 已向入站 \${green}\$target_tag\${normal} 添加账号")\n"
 }

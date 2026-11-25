@@ -1,13 +1,21 @@
 V2rayDomainUpdateCert()
 {
-    local domain=$1
+    local domain="$1"
+    local cert_dir="$V2_ROOT/certs"
+    local acme_out=""
 
-    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
+    if ! mkdir -p "$cert_dir"
     then
-        if [ -z "${tls_port:-}" ] 
+        Println "$(eval_gettext "\$error 创建证书目录失败: \$cert_dir")\n"
+        return 1
+    fi
+
+    if [ "${ca_server:-}" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && ServiceControl is-active mmproxy-acme > /dev/null 2>&1
+    then
+        if [ -z "${tls_port:-}" ]
         then
             tls_port=$(grep ^ExecStart= < /etc/systemd/system/mmproxy-acme.service)
-            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]] 
+            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]]
             then
                 tls_port=${BASH_REMATCH[1]}
             else
@@ -17,43 +25,74 @@ V2rayDomainUpdateCert()
             fi
         fi
 
-        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
-        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
-    else
-        stopped=0
-
-        if [ -d "$nginx_prefix" ] 
+        if ! acme_out=$(~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 --server "$ca_server" 2>&1)
         then
-            if [[ $(systemctl is-active $nginx_name) == "active" ]]
+            Println "$(eval_gettext "\$error 申请 \$domain 证书失败: \${acme_out}")\n"
+            return 1
+        fi
+
+        if ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$cert_dir/$domain.crt" --keypath "$cert_dir/$domain.key" --ecc 2>&1)
+        then
+            Println "$(eval_gettext "\$error 安装 \$domain 证书失败: \${acme_out}")\n"
+            return 1
+        fi
+    else
+        local stopped=0
+
+        if [ -d "${nginx_prefix:-}" ]
+        then
+            if ServiceControl is-active "$nginx_name" > /dev/null 2>&1
             then
-                if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+                if [[ $(echo "${SSH_CONNECTION:-}" | cut -d' ' -f3) == "127.0.0.1" ]]
                 then
                     Println "$(eval_gettext "\$error 请使用非 \$nginx_name 监听端口连接 ssh 后重试")\n"
-                    exit 1
+                    return 1
                 fi
-                systemctl stop $nginx_name
+                ServiceControl stop "$nginx_name"
                 stopped=1
             fi
 
             sleep 1
         fi
 
-        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
-        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
+        local acme_rc=0
+        if ! acme_out=$(~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 --server "$ca_server" 2>&1)
+        then
+            acme_rc=1
+            Println "$(eval_gettext "\$error 申请 \$domain 证书失败: \${acme_out}")\n"
+        elif ! acme_out=$(~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$cert_dir/$domain.crt" --keypath "$cert_dir/$domain.key" --ecc 2>&1)
+        then
+            acme_rc=1
+            Println "$(eval_gettext "\$error 安装 \$domain 证书失败: \${acme_out}")\n"
+        fi
 
-        [ "$stopped" -eq 1 ] && systemctl start $nginx_name
+        if [ "$stopped" -eq 1 ]
+        then
+            ServiceControl start "$nginx_name"
+        fi
+
+        if [ "$acme_rc" -ne 0 ]
+        then
+            return 1
+        fi
     fi
 
-    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+    if ! ProxySyncCertPerms "v2ray" "$cert_dir/$domain.crt" "$cert_dir/$domain.key"
     then
-        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
-        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+        Println "$(eval_gettext "\$error 同步 \$domain 证书权限失败")\n"
+        return 1
     fi
 
-    if [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
+    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ]
     then
-        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
-        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
+        cp -f "$cert_dir/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
+        cp -f "$cert_dir/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+    fi
+
+    if [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ]
+    then
+        cp -f "$cert_dir/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
+        cp -f "$cert_dir/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
     fi
 
     return 0

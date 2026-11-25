@@ -1,0 +1,513 @@
+_CoreMatrixFindCoresDir()
+{
+    if [ -n "${AIOS_CORES_DIR:-}" ] && [ -d "$AIOS_CORES_DIR" ]
+    then
+        printf '%s' "$AIOS_CORES_DIR"
+        return 0
+    fi
+    if [ -d "$REPO_ROOT/.memory/cores" ]
+    then
+        printf '%s' "$REPO_ROOT/.memory/cores"
+        return 0
+    fi
+    if [ -d "$REPO_ROOT/../luci-app-aios/.memory/cores" ]
+    then
+        printf '%s' "$REPO_ROOT/../luci-app-aios/.memory/cores"
+        return 0
+    fi
+    return 1
+}
+
+RunSuiteCoreMatrix()
+{
+    printf '\n=== Suite: core_matrix (version boundaries + real multi-version cores + transactions) ===\n'
+
+    # 1. Strict version normalization & boundary-1 / boundary / higher tests
+    local norm=""
+    norm=$(ProxyNormalizeVersion "v26.5.9")
+    AssertEq "26.5.9" "$norm" "core_features: strips leading v"
+    AssertFail "ProxyNormalizeVersion rejects prerelease" ProxyNormalizeVersion "26.5.9-rc1"
+    AssertFail "ProxyNormalizeVersion rejects non-3-part" ProxyNormalizeVersion "26.5"
+    AssertOk "ProxyVersionLt v25.9.11 < v26.0.0" ProxyVersionLt "v25.9.11" "v26.0.0"
+    AssertFail "ProxyVersionLt 26.0.0 < 25.9.11 is false" ProxyVersionLt "26.0.0" "25.9.11"
+    AssertFail "V2Ray 4.45.2 rejected (< 5.18.0)" ProxyValidateSupportedVersion "v2ray" "4.45.2"
+    AssertOk "V2Ray 5.18.0 accepted" ProxyValidateSupportedVersion "v2ray" "5.18.0"
+    AssertFail "Xray 25.8.3 rejected (< 25.9.11)" ProxyValidateSupportedVersion "xray" "25.8.3"
+    AssertOk "Xray 25.9.11 accepted" ProxyValidateSupportedVersion "xray" "25.9.11"
+
+    # CLI format mapping must NEVER emit jsonv4
+    local cli_v4 cli_v5
+    cli_v4=$(ProxyV2rayFormatCliValue "jsonv4")
+    cli_v5=$(ProxyV2rayFormatCliValue "jsonv5")
+    AssertEq "json" "$cli_v4" "v2ray: meta=jsonv4 maps to CLI -format json (never jsonv4)"
+    AssertEq "jsonv5" "$cli_v5" "v2ray: meta=jsonv5 maps to CLI -format jsonv5"
+
+    # Every Xray feature boundary-1 vs boundary
+    AssertFail "flatOutbounds < 25.10.15" ProxyCoreHasFeature "xray" "25.10.14" "json" "flatOutbounds"
+    AssertOk "flatOutbounds >= 25.10.15" ProxyCoreHasFeature "xray" "25.10.15" "json" "flatOutbounds"
+    AssertFail "hysteriaOutbound < 26.1.13" ProxyCoreHasFeature "xray" "26.1.12" "json" "hysteriaOutbound"
+    AssertOk "hysteriaOutbound >= 26.1.13" ProxyCoreHasFeature "xray" "26.1.13" "json" "hysteriaOutbound"
+    AssertFail "hysteriaInbound < 26.3.23" ProxyCoreHasFeature "xray" "26.3.22" "json" "hysteriaInbound"
+    AssertOk "hysteriaInbound >= 26.3.23" ProxyCoreHasFeature "xray" "26.3.23" "json" "hysteriaInbound"
+    AssertOk "legacyReverse < 26.4.25" ProxyCoreHasFeature "xray" "26.4.24" "json" "legacyReverse"
+    AssertFail "legacyReverse removedIn 26.4.25" ProxyCoreHasFeature "xray" "26.4.25" "json" "legacyReverse"
+    AssertFail "geodataCron < 26.4.25" ProxyCoreHasFeature "xray" "26.4.24" "json" "geodataCron"
+    AssertOk "geodataCron >= 26.4.25" ProxyCoreHasFeature "xray" "26.4.25" "json" "geodataCron"
+    AssertFail "freedomFinalRules < 26.5.3" ProxyCoreHasFeature "xray" "26.5.2" "json" "freedomFinalRules"
+    AssertOk "freedomFinalRules >= 26.5.3" ProxyCoreHasFeature "xray" "26.5.3" "json" "freedomFinalRules"
+    AssertFail "inboundUsersKey < 26.5.9" ProxyCoreHasFeature "xray" "26.5.8" "json" "inboundUsersKey"
+    AssertOk "inboundUsersKey >= 26.5.9" ProxyCoreHasFeature "xray" "26.5.9" "json" "inboundUsersKey"
+    AssertFail "dnsRewriteKeys < 26.5.9" ProxyCoreHasFeature "xray" "26.5.8" "json" "dnsRewriteKeys"
+    AssertOk "dnsRewriteKeys >= 26.5.9" ProxyCoreHasFeature "xray" "26.5.9" "json" "dnsRewriteKeys"
+    AssertOk "ssUot < 26.6.22" ProxyCoreHasFeature "xray" "26.6.21" "json" "ssUot"
+    AssertFail "ssUot removedIn 26.6.22" ProxyCoreHasFeature "xray" "26.6.22" "json" "ssUot"
+    AssertFail "streamMethodKey < 26.7.11" ProxyCoreHasFeature "xray" "26.7.10" "json" "streamMethodKey"
+    AssertOk "streamMethodKey >= 26.7.11" ProxyCoreHasFeature "xray" "26.7.11" "json" "streamMethodKey"
+    AssertFail "requireTlsPublic < 26.7.11" ProxyCoreHasFeature "xray" "26.7.10" "json" "requireTlsPublicVlessTrojan"
+    AssertOk "requireTlsPublic >= 26.7.11" ProxyCoreHasFeature "xray" "26.7.11" "json" "requireTlsPublicVlessTrojan"
+    AssertFail "masque < 26.9.30" ProxyCoreHasFeature "xray" "26.9.29" "json" "masque"
+    AssertOk "masque >= 26.9.30" ProxyCoreHasFeature "xray" "26.9.30" "json" "masque"
+
+    # V2Ray feature boundaries
+    AssertFail "v2ray jsonv5 < 5.0.1" ProxyCoreHasFeature "v2ray" "5.0.0" "jsonv5" "jsonv5"
+    AssertOk "v2ray jsonv5 >= 5.0.1" ProxyCoreHasFeature "v2ray" "5.0.1" "jsonv5" "jsonv5"
+    AssertFail "v2ray hysteria2 < 5.18.0" ProxyCoreHasFeature "v2ray" "5.17.9" "jsonv4" "hysteria2"
+    AssertOk "v2ray hysteria2 >= 5.18.0" ProxyCoreHasFeature "v2ray" "5.18.0" "jsonv4" "hysteria2"
+
+    # Public target address & key extraction & URI codec
+    AssertOk "public IP 1.1.1.1" ProxyIsPublicTargetAddress "1.1.1.1"
+    AssertFail "private IP 192.168.1.1" ProxyIsPublicTargetAddress "192.168.1.1"
+    AssertFail "private mapped IPv6 ::ffff:c0a8:101" ProxyIsPublicTargetAddress "::ffff:c0a8:101"
+    AssertFail "dotless RFC host intranet" ProxyIsPublicTargetAddress "intranet"
+    AssertOk "double trailing dot is public" ProxyIsPublicTargetAddress "foo.local.."
+
+    local pk26
+    pk26=$(printf 'PrivateKey: aaa\nPassword (PublicKey): bbb123\n' | ProxyExtractXrayPubKey)
+    AssertEq "bbb123" "$pk26" "ProxyExtractXrayPubKey parses 26.6+ Password (PublicKey) format"
+
+    local ss_out
+    ss_out=$(ProxyParseUriToOutbound "ss://2022-blake3-aes-128-gcm%3Apass1%3Apass2@1.2.3.4:8388?plugin=obfs%40local#ss-sip002" "xray" "26.11.9")
+    AssertContains "$ss_out" '"method": "2022-blake3-aes-128-gcm"' "uri_codec: SIP002 %3A + ?plugin=@ parsed"
+
+    # 2. Real multi-version binary matrix
+    local cores_dir=""
+    local strict="${AIOS_REQUIRE_CORE_MATRIX:-0}"
+    if ! cores_dir=$(_CoreMatrixFindCoresDir)
+    then
+        if [ "$strict" == "1" ]
+        then
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] core_matrix: AIOS_REQUIRE_CORE_MATRIX=1 but no cores directory found\n' >&2
+        else
+            printf '[SKIP] core_matrix: no local cores directory found\n'
+        fi
+        return 0
+    fi
+
+    local geodata_dir="${cores_dir}/geodata"
+    if [ ! -s "${geodata_dir}/geoip.dat" ] || [ ! -s "${geodata_dir}/geosite.dat" ]
+    then
+        if [ "$strict" == "1" ]
+        then
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] core_matrix: missing geodata in %s\n' "$geodata_dir" >&2
+        else
+            printf '[SKIP] core_matrix: missing geodata in %s\n' "$geodata_dir"
+        fi
+        return 0
+    fi
+
+    local tmpd
+    tmpd=$(mktemp -d "${TMPDIR:-/tmp}/aios-core-matrix.XXXXXX")
+
+    # Test Xray versions
+    local xver xbin
+    for xver in v25.9.11 v26.5.3 v26.5.9 v26.6.22 v26.6.27 v26.11.9
+    do
+        xbin="${cores_dir}/xray/${xver}/xray"
+        if [ ! -x "$xbin" ]
+        then
+            if [ "$strict" == "1" ]
+            then
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+                printf '[FAIL] core_matrix: missing required xray %s at %s\n' "$xver" "$xbin" >&2
+            else
+                printf '[SKIP] core_matrix: xray %s not installed\n' "$xver"
+            fi
+            continue
+        fi
+
+        local norm_x="${xver#v}"
+        # Generate version-adapted preset & verify BOTH -test AND semantic JSON keys
+        local preset_cfg="$tmpd/xray_${norm_x}_preset.json"
+        ProxyBuildPresetConfig "xray-local-socks-http" "xray" "$norm_x" "json" > "$preset_cfg"
+        AssertOk "xray ${xver}: preset passes real -test" ProxyTestConfigWithBinary "xray" "$xbin" "$preset_cfg" "json" "$geodata_dir"
+
+        # Double-key clients+users overwrite prevention via ProxyAdaptConfigForTarget
+        local dual_src="$tmpd/dual_src.json" dual_dst="$tmpd/dual_${norm_x}.json"
+        printf '{"inbounds":[{"tag":"vmess-in","listen":"127.0.0.1","port":14433,"protocol":"vmess","settings":{"users":[{"id":"11111111-1111-4111-8111-111111111111"}],"clients":[{"id":"22222222-2222-4222-8222-222222222222"}]}}]}\n' > "$dual_src"
+        ProxyAdaptConfigForTarget "xray" "$dual_src" "$dual_dst" "$norm_x" "json"
+        if ProxyCoreHasFeature "xray" "$norm_x" "json" "inboundUsersKey"
+        then
+            AssertOk "xray ${xver}: adapted removes clients when writing users" $JQ_FILE -e '(.inbounds[0].settings | has("users")) and (.inbounds[0].settings | has("clients") | not) and (.inbounds[0].settings.users | length == 1) and (.inbounds[0].settings.users[0].id == "11111111-1111-4111-8111-111111111111")' "$dual_dst"
+        else
+            AssertOk "xray ${xver}: adapted removes users when writing clients" $JQ_FILE -e '(.inbounds[0].settings | has("clients")) and (.inbounds[0].settings | has("users") | not) and (.inbounds[0].settings.clients | length == 1)' "$dual_dst"
+        fi
+        AssertOk "xray ${xver}: adapted inbound passes real -test" ProxyTestConfigWithBinary "xray" "$xbin" "$dual_dst" "json" "$geodata_dir"
+
+        # Empty users[] + non-empty clients[] must NOT wipe existing accounts
+        local empty_users_src="$tmpd/empty_users_src.json" empty_users_dst="$tmpd/empty_users_${norm_x}.json"
+        printf '{"inbounds":[{"tag":"vmess-empty-u","listen":"127.0.0.1","port":14434,"protocol":"vmess","settings":{"users":[],"clients":[{"id":"33333333-3333-4333-8333-333333333333"}]}}]}\n' > "$empty_users_src"
+        ProxyAdaptConfigForTarget "xray" "$empty_users_src" "$empty_users_dst" "$norm_x" "json"
+        if ProxyCoreHasFeature "xray" "$norm_x" "json" "inboundUsersKey"
+        then
+            AssertOk "xray ${xver}: empty users[] preserves clients[] account" $JQ_FILE -e '(.inbounds[0].settings.users | length == 1) and (.inbounds[0].settings.users[0].id == "33333333-3333-4333-8333-333333333333") and (.inbounds[0].settings | has("clients") | not)' "$empty_users_dst"
+        else
+            AssertOk "xray ${xver}: empty users[] preserves clients[] on legacy" $JQ_FILE -e '(.inbounds[0].settings.clients | length == 1) and (.inbounds[0].settings.clients[0].id == "33333333-3333-4333-8333-333333333333") and (.inbounds[0].settings | has("users") | not)' "$empty_users_dst"
+        fi
+
+        # Hysteria dual-key clients+users overwrite prevention on versions supporting hysteriaInbound
+        if ProxyCoreHasFeature "xray" "$norm_x" "json" "hysteriaInbound"
+        then
+            local hy_dual_src="$tmpd/hy_dual_src.json" hy_dual_dst="$tmpd/hy_dual_${norm_x}.json"
+            printf '{"inbounds":[{"tag":"hy-in","listen":"127.0.0.1","port":14435,"protocol":"hysteria","settings":{"version":2,"users":[{"auth":"pw1"}],"clients":[{"auth":"pw2"}]},"streamSettings":{"network":"hysteria","hysteriaSettings":{"version":2}}}]}\n' > "$hy_dual_src"
+            ProxyAdaptConfigForTarget "xray" "$hy_dual_src" "$hy_dual_dst" "$norm_x" "json"
+            if ProxyCoreHasFeature "xray" "$norm_x" "json" "inboundUsersKey"
+            then
+                AssertOk "xray ${xver}: hysteria dual-key keeps users and drops clients" $JQ_FILE -e '(.inbounds[0].settings | has("users")) and (.inbounds[0].settings | has("clients") | not) and (.inbounds[0].settings.users[0].auth == "pw1")' "$hy_dual_dst"
+            else
+                AssertOk "xray ${xver}: hysteria dual-key keeps clients and drops users" $JQ_FILE -e '(.inbounds[0].settings | has("clients")) and (.inbounds[0].settings | has("users") | not) and (.inbounds[0].settings.clients | length == 1)' "$hy_dual_dst"
+            fi
+        fi
+
+        # Negative tests per version
+        local uot_cfg="$tmpd/uot_${norm_x}.json"
+        printf '{"outbounds":[{"tag":"ss-uot","protocol":"shadowsocks","settings":{"address":"1.1.1.1","port":8388,"method":"aes-256-gcm","password":"pw","uot":true,"uotVersion":2}}]}\n' > "$uot_cfg"
+        if ProxyCoreHasFeature "xray" "$norm_x" "json" "ssUot"
+        then
+            AssertOk "xray ${xver}: uot allowed (< 26.6.22)" ProxyValidateCandidateRules "xray" "$uot_cfg" "$norm_x" "json"
+        else
+            AssertFail "xray ${xver}: uot upgrade blocked (>= 26.6.22)" ProxyValidateCandidateRules "xray" "$uot_cfg" "$norm_x" "json"
+        fi
+
+        local pub_vless="$tmpd/pub_vless_${norm_x}.json"
+        printf '{"outbounds":[{"tag":"vl","protocol":"vless","settings":{"address":"1.1.1.1","port":443,"id":"11111111-1111-4111-8111-111111111111","encryption":"none"},"streamSettings":{"network":"raw","security":"none"}}]}\n' > "$pub_vless"
+        if ProxyCoreHasFeature "xray" "$norm_x" "json" "requireTlsPublicVlessTrojan"
+        then
+            AssertFail "xray ${xver}: public plaintext VLESS blocked (>= 26.7.11)" ProxyValidateCandidateRules "xray" "$pub_vless" "$norm_x" "json"
+        fi
+    done
+
+    # Test V2Ray versions (v5.18.0 + v5.56.0, both jsonv4 and jsonv5, plus XDG isolation)
+    local vver vbin
+    for vver in v5.18.0 v5.56.0
+    do
+        vbin="${cores_dir}/v2ray/${vver}/v2ray"
+        if [ ! -x "$vbin" ]
+        then
+            if [ "$strict" == "1" ]
+            then
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+                printf '[FAIL] core_matrix: missing required v2ray %s at %s\n' "$vver" "$vbin" >&2
+            else
+                printf '[SKIP] core_matrix: v2ray %s not installed\n' "$vver"
+            fi
+            continue
+        fi
+
+        local norm_v="${vver#v}"
+        local v4_cfg="$tmpd/v2_${norm_v}_v4.json"
+        local v5_cfg="$tmpd/v2_${norm_v}_v5.json"
+        local iso_xdg="$tmpd/iso_xdg_${norm_v}"
+        ProxyBuildPresetConfig "v2ray-local-socks-http" "v2ray" "$norm_v" "jsonv4" > "$v4_cfg"
+        ProxyBuildPresetConfig "v2ray-local-socks-http" "v2ray" "$norm_v" "jsonv5" > "$v5_cfg"
+
+        AssertOk "v2ray ${vver}: jsonv4 preset passes real test (-format json)" ProxyTestConfigWithBinary "v2ray" "$vbin" "$v4_cfg" "jsonv4" "$geodata_dir" "$iso_xdg"
+        AssertOk "v2ray ${vver}: jsonv5 preset passes real test (-format jsonv5)" ProxyTestConfigWithBinary "v2ray" "$vbin" "$v5_cfg" "jsonv5" "$geodata_dir" "$iso_xdg"
+
+        # Verify hy2Settings in jsonv4 vs transportSettings in jsonv5 AND validate with real v2ray binary
+        local hy2_v4_st hy2_v5_st hy2_v4_cfg hy2_v5_cfg
+        hy2_v4_st=$(ProxyBuildStreamSettings "v2ray" "$norm_v" "jsonv4" "hy2" "tls" '{"sni":"example.com","password":"pw"}')
+        hy2_v5_st=$(ProxyBuildStreamSettings "v2ray" "$norm_v" "jsonv5" "hy2" "tls" '{"sni":"example.com","password":"pw"}')
+        AssertContains "$hy2_v4_st" '"hy2Settings"' "v2ray ${vver}: jsonv4 uses hy2Settings"
+        AssertContains "$hy2_v5_st" '"transportSettings"' "v2ray ${vver}: jsonv5 uses transportSettings"
+
+        hy2_v4_cfg="$tmpd/v2_${norm_v}_hy2_v4.json"
+        hy2_v5_cfg="$tmpd/v2_${norm_v}_hy2_v5.json"
+        $JQ_FILE -n --argjson st "$hy2_v4_st" '{outbounds:[{tag:"hy2-out",protocol:"hysteria2",settings:{servers:[{address:"127.0.0.1",port:443}]},streamSettings:$st}]}' > "$hy2_v4_cfg"
+        $JQ_FILE -n --argjson st "$hy2_v5_st" '{outbounds:[{tag:"hy2-out",protocol:"hysteria2",settings:{server:[{address:"127.0.0.1",port:443}]},streamSettings:$st}]}' > "$hy2_v5_cfg"
+        AssertOk "v2ray ${vver}: jsonv4 hy2Settings passes real test (-format json)" ProxyTestConfigWithBinary "v2ray" "$vbin" "$hy2_v4_cfg" "jsonv4" "$geodata_dir" "$iso_xdg"
+        AssertOk "v2ray ${vver}: jsonv5 transportSettings passes real test (-format jsonv5)" ProxyTestConfigWithBinary "v2ray" "$vbin" "$hy2_v5_cfg" "jsonv5" "$geodata_dir" "$iso_xdg"
+    done
+
+    # 3. Stale lock recovery & transactional switch/rollback tests in isolated temp PROXY_ROOT
+    local orig_proxy_root="$PROXY_ROOT"
+    local orig_proxy_cores_root="$PROXY_CORES_ROOT"
+    local orig_proxy_cores_manifest="$PROXY_CORES_MANIFEST"
+    local orig_proxy_geodata_root="$PROXY_GEODATA_ROOT"
+    local orig_proxy_geodata_current="$PROXY_GEODATA_CURRENT"
+    local orig_proxy_xdg_root="$PROXY_XDG_ROOT"
+    local orig_proxy_tmp_root="$PROXY_TMP_ROOT"
+    local orig_proxy_lock_file="$PROXY_LOCK_FILE"
+    local orig_x_root="$X_ROOT"
+    local orig_x_config="$X_CONFIG"
+    local orig_x_meta="$X_META"
+    local orig_x_tx_state="$X_TX_STATE"
+    local orig_x_backup_root="$X_BACKUP_ROOT"
+    local orig_x_log_root="$X_LOG_ROOT"
+    local orig_x_lkg_link="$X_LKG_LINK"
+    local orig_v2_root="$V2_ROOT"
+    local orig_v2_config="$V2_CONFIG"
+    local orig_v2_meta="$V2_META"
+    local orig_v2_tx_state="$V2_TX_STATE"
+    local orig_v2_backup_root="$V2_BACKUP_ROOT"
+    local orig_v2_log_root="$V2_LOG_ROOT"
+    local orig_v2_lkg_link="$V2_LKG_LINK"
+    local orig_aios_xray_bin="$AIOS_XRAY_BIN"
+    local orig_aios_v2ray_bin="$AIOS_V2RAY_BIN"
+    local orig_aios_prefix="$AIOS_PREFIX"
+
+    local tx_root="$tmpd/tx_proxy"
+    PROXY_ROOT="$tx_root"
+    PROXY_CORES_ROOT="$tx_root/cores"
+    PROXY_CORES_MANIFEST="$tx_root/cores/manifest.json"
+    PROXY_GEODATA_ROOT="$tx_root/geodata"
+    PROXY_GEODATA_CURRENT="$tx_root/geodata/current"
+    PROXY_XDG_ROOT="$tx_root/xdg"
+    PROXY_TMP_ROOT="$tx_root/.tmp"
+    PROXY_LOCK_FILE="$tx_root/lock"
+    X_ROOT="$tx_root/xray"
+    X_CONFIG="$X_ROOT/config.json"
+    X_META="$X_ROOT/meta.json"
+    X_TX_STATE="$X_ROOT/tx_state.json"
+    X_BACKUP_ROOT="$X_ROOT/backups"
+    X_LOG_ROOT="$X_ROOT/logs"
+    X_LKG_LINK="$X_BACKUP_ROOT/last-known-good"
+    V2_ROOT="$tx_root/v2ray"
+    V2_CONFIG="$V2_ROOT/config.json"
+    V2_META="$V2_ROOT/meta.json"
+    V2_TX_STATE="$V2_ROOT/tx_state.json"
+    V2_BACKUP_ROOT="$V2_ROOT/backups"
+    V2_LOG_ROOT="$V2_ROOT/logs"
+    V2_LKG_LINK="$V2_BACKUP_ROOT/last-known-good"
+    AIOS_XRAY_BIN="$tmpd/bin/aios-xray"
+    AIOS_V2RAY_BIN="$tmpd/bin/aios-v2ray"
+    AIOS_PREFIX="$tmpd"
+
+    ProxyEnsureDirs
+    mkdir -p "${PROXY_LOCK_FILE}.d"
+    printf '999999:1\n' > "${PROXY_LOCK_FILE}.d/pid"
+    AssertOk "ProxyAcquireLock recovers stale mkdir lock from dead PID" ProxyAcquireLock "$PROXY_LOCK_FILE" 2 1
+    ProxyReleaseLock
+
+    if [ -x "${cores_dir}/xray/v25.9.11/xray" ] && [ -x "${cores_dir}/xray/v26.11.9/xray" ]
+    then
+        ProxyAtomicSymlinkSwap "$geodata_dir" "$PROXY_GEODATA_CURRENT"
+        ProxyCoreImport "xray" "${cores_dir}/xray/v25.9.11/xray" "test" > /dev/null
+        ProxyCoreImport "xray" "${cores_dir}/xray/v26.11.9/xray" "test" > /dev/null
+        ProxyBuildPresetConfig "xray-local-socks-http" "xray" "25.9.11" "json" > "$X_CONFIG"
+
+        local orig_obs="${PROXY_OBSERVE_SECONDS:-3}"
+        PROXY_OBSERVE_SECONDS=0
+        AssertOk "ProxyCoreSwitch v25.9.11 -> v26.11.9 commits cleanly" ProxyCoreSwitch "xray" "v26.11.9"
+        AssertEq "v26.11.9" "$(readlink "${PROXY_CORES_ROOT}/xray/current")" "current symlink points to v26.11.9"
+        AssertFail "ProxyCoreRemove blocks deleting LKG slot v25.9.11" ProxyCoreRemove "xray" "v25.9.11"
+
+        # ProxyConfigTx rejects invalid JSON and bad-schema config without touching existing config.json
+        local orig_cfg_sha
+        orig_cfg_sha=$(ProxySha256File "$X_CONFIG")
+        AssertFail "ProxyConfigTx rejects malformed JSON" ProxyConfigTx "xray" '{bad json' 1
+        AssertEq "$orig_cfg_sha" "$(ProxySha256File "$X_CONFIG")" "config.json unchanged after malformed JSON"
+        AssertFail "ProxyConfigTx rejects config failing real -test" ProxyConfigTx "xray" '{"inbounds":[{"tag":"bad","protocol":"vless","port":999999,"settings":{}}]}' 1
+        AssertEq "$orig_cfg_sha" "$(ProxySha256File "$X_CONFIG")" "config.json unchanged after failed -test"
+
+        # Stateful rollback & recovery_failed tests via OS-independent stateful service control mock
+        local mock_state="$tmpd/mock_svc_state"
+        mkdir -p "$mock_state"
+        touch "$mock_state/aios-xray.active"
+        local orig_svc_is_active orig_svc_is_enabled orig_svc_ctrl
+        orig_svc_is_active=$(declare -f ServiceControlIsActive)
+        orig_svc_is_enabled=$(declare -f ServiceControlIsEnabled)
+        orig_svc_ctrl=$(declare -f ServiceControl)
+
+        ServiceControlIsActive()
+        {
+            [ -f "$mock_state/${1}.active" ]
+        }
+        ServiceControlIsEnabled()
+        {
+            [ -f "$mock_state/${1}.active" ]
+        }
+        ServiceControl()
+        {
+            local act="$1" svc="$2"
+            case "$act" in
+                start|restart)
+                    if [ -f "$mock_state/fail_next_restart" ]
+                    then
+                        rm -f "$mock_state/fail_next_restart"
+                        rm -f "$mock_state/${svc}.active"
+                        return 1
+                    fi
+                    if [ -f "$mock_state/fail_all_restarts" ]
+                    then
+                        rm -f "$mock_state/${svc}.active"
+                        return 1
+                    fi
+                    touch "$mock_state/${svc}.active"
+                    return 0
+                ;;
+                stop)
+                    rm -f "$mock_state/${svc}.active"
+                    return 0
+                ;;
+            esac
+            return 0
+        }
+
+        # Case A: fail_next_restart triggers automatic rollback to v26.11.9
+        touch "$mock_state/fail_next_restart"
+        AssertFail "ProxyCoreSwitch rolls back when post-switch restart fails" ProxyCoreSwitch "xray" "v25.9.11"
+        AssertEq "v26.11.9" "$(readlink "${PROXY_CORES_ROOT}/xray/current")" "rollback restored current symlink to v26.11.9"
+        AssertEq "rolled_back" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "tx_state.json records rolled_back"
+        AssertOk "aios-xray active again after rollback" ServiceControlIsActive "aios-xray"
+
+        # Case B: fail_all_restarts triggers recovery_failed and blocks subsequent switches
+        touch "$mock_state/fail_all_restarts"
+        AssertFail "ProxyCoreSwitch enters recovery_failed when rollback restart also fails" ProxyCoreSwitch "xray" "v25.9.11"
+        AssertEq "recovery_failed" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "tx_state.json records recovery_failed"
+        rm -f "$mock_state/fail_all_restarts"
+        AssertFail "ProxyCoreSwitch refuses to run while recovery_failed is unresolved" ProxyCoreSwitch "xray" "v25.9.11"
+
+        # Case C: crash recovery cleans leftover preparing state
+        ProxyTxWriteState "$X_TX_STATE" "preparing" "crash_test" "" "simulated crash"
+        AssertOk "ProxyRecoverPendingTx cleans interrupted preparing state" ProxyRecoverPendingTx "xray"
+        AssertEq "rolled_back" "$($JQ_FILE -r '.state' "$X_TX_STATE")" "tx_state.json transitioned preparing -> rolled_back"
+
+        # Case D: V2Ray jsonv4 -> jsonv5 automatic config adaptation + real -format jsonv5 test
+        if [ -x "${cores_dir}/v2ray/v5.56.0/v2ray" ]
+        then
+            local v2_src_v4="$tmpd/v2_adapt_v4.json" v2_dst_v5="$tmpd/v2_adapt_v5.json"
+            printf '{"log":{"loglevel":"warning","access":"/tmp/v2-acc.log","error":"/tmp/v2-err.log"},"inbounds":[{"tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"auth":"noauth","udp":true}}],"outbounds":[{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}]}\n' > "$v2_src_v4"
+            AssertOk "ProxyAdaptConfigForTarget converts V2Ray jsonv4 -> jsonv5" ProxyAdaptConfigForTarget "v2ray" "$v2_src_v4" "$v2_dst_v5" "5.56.0" "jsonv5"
+            AssertOk "v2ray v5.56.0: adapted jsonv5 config passes real test (-format jsonv5)" ProxyTestConfigWithBinary "v2ray" "${cores_dir}/v2ray/v5.56.0/v2ray" "$v2_dst_v5" "jsonv5" "$geodata_dir" "$tmpd/v5_adapt_xdg"
+        elif [ "$strict" == "1" ]
+        then
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] core_matrix: missing v2ray v5.56.0 for Case D\n' >&2
+        fi
+
+        # Case E: Real core + rule negative feature rejection (tun/hysteria on v25.9.11, masque/legacyReverse on v26.6.27, SS dual-key)
+        local tun_cfg="$tmpd/neg_tun.json" hy_cfg="$tmpd/neg_hy.json" mq_cfg="$tmpd/neg_mq.json" rev_cfg="$tmpd/neg_rev.json"
+        printf '{"inbounds":[{"tag":"tun-in","protocol":"tun","settings":{"name":"xray0","MTU":1500}}]}\n' > "$tun_cfg"
+        printf '{"outbounds":[{"tag":"hy-out","protocol":"hysteria","settings":{"version":2,"address":"1.1.1.1","port":443}}]}\n' > "$hy_cfg"
+        printf '{"outbounds":[{"tag":"mq-out","protocol":"masque","settings":{"address":"1.1.1.1","port":443}}]}\n' > "$mq_cfg"
+        printf '{"reverse":{"bridges":[{"tag":"bridge","domain":"example.com"}]}}\n' > "$rev_cfg"
+        AssertFail "xray v25.9.11: rule rejects tun inbound" ProxyValidateCandidateRules "xray" "$tun_cfg" "25.9.11" "json"
+        AssertFail "xray v25.9.11: real binary rejects tun inbound" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v25.9.11/xray" "$tun_cfg" "json" "$geodata_dir"
+        AssertFail "xray v25.9.11: rule rejects hysteria outbound" ProxyValidateCandidateRules "xray" "$hy_cfg" "25.9.11" "json"
+        AssertFail "xray v25.9.11: real binary rejects hysteria outbound" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v25.9.11/xray" "$hy_cfg" "json" "$geodata_dir"
+        AssertFail "xray v26.6.27: rule rejects masque outbound" ProxyValidateCandidateRules "xray" "$mq_cfg" "26.6.27" "json"
+        AssertFail "xray v26.6.27: rule rejects legacy top-level reverse" ProxyValidateCandidateRules "xray" "$rev_cfg" "26.6.27" "json"
+        if [ -x "${cores_dir}/xray/v26.6.27/xray" ]
+        then
+            AssertFail "xray v26.6.27: real binary rejects masque outbound" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.6.27/xray" "$mq_cfg" "json" "$geodata_dir"
+            AssertFail "xray v26.6.27: real binary rejects legacy top-level reverse" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.6.27/xray" "$rev_cfg" "json" "$geodata_dir"
+        elif [ "$strict" == "1" ]
+        then
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            printf '[FAIL] core_matrix: missing xray v26.6.27 for real negative test\n' >&2
+        fi
+
+        local ss_dual_src="$tmpd/ss_dual.json" ss_dual_dst="$tmpd/ss_dual_out.json"
+        printf '{"inbounds":[{"tag":"ss-in","listen":"127.0.0.1","port":18388,"protocol":"shadowsocks","settings":{"method":"aes-256-gcm","users":[{"method":"aes-256-gcm","password":"p1"}],"clients":[{"method":"aes-256-gcm","password":"p2"}]}}]}\n' > "$ss_dual_src"
+        ProxyAdaptConfigForTarget "xray" "$ss_dual_src" "$ss_dual_dst" "26.11.9" "json"
+        AssertOk "xray v26.11.9: SS dual-key removes clients when writing users" $JQ_FILE -e '(.inbounds[0].settings | has("users")) and (.inbounds[0].settings | has("clients") | not) and (.inbounds[0].settings.users[0].password == "p1")' "$ss_dual_dst"
+
+        # Case F: ProxyGeodataUpdate rolls back symlink when post-update restart fails
+        local geo_repo="$tmpd/geo_repo/202611240001"
+        mkdir -p "$geo_repo"
+        cp "$geodata_dir/geoip.dat" "$geo_repo/geoip.dat"
+        cp "$geodata_dir/geosite.dat" "$geo_repo/geosite.dat"
+        printf '%s  geoip.dat\n' "$(ProxySha256File "$geo_repo/geoip.dat")" > "$geo_repo/geoip.dat.sha256sum"
+        printf '%s  geosite.dat\n' "$(ProxySha256File "$geo_repo/geosite.dat")" > "$geo_repo/geosite.dat.sha256sum"
+        local orig_geo_link="${PROXY_GEODATA_LINK:-}" orig_geo_mirror="${PROXY_GEODATA_MIRROR_LINK:-}"
+        local prev_geo_target
+        prev_geo_target=$(readlink "$PROXY_GEODATA_CURRENT")
+        PROXY_GEODATA_LINK="file://${tmpd}/geo_repo"
+        PROXY_GEODATA_MIRROR_LINK="file://${tmpd}/geo_repo"
+        touch "$mock_state/aios-xray.active"
+        touch "$mock_state/fail_next_restart"
+        AssertFail "ProxyGeodataUpdate rolls back when post-update restart fails" ProxyGeodataUpdate "202611240001"
+        AssertEq "$prev_geo_target" "$(readlink "$PROXY_GEODATA_CURRENT")" "geodata current symlink restored after rollback"
+        PROXY_GEODATA_LINK="$orig_geo_link"
+        PROXY_GEODATA_MIRROR_LINK="$orig_geo_mirror"
+
+        eval "$orig_svc_is_active"
+        eval "$orig_svc_is_enabled"
+        eval "$orig_svc_ctrl"
+        PROXY_OBSERVE_SECONDS="$orig_obs"
+    elif [ "$strict" == "1" ]
+    then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] core_matrix: missing xray v25.9.11 or v26.11.9 for transactional tests\n' >&2
+    fi
+
+    # 4. V2Ray XDG isolation test: poisoned host XDG_DATA_DIRS must not break AIOS v2ray test
+    if [ -x "${cores_dir}/v2ray/v5.56.0/v2ray" ]
+    then
+        local poison_xdg="$tmpd/poison_xdg"
+        mkdir -p "$poison_xdg/v2ray"
+        printf 'CORRUPTED_GEOIP_DATA' > "$poison_xdg/v2ray/geoip.dat"
+        printf 'CORRUPTED_GEOSITE_DATA' > "$poison_xdg/v2ray/geosite.dat"
+        local geo_cfg="$tmpd/v2_geo_test.json"
+        printf '{"inbounds":[{"tag":"socks-in","listen":"127.0.0.1","port":10808,"protocol":"socks","settings":{"udp":true}}],"outbounds":[{"tag":"direct","protocol":"freedom"},{"tag":"block","protocol":"blackhole"}],"routing":{"rules":[{"type":"field","ip":["geoip:private"],"outboundTag":"direct"}]}}\n' > "$geo_cfg"
+        local orig_xdg_dirs="${XDG_DATA_DIRS:-}" orig_xdg_home="${XDG_DATA_HOME:-}"
+        export XDG_DATA_DIRS="$poison_xdg"
+        export XDG_DATA_HOME="$poison_xdg"
+        AssertOk "v2ray v5.56.0: isolated XDG ignores poisoned host XDG_DATA_DIRS" ProxyTestConfigWithBinary "v2ray" "${cores_dir}/v2ray/v5.56.0/v2ray" "$geo_cfg" "jsonv4" "$geodata_dir" "$tmpd/clean_xdg"
+        if [ -n "$orig_xdg_dirs" ]
+        then
+            export XDG_DATA_DIRS="$orig_xdg_dirs"
+        else
+            unset XDG_DATA_DIRS
+        fi
+        if [ -n "$orig_xdg_home" ]
+        then
+            export XDG_DATA_HOME="$orig_xdg_home"
+        else
+            unset XDG_DATA_HOME
+        fi
+    elif [ "$strict" == "1" ]
+    then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] core_matrix: missing v2ray v5.56.0 for XDG isolation test\n' >&2
+    fi
+
+    PROXY_ROOT="$orig_proxy_root"
+    PROXY_CORES_ROOT="$orig_proxy_cores_root"
+    PROXY_CORES_MANIFEST="$orig_proxy_cores_manifest"
+    PROXY_GEODATA_ROOT="$orig_proxy_geodata_root"
+    PROXY_GEODATA_CURRENT="$orig_proxy_geodata_current"
+    PROXY_XDG_ROOT="$orig_proxy_xdg_root"
+    PROXY_TMP_ROOT="$orig_proxy_tmp_root"
+    PROXY_LOCK_FILE="$orig_proxy_lock_file"
+    X_ROOT="$orig_x_root"
+    X_CONFIG="$orig_x_config"
+    X_META="$orig_x_meta"
+    X_TX_STATE="$orig_x_tx_state"
+    X_BACKUP_ROOT="$orig_x_backup_root"
+    X_LOG_ROOT="$orig_x_log_root"
+    X_LKG_LINK="$orig_x_lkg_link"
+    V2_ROOT="$orig_v2_root"
+    V2_CONFIG="$orig_v2_config"
+    V2_META="$orig_v2_meta"
+    V2_TX_STATE="$orig_v2_tx_state"
+    V2_BACKUP_ROOT="$orig_v2_backup_root"
+    V2_LOG_ROOT="$orig_v2_log_root"
+    V2_LKG_LINK="$orig_v2_lkg_link"
+    AIOS_XRAY_BIN="$orig_aios_xray_bin"
+    AIOS_V2RAY_BIN="$orig_aios_v2ray_bin"
+    AIOS_PREFIX="$orig_aios_prefix"
+    rm -rf "$tmpd"
+}

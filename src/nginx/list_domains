@@ -23,10 +23,10 @@ NginxListDomains()
             if [ -f "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
                 domain_status=1
-                domain_status_text="${green} [$(gettext "已开启")] ${normal}"
+                domain_status_text="${green} [$i18n_enabled] ${normal}"
             else
                 domain_status=0
-                domain_status_text="${red} [$(gettext "已关闭")] ${normal}"
+                domain_status_text="${red} [$i18n_disabled] ${normal}"
             fi
             if [ -f "$nginx_prefix/conf/sites_crt/$domain.crt" ] 
             then

@@ -86,7 +86,7 @@ Add4gtvLink()
             if [ -z "${kind:-}" ]
             then
                 stream_urls_select_all=$((stream_urls_count+1))
-                stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
+                stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}$i18n_all\n"
                 Println "$stream_urls_list"
                 echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
             else

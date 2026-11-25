@@ -26,7 +26,7 @@ DockerCrtManage()
 
     echo
     crt_options=( "$(gettext "浏览证书")" "$(gettext "安装自签名证书")" )
-    inquirer list_input_index "$(gettext "选择操作")" crt_options crt_options_index
+    inquirer list_input_index "$i18n_select_action" crt_options crt_options_index
 
     case $crt_options_index in
         0) ServiceBrowse "$DOCKER_ROOT"/certs

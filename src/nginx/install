@@ -229,7 +229,7 @@ EOF
 
 NginxSourceInstall()
 {
-    local install="$(gettext "更新")"
+    local install="$i18n_update"
 
     if [ -z "${1:-}" ]
     then
@@ -237,10 +237,10 @@ NginxSourceInstall()
         then
             return 0
         fi
-        install="$(gettext "安装")"
+        install="$i18n_install"
     elif [[ ! -x $(command -v $nginx_name) ]]
     then
-        install="$(gettext "安装")"
+        install="$i18n_install"
     fi
 
     DepsCheck

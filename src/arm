@@ -12,8 +12,10 @@ Include utils/dnscrypt "$@"
 
 ShFileCheck
 
-Println "  $(gettext "Armbian 管理面板") ${normal}${red}[v$sh_ver]${normal}
-
+if [ "${arm_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+then
+    arm_menu_title_cache=$(gettext "Armbian 管理面板")
+    arm_menu_body_cache="
   ${green}1.${normal} $(gettext "更改 apt 源")
   ${green}2.${normal} $(gettext "修复 N1 dtb")
 ————————————
@@ -35,7 +37,12 @@ Println "  $(gettext "Armbian 管理面板") ${normal}${red}[v$sh_ver]${normal}
  ${green}16.${normal} $(gettext "更新脚本")
 
 "
-read -p "`gettext \"输入序号\"` [1-16]: " armbian_num
+    arm_menu_locale="${sh_locale:-zh_CN}"
+fi
+
+Println "  ${arm_menu_title_cache} ${normal}${red}[v$sh_ver]${normal}
+${arm_menu_body_cache}"
+read -p "$i18n_input_no [1-16]: " armbian_num
 
 case $armbian_num in
     1) 
@@ -871,6 +878,7 @@ EOF
             configs_count=0
             configs_time=()
             configs_name=()
+            arm_i18n_date=$(gettext "日期")
             for file in "$HOME/openwrt_saved/openwrt-v2ray/config-"*
             do
                 if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
@@ -888,7 +896,7 @@ EOF
                 configs_name+=("$config_name")
                 configs_count=$((configs_count+1))
                 printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
-                configs_list="$configs_list $configs_count.${indent_6}$(gettext "名称"): ${green}${config_name_list:-$(gettext "无")}${normal} $(gettext "日期"): ${green}$config_date${normal}\n\n"
+                configs_list="$configs_list $configs_count.${indent_6}${i18n_name}: ${green}${config_name_list:-$i18n_none}${normal} ${arm_i18n_date}: ${green}$config_date${normal}\n\n"
             done
 
             Println "$configs_list"
@@ -1009,8 +1017,8 @@ EOF
             exit 1
         fi
         echo
-        switch_options=( "$(gettext "开启")" "$(gettext "关闭")" )
-        inquirer list_input_index "$(gettext "选择操作")" switch_options switch_options_index
+        switch_options=( "$i18n_open" "$i18n_close" )
+        inquirer list_input_index "$i18n_select_action" switch_options switch_options_index
         if [ -f /opt/AdGuardHome/AdGuardHome.yaml ] 
         then
             /opt/AdGuardHome/AdGuardHome -s stop || true

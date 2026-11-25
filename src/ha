@@ -8,9 +8,9 @@ Include utils/zlib "$@"
 
 DepInstall sudo
 
-haproxy_options=( "$(gettext "安装")" "$(gettext "更新")" "$(gettext "卸载")" )
+haproxy_options=( "$i18n_install" "$i18n_update" "$(gettext "卸载")" )
 echo
-inquirer list_input_index "$(gettext "请选择")" haproxy_options haproxy_options_index
+inquirer list_input_index "$i18n_please_select" haproxy_options haproxy_options_index
 
 case $haproxy_options_index in
     0) HAProxyInstall

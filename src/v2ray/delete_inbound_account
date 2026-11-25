@@ -34,8 +34,12 @@ V2rayDeleteInboundAccount()
     local acc_idx=0
     echo
     inquirer list_input_index "$(gettext "选择要删除的账号")" opts acc_idx
-    jq_path='["inbounds",'"$idx"',"settings","'"$field"'",'"$acc_idx"']'
-    JQ delete "$V2_CONFIG"
-    ProxyRestartIfActive v2ray
+    if ! ProxyMutateConfigTx "v2ray" 'del(.inbounds[$i].settings[$f][$a])' \
+        --argjson i "$idx" --arg f "$field" --argjson a "$acc_idx"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 删除账号失败: \$err_detail")\n"
+        return 1
+    fi
     Println "$(eval_gettext "\$info 已删除账号") ${green}${opts[acc_idx]}${normal}\n"
 }

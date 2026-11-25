@@ -9,7 +9,7 @@ DepInstall sudo
 
 docker_options=( "$(gettext "服务")" "$(gettext "管理证书")" "$(gettext "安装/更新 docker")" "$(gettext "安装/更新 postgresql")" "$(gettext "安装/更新 yq")" )
 echo
-inquirer list_input_index "$(gettext "请选择")" docker_options docker_options_index
+inquirer list_input_index "$i18n_please_select" docker_options docker_options_index
 
 case $docker_options_index in
     0) DockerService

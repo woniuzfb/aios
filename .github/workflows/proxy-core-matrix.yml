@@ -1,0 +1,40 @@
+name: Proxy Core Matrix & Regression
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq shellcheck unzip curl
+
+      - name: Fetch pinned multi-version Xray/V2Ray cores & GeoData
+        env:
+          AIOS_CORES_SHA256_FILE: scripts/test_cores.sha256
+        run: bash scripts/fetch_test_cores.sh
+
+      - name: Syntax, Lint, Build & Full Test Suite (Strict Core Matrix)
+        env:
+          AIOS_REQUIRE_CORE_MATRIX: "1"
+        run: |
+          shellcheck -s bash -e SC2034,SC2154,SC2016 \
+            src/service/control src/proxy/core_features src/proxy/core_manager \
+            src/proxy/validate src/proxy/stream_editor src/proxy/uri_codec \
+            src/proxy/presets src/xray/set_advanced src/v2ray/set_advanced \
+            src/v2ray/stats scripts/fetch_test_cores.sh
+          ./make
+          bash -n aios.sh
+          AIOS_REQUIRE_CORE_MATRIX=1 bash test/run

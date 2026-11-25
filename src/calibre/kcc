@@ -40,7 +40,7 @@ KccView()
         kcc_source=$(JoinByString ', ' "${kcc_sources[@]}")
     fi
 
-    kcc_list="${kcc_list}$(gettext "额外参数"): ${kcc_args:-$(gettext "无")}\n$(gettext "输出目录"): $kcc_output\n$(gettext "源图片"): ${kcc_source:-$(gettext "无")}\n"
+    kcc_list="${kcc_list}$(gettext "额外参数"): ${kcc_args:-$i18n_none}\n$(gettext "输出目录"): $kcc_output\n$(gettext "源图片"): ${kcc_source:-$i18n_none}\n"
 
     Println "$kcc_list"
 }
@@ -52,7 +52,7 @@ KccBrowse()
     kcc_view_options=( "$(gettext "输出目录")" "$(gettext "源图片")" )
 
     echo
-    inquirer list_input_index "$(gettext "请选择")" kcc_view_options kcc_view_options_index
+    inquirer list_input_index "$i18n_please_select" kcc_view_options kcc_view_options_index
 
     if [ "$kcc_view_options_index" -eq 0 ] 
     then
@@ -145,7 +145,7 @@ KccConfigEdit()
     kcc_format_options=( Auto MOBI EPUB CBZ KFX MOBI+EPUB )
 
     echo
-    inquirer checkbox_input_indices "$(gettext "选择修改内容")" kcc_config_edit_options kcc_config_edit_options_indices
+    inquirer checkbox_input_indices "$i18n_select_edit" kcc_config_edit_options kcc_config_edit_options_indices
 
     for kcc_config_edit_options_index in "${kcc_config_edit_options_indices[@]}"
     do
@@ -412,7 +412,7 @@ KccMenu()
 {
     kcc_options=( "$(gettext "浏览")" "$(gettext "转换")" "$(gettext "设置")" "$(gettext "修改设置")" "$(gettext "更新/安装")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" kcc_options kcc_options_index
+    inquirer list_input_index "$i18n_please_select" kcc_options kcc_options_index
 
     case $kcc_options_index in
         0) KccBrowse

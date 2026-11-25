@@ -1,6 +1,14 @@
 XraySetReverse()
 {
-    Println "$(eval_gettext "\$tip 注意: Xray 顶层 reverse 配置已废弃, 推荐使用 VLESS 反向代理")\n"
+    local cur_ver
+    cur_ver=$(ProxyGetTargetVersion "xray")
+    if ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "legacyReverse"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 已移除顶层 legacy reverse (>= 26.4.25), 请改用 VLESS 内联反向代理")\n"
+        return 1
+    fi
+
+    Println "$(eval_gettext "\$tip 注意: Xray 顶层 reverse 配置在 >= 26.4.25 已移除, 推荐使用 VLESS 反向代理")\n"
 
     local actions=( "$(gettext "添加 Bridge")" "$(gettext "添加 Portal")" "$(gettext "删除 Bridge")" "$(gettext "删除 Portal")" )
     local action_idx=0
@@ -15,18 +23,18 @@ XraySetReverse()
             JQs build item_json '{"tag": $t, "domain": $d}' --arg t "$r_tag" --arg d "$r_domain"
             if [ "$action_idx" -eq 0 ]
             then
-                jq_path='["reverse","bridges"]'
-                if ! JQ add "$X_CONFIG" "[$item_json]"
+                if ! ProxyMutateConfigTx "xray" '.reverse.bridges = ((.reverse.bridges // []) + [$item])' --argjson item "$item_json"
                 then
-                    Println "$(eval_gettext "\$error 添加 Bridge 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加 Bridge 失败: \$err_detail")\n"
                     return 1
                 fi
                 Println "$(eval_gettext "\$info 已添加 Bridge \${green}\${r_tag}\${normal}")\n"
             else
-                jq_path='["reverse","portals"]'
-                if ! JQ add "$X_CONFIG" "[$item_json]"
+                if ! ProxyMutateConfigTx "xray" '.reverse.portals = ((.reverse.portals // []) + [$item])' --argjson item "$item_json"
                 then
-                    Println "$(eval_gettext "\$error 添加 Portal 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加 Portal 失败: \$err_detail")\n"
                     return 1
                 fi
                 Println "$(eval_gettext "\$info 已添加 Portal \${green}\${r_tag}\${normal}")\n"
@@ -48,16 +56,14 @@ XraySetReverse()
             fi
             local del_idx=0
             inquirer list_input_index "$(eval_gettext "选择要删除的 \${r_key}")" r_opts del_idx
-            jq_path='["reverse","'"$r_key"'",'"$del_idx"']'
-            if ! JQ delete "$X_CONFIG"
+            if ! ProxyMutateConfigTx "xray" 'del(.reverse[$k][$i])' --arg k "$r_key" --argjson i "$del_idx"
             then
-                Println "$(eval_gettext "\$error 删除 \${r_key} 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除 \${r_key} 失败: \$err_detail")\n"
                 return 1
             fi
             local del_item="${r_opts[$del_idx]}"
             Println "$(eval_gettext "\$info 已删除 \${r_key}: \${green}\${del_item}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }

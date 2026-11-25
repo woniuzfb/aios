@@ -34,7 +34,7 @@ then
                 chnl_stream_links_list="$chnl_stream_links_list${indent_6}$(gettext "源")$((j+1)): ${chnl_stream_links[j]}\n"
             done
 
-            flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$(gettext "无")}\n\n"
+            flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$i18n_none}\n\n"
         elif [ "${chnls_status[i]:-}" == "on" ]
         then
             IFS="${delimiters[3]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]:-}"

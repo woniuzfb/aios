@@ -131,7 +131,7 @@ IbmSetCfAppCron()
     done
 
     Println "$(eval_gettext "\$info 输入重启间隔天数")"
-    while read -p "($(gettext "默认"): 5): " cron_days 
+    while read -p "($i18n_default: 5): " cron_days 
     do
         case $cron_days in
             "") 
@@ -153,7 +153,7 @@ IbmSetCfAppCron()
     done
 
     Println "$(eval_gettext "\$info 输入重启小时 [0-23]")"
-    while read -p "($(gettext "默认"): 0): " cron_hour 
+    while read -p "($i18n_default: 0): " cron_hour 
     do
         case $cron_hour in
             "") 
@@ -175,7 +175,7 @@ IbmSetCfAppCron()
     done
 
     Println "$(eval_gettext "\$info 输入重启分钟 [0-59]")"
-    while read -p "($(gettext "默认"): 0): " cron_min 
+    while read -p "($i18n_default: 0): " cron_min 
     do
         case $cron_min in
             "") 

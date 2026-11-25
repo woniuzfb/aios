@@ -20,7 +20,7 @@ OpenListAct()
             IFS="${delimiters[4]}" read -ra openlist_accs_username <<< "${openlists_acc_username[openlists_index]}"
             openlist_accs_count=${#openlist_accs_username[@]}
         fi
-        openlists_txt="$openlists_txt\n${green}$((openlists_index+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[openlists_index]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[openlists_index]}\n${indent_6}$(gettext "账号"): $(eval_gettext "\${openlist_accs_count}个")\n"
+        openlists_txt="$openlists_txt\n${green}$((openlists_index+1)).${normal}${indent_6}${i18n_name}: ${openlists_name[openlists_index]:-$i18n_none}\n${indent_6}${i18n_address}: ${openlists_url[openlists_index]}\n${indent_6}${i18n_account}: $(eval_gettext "\${openlist_accs_count}个")\n"
     done
 
     Println "$openlists_txt\n"
@@ -40,11 +40,14 @@ OpenListAct()
 
     openlist_accs_count=${#openlist_accs_username[@]}
 
-    openlist_txt="${green}$(gettext "账号"):${normal}\n"
+    openlist_txt="${green}${i18n_account}:${normal}\n"
+
+    local i18n_username
+    i18n_username=$(gettext "用户名")
 
     for((i=0;i<openlist_accs_count;i++));
     do
-        openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}$(gettext "用户名"): ${openlist_accs_username[i]}\n${indent_6}$(gettext "密码"): ${openlist_accs_password[i]:-$(gettext "无")}\n${indent_6}Token: ${openlist_accs_token[i]:-$(gettext "无")}\n\n"
+        openlist_txt="$openlist_txt${green}$((i+1)).${normal}${indent_6}${i18n_username}: ${openlist_accs_username[i]}\n${indent_6}${i18n_password}: ${openlist_accs_password[i]:-$i18n_none}\n${indent_6}Token: ${openlist_accs_token[i]:-$i18n_none}\n\n"
     done
 
     Println "$openlist_txt"
@@ -71,6 +74,17 @@ OpenListAct()
 
     echo
     inquirer text_input "$(gettext "输入访问路径")" openlist_path "/" SetOpenListPathValidate "$(gettext "必须是 / 开始的路径")"
+
+    local i18n_multi_select i18n_select_all_dirs i18n_select_all_files i18n_rename i18n_rename_each i18n_rename_batch i18n_input_new_name i18n_input_sed i18n_confirm_delete_files
+    i18n_multi_select=$(gettext "多选")
+    i18n_select_all_dirs=$(gettext "选择所有目录文件")
+    i18n_select_all_files=$(gettext "选择所有非目录文件")
+    i18n_rename=$(gettext "重命名")
+    i18n_rename_each=$(gettext "逐个重命名")
+    i18n_rename_batch=$(gettext "批量重命名")
+    i18n_input_new_name=$(gettext "输入新名称")
+    i18n_input_sed=$(gettext "输入 sed 命令(-e)")
+    i18n_confirm_delete_files=$(gettext "确认删除以上文件")
 
     while true 
     do
@@ -126,11 +140,11 @@ OpenListAct()
 
         if [ -n "${openlist_not_dir_indices:-}" ] || [ -n "${openlist_dir_indices:-}" ]
         then
-            openlist_files_options+=("${red}$(gettext "修改")${normal}")
+            openlist_files_options+=("${red}${i18n_edit}${normal}")
         fi
 
         echo
-        inquirer list_input_index "$(gettext "请选择")" openlist_files_options openlist_files_index
+        inquirer list_input_index "$i18n_please_select" openlist_files_options openlist_files_index
 
         if [ "$openlist_files_root" = false ] && [ "$openlist_files_index" -eq 0 ]
         then
@@ -140,26 +154,26 @@ OpenListAct()
 
         if { [ "$openlist_files_root" = false ] && [ "$openlist_files_index" -eq $((openlist_files_count+1)) ]; } || { [ "$openlist_files_root" = true ] && [ "$openlist_files_index" -eq $((openlist_files_count)) ]; }
         then
-            openlist_files_options=("$(gettext "多选")")
+            openlist_files_options=("$i18n_multi_select")
 
             if [ -n "${openlist_dir_indices:-}" ] 
             then
-                openlist_files_options+=("$(gettext "选择所有目录文件")")
+                openlist_files_options+=("$i18n_select_all_dirs")
             fi
             if [ -n "${openlist_not_dir_indices:-}" ] 
             then
-                openlist_files_options+=("$(gettext "选择所有非目录文件")")
+                openlist_files_options+=("$i18n_select_all_files")
             fi
 
             echo
-            inquirer list_input_index "$(gettext "请选择")" openlist_files_options openlist_files_options_index
+            inquirer list_input_index "$i18n_please_select" openlist_files_options openlist_files_options_index
 
             if [ "$openlist_files_options_index" -eq 0 ] 
             then
                 echo
                 openlist_files_indices=()
-                inquirer checkbox_input_indices "$(gettext "多选")" openlist_checkbox_options openlist_files_indices 20
-            elif [ "${openlist_files_options[openlist_files_options_index]}" == "$(gettext "选择所有目录文件")" ] 
+                inquirer checkbox_input_indices "$i18n_multi_select" openlist_checkbox_options openlist_files_indices 20
+            elif [ "${openlist_files_options[openlist_files_options_index]}" == "$i18n_select_all_dirs" ] 
             then
                 openlist_files_indices=("${openlist_dir_indices[@]}")
             else
@@ -186,42 +200,42 @@ OpenListAct()
 
         if [ "$openlist_files_edit_count" -eq 1 ] 
         then
-            openlist_files_edit_options+=("$(gettext "重命名")")
+            openlist_files_edit_options+=("$i18n_rename")
         else
-            openlist_files_edit_options+=( "$(gettext "逐个重命名")" "$(gettext "批量重命名")")
+            openlist_files_edit_options+=( "$i18n_rename_each" "$i18n_rename_batch" )
         fi
 
-        openlist_files_edit_options+=( "$(gettext "删除")" )
+        openlist_files_edit_options+=( "$i18n_delete" )
 
         echo
-        inquirer list_input "$(gettext "选择操作")" openlist_files_edit_options openlist_files_edit_option
+        inquirer list_input "$i18n_select_action" openlist_files_edit_options openlist_files_edit_option
 
-        if [ "$openlist_files_edit_option" == "$(gettext "重命名")" ] 
+        if [ "$openlist_files_edit_option" == "$i18n_rename" ] 
         then
             echo
-            inquirer text_input "$(gettext "输入新的名称")" openlist_file_name "$i18n_cancel"
+            inquirer text_input "$i18n_input_new_name" openlist_file_name "$i18n_cancel"
             if [ "$openlist_file_name" == "$i18n_cancel" ] 
             then
                 continue
             fi
             OpenList.fs.rename
-        elif [ "$openlist_files_edit_option" == "$(gettext "逐个重命名")" ] 
+        elif [ "$openlist_files_edit_option" == "$i18n_rename_each" ] 
         then
             for openlist_files_index in "${openlist_files_indices[@]}"
             do
                 echo
-                Println "$info $(gettext "修改") ${openlist_files_name[openlist_files_index]}\n"
-                inquirer text_input "$(gettext "输入新的名称")" openlist_file_name "$i18n_cancel"
+                Println "$info $i18n_edit ${openlist_files_name[openlist_files_index]}\n"
+                inquirer text_input "$i18n_input_new_name" openlist_file_name "$i18n_cancel"
                 if [ "$openlist_file_name" == "$i18n_cancel" ] 
                 then
                     continue
                 fi
                 OpenList.fs.rename
             done
-        elif [ "$openlist_files_edit_option" == "$(gettext "批量重命名")" ] 
+        elif [ "$openlist_files_edit_option" == "$i18n_rename_batch" ] 
         then
             echo
-            inquirer text_input "$(gettext "输入 sed 命令(-e)")" openlist_files_edit_sed "$i18n_cancel"
+            inquirer text_input "$i18n_input_sed" openlist_files_edit_sed "$i18n_cancel"
             if [ "$openlist_file_name" == "$i18n_cancel" ] 
             then
                 continue
@@ -229,7 +243,7 @@ OpenListAct()
             for openlist_files_index in "${openlist_files_indices[@]}"
             do
                 openlist_file_name=$(echo "${openlist_files_name[openlist_files_index]}" | sed -e "$openlist_files_edit_sed")
-                Println "$info $(gettext "修改") ${openlist_files_name[openlist_files_index]} => $openlist_file_name\n"
+                Println "$info $i18n_edit ${openlist_files_name[openlist_files_index]} => $openlist_file_name\n"
                 OpenList.fs.rename
             done
         else
@@ -244,7 +258,7 @@ OpenListAct()
             done
 
             Println "$openlist_files_txt\n"
-            inquirer list_input_index "$(gettext "确认删除以上文件")" ny_options ny_index
+            inquirer list_input_index "$i18n_confirm_delete_files" ny_options ny_index
 
             if [ "$ny_index" -eq 1 ] 
             then

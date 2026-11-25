@@ -4,6 +4,10 @@ RunSuiteXray()
 
     local tmpdir
     tmpdir=$(mktemp -d)
+    local orig_x_root="${X_ROOT:-}" orig_x_backup="${X_BACKUP_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    X_ROOT="$tmpdir"
+    X_BACKUP_ROOT="$tmpdir/backups"
+    PROXY_LOCK_FILE="$tmpdir/proxy.lock"
     X_CONFIG="$tmpdir/xray.json"
 
     cat > "$X_CONFIG" <<'EOF'
@@ -246,6 +250,8 @@ EOF
     AssertEq "GET" "$burstObservatory_pingConfig_httpMethod" "XrayGetBurstObservatory httpMethod"
 
     # 5. Interactive end-to-end: add + delete inbound/outbound via mocked inquirer
+    # Strip legacy top-level reverse (removed in Xray 26.4.25+) before 26.11.9 transactional writes
+    $JQ_FILE 'del(.reverse)' "$X_CONFIG" > "${X_CONFIG}.clean" && mv -f "${X_CONFIG}.clean" "$X_CONFIG"
     ProxyAddBound "$X_CONFIG" inbounds '{"listen":"127.0.0.1","port":1080,"protocol":"socks","tag":"socks-added","settings":{"auth":"noauth"}}'
     AssertJsonEq "$X_CONFIG" '.inbounds | length' "4" "ProxyAddBound adds xray inbound"
 
@@ -281,7 +287,7 @@ EOF
     AssertJsonEq "$X_CONFIG" '.inbounds[0].protocol' "vless" "XrayAddInbound writes protocol=vless"
     AssertJsonEq "$X_CONFIG" '.inbounds[0].port' "443" "XrayAddInbound writes numeric port"
     AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users[0].id' "00000000-0000-4000-8000-000000000099" "XrayAddInbound writes settings.users[0].id"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].streamSettings.network' "xhttp" "XrayAddInbound writes network=xhttp"
+    AssertJsonEq "$X_CONFIG" '(.inbounds[0].streamSettings.method // .inbounds[0].streamSettings.network)' "xhttp" "XrayAddInbound writes method/network=xhttp"
     AssertJsonEq "$X_CONFIG" '.inbounds[0].streamSettings.realitySettings.serverNames | length' "2" "XrayAddInbound splits serverNames"
     AssertJsonEq "$X_CONFIG" '.inbounds[0].sniffing.routeOnly' "true" "XrayAddInbound writes sniffing.routeOnly"
 
@@ -314,16 +320,16 @@ EOF
     AssertInquirerDrained "XrayDeleteInboundAccount drained"
     AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users | length' "1" "XrayDeleteInboundAccount deletes selected user"
 
-    # 6c. XrayAddOutbound + XrayListOutboundAccounts
+    # 6c. XrayAddOutbound + XrayListOutboundAccounts (private address allows plaintext on >= 26.7.11)
     MockInquirerReset
     MockInquirerPush \
         "3" "proxy-new" "" "UseIPv4" "direct" \
-        "edge.example.test" "443" "00000000-0000-4000-8000-000000000099" "none" "xtls-rprx-vision" \
+        "127.0.0.1" "443" "00000000-0000-4000-8000-000000000099" "none" "xtls-rprx-vision" \
         "0" "0"
     XrayAddOutbound > /dev/null
     AssertInquirerDrained "XrayAddOutbound drained"
     AssertJsonEq "$X_CONFIG" '.outbounds[0].protocol' "vless" "XrayAddOutbound writes protocol=vless"
-    AssertJsonEq "$X_CONFIG" '.outbounds[0].settings.address' "edge.example.test" "XrayAddOutbound writes flat settings.address"
+    AssertJsonEq "$X_CONFIG" '.outbounds[0].settings.address' "127.0.0.1" "XrayAddOutbound writes flat settings.address"
     AssertJsonEq "$X_CONFIG" '.outbounds[0].targetStrategy' "UseIPv4" "XrayAddOutbound writes targetStrategy"
     AssertJsonEq "$X_CONFIG" '.outbounds[0].streamSettings.sockopt.dialerProxy' "direct" "XrayAddOutbound writes sockopt.dialerProxy"
 
@@ -332,7 +338,7 @@ EOF
     local out_acc
     out_acc=$(XrayListOutboundAccounts)
     AssertInquirerDrained "XrayListOutboundAccounts drained"
-    AssertContains "$out_acc" "edge.example.test:443" "XrayListOutboundAccounts shows outbound server"
+    AssertContains "$out_acc" "127.0.0.1:443" "XrayListOutboundAccounts shows outbound server"
 
     # 6d. XraySetDns (add host + add server + set queryStrategy + delete host + delete server)
     MockInquirerReset
@@ -397,18 +403,20 @@ EOF
     AssertInquirerDrained "XraySetPolicy single system stat drained"
     AssertJsonEq "$X_CONFIG" '.policy.system.statsInboundUplink' "true" "XraySetPolicy sets single system stat"
 
-    # 6g. XraySetReverse (add + delete bridge)
+    # 6g. XraySetReverse (blocked on >= 26.4.25, allowed on < 26.4.25)
+    AIOS_XRAY_TARGET_VERSION="26.11.9" AssertFail "XraySetReverse blocks legacy reverse on >= 26.4.25" XraySetReverse
     MockInquirerReset
     MockInquirerPush "0" "br-1" "rev.example.test"
-    XraySetReverse > /dev/null
+    AIOS_XRAY_TARGET_VERSION="25.9.11" XraySetReverse > /dev/null
     AssertInquirerDrained "XraySetReverse add bridge drained"
     AssertJsonEq "$X_CONFIG" '.reverse.bridges[0].tag' "br-1" "XraySetReverse writes reverse.bridges[0].tag"
 
     MockInquirerReset
     MockInquirerPush "2" "0"
-    XraySetReverse > /dev/null
+    AIOS_XRAY_TARGET_VERSION="25.9.11" XraySetReverse > /dev/null
     AssertInquirerDrained "XraySetReverse delete bridge drained"
     AssertJsonEq "$X_CONFIG" '.reverse.bridges | length' "0" "XraySetReverse deletes bridge"
+    $JQ_FILE 'del(.reverse)' "$X_CONFIG" > "${X_CONFIG}.clean" && mv -f "${X_CONFIG}.clean" "$X_CONFIG"
 
     # 6h. XrayListInboundShare (vless + vmess base64 + single-inbound filter) + XrayAddOutboundAccount + XrayListStats (KB/MB)
     local share_out
@@ -435,7 +443,8 @@ EOF
 printf '%s\n' '{"stat":[{"name":"inbound>>>vless-new>>>traffic>>>uplink","value":2097152},{"name":"user>>>user1@example.test>>>online","value":1}]}'
 MOCKX
     chmod +x "$fake_xctl"
-    XCTL_FILE="$fake_xctl"
+    local orig_xray_bin="${AIOS_XRAY_BIN:-}"
+    AIOS_XRAY_BIN="$fake_xctl"
     local stats_out
     stats_out=$(XrayListStats)
     ShowCaptured "XrayListStats" "$stats_out"
@@ -444,6 +453,7 @@ MOCKX
     local reset_out
     reset_out=$(XrayResetStats -y)
     AssertContains "$reset_out" "已重置" "XrayResetStats succeeds via mocked xray api"
+    AIOS_XRAY_BIN="$orig_xray_bin"
 
     # 6i. XrayConfigDomain (direct TLS cert add + edit path)
     JQ mutate "$X_CONFIG" \
@@ -517,5 +527,8 @@ REGEOF
     XrayGetInbounds
     AssertEq "0" "$inbounds_count" "Xray handles empty config gracefully"
 
+    X_ROOT="${orig_x_root}"
+    X_BACKUP_ROOT="${orig_x_backup}"
+    PROXY_LOCK_FILE="${orig_proxy_lock}"
     rm -rf "$tmpdir"
 }

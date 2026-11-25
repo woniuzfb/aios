@@ -2,7 +2,7 @@ Include src/service/get "$@"
 
 IperfInstall()
 {
-    local install="$(gettext "更新")"
+    local install="$i18n_update"
 
     if [ -z "${1:-}" ] 
     then
@@ -10,10 +10,10 @@ IperfInstall()
         then
             return 0
         fi
-        install="$(gettext "安装")"
+        install="$i18n_install"
     elif [[ ! -x $(command -v iperf3) ]] 
     then
-        install="$(gettext "安装")"
+        install="$i18n_install"
     fi
 
     if [ "$dist" == "mac" ] 
@@ -72,22 +72,24 @@ IperfView()
     iperf_clients_target=()
     iperf_clients_args=()
 
-    local i
+    local i i18n_args i18n_target
+    i18n_args=$(gettext "参数")
+    i18n_target=$(gettext "目标")
     for((i=0;i<iperf_count;i++));
     do
         if [ "${iperf_types[i]}" == "server" ] 
         then
             iperf_servers_name+=("${iperf_names[i]}")
             iperf_servers_args+=("${iperf_args[i]}")
-            iperf_server_options+=("$(gettext "名称"): ${iperf_names[i]:-$(gettext "无")}, $(gettext "参数"): ${iperf_args[i]}")
-            iperf_server_list="${iperf_server_list}${green}${#iperf_servers_name[@]}.${normal} $(gettext "名称"): ${iperf_names[i]:-$(gettext "无")}, $(gettext "参数"): ${iperf_args[i]:-$(gettext "无")}\n"
+            iperf_server_options+=("${i18n_name}: ${iperf_names[i]:-$i18n_none}, ${i18n_args}: ${iperf_args[i]}")
+            iperf_server_list="${iperf_server_list}${green}${#iperf_servers_name[@]}.${normal} ${i18n_name}: ${iperf_names[i]:-$i18n_none}, ${i18n_args}: ${iperf_args[i]:-$i18n_none}\n"
             iperf_server_indices+=("$i")
         else
             iperf_clients_name+=("${iperf_names[i]}")
             iperf_clients_target+=("${iperf_targets[i]}")
             iperf_clients_args+=("${iperf_args[i]}")
-            iperf_client_options+=("$(gettext "名称"): ${iperf_names[i]:-$(gettext "无")}, $(gettext "目标"): ${iperf_targets[i]}, $(gettext "参数"): ${iperf_args[i]}")
-            iperf_client_list="${iperf_client_list}${green}${#iperf_clients_name[@]}.${normal} $(gettext "名称"): ${iperf_names[i]:-$(gettext "无")}, $(gettext "目标"): ${iperf_targets[i]:-$(gettext "无")}, $(gettext "参数"): ${iperf_args[i]:-$(gettext "无")}\n"
+            iperf_client_options+=("${i18n_name}: ${iperf_names[i]:-$i18n_none}, ${i18n_target}: ${iperf_targets[i]}, ${i18n_args}: ${iperf_args[i]}")
+            iperf_client_list="${iperf_client_list}${green}${#iperf_clients_name[@]}.${normal} ${i18n_name}: ${iperf_names[i]:-$i18n_none}, ${i18n_target}: ${iperf_targets[i]:-$i18n_none}, ${i18n_args}: ${iperf_args[i]:-$i18n_none}\n"
             iperf_client_indices+=("$i")
         fi
     done
@@ -126,7 +128,7 @@ IperfAdd()
         fi
 
         echo
-        inquirer list_input_index "$(gettext "请选择")" iperf_target_options iperf_target_index 20
+        inquirer list_input_index "$i18n_please_select" iperf_target_options iperf_target_index 20
 
         if [ "$iperf_target_index" -eq 0 ] 
         then
@@ -165,7 +167,10 @@ IperfEdit()
     IperfView
     iperf_edit_options=( "$(gettext "服务端")" "$(gettext "客户端")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" iperf_edit_options iperf_edit_options_index
+    inquirer list_input_index "$i18n_please_select" iperf_edit_options iperf_edit_options_index
+
+    local i18n_target
+    i18n_target=$(gettext "目标")
 
     if [ "$iperf_edit_options_index" -eq 0 ] 
     then
@@ -176,7 +181,7 @@ IperfEdit()
         fi
         iperf_options=("${iperf_server_options[@]}")
         iperf_indices=("${iperf_server_indices[@]}")
-        iperf_edit_options=( "$(gettext "名称")" "$(gettext "参数")" )
+        iperf_edit_options=( "$i18n_name" "$(gettext "参数")" )
     else
         if [ "$iperf_clients_count" -eq 0 ] 
         then
@@ -185,26 +190,26 @@ IperfEdit()
         fi
         iperf_options=("${iperf_client_options[@]}")
         iperf_indices=("${iperf_client_indices[@]}")
-        iperf_edit_options=( "$(gettext "名称")" "$(gettext "目标")" "$(gettext "参数")" )
+        iperf_edit_options=( "$i18n_name" "$i18n_target" "$(gettext "参数")" )
     fi
 
     echo
-    inquirer list_input_index "$(gettext "请选择")" iperf_options iperf_options_index
+    inquirer list_input_index "$i18n_please_select" iperf_options iperf_options_index
 
     echo
-    inquirer checkbox_input_indices "$(gettext "选择修改内容")" iperf_edit_options iperf_edit_options_indices
+    inquirer checkbox_input_indices "$i18n_select_edit" iperf_edit_options iperf_edit_options_indices
 
     for iperf_edit_options_index in "${iperf_edit_options_indices[@]}"
     do
         case "${iperf_edit_options[iperf_edit_options_index]}" in
-            "$(gettext "名称")") 
+            "$i18n_name") 
                 echo
                 inquirer text_input "$(gettext "输入服务名称")" iperf_name "${iperf_name[iperf_indices[iperf_options_index]]:-$i18n_blank}"
 
                 jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"name"]'
                 JQ update "$SERVICES_CONFIG" "$iperf_name"
             ;;
-            "$(gettext "目标")") 
+            "$i18n_target") 
                 iperf_target_options=( "$(gettext "输入目标地址")" )
 
                 if iperf_target_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
@@ -213,7 +218,7 @@ IperfEdit()
                 fi
 
                 echo
-                inquirer list_input_index "$(gettext "请选择")" iperf_target_options iperf_target_index 20
+                inquirer list_input_index "$i18n_please_select" iperf_target_options iperf_target_index 20
 
                 if [ "$iperf_target_index" -eq 0 ] 
                 then
@@ -245,7 +250,7 @@ IperfDel()
     IperfView
     iperf_del_options=( "$(gettext "服务端")" "$(gettext "客户端")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" iperf_del_options iperf_del_options_index
+    inquirer list_input_index "$i18n_please_select" iperf_del_options iperf_del_options_index
 
     if [ "$iperf_del_options_index" -eq 0 ] 
     then
@@ -283,7 +288,7 @@ IperfStart()
     IperfView
     iperf_start_options=( "$(gettext "服务端")" "$(gettext "客户端")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" iperf_start_options iperf_start_options_index
+    inquirer list_input_index "$i18n_please_select" iperf_start_options iperf_start_options_index
 
     if [ "$iperf_start_options_index" -eq 0 ] 
     then
@@ -337,9 +342,9 @@ IperfStart()
 
 IperfMenu()
 {
-    iperf_options=( "$(gettext "浏览")" "$(gettext "启动")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "安装/更新 iperf3")" )
+    iperf_options=( "$(gettext "浏览")" "$(gettext "启动")" "$i18n_add" "$i18n_edit" "$i18n_delete" "$(gettext "安装/更新 iperf3")" )
     echo
-    inquirer list_input_index "$(gettext "请选择")" iperf_options iperf_options_index
+    inquirer list_input_index "$i18n_please_select" iperf_options iperf_options_index
 
     case $iperf_options_index in
         0) IperfView

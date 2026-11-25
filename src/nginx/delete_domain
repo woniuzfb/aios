@@ -4,7 +4,7 @@ NginxDeleteDomain()
 
     [ "$nginx_domains_count" -eq 0 ] && Println "$(eval_gettext "\$error 没有域名")\n" && exit 1
 
-    echo "`gettext \"输入序号\"`"
+    echo "$i18n_input_no"
     while read -p "$i18n_default_cancel" nginx_domains_index
     do
         case "$nginx_domains_index" in

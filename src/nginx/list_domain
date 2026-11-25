@@ -141,7 +141,7 @@ NginxListDomain()
 
             nginx_domain_servers_name+=("${nginx_domain_server_name_list//, /,}")
             nginx_domain_servers_root+=("$server_root")
-            nginx_domain_servers_list="$nginx_domain_servers_list $nginx_domain_servers_count.${indent_6}$(gettext "域名"): ${green}${nginx_domain_server_name_list:-$(gettext "未设置")}${normal}\n${indent_6}$(gettext "端口"): ${green}${nginx_domain_server_listen_list:-$(gettext "未设置")}${normal}\n${indent_6}flv: $nginx_domain_server_flv_status\n${indent_6}nodejs: $nginx_domain_server_nodejs_status\n\n"
+            nginx_domain_servers_list="$nginx_domain_servers_list $nginx_domain_servers_count.${indent_6}$i18n_domain: ${green}${nginx_domain_server_name_list:-$i18n_not_set}${normal}\n${indent_6}$i18n_port: ${green}${nginx_domain_server_listen_list:-$i18n_not_set}${normal}\n${indent_6}flv: $nginx_domain_server_flv_status\n${indent_6}nodejs: $nginx_domain_server_nodejs_status\n\n"
         fi
     done
 

@@ -1,19 +1,20 @@
 Include utils/imagemagick "$@"
 Include utils/imgcat "$@"
+Include src/proxy/core_features "$@"
+Include src/proxy/validate "$@"
+Include src/proxy/core_manager "$@"
+Include src/proxy/stream_editor "$@"
+Include src/proxy/uri_codec "$@"
+Include src/proxy/presets "$@"
 Include src/proxy/common "$@"
 Include src/nginx/parse_config "$@"
 Include src/nginx/get_config "$@"
 Include src/nginx/build_conf "$@"
 Include src/nginx/check_acme "$@"
-Include src/v2ray/get_free_tag "$@"
 Include src/v2ray/set_bound "$@"
 Include src/v2ray/add_inbound "$@"
-Include src/v2ray/inbound "$@"
-Include src/v2ray/stream "$@"
 Include src/v2ray/get_inbounds "$@"
 Include src/v2ray/list_inbounds "$@"
-Include src/v2ray/select_inbound "$@"
-Include src/v2ray/select_account "$@"
 Include src/v2ray/delete_inbound "$@"
 Include src/v2ray/add_inbound_account "$@"
 Include src/v2ray/list_inbound_accounts "$@"
@@ -22,7 +23,6 @@ Include src/v2ray/delete_inbound_account "$@"
 Include src/v2ray/add_outbound "$@"
 Include src/v2ray/get_outbounds "$@"
 Include src/v2ray/list_outbounds "$@"
-Include src/v2ray/select_outbound "$@"
 Include src/v2ray/delete_outbound "$@"
 Include src/v2ray/add_outbound_account "$@"
 Include src/v2ray/list_outbound_accounts "$@"
@@ -33,16 +33,11 @@ Include src/v2ray/set_routing "$@"
 Include src/v2ray/get_policy "$@"
 Include src/v2ray/list_policy "$@"
 Include src/v2ray/set_policy "$@"
-Include src/v2ray/get_reverse "$@"
 Include src/v2ray/list_reverse "$@"
 Include src/v2ray/set_reverse "$@"
-Include src/v2ray/get_dns "$@"
 Include src/v2ray/list_dns "$@"
 Include src/v2ray/set_dns "$@"
-Include src/v2ray/get_stats "$@"
-Include src/v2ray/get_traffic "$@"
-Include src/v2ray/list_stats "$@"
-Include src/v2ray/reset_stats "$@"
+Include src/v2ray/stats "$@"
 Include src/v2ray/list_inbound_domains "$@"
 Include src/v2ray/update_cert "$@"
 Include src/v2ray/list_nginx_domains "$@"
@@ -53,32 +48,10 @@ Include src/v2ray/add_nginx_proxy "$@"
 Include src/v2ray/select_nginx_proxy "$@"
 Include src/v2ray/list_nginx_domain "$@"
 Include src/v2ray/config_domain "$@"
+Include src/v2ray/set_advanced "$@"
 Include src/v2ray/install "$@"
-Include src/v2ray/log "$@"
 Include src/service/control "$@"
 
 ShFileCheck
-
-if [ "$dist" != "mac" ] && [ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
-then
-    ServiceControl disable v2ray
-    rm -rf /usr/bin/v2ray/
-    mv /etc/v2ray/ /usr/local/etc/
-    if ! grep -q "v2ray:" < "/etc/passwd"
-    then
-        if grep -q '\--group ' < <(adduser --help)
-        then
-            adduser v2ray --system --group --no-create-home > /dev/null
-        else
-            adduser v2ray --system --no-create-home > /dev/null
-        fi
-        usermod -s /usr/sbin/nologin v2ray
-    fi
-    mkdir -p /var/log/v2ray/
-    [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
-    chown -R v2ray:v2ray /var/log/v2ray/
-    chown -R v2ray:v2ray /usr/local/share/v2ray/
-    V2rayUpdate
-fi
 
 Include src/v2ray/menu "$@"

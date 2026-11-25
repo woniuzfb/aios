@@ -138,7 +138,7 @@ ScheduleAddChannel()
 ScheduleAdd()
 {
     ScheduleView
-    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$i18n_all"
 
     Println "$(gettext "多个频道用空格分隔 比如: 5 7 9-11")"
     while read -p "$i18n_default_cancel" chnls_num
@@ -268,7 +268,7 @@ ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}$i18n_all"
 
     Println "$(gettext "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11")"
     while read -p "$i18n_default_cancel" chnls_num
@@ -411,7 +411,7 @@ ScheduleBackup()
         exit 1
     fi
     echo
-    inquirer text_input "$(gettext "输入备份名称: ")" backup_name "$(gettext "无")"
+    inquirer text_input "$(gettext "输入备份名称: ")" backup_name "$i18n_none"
     backup_schedule=""
     while IFS="=" read -r provider chnls option
     do

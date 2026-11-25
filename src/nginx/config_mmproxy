@@ -15,7 +15,7 @@ fi
 
 echo
 mmproxy_opotions=( "$(gettext "用于 acme.sh")" "$(gettext "用于 ssh")" "$(gettext "手动配置")" )
-inquirer list_input_index "$(gettext "选择操作")" mmproxy_opotions mmproxy_opotions_index
+inquirer list_input_index "$i18n_select_action" mmproxy_opotions mmproxy_opotions_index
 
 if [ "$mmproxy_opotions_index" -eq 0 ] 
 then

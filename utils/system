@@ -450,7 +450,7 @@ AptInstall()
             )
             local retry_idx=2
             echo
-            inquirer list_input_index "$(gettext "请选择处理方式")" retry_opts retry_idx
+            inquirer list_input_index "$(gettext "选择操作")" retry_opts retry_idx
 
             if [ "$retry_idx" -eq 0 ] && [ -n "$codename" ]
             then

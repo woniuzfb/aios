@@ -1,11 +1,19 @@
 IbmV2rayMenu()
 {
-    Println " $(eval_gettext "IBM \$v2ray_package_name APP 面板") ${normal}${red}[v$sh_ver]${normal}
+    local menu_key="${sh_locale:-zh_CN}:${v2ray_package_name:-}"
 
-  ${green}1.${normal} $(eval_gettext "下载 \$v2ray_package_name APP")
+    if [ "${IBM_V2RAY_MENU_KEY:-}" != "$menu_key" ] || [ -z "${IBM_V2RAY_MENU_TOP:-}" ]
+    then
+        IBM_V2RAY_MENU_TITLE="$(eval_gettext "IBM \$v2ray_package_name APP 面板")"
+        IBM_V2RAY_MENU_TOP="  ${green}1.${normal} $(eval_gettext "下载 \$v2ray_package_name APP")
   ${green}2.${normal} $(eval_gettext "更新 \$v2ray_package_name APP")
-  ${green}3.${normal} $(eval_gettext "部署 \$v2ray_package_name APP")
-————————————
+  ${green}3.${normal} $(eval_gettext "部署 \$v2ray_package_name APP")"
+        IBM_V2RAY_MENU_KEY="$menu_key"
+    fi
+
+    if [ "${IBM_V2RAY_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${IBM_V2RAY_MENU_BODY:-}" ]
+    then
+        IBM_V2RAY_MENU_BODY="————————————
   ${green}4.${normal} $(gettext "查看入站")
   ${green}5.${normal} $(gettext "添加入站")
   ${green}6.${normal} $(gettext "添加入站账号")
@@ -35,6 +43,13 @@ IbmV2rayMenu()
  ${green}23.${normal} $(gettext "删除出站账号")
 
     "
+        IBM_V2RAY_MENU_LOCALE="${sh_locale:-zh_CN}"
+    fi
+
+    Println " ${IBM_V2RAY_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+
+${IBM_V2RAY_MENU_TOP}
+${IBM_V2RAY_MENU_BODY}"
     read -p "$i18n_default_cancel" ibm_v2ray_num
     case $ibm_v2ray_num in
         1) 

@@ -96,10 +96,15 @@ SetSubtitle()
     subtitle="[]"
     subtitle_default=false
 
+    local lbl_add_sub_name lbl_set_sub_lang lbl_input_sub_map
+    lbl_add_sub_name=$(gettext "新增字幕语言名称")
+    lbl_set_sub_lang=$(gettext "设置字幕语言标识")
+    lbl_input_sub_map=$(gettext "输入字幕轨道序号")
+
     while true
     do
         Println "$(eval_gettext "\$tip 比如 简体中文")"
-        inquirer text_input "$(gettext "新增字幕语言名称")" subtitle_name "$i18n_blank"
+        inquirer text_input "$lbl_add_sub_name" subtitle_name "$i18n_blank"
 
         if [ -z "$subtitle_name" ]
         then
@@ -107,7 +112,7 @@ SetSubtitle()
         fi
 
         Println "$(eval_gettext "\$tip 比如 chi")"
-        inquirer text_input "$(gettext "设置字幕语言标识")" subtitle_language "$i18n_blank"
+        inquirer text_input "$lbl_set_sub_lang" subtitle_language "$i18n_blank"
 
         if [ "$subtitle_default" = true ]
         then
@@ -149,7 +154,7 @@ SetSubtitle()
 
         while true
         do
-            inquirer text_input "$(gettext "输入字幕轨道序号")" subtitle_map 0
+            inquirer text_input "$lbl_input_sub_map" subtitle_map 0
 
             case "$subtitle_map" in
                 *[!0-9]*)
@@ -309,9 +314,12 @@ SetCookies()
 SetOutputDirName()
 {
     echo
+    local lbl_input_out_dir lbl_dir_name
+    lbl_input_out_dir=$(gettext "请输入频道输出目录名称: ")
+    lbl_dir_name=$(gettext "目录名称")
     while true
     do
-        inquirer text_input "$(gettext "请输入频道输出目录名称: ")" output_dir_name "$i18n_random"
+        inquirer text_input "$lbl_input_out_dir" output_dir_name "$i18n_random"
 
         if [ "$output_dir_name" == "$i18n_random" ]
         then
@@ -320,7 +328,7 @@ SetOutputDirName()
 
                 if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
                 then
-                    Println "  $(gettext "目录名称"): ${green} $output_dir_name ${normal}\n"
+                    Println "  $lbl_dir_name: ${green} $output_dir_name ${normal}\n"
                     break 2
                 fi
             done
@@ -374,10 +382,12 @@ SetSegName()
 
 SetSegLength()
 {
+    local lbl_input_seg_len
+    lbl_input_seg_len=$(gettext "请输入分片时长(单位: s): ")
     while true
     do
         echo
-        inquirer text_input "$(gettext "请输入分片时长(单位: s): ")" seg_length "$d_seg_length"
+        inquirer text_input "$lbl_input_seg_len" seg_length "$d_seg_length"
         case "$seg_length" in
             "")
                 seg_length="$d_seg_length"
@@ -420,9 +430,11 @@ SetHlsEndList()
 SetSegCount()
 {
     Println "$(eval_gettext "\$tip FFmpeg 分割的数目是其2倍, 如果填0就是无限")"
+    local lbl_input_seg_cnt
+    lbl_input_seg_cnt=$(gettext "请输入m3u8文件包含的分片数目: ")
     while true
     do
-        inquirer text_input "$(gettext "请输入m3u8文件包含的分片数目: ")" seg_count "$d_seg_count"
+        inquirer text_input "$lbl_input_seg_cnt" seg_count "$d_seg_count"
         case "$seg_count" in
             "")
                 seg_count="$d_seg_count"
@@ -461,13 +473,18 @@ SetVideoAudioShift()
     then
         video_audio_shift_options=( "$d_video_audio_shift_text" "$(gettext "设置 画面延迟")" "$(gettext "设置 声音延迟")" )
     else
-        video_audio_shift_options=( "$d_video_audio_shift_text" "$(gettext "设置 画面延迟")" "$(gettext "设置 声音延迟")" "$(gettext "不设置")" )
+        video_audio_shift_options=( "$d_video_audio_shift_text" "$(gettext "设置 画面延迟")" "$(gettext "设置 声音延迟")" "$i18n_blank" )
     fi
+
+    local lbl_shift_prompt lbl_input_delay lbl_default_back
+    lbl_shift_prompt=$(gettext "画面或声音延迟")
+    lbl_input_delay=$(gettext "请输入延迟时间(秒)")
+    lbl_default_back=$(gettext "(默认: 回到上级): ")
 
     while true
     do
         echo
-        inquirer list_input_index "$(gettext "画面或声音延迟")" video_audio_shift_options video_audio_shift_options_index
+        inquirer list_input_index "$lbl_shift_prompt" video_audio_shift_options video_audio_shift_options_index
 
         case $video_audio_shift_options_index in
             0)
@@ -489,8 +506,8 @@ SetVideoAudioShift()
                 break
             ;;
             1)
-                Println "$(gettext "请输入延迟时间(秒)")"
-                read -p "$(gettext "(默认: 返回上级选项): ")" video_shift
+                Println "$lbl_input_delay"
+                read -p "$lbl_default_back" video_shift
                 if [ -n "$video_shift" ]
                 then
                     video_audio_shift="v_$video_shift"
@@ -499,8 +516,8 @@ SetVideoAudioShift()
                 fi
             ;;
             2)
-                Println "$(gettext "请输入延迟时间(秒)")"
-                read -p "$(gettext "(默认: 返回上级选项): ")" audio_shift
+                Println "$lbl_input_delay"
+                read -p "$lbl_default_back" audio_shift
                 if [ -n "$audio_shift" ]
                 then
                     video_audio_shift="a_$audio_shift"
@@ -522,9 +539,11 @@ SetVideoAudioShift()
 SetQuality()
 {
     Println "$tip $(gettext "多个 crf 固定码率因子用逗号分隔, 取值每 +/- 6 会大概导致码率的减半或加倍")\n$(gettext "x264 和 x265 取值范围为 [0,51]")\n$(gettext "x264 的默认值是 23, 视觉无损值 18")\n$(gettext "x265 的默认值是 28, 视觉无损值 24")\n$(gettext "VP9 取值范围为 [0,63], 建议取值范围为 [15,35]")"
+    local lbl_input_crf
+    lbl_input_crf=$(gettext "请输入 crf 值: ")
     while true
     do
-        inquirer text_input "$(gettext "请输入 crf 值: ")" quality "${d_quality:-$i18n_blank}"
+        inquirer text_input "$lbl_input_crf" quality "${d_quality:-$i18n_blank}"
         if [ -z "$quality" ]
         then
             break
@@ -1375,17 +1394,21 @@ SetFlvH265()
 SetFlvPushLink()
 {
     Println "$(eval_gettext "\$tip 比如 rtmp://127.0.0.1/flv/xxx , 如指向本机请确保已经安装 nginx 或 openresty")"
+    local lbl_input_flv_push lbl_local_rand_addr lbl_flv_push_addr
+    lbl_input_flv_push=$(gettext "请输入推流地址: ")
+    lbl_local_rand_addr=$(gettext "本地随机地址")
+    lbl_flv_push_addr=$(gettext "推流地址")
     while true
     do
-        inquirer text_input "$(gettext "请输入推流地址: ")" flv_push_link "$(gettext "本地随机地址")"
-        if [ "$flv_push_link" == "$(gettext "本地随机地址")" ]
+        inquirer text_input "$lbl_input_flv_push" flv_push_link "$lbl_local_rand_addr"
+        if [ "$flv_push_link" == "$lbl_local_rand_addr" ]
         then
             flv_push_link="rtmp://127.0.0.1/flv/$(RandStr)"
             until [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
             do
                 flv_push_link=$(RandStr)
             done
-            Println "  $(gettext "推流地址"): ${green} $flv_push_link ${normal}\n"
+            Println "  $lbl_flv_push_addr: ${green} $flv_push_link ${normal}\n"
             break
         elif [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
         then

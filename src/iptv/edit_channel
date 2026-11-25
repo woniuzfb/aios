@@ -10,11 +10,11 @@ EditStreamLink()
 
     Println "$chnl_stream_links_list"
 
-    chnl_stream_links_actions=( "$(gettext "添加")" )
+    chnl_stream_links_actions=( "$i18n_add" )
 
     if [ "$chnl_stream_links_count" -gt 0 ] 
     then
-        chnl_stream_links_actions+=( "$(gettext "修改")" "$(gettext "删除")" )
+        chnl_stream_links_actions+=( "$i18n_edit" "$i18n_delete" )
 
         if [ "$chnl_stream_links_count" -gt 1 ] 
         then
@@ -22,7 +22,7 @@ EditStreamLink()
         fi
     fi
 
-    inquirer list_input_index "$(gettext "选择操作")" chnl_stream_links_actions chnl_stream_links_actions_index
+    inquirer list_input_index "$i18n_select_action" chnl_stream_links_actions chnl_stream_links_actions_index
 
     if [ "$chnl_stream_links_actions_index" -eq 0 ] 
     then
@@ -73,7 +73,7 @@ EditStreamLink()
                     then
                         xc_macs=(${new_accounts[xc_i]} "$(gettext "输入mac")" "$(gettext "输入新的直播源")")
                         xc_macs_count=$((${#xc_macs[@]} - 2))
-                        inquirer list_input_index "$(gettext "选择操作")" xc_macs xc_macs_index
+                        inquirer list_input_index "$i18n_select_action" xc_macs xc_macs_index
 
                         if [ "$xc_macs_index" -eq "$xc_macs_count" ]
                         then

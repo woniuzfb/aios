@@ -120,8 +120,8 @@ XtreamCodesTestAcc()
 
     IFS="|" read -ra domains <<< "${new_domains[ips_index]}"
     IFS=" " read -ra accounts <<< "${new_accounts[ips_index]}"
-    Println "IP: ${green}${ips[ips_index]}${normal} $(gettext "域名"): ${green}${new_domains[ips_index]//|/ }${normal}"
-    Println "${green}$(gettext "账号"):${normal}"
+    Println "IP: ${green}${ips[ips_index]}${normal} $i18n_domain: ${green}${new_domains[ips_index]//|/ }${normal}"
+    Println "${green}$i18n_account:${normal}"
 
     FFmpegInstall
 

@@ -2,7 +2,7 @@ AddChannelsSchedule()
 {
     echo
     add_options=( "$(gettext "手动添加")" "$(gettext "足球比赛")" )
-    inquirer list_input_index "$(gettext "选择操作")" add_options add_options_index
+    inquirer list_input_index "$i18n_select_action" add_options add_options_index
 
     if [ "$add_options_index" -eq 1 ] 
     then
@@ -66,9 +66,19 @@ AddChannelsSchedule()
         GetChannels
         chnls_indices=("${!chnls_pid[@]}")
 
+        local lbl_schedule lbl_start_date lbl_end_date lbl_daily_loop lbl_auto_remove lbl_anti_leech lbl_anti_leech_once lbl_input_chnl_name
+        lbl_schedule=$(gettext "计划")
+        lbl_start_date=$(gettext "设置开始日期")
+        lbl_end_date=$(gettext "设置结束日期")
+        lbl_daily_loop=$(gettext "每日循环")
+        lbl_auto_remove=$(gettext "结束后自动清除")
+        lbl_anti_leech=$(gettext "防盗链")
+        lbl_anti_leech_once=$(gettext "防盗链一次")
+        lbl_input_chnl_name=$(gettext "输入频道名称")
+
         for schedules_index in "${schedules_indices[@]}"
         do
-            Println "$info $(gettext "添加") ${schedules_list[schedules_index]} $(gettext "计划")"
+            Println "$info $i18n_add ${schedules_list[schedules_index]} $lbl_schedule"
 
             schedule_chnl_id="${schedules_chnl_id[schedules_index]}"
             schedule_start_time="${schedules_start_time[schedules_index]}"
@@ -77,26 +87,26 @@ AddChannelsSchedule()
 
             for chnls_index in "${chnls_indices[@]}"
             do
-                if [ "${chnls_output_dir_name[chnls_index]}" == "$schedule_chnl_id" ] 
+                if [ "${chnls_output_dir_name[chnls_index]}" == "$schedule_chnl_id" ]
                 then
                     ListChannelSchedules
 
-                    inquirer date_pick "$(gettext "设置开始日期")" schedule_start_time
+                    inquirer date_pick "$lbl_start_date" schedule_start_time
 
                     echo
-                    inquirer date_pick "$(gettext "设置结束日期")" schedule_end_time
+                    inquirer date_pick "$lbl_end_date" schedule_end_time
 
                     echo
-                    inquirer list_input_index "$(gettext "每日循环")" ny_options ny_index
+                    inquirer list_input_index "$lbl_daily_loop" ny_options ny_index
 
-                    if [ "$ny_index" -eq 0 ] 
+                    if [ "$ny_index" -eq 0 ]
                     then
                         schedule_loop=false
 
                         echo
-                        inquirer list_input_index "$(gettext "结束后自动清除")" ny_options ny_index
+                        inquirer list_input_index "$lbl_auto_remove" ny_options ny_index
 
-                        if [ "$ny_index" -eq 0 ] 
+                        if [ "$ny_index" -eq 0 ]
                         then
                             schedule_auto_remove=false
                         else
@@ -108,16 +118,16 @@ AddChannelsSchedule()
                     fi
 
                     echo
-                    inquirer list_input_index "$(gettext "防盗链")" yn_options yn_index
+                    inquirer list_input_index "$lbl_anti_leech" yn_options yn_index
 
-                    if [ "$yn_index" -eq 0 ] 
+                    if [ "$yn_index" -eq 0 ]
                     then
                         schedule_hls_change=true
 
                         echo
-                        inquirer list_input_index "$(gettext "防盗链一次")" ny_options yn_index
+                        inquirer list_input_index "$lbl_anti_leech_once" ny_options yn_index
 
-                        if [ "$yn_index" -eq 0 ] 
+                        if [ "$yn_index" -eq 0 ]
                         then
                             schedule_hls_change_once=false
                         else
@@ -129,7 +139,7 @@ AddChannelsSchedule()
                     fi
 
                     echo
-                    inquirer text_input "$(gettext "输入频道名称")" schedule_channel_name "$schedule_title"
+                    inquirer text_input "$lbl_input_chnl_name" schedule_channel_name "$schedule_title"
 
                     chnl_schedule=$(
                         $JQ_FILE -n --arg start_time "$schedule_start_time" \
@@ -170,28 +180,40 @@ AddChannelsSchedule()
     ListChannels
     InputChannelsIndex
 
+    local lbl_start_date lbl_end_date lbl_daily_loop lbl_auto_remove lbl_anti_leech lbl_anti_leech_once lbl_input_chnl_name lbl_channel lbl_sched_added lbl_continue_add
+    lbl_start_date=$(gettext "设置开始日期")
+    lbl_end_date=$(gettext "设置结束日期")
+    lbl_daily_loop=$(gettext "每日循环")
+    lbl_auto_remove=$(gettext "结束后自动清除")
+    lbl_anti_leech=$(gettext "防盗链")
+    lbl_anti_leech_once=$(gettext "防盗链一次")
+    lbl_input_chnl_name=$(gettext "输入频道名称")
+    lbl_channel=$(gettext "频道")
+    lbl_sched_added=$(gettext "计划添加成功")
+    lbl_continue_add=$(gettext "是否继续添加此频道计划")
+
     for chnls_index in "${chnls_indices[@]}"
     do
         ListChannelSchedules
 
-        while true 
+        while true
         do
-            inquirer date_pick "$(gettext "设置开始日期")" schedule_start_time
+            inquirer date_pick "$lbl_start_date" schedule_start_time
 
             echo
-            inquirer date_pick "$(gettext "设置结束日期")" schedule_end_time
+            inquirer date_pick "$lbl_end_date" schedule_end_time
 
             echo
-            inquirer list_input_index "$(gettext "每日循环")" ny_options ny_index
+            inquirer list_input_index "$lbl_daily_loop" ny_options ny_index
 
-            if [ "$ny_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ]
             then
                 schedule_loop=false
 
                 echo
-                inquirer list_input_index "$(gettext "结束后自动清除")" ny_options ny_index
+                inquirer list_input_index "$lbl_auto_remove" ny_options ny_index
 
-                if [ "$ny_index" -eq 0 ] 
+                if [ "$ny_index" -eq 0 ]
                 then
                     schedule_auto_remove=false
                 else
@@ -203,16 +225,16 @@ AddChannelsSchedule()
             fi
 
             echo
-            inquirer list_input_index "$(gettext "防盗链")" yn_options yn_index
+            inquirer list_input_index "$lbl_anti_leech" yn_options yn_index
 
-            if [ "$yn_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ]
             then
                 schedule_hls_change=true
 
                 echo
-                inquirer list_input_index "$(gettext "防盗链一次")" ny_options yn_index
+                inquirer list_input_index "$lbl_anti_leech_once" ny_options yn_index
 
-                if [ "$yn_index" -eq 0 ] 
+                if [ "$yn_index" -eq 0 ]
                 then
                     schedule_hls_change_once=false
                 else
@@ -224,7 +246,7 @@ AddChannelsSchedule()
             fi
 
             echo
-            inquirer text_input "$(gettext "输入频道名称")" schedule_channel_name "$i18n_blank"
+            inquirer text_input "$lbl_input_chnl_name" schedule_channel_name "$i18n_blank"
 
             chnl_schedule=$(
                 $JQ_FILE -n --arg start_time "$schedule_start_time" \
@@ -250,12 +272,12 @@ AddChannelsSchedule()
             jq_path='["channels",'"$chnls_index"',"schedule"]'
             JQ add "$CHANNELS_FILE" "[$chnl_schedule]"
 
-            Println "$info $(gettext "频道") [ ${schedule_channel_name:-${chnls_channel_name[chnls_index]}} ] $(gettext "计划添加成功")\n"
+            Println "$info $lbl_channel [ ${schedule_channel_name:-${chnls_channel_name[chnls_index]}} ] $lbl_sched_added\n"
 
             echo
-            inquirer list_input_index "$(gettext "是否继续添加此频道计划")" ny_options ny_index
+            inquirer list_input_index "$lbl_continue_add" ny_options ny_index
 
-            if [ "$ny_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ]
             then
                 break
             fi

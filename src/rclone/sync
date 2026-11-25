@@ -9,6 +9,15 @@ RcloneSyncView()
     fi
 
     local rclone_syncs_list="" i rclone_sync_include_list rclone_sync_exclude_before_list rclone_sync_exclude_after_list
+    local i18n_exclude_before i18n_include i18n_exclude_after i18n_sync_source i18n_sync_target i18n_sync_args i18n_src i18n_dst
+    i18n_exclude_before=$(gettext "前排除")
+    i18n_include=$(gettext "包含")
+    i18n_exclude_after=$(gettext "后排除")
+    i18n_sync_source=$(gettext "同步源")
+    i18n_sync_target=$(gettext "同步目标")
+    i18n_sync_args=$(gettext "同步参数")
+    i18n_src=$(gettext "源")
+    i18n_dst=$(gettext "目标")
     rclone_syncs_options=()
 
     for((i=0;i<rclone_syncs_count;i++));
@@ -16,33 +25,33 @@ RcloneSyncView()
         rclone_syncs_list="${rclone_syncs_list}${green}$((i+1)).${normal} rsync: "
         if [ "${rclone_syncs_rsync[i]}" = true ] 
         then
-            rclone_syncs_list="${rclone_syncs_list}${green}$(gettext "是")${normal}\n"
+            rclone_syncs_list="${rclone_syncs_list}${green}${i18n_yes}${normal}\n"
         else
-            rclone_syncs_list="${rclone_syncs_list}${red}$(gettext "否")${normal}\n"
+            rclone_syncs_list="${rclone_syncs_list}${red}${i18n_no}${normal}\n"
         fi
         if [[ -z "${rclone_syncs_exclude_before[i]:-}" ]] 
         then
-            rclone_sync_exclude_before_list="$(gettext "前排除"): $(gettext "未设置")\n"
+            rclone_sync_exclude_before_list="${i18n_exclude_before}: ${i18n_not_set}\n"
         else
             IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[i]}"
-            rclone_sync_exclude_before_list="$(gettext "前排除"):\n$(printf '%s\n' "${rclone_sync_excludes_before[@]}")\n"
+            rclone_sync_exclude_before_list="${i18n_exclude_before}:\n$(printf '%s\n' "${rclone_sync_excludes_before[@]}")\n"
         fi
         if [[ -z "${rclone_syncs_include[i]:-}" ]] 
         then
-            rclone_sync_include_list="$(gettext "包含"): $(gettext "未设置")\n"
+            rclone_sync_include_list="${i18n_include}: ${i18n_not_set}\n"
         else
             IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[i]}"
-            rclone_sync_include_list="$(gettext "包含"):\n$(printf '%s\n' "${rclone_sync_includes[@]}")"
+            rclone_sync_include_list="${i18n_include}:\n$(printf '%s\n' "${rclone_sync_includes[@]}")"
         fi
         if [[ -z "${rclone_syncs_exclude_after[i]:-}" ]] 
         then
-            rclone_sync_exclude_after_list="$(gettext "后排除"): $(gettext "未设置")\n"
+            rclone_sync_exclude_after_list="${i18n_exclude_after}: ${i18n_not_set}\n"
         else
             IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[i]}"
-            rclone_sync_exclude_after_list="$(gettext "后排除"):\n$(printf '%s\n' "${rclone_sync_excludes_after[@]}")\n"
+            rclone_sync_exclude_after_list="${i18n_exclude_after}:\n$(printf '%s\n' "${rclone_sync_excludes_after[@]}")\n"
         fi
-        rclone_syncs_list="${rclone_syncs_list}$(gettext "同步源"): ${rclone_syncs_source[i]}\n$(gettext "同步目标"): ${rclone_syncs_target[i]}\n$(gettext "同步参数"): ${rclone_syncs_args[i]:-$(gettext "无")}\n${rclone_sync_exclude_before_list}${rclone_sync_include_list}${rclone_sync_exclude_after_list}\n"
-        rclone_syncs_options+=("$(gettext "源"): ${rclone_syncs_source[i]} $(gettext "目标"): ${rclone_syncs_target[i]} rsync: ${rclone_syncs_rsync[i]}")
+        rclone_syncs_list="${rclone_syncs_list}${i18n_sync_source}: ${rclone_syncs_source[i]}\n${i18n_sync_target}: ${rclone_syncs_target[i]}\n${i18n_sync_args}: ${rclone_syncs_args[i]:-$i18n_none}\n${rclone_sync_exclude_before_list}${rclone_sync_include_list}${rclone_sync_exclude_after_list}\n"
+        rclone_syncs_options+=("${i18n_src}: ${rclone_syncs_source[i]} ${i18n_dst}: ${rclone_syncs_target[i]} rsync: ${rclone_syncs_rsync[i]}")
     done
 
     Println "$rclone_syncs_list"
@@ -117,9 +126,10 @@ RcloneSyncAdd()
         echo
         inquirer list_input_index "$(gettext "选择同步源")" rclone_remotes_options rclone_remotes_index 20
 
+        rclone_sync_remote_name="${rclone_remotes_name[rclone_remotes_index]}"
         echo
-        ExitOnText "$(gettext "输入远端") ${rclone_remotes_name[rclone_remotes_index]} $(gettext "的路径")" rclone_sync_remote_path
-        rclone_sync_source="${rclone_remotes_name[rclone_remotes_index]}:$rclone_sync_remote_path"
+        ExitOnText "$(eval_gettext "输入远端 \$rclone_sync_remote_name 的路径")" rclone_sync_remote_path
+        rclone_sync_source="$rclone_sync_remote_name:$rclone_sync_remote_path"
 
         rclone_sync_target_options+=("${rclone_remotes_name[@]}")
     fi
@@ -168,6 +178,8 @@ RcloneSyncAdd()
 
 RcloneSyncSetExcludeBefore()
 {
+    local i18n_input_exclude
+    i18n_input_exclude=$(gettext "输入排除的文件或目录")
     rclone_sync_excludes_before=()
     while true 
     do
@@ -177,9 +189,9 @@ RcloneSyncSetExcludeBefore()
         else
             Println "$(eval_gettext "\$tip 用于参数 --filter - , 置于所有 --filter + 之前, 每次输入一项")"
         fi
-        inquirer text_input "$(gettext "输入排除的文件或目录")" rclone_sync_exclude_before "$(gettext "跳过")"
+        inquirer text_input "$i18n_input_exclude" rclone_sync_exclude_before "$i18n_skip"
         RemoveQuotes rclone_sync_exclude_before
-        if [ "$rclone_sync_exclude_before" == "$(gettext "跳过")" ] 
+        if [ "$rclone_sync_exclude_before" == "$i18n_skip" ] 
         then
             break
         fi
@@ -190,6 +202,8 @@ RcloneSyncSetExcludeBefore()
 
 RcloneSyncSetInclude()
 {
+    local i18n_input_include
+    i18n_input_include=$(gettext "输入包含的文件或目录")
     rclone_sync_includes=()
     while true 
     do
@@ -199,9 +213,9 @@ RcloneSyncSetInclude()
         else
             Println "$(eval_gettext "\$tip 用于参数 --filter + , 每次输入一项")"
         fi
-        inquirer text_input "$(gettext "输入包含的文件或目录")" rclone_sync_include "$(gettext "跳过")"
+        inquirer text_input "$i18n_input_include" rclone_sync_include "$i18n_skip"
         RemoveQuotes rclone_sync_include
-        if [ "$rclone_sync_include" == "$(gettext "跳过")" ] 
+        if [ "$rclone_sync_include" == "$i18n_skip" ] 
         then
             break
         fi
@@ -212,6 +226,8 @@ RcloneSyncSetInclude()
 
 RcloneSyncSetExcludeAfter()
 {
+    local i18n_input_exclude
+    i18n_input_exclude=$(gettext "输入排除的文件或目录")
     rclone_sync_excludes_after=()
     while true 
     do
@@ -221,9 +237,9 @@ RcloneSyncSetExcludeAfter()
         else
             Println "$(eval_gettext "\$tip 用于参数 --filter - , 置于所有 --filter + 之后, 每次输入一项")"
         fi
-        inquirer text_input "$(gettext "输入排除的文件或目录")" rclone_sync_exclude_after "$(gettext "跳过")"
+        inquirer text_input "$i18n_input_exclude" rclone_sync_exclude_after "$i18n_skip"
         RemoveQuotes rclone_sync_exclude_after
-        if [ "$rclone_sync_exclude_after" == "$(gettext "跳过")" ] 
+        if [ "$rclone_sync_exclude_after" == "$i18n_skip" ] 
         then
             break
         fi
@@ -243,7 +259,7 @@ RcloneSyncEdit()
     rclone_sync_edit_options=( "$(gettext "源")" "$(gettext "目标")" "$(gettext "参数")" "$(gettext "前排除")" "$(gettext "包含")" "$(gettext "后排除")" )
 
     echo
-    inquirer list_input_index "$(gettext "选择编辑")" rclone_sync_edit_options rclone_sync_edit_options_index
+    inquirer list_input_index "$i18n_select_edit" rclone_sync_edit_options rclone_sync_edit_options_index
 
     case $rclone_sync_edit_options_index in
         0) 
@@ -288,9 +304,10 @@ RcloneSyncEdit()
                 echo
                 inquirer list_input_index "$(gettext "选择同步源")" rclone_remotes_options rclone_remotes_index 20
 
+                rclone_sync_remote_name="${rclone_remotes_name[rclone_remotes_index]}"
                 echo
-                ExitOnText "$(gettext "输入远端") ${rclone_remotes_name[rclone_remotes_index]} $(gettext "的路径")" rclone_sync_remote_path
-                rclone_sync_source="${rclone_remotes_name[rclone_remotes_index]}:$rclone_sync_remote_path"
+                ExitOnText "$(eval_gettext "输入远端 \$rclone_sync_remote_name 的路径")" rclone_sync_remote_path
+                rclone_sync_source="$rclone_sync_remote_name:$rclone_sync_remote_path"
             fi
 
             if [ "$rclone_sync_source" != "${rclone_syncs_source[rclone_syncs_index]}" ] 
@@ -361,9 +378,9 @@ RcloneSyncEdit()
                 RcloneSyncSetExcludeBefore
             else
                 IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
-                rclone_sync_exclude_options=( "$(gettext "新增")" "$(gettext "修改")" "$(gettext "删除")" )
+                rclone_sync_exclude_options=( "$i18n_add" "$i18n_edit" "$i18n_delete" )
                 echo
-                inquirer list_input_index "$(gettext "选择操作")" rclone_sync_exclude_options rclone_sync_exclude_options_index
+                inquirer list_input_index "$i18n_select_action" rclone_sync_exclude_options rclone_sync_exclude_options_index
 
                 if [ "$rclone_sync_exclude_options_index" -eq 0 ] 
                 then
@@ -374,12 +391,14 @@ RcloneSyncEdit()
 
                     if [ "$rclone_sync_exclude_options_index" -eq 1 ] 
                     then
+                        local i18n_input_new_item
+                        i18n_input_new_item=$(gettext "输入新的文件或目录")
                         for rclone_sync_excludes_before_index in "${rclone_sync_excludes_before_indices[@]}"
                         do
-                            Println "$info $(gettext "修改") ${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}"
-                            inquirer text_input "$(gettext "输入新的文件或目录")" rclone_sync_exclude_before "$(gettext "跳过")"
+                            Println "$info $i18n_edit ${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}"
+                            inquirer text_input "$i18n_input_new_item" rclone_sync_exclude_before "$i18n_skip"
                             RemoveQuotes rclone_sync_exclude_before
-                            if [ "$rclone_sync_exclude_before" == "$(gettext "跳过")" ] || [ "$rclone_sync_exclude_before" == "${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}" ]
+                            if [ "$rclone_sync_exclude_before" == "$i18n_skip" ] || [ "$rclone_sync_exclude_before" == "${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}" ]
                             then
                                 continue
                             fi
@@ -409,9 +428,9 @@ RcloneSyncEdit()
                 RcloneSyncSetInclude
             else
                 IFS="${delimiters[4]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
-                rclone_sync_include_options=( "$(gettext "新增")" "$(gettext "修改")" "$(gettext "删除")" )
+                rclone_sync_include_options=( "$i18n_add" "$i18n_edit" "$i18n_delete" )
                 echo
-                inquirer list_input_index "$(gettext "选择操作")" rclone_sync_include_options rclone_sync_include_options_index
+                inquirer list_input_index "$i18n_select_action" rclone_sync_include_options rclone_sync_include_options_index
 
                 if [ "$rclone_sync_include_options_index" -eq 0 ] 
                 then
@@ -422,12 +441,14 @@ RcloneSyncEdit()
 
                     if [ "$rclone_sync_include_options_index" -eq 1 ] 
                     then
+                        local i18n_input_new_item
+                        i18n_input_new_item=$(gettext "输入新的文件或目录")
                         for rclone_sync_includes_index in "${rclone_sync_includes_indices[@]}"
                         do
-                            Println "$info $(gettext "修改") ${rclone_sync_includes[rclone_sync_includes_index]}"
-                            inquirer text_input "$(gettext "输入新的文件或目录")" rclone_sync_include "$(gettext "跳过")"
+                            Println "$info $i18n_edit ${rclone_sync_includes[rclone_sync_includes_index]}"
+                            inquirer text_input "$i18n_input_new_item" rclone_sync_include "$i18n_skip"
                             RemoveQuotes rclone_sync_include
-                            if [ "$rclone_sync_include" == "$(gettext "跳过")" ] || [ "$rclone_sync_include" == "${rclone_sync_includes[rclone_sync_includes_index]}" ]
+                            if [ "$rclone_sync_include" == "$i18n_skip" ] || [ "$rclone_sync_include" == "${rclone_sync_includes[rclone_sync_includes_index]}" ]
                             then
                                 continue
                             fi
@@ -457,9 +478,9 @@ RcloneSyncEdit()
                 RcloneSyncSetExcludeAfter
             else
                 IFS="${delimiters[4]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
-                rclone_sync_exclude_options=( "$(gettext "新增")" "$(gettext "修改")" "$(gettext "删除")" )
+                rclone_sync_exclude_options=( "$i18n_add" "$i18n_edit" "$i18n_delete" )
                 echo
-                inquirer list_input_index "$(gettext "选择操作")" rclone_sync_exclude_options rclone_sync_exclude_options_index
+                inquirer list_input_index "$i18n_select_action" rclone_sync_exclude_options rclone_sync_exclude_options_index
 
                 if [ "$rclone_sync_exclude_options_index" -eq 0 ] 
                 then
@@ -470,12 +491,14 @@ RcloneSyncEdit()
 
                     if [ "$rclone_sync_exclude_options_index" -eq 1 ] 
                     then
+                        local i18n_input_new_item
+                        i18n_input_new_item=$(gettext "输入新的文件或目录")
                         for rclone_sync_excludes_after_index in "${rclone_sync_excludes_after_indices[@]}"
                         do
-                            Println "$info $(gettext "修改") ${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}"
-                            inquirer text_input "$(gettext "输入新的文件或目录")" rclone_sync_exclude_after "$(gettext "跳过")"
+                            Println "$info $i18n_edit ${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}"
+                            inquirer text_input "$i18n_input_new_item" rclone_sync_exclude_after "$i18n_skip"
                             RemoveQuotes rclone_sync_exclude_after
-                            if [ "$rclone_sync_exclude_after" == "$(gettext "跳过")" ] || [ "$rclone_sync_exclude_after" == "${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}" ]
+                            if [ "$rclone_sync_exclude_after" == "$i18n_skip" ] || [ "$rclone_sync_exclude_after" == "${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}" ]
                             then
                                 continue
                             fi

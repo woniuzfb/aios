@@ -612,6 +612,9 @@ StartChannel()
 
                     chnl_stream_url_video_indices=()
 
+                    local lbl_not_exist
+                    lbl_not_exist=$(gettext "不存在")
+
                     for((i=0;i<chnl_stream_url_qualities_count;i++));
                     do
                         for((j=0;j<chnl_stream_urls_count;j++));
@@ -624,21 +627,21 @@ StartChannel()
                             fi
                         done
 
-                        Println "$error ${chnl_stream_url_qualities[i]} $(gettext "不存在")"
+                        Println "$error ${chnl_stream_url_qualities[i]} $lbl_not_exist"
 
-                        if [ "$monitor" = true ] 
+                        if [ "$monitor" = true ]
                         then
                             quality_unset=true
                             unset 'chnl_stream_url_qualities[i]'
                             chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
                             continue
-                        elif [ "$choose_asked" = false ] 
+                        elif [ "$choose_asked" = false ]
                         then
                             choose_asked=true
                             echo
                             inquirer list_input_index "$(gettext "是否按分辨率自动选择")" yn_options yn_index
 
-                            if [ "$yn_index" -eq 0 ] 
+                            if [ "$yn_index" -eq 0 ]
                             then
                                 i=$((i-1))
                                 continue
@@ -650,17 +653,17 @@ StartChannel()
                         break
                     done
 
-                    if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+                    if [ "$chnl_stream_url_qualities_count" -eq 0 ]
                     then
                         Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                         return 0
                     fi
 
-                    if [ "$quality_unset" = true ] 
+                    if [ "$quality_unset" = true ]
                     then
                         chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
                     fi
-                elif [ "$monitor" = true ] 
+                elif [ "$monitor" = true ]
                 then
                     Println "$(eval_gettext "\$error 请重新选择 \$chnl_channel_name 分辨率")"
                     return 0
@@ -671,7 +674,7 @@ StartChannel()
                 if [ "$choose" -eq 1 ]
                 then
                     chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
-                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
+                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}$i18n_all\n"
                     Println "$chnl_stream_urls_list"
                     echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
 
@@ -798,13 +801,17 @@ StartChannel()
                         chnl_stream_audio_list=""
                         chnl_stream_audio_num_default=1
 
+                        local lbl_audio_group lbl_lang
+                        lbl_audio_group=$(gettext "音轨组")
+                        lbl_lang=$(gettext "语言")
+
                         for((i=0;i<chnl_stream_audio_count;i++));
                         do
-                            if [ "${chnl_stream_audio_default[i]}" == "YES" ] 
+                            if [ "${chnl_stream_audio_default[i]}" == "YES" ]
                             then
                                 chnl_stream_audio_num_default=$((i+1))
                             fi
-                            chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}$(gettext "音轨组"): ${green}${chnl_stream_audio_group_id[i]}${normal} $(gettext "名称"): ${green}${chnl_stream_audio_name[i]}${normal} $(gettext "语言"): ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
+                            chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}$lbl_audio_group: ${green}${chnl_stream_audio_group_id[i]}${normal} $i18n_name: ${green}${chnl_stream_audio_name[i]}${normal} $lbl_lang: ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
                         done
 
                         chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
@@ -963,13 +970,17 @@ StartChannel()
                         chnl_stream_subtitles_list=""
                         chnl_stream_subtitles_num_default=1
 
+                        local lbl_sub_group lbl_sub_lang
+                        lbl_sub_group=$(gettext "字幕组")
+                        lbl_sub_lang=$(gettext "语言")
+
                         for((i=0;i<chnl_stream_subtitles_count;i++));
                         do
-                            if [ "${chnl_stream_subtitles_default[i]}" == "YES" ] 
+                            if [ "${chnl_stream_subtitles_default[i]}" == "YES" ]
                             then
                                 chnl_stream_subtitles_num_default=$((i+1))
                             fi
-                            chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$(gettext "字幕组"): ${green}${chnl_stream_subtitles_group_id[i]}${normal} $(gettext "名称"): ${green}${chnl_stream_subtitles_name[i]}${normal} $(gettext "语言"): ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                            chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$lbl_sub_group: ${green}${chnl_stream_subtitles_group_id[i]}${normal} $i18n_name: ${green}${chnl_stream_subtitles_name[i]}${normal} $lbl_sub_lang: ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
                         done
 
                         chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))

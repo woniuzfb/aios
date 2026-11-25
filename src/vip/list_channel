@@ -121,9 +121,9 @@ VipListChannel()
             then
                 if [ -n "${vip_public_host:-}" ] 
                 then
-                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$i18n_address: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
                 else
-                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                    Println "$error $(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$i18n_address: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
                 fi
 
                 continue
@@ -132,9 +132,9 @@ VipListChannel()
 
         if [ -n "${vip_public_host:-}" ] 
         then
-            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$i18n_address: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
         else
-            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$(gettext "地址"): $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+            Println "$(gettext "频道") ${green}[ $vip_channel_name ]${normal}\n\n$(gettext "源链接"): $stream_link\n\n$i18n_address: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
         fi
     done
 }

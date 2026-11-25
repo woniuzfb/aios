@@ -1,691 +1,578 @@
 V2rayAddOutbound()
 {
-    V2raySetOutboundProtocol
-    V2raySetTag
+    local v2_ver="" v2_fmt=""
+    v2_ver=$(ProxyGetTargetVersion "v2ray")
+    v2_fmt=$(ProxyGetV2rayFormat)
 
-    new_outbound=$(
-    $JQ_FILE -n --arg protocol "$protocol" --arg tag "$tag" \
-    '{
-        "protocol": $protocol,
-        "tag": $tag
-    }')
+    V2raySetOutboundProtocol "$v2_ver" "$v2_fmt"
+    V2raySetTag "${protocol}-out-"
 
-    if [ "$protocol" != "blackhole" ]
+    local send_through=""
+    if [ "$protocol" != "blackhole" ] && [ "$protocol" != "loopback" ]
     then
         V2raySetSendThrough
-        new_outbound=$(
-        $JQ_FILE --arg sendThrough "$send_through" \
-        '. * 
-        {
-            "sendThrough": $sendThrough,
-        }' <<< "$new_outbound")
     fi
 
-    if [ "$protocol" != "blackhole" ] && [ "$protocol" != "dns" ]
+    local mux_json="null"
+    if [ "$protocol" != "blackhole" ] && [ "$protocol" != "dns" ] && [ "$protocol" != "loopback" ]
     then
         V2raySetMuxEnabled
         V2raySetMuxConcurrency
-        new_outbound=$(
-        $JQ_FILE --arg enabled "$mux_enabled" --arg concurrency "$mux_concurrency" \
-        '. * 
-        {
-            "mux": {
-                "enabled": $enabled | test("true"),
-                "concurrency": $concurrency | tonumber
-            }
-        }' <<< "$new_outbound")
+        JQs build mux_json '{
+            "enabled": ($enabled == "true"),
+            "concurrency": ($concurrency | tonumber)
+        }' --arg enabled "$mux_enabled" --arg concurrency "$mux_concurrency"
     fi
 
-    if [ "$protocol" == "vmess" ] || [ "$protocol" == "vless" ]
-    then
-        V2raySetAddress
-        V2raySetAddressPort
-        new_outbound=$(
-        $JQ_FILE --arg address "$address" --arg port "$address_port" \
-        '. * 
-        {
-            "settings": {
-                "vnext" : [
+    local settings_json="{}"
+    case "$protocol" in
+        vmess)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            V2raySetId || return 1
+            V2raySetAlterId
+            V2raySetVmessSecurity
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "uuid": $id
+                }' --arg addr "$address" --arg port "$address_port" --arg id "$id"
+            else
+                JQs build settings_json '{
+                    "vnext": [{
+                        "address": $addr,
+                        "port": ($port | tonumber),
+                        "users": [{
+                            "id": $id,
+                            "alterId": ($aid | tonumber),
+                            "security": $sec
+                        }]
+                    }]
+                }' --arg addr "$address" --arg port "$address_port" \
+                    --arg id "$id" --arg aid "$alter_id" --arg sec "$vmess_security"
+            fi
+        ;;
+        vless)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            V2raySetId || return 1
+            local vless_enc="none"
+            echo
+            inquirer text_input "$(gettext "输入 encryption (默认 none): ")" vless_enc "none"
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "uuid": $id
+                }' --arg addr "$address" --arg port "$address_port" --arg id "$id"
+            else
+                JQs build settings_json '{
+                    "vnext": [{
+                        "address": $addr,
+                        "port": ($port | tonumber),
+                        "users": [{
+                            "id": $id,
+                            "encryption": $enc
+                        }]
+                    }]
+                }' --arg addr "$address" --arg port "$address_port" --arg id "$id" --arg enc "$vless_enc"
+            fi
+        ;;
+        trojan)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            V2raySetPassword
+            V2raySetEmail
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "password": $pw
+                }' --arg addr "$address" --arg port "$address_port" --arg pw "$password"
+            else
+                JQs build settings_json '{
+                    "servers": [{
+                        "address": $addr,
+                        "port": ($port | tonumber),
+                        "password": $pw,
+                        "email": $email
+                    }]
+                }' --arg addr "$address" --arg port "$address_port" --arg pw "$password" --arg email "$email"
+            fi
+        ;;
+        http|socks)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+
+            local socks_version=""
+            if [ "$protocol" == "socks" ]
+            then
+                V2raySetSocksVersion
+            fi
+
+            local user="" pass=""
+            echo
+            inquirer text_input "$(gettext "输入用户名 (留空无认证): ")" user ""
+            if [ -n "$user" ]
+            then
+                echo
+                inquirer text_input "$(gettext "输入密码: ")" pass ""
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '
                     {
-                        "address": $address,
-                        "port": $port | tonumber,
-                        "users": []
+                        "address": $addr,
+                        "port": ($port | tonumber)
                     }
-                ]
-            }
-        }' <<< "$new_outbound")
-    elif [ "$protocol" == "http" ] || [ "$protocol" == "socks" ]
-    then
-        V2raySetAddress
-        V2raySetAddressPort
-
-        new_outbound=$(
-        $JQ_FILE --arg address "$address" --arg port "$address_port" \
-        '. * 
-        {
-            "settings": {
-                "servers" : [
+                    + (if $u != "" then {"username": $u, "password": $p} else {} end)
+                ' --arg addr "$address" --arg port "$address_port" --arg u "$user" --arg p "$pass"
+            else
+                JQs build settings_json '
                     {
-                        "address": $address,
-                        "port": $port | tonumber,
-                        "users": []
+                        "servers": [(
+                            {
+                                "address": $addr,
+                                "port": ($port | tonumber)
+                            }
+                            + (if $u != "" then {"users": [{"user": $u, "pass": $p}]} else {} end)
+                        )]
                     }
-                ]
-            }
-        }' <<< "$new_outbound")
-
-        if [ "$v2ray_name" == "v2ray" ] && [ "$protocol" == "socks" ]
-        then
-            V2raySetSocksVersion
-
-            new_outbound=$(
-            $JQ_FILE --arg version "$socks_version" \
-            '. * 
-            {
-                "settings": {
-                    "version" : $version
-                }
-            }' <<< "$new_outbound")
-        fi
-    elif [ "$protocol" == "shadowsocks" ] 
-    then
-        V2raySetEmail
-        V2raySetAddress
-        V2raySetAddressPort
-        V2raySetShadowsocksMethod
-        V2raySetPassword
-        V2raySetLevel
-
-        if [ "$v2ray_name" == "v2ray" ] 
-        then
+                    + (if $ver != "" then {"version": $ver} else {} end)
+                ' --arg addr "$address" --arg port "$address_port" --arg u "$user" --arg p "$pass" --arg ver "$socks_version"
+            fi
+        ;;
+        shadowsocks)
+            V2raySetEmail
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            V2raySetShadowsocksMethod
+            V2raySetPassword
+            V2raySetLevel
             V2raySetIvCheck
 
-            new_outbound=$(
-            $JQ_FILE --arg email "$email" --arg address "$address" \
-            --arg port "$address_port" --arg method "$shadowsocks_method" \
-            --arg password "$password" --arg level "$level" \
-            --arg ivCheck "$iv_check" \
-            '. * 
-            {
-                "settings": {
-                    "servers": [
-                        {
-                            "email": $email,
-                            "address": $address,
-                            "port": $port | tonumber,
-                            "method": $method,
-                            "password": $password,
-                            "level": $level | tonumber,
-                            "ivCheck": $ivCheck | test("true")
-                        }
-                    ]
-                }
-            }' <<< "$new_outbound")
-        else
-            new_outbound=$(
-            $JQ_FILE --arg email "$email" --arg address "$address" \
-            --arg port "$address_port" --arg method "$shadowsocks_method" \
-            --arg password "$password" --arg level "$level" \
-            '. * 
-            {
-                "settings": {
-                    "servers": [
-                        {
-                            "email": $email,
-                            "address": $address,
-                            "port": $port | tonumber,
-                            "method": $method,
-                            "password": $password,
-                            "level": $level | tonumber
-                        }
-                    ]
-                }
-            }' <<< "$new_outbound")
-        fi
-    elif [ "$protocol" == "trojan" ] 
-    then
-        new_outbound=$(
-        $JQ_FILE \
-        '. * 
-        {
-            "settings": {
-                "servers" : []
-            }
-        }' <<< "$new_outbound")
-    elif [ "$protocol" == "blackhole" ] 
-    then
-        V2raySetResponseType
-        new_outbound=$(
-        $JQ_FILE --arg response_type "$response_type" \
-        '. * 
-        {
-            "settings": {
-                "type": $response_type
-            }
-        }' <<< "$new_outbound")
-    elif [ "$protocol" == "dns" ] 
-    then
-        V2raySetDnsNetwork
-        V2raySetDnsAddress
-        V2raySetDnsPort
-        if [ -n "$dns_network" ] 
-        then
-            new_outbound=$(
-            $JQ_FILE --arg network "$dns_network" \
-            '. * 
-            {
-                "settings": {
-                    "network": $network
-                }
-            }' <<< "$new_outbound")
-        fi
-        if [ -n "$dns_address" ] 
-        then
-            new_outbound=$(
-            $JQ_FILE --arg address "$dns_address" \
-            '. * 
-            {
-                "settings": {
-                    "address": $address
-                }
-            }' <<< "$new_outbound")
-        fi
-        if [ -n "$dns_port" ] 
-        then
-            new_outbound=$(
-            $JQ_FILE --arg port "$dns_port" \
-            '. * 
-            {
-                "settings": {
-                    "port": $port | tonumber
-                }
-            }' <<< "$new_outbound")
-        fi
-    elif [ "$protocol" == "freedom" ] 
-    then
-        V2raySetFreedomDomainStrategy
-        V2raySetFreedomRedirect
-        V2raySetLevel
-        new_outbound=$(
-        $JQ_FILE --arg domainStrategy "$freedom_domain_strategy" --arg userLevel "$level" \
-        '. * 
-        {
-            "settings": {
-                "domainStrategy": $domainStrategy,
-                "userLevel": $userLevel | tonumber
-            }
-        }' <<< "$new_outbound")
-        if [ -n "$freedom_redirect" ] 
-        then
-            new_outbound=$(
-            $JQ_FILE --arg redirect "$freedom_redirect" \
-            '. * 
-            {
-                "settings": {
-                    "redirect": ${red}irect
-                }
-            }' <<< "$new_outbound")
-        fi
-    fi
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build settings_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "method": $method,
+                    "password": $pw
+                }' --arg addr "$address" --arg port "$address_port" \
+                    --arg method "$shadowsocks_method" --arg pw "$password"
+            else
+                JQs build settings_json '{
+                    "servers": [{
+                        "email": $email,
+                        "address": $addr,
+                        "port": ($port | tonumber),
+                        "method": $method,
+                        "password": $pw,
+                        "level": ($lvl | tonumber),
+                        "ivCheck": ($iv == "true")
+                    }]
+                }' --arg email "$email" --arg addr "$address" --arg port "$address_port" \
+                    --arg method "$shadowsocks_method" --arg pw "$password" \
+                    --arg lvl "$level" --arg iv "$iv_check"
+            fi
+        ;;
+        shadowsocks2022)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            V2raySetSs2022MethodAndPsk || return 1
 
-    if [ "$v2ray_name" == "xray" ] 
-    then
-        V2raySetSockoptDialerProxy
+            JQs build settings_json '{
+                "address": $addr,
+                "port": ($port | tonumber),
+                "method": $method,
+                "psk": $psk
+            }' --arg addr "$address" --arg port "$address_port" \
+                --arg method "$ss2022_method" --arg psk "$ss2022_psk"
+        ;;
+        hysteria2)
+            V2raySetAddress
+            V2raySetAddressPort || return 1
+            JQs build settings_json '{
+                "servers": [{"address": $addr, "port": ($port | tonumber)}]
+            }' --arg addr "$address" --arg port "$address_port"
+        ;;
+        blackhole)
+            V2raySetResponseType
+            JQs build settings_json '{"response": {"type": $rt}}' --arg rt "$response_type"
+        ;;
+        dns)
+            V2raySetDnsNetwork
+            V2raySetDnsAddress
+            V2raySetDnsPort
 
-        if [ -z "$sockopt_dialer_proxy" ] 
-        then
-            V2raySetProxyTag
-        fi
-    else
+            if [ -n "$dns_port" ] && { [[ ! "$dns_port" =~ ^[0-9]+$ ]] || [ "$dns_port" -lt 1 ] || [ "$dns_port" -gt 65535 ]; }
+            then
+                Println "$(eval_gettext "\$error DNS 端口必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            JQs build settings_json '
+                {}
+                + (if $net != "" then {"network": $net} else {} end)
+                + (if $addr != "" then {"address": $addr} else {} end)
+                + (if $port != "" then {"port": ($port | tonumber)} else {} end)
+            ' --arg net "$dns_network" --arg addr "$dns_address" --arg port "$dns_port"
+        ;;
+        freedom)
+            V2raySetFreedomDomainStrategy
+            V2raySetFreedomRedirect
+            V2raySetLevel
+            JQs build settings_json '
+                {
+                    "domainStrategy": $ds,
+                    "userLevel": ($lvl | tonumber)
+                }
+                + (if $redir != "" then {"redirect": $redir} else {} end)
+            ' --arg ds "$freedom_domain_strategy" --arg lvl "$level" --arg redir "$freedom_redirect"
+        ;;
+        loopback)
+            local loopback_inbound_tag=""
+            echo
+            ExitOnText "$(gettext "输入目标入站标识 inboundTag: ")" loopback_inbound_tag
+            JQs build settings_json '{"inboundTag": $inb}' --arg inb "$loopback_inbound_tag"
+        ;;
+    esac
+
+    local proxy_settings_json="null"
+    local final_stream_json="null"
+
+    if [ "$protocol" != "loopback" ]
+    then
         V2raySetProxyTag
-    fi
 
-    if [ -n "${sockopt_dialer_proxy:-}" ] 
-    then
-        new_outbound=$(
-        $JQ_FILE --arg dialerProxy "$sockopt_dialer_proxy" \
-        '. * 
-        {
-            "streamSettings": {
-                "sockopt": {
-                    "dialerProxy": $dialerProxy
-                }
-            }
-        }' <<< "$new_outbound")
-    elif [ -n "${proxy_tag:-}" ] 
-    then
-        new_outbound=$(
-        $JQ_FILE --arg tag "$proxy_tag" \
-        '. * 
-        {
-            "proxySettings": {
-                "tag": $tag
-            }
-        }' <<< "$new_outbound")
-
-        if [ "$v2ray_name" == "v2ray" ] 
+        if [ -n "$proxy_tag" ]
         then
             V2raySetProxyTransportLayer
-
-            new_outbound=$(
-            $JQ_FILE --arg transportLayer "$transport_layer" \
-            '. * 
-            {
-                "proxySettings": {
-                    "transportLayer": $transportLayer | test("true")
-                }
-            }' <<< "$new_outbound")
-        fi
-    elif [ "$protocol" != "blackhole" ] && [ "$protocol" != "dns" ] && [ "$protocol" != "freedom" ]
-    then
-        V2raySetSockoptMark
-        V2raySetOutboundSockoptTcpFastOpen
-
-        if [ "$v2ray_name" == "xray" ] 
+            JQs build proxy_settings_json '{
+                "tag": $tag,
+                "transportLayer": ($tl == "true")
+            }' --arg tag "$proxy_tag" --arg tl "$transport_layer"
+        elif [ "$protocol" != "blackhole" ] && [ "$protocol" != "dns" ] && [ "$protocol" != "freedom" ]
         then
-            V2raySetSockoptDomainStrategy
-
-            new_outbound=$(
-            $JQ_FILE --arg mark "$sockopt_mark" --arg tcpFastOpen "$sockopt_tfo" \
-                --arg domainStrategy "$sockopt_domain_strategy" \
-            '. * 
-            {
-                "streamSettings": {
-                    "sockopt": {
-                        "mark": $mark | tonumber,
-                        "tcpFastOpen": $tcpFastOpen | test("true"),
-                        "domainStrategy": $domainStrategy
-                    }
-                }
-            }' <<< "$new_outbound")
-        else
+            V2raySetSockoptMark
+            V2raySetSockoptTcpFastOpen
+            local sockopt_tfo_queue_length=""
+            if [ "$sockopt_tfo" = true ]
+            then
+                V2raySetSockoptTcpFastOpenQueueLength
+            fi
             V2raySetSockoptTcpKeepAliveInterval
+            V2raySetSockoptBindToDevice
+            V2raySetSockoptMptcp
 
-            new_outbound=$(
-            $JQ_FILE --arg mark "$sockopt_mark" --arg tcpFastOpen "$sockopt_tfo" \
-                --arg tcpKeepAliveInterval "$sockopt_tcp_keep_alive_interval" \
-            '. * 
-            {
-                "streamSettings": {
-                    "sockopt": {
-                        "mark": $mark | tonumber,
-                        "tcpFastOpen": $tcpFastOpen | test("true"),
-                        "tcpKeepAliveInterval": $tcpKeepAliveInterval | tonumber
-                    }
-                }
-            }' <<< "$new_outbound")
-        fi
-
-        V2raySetOutboundNetwork
-        V2raySetSecurity
-
-        new_outbound=$(
-        $JQ_FILE --arg network "$network" --arg security "$security" \
-        '. * 
-        {
-            "streamSettings": {
-                "network": $network,
-                "security": $security
-            }
-        }' <<< "$new_outbound")
-
-        if [ "$network" == "ws" ] 
-        then
-            V2raySetPath
-            V2raySetWsHeaders
-
-            new_outbound=$(
-            $JQ_FILE --arg path "$path" --argjson headers "{$ws_headers}" \
-            '. * 
-            {
-                "streamSettings": {
-                    "wsSettings": {
-                        "path": $path,
-                        "headers": $headers
-                    }
-                }
-            }' <<< "$new_outbound")
-
-            if [ "$v2ray_name" == "v2ray" ] 
+            local stream_packet_encoding=""
+            if ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "packetEncodingStream"
             then
-                V2raySetOutboundMaxEarlyData
+                V2raySetStreamPacketEncoding
+            fi
 
-                if [ "$max_early_data" -gt 0 ] 
+            if [ "$protocol" == "hysteria2" ]
+            then
+                network="hy2"
+                security="tls"
+            else
+                V2raySetOutboundNetwork "$v2_ver" "$v2_fmt"
+                if [ "$network" == "hy2" ]
                 then
-                    V2raySetEarlyDataHeaderName
-
-                    if [ -n "$early_data_header_name" ] && [ "$early_data_header_name" != "Sec-WebSocket-Protocol" ]
-                    then
-                        use_browser_forwarding=false
-                    else
-                        V2raySetUseBrowserForwarding
-                    fi
+                    security="tls"
                 else
-                    early_data_header_name=""
-                    use_browser_forwarding=false
+                    V2raySetSecurity
                 fi
-
-                new_outbound=$(
-                $JQ_FILE --arg maxEarlyData "$max_early_data" \
-                    --arg earlyDataHeaderName "$early_data_header_name" \
-                    --arg useBrowserForwarding "$use_browser_forwarding" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "wsSettings": {
-                            "maxEarlyData": $maxEarlyData | tonumber,
-                            "earlyDataHeaderName": $earlyDataHeaderName,
-                            "useBrowserForwarding": $useBrowserForwarding | test("true")
-                        }
-                    }
-                }' <<< "$new_outbound")
-            fi
-        elif [ "$network" == "tcp" ] 
-        then
-            V2raySetHeaderType
-
-            new_outbound=$(
-            $JQ_FILE --arg header_type "$header_type" --argjson request "$header_http_request" \
-            --argjson response "$header_http_response" \
-            '. * 
-            {
-                "streamSettings": {
-                    "tcpSettings": {
-                        "header": {
-                            "type": $header_type,
-                            "request": $request,
-                            "response": $response
-                        }
-                    }
-                }
-            }' <<< "$new_outbound")
-        elif [ "$network" == "kcp" ] 
-        then
-            V2raySetHeaderType
-            V2raySetKcpMtu
-            V2raySetKcpTti
-            V2raySetKcpUplinkCapacity
-            V2raySetKcpDownlinkCapacity
-            V2raySetKcpCongestion
-            V2raySetKcpReadBufferSize
-            V2raySetKcpWriteBufferSize
-            V2raySetKcpSeed
-
-            new_outbound=$(
-            $JQ_FILE --arg mtu "$kcp_mtu" --arg tti "$kcp_tti" \
-                --arg uplinkCapacity "$kcp_uplink_capacity" --arg downlinkCapacity "$kcp_downlink_capacity" \
-                --arg congestion "$kcp_congestion" --arg readBufferSize "$kcp_read_buffer_size" \
-                --arg writeBufferSize "$kcp_write_buffer_size"  --arg header_type "$header_type" \
-                --arg seed "$kcp_seed" \
-            '. * 
-            {
-                "streamSettings": {
-                    "kcpSettings": {
-                        "mtu": $mtu | tonumber,
-                        "tti": $tti | tonumber,
-                        "uplinkCapacity": $uplinkCapacity | tonumber,
-                        "downlinkCapacity": $downlinkCapacity | tonumber,
-                        "congestion": $congestion | test("true"),
-                        "readBufferSize": $readBufferSize | tonumber,
-                        "writeBufferSize": $writeBufferSize | tonumber,
-                        "header": {
-                            "type": $header_type
-                        },
-                        "seed": $seed
-                    }
-                }
-            }' <<< "$new_outbound")
-        elif [ "$network" == "http" ] 
-        then
-            V2raySetHttpHost
-            V2raySetPath
-            V2raySetHttpHeaders
-
-            new_outbound=$(
-            $JQ_FILE --argjson host "[$http_host]" --arg path "$path" \
-                --argjson headers "{$http_headers}" \
-            '. * 
-            {
-                "streamSettings": {
-                    "httpSettings": {
-                        "host": $host,
-                        "path": $path,
-                        "headers": $headers
-                    }
-                }
-            }' <<< "$new_outbound")
-
-            if [ "$v2ray_name" == "v2ray" ] 
-            then
-                V2raySetHttpMethod
-
-                new_outbound=$(
-                $JQ_FILE --arg method "$http_method" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "httpSettings": {
-                            "method": $method
-                        }
-                    }
-                }' <<< "$new_outbound")
-            fi
-        elif [ "$network" == "quic" ] 
-        then
-            V2raySetQuicSecurity
-            V2raySetQuicKey
-            V2raySetHeaderType
-
-            new_outbound=$(
-            $JQ_FILE --arg security "$quic_security" \
-                --arg key "$quic_key" --arg header_type "$header_type" \
-            '. * 
-            {
-                "streamSettings": {
-                    "quicSettings": {
-                        "security": $security,
-                        "key": $key,
-                        "header": {
-                            "type": $header_type
-                        }
-                    }
-                }
-            }' <<< "$new_outbound")
-        else
-            V2raySetGrpcServiceName
-
-            new_outbound=$(
-            $JQ_FILE --arg grpcSettings "$grpc_service_name" \
-            '. * 
-            {
-                "streamSettings": {
-                    "grpcSettings": {
-                        "serviceName": $serviceName
-                    }
-                }
-            }' <<< "$new_outbound")
-
-            if [ "$v2ray_name" == "xray" ] 
-            then
-                V2raySetGrpcMultiMode
-
-                new_outbound=$(
-                $JQ_FILE --arg multiMode "$grpc_multi_mode" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "grpcSettings": {
-                            "multiMode": $multiMode | test("true")
-                        }
-                    }
-                }' <<< "$new_outbound")
-            fi
-        fi
-
-        if [ "$security" == "tls" ] 
-        then
-            V2raySetTlsServerName
-
-            if [ -n "$tls_server_name" ] 
-            then
-                new_outbound=$(
-                $JQ_FILE --arg serverName "$tls_server_name" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "tlsSettings": {
-                            "serverName": $serverName
-                        }
-                    }
-                }' <<< "$new_outbound")
             fi
 
-            V2raySetTlsAllowInsecure
-            V2raySetTlsAlpn
-            V2raySetTlsDisableSystemRoot
+            local path="" ws_headers_json="{}" max_early_data=0 early_data_header_name="" use_browser_forwarding=false
+            local header_type="none" header_http_request="{}" header_http_response="{}"
+            local kcp_mtu="1350" kcp_tti="50" kcp_uplink_capacity="5" kcp_downlink_capacity="20"
+            local kcp_congestion=false kcp_read_buffer_size="2" kcp_write_buffer_size="2" kcp_seed=""
+            local http_host_json="[]" http_headers_json="{}" http_method="PUT"
+            local quic_security="none" quic_key=""
+            local grpc_service_name=""
+            local hu_path="/" hu_host=""
+            local hy2_password="" hy2_use_udp_extension=false
 
-            new_outbound=$(
-            $JQ_FILE --arg allowInsecure "$tls_allow_insecure" --argjson alpn "[$tls_alpn]" \
-                --arg disableSystemRoot "$tls_disable_system_root" \
-            '. * 
-            {
-                "streamSettings": {
-                    "tlsSettings": {
-                        "allowInsecure": $allowInsecure | test("true"),
-                        "alpn": $alpn,
-                        "disableSystemRoot": $disableSystemRoot | test("true")
-                    }
-                }
-            }' <<< "$new_outbound")
+            case "$network" in
+                ws)
+                    V2raySetPath
+                    V2raySetWsHeaders
+                    V2raySetMaxEarlyData
 
-            V2raySetTlsPinnedPeerCertificateChainSha256
-
-            if [ -n "$tls_pinned_peer_certificate_chain_sha256" ] 
-            then
-                new_outbound=$(
-                $JQ_FILE --arg pinnedPeerCertificateChainSha256 "$tls_pinned_peer_certificate_chain_sha256" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "tlsSettings": {
-                            "pinnedPeerCertificateChainSha256": $pinnedPeerCertificateChainSha256
-                        }
-                    }
-                }' <<< "$new_outbound")
-            fi
-
-            while true 
-            do
-                if [ "$tls_disable_system_root" = false ] 
-                then
-                    echo
-                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
-                    if [ "$continue_yn" == "$i18n_no" ] 
+                    if [ "$max_early_data" -gt 0 ]
                     then
-                        break
+                        V2raySetEarlyDataHeaderName
+                        if [ -z "$early_data_header_name" ] || [ "$early_data_header_name" == "Sec-WebSocket-Protocol" ]
+                        then
+                            V2raySetUseBrowserForwarding
+                        fi
                     fi
-                fi
-                Println "$(eval_gettext "\$info 设置证书")"
-                V2raySetCertificates
-                merge=$(
-                $JQ_FILE -n --argjson certificates "[$certificate]" \
-                '{
-                    "streamSettings": {
-                        "tlsSettings": {
-                            "certificates": $certificates
-                        }
-                    }
-                }')
-                JQs merge new_outbound "$merge"
-                if [ "$tls_disable_system_root" = true ] 
-                then
+                ;;
+                tcp)
+                    V2raySetHeaderType
+                ;;
+                kcp)
+                    V2raySetHeaderType
+                    V2raySetKcpMtu
+                    V2raySetKcpTti
+                    V2raySetKcpUplinkCapacity
+                    V2raySetKcpDownlinkCapacity
+                    V2raySetKcpCongestion
+                    V2raySetKcpReadBufferSize
+                    V2raySetKcpWriteBufferSize
+                    V2raySetKcpSeed
+                ;;
+                http)
+                    V2raySetHttpHost
+                    V2raySetPath
+                    V2raySetHttpHeaders
+                    V2raySetHttpMethod
+                ;;
+                quic)
+                    V2raySetQuicSecurity
+                    V2raySetQuicKey
+                    V2raySetHeaderType
+                ;;
+                grpc)
+                    V2raySetGrpcServiceName
+                ;;
+                httpupgrade)
+                    V2raySetPath
+                    hu_path="$path"
                     echo
-                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
-                    if [ "$continue_yn" == "$i18n_no" ] 
-                    then
-                        break
-                    fi
-                fi
-            done
-        elif [ "$security" == "xtls" ] 
-        then
-            V2raySetTlsServerName
+                    inquirer text_input "$(gettext "HTTPUpgrade host (可留空): ")" hu_host ""
+                ;;
+                hy2)
+                    V2raySetHy2Settings
+                ;;
+            esac
 
-            if [ -n "$tls_server_name" ] 
+            local tls_server_name="" tls_allow_insecure=false tls_alpn_raw="" tls_alpn_json="[]"
+            local tls_disable_system_root=false tls_pinned_sha256_json="[]" tls_certs_json="[]"
+
+            if [ "$security" == "tls" ]
             then
-                new_outbound=$(
-                $JQ_FILE --arg serverName "$tls_server_name" \
-                '. * 
-                {
-                    "streamSettings": {
-                        "xtlsSettings": {
-                            "serverName": $serverName
-                        }
-                    }
-                }' <<< "$new_outbound")
+                V2raySetTlsServerName
+                V2raySetTlsAllowInsecure
+                V2raySetTlsAlpn "outbound"
+                V2raySetTlsDisableSystemRoot "outbound"
+                V2raySetTlsPinnedPeerCertificateChainSha256
+
+                local cert_items=()
+                while true
+                do
+                    if [ "$tls_disable_system_root" = false ]
+                    then
+                        echo
+                        inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
+                        if [ "$continue_yn" == "$i18n_no" ]
+                        then
+                            break
+                        fi
+                    fi
+
+                    Println "$(eval_gettext "\$info 设置证书")"
+                    V2raySetCertificates || return 1
+                    cert_items+=("$certificate")
+
+                    if [ "$tls_disable_system_root" = true ]
+                    then
+                        echo
+                        inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
+                        if [ "$continue_yn" == "$i18n_no" ]
+                        then
+                            break
+                        fi
+                    fi
+                done
+
+                if [ "${#cert_items[@]}" -gt 0 ]
+                then
+                    tls_certs_json=$(printf '%s\n' "${cert_items[@]}" | $JQ_FILE -s -c '.')
+                fi
             fi
 
-            V2raySetTlsAllowInsecure
-            V2raySetTlsAlpn
-            V2raySetTlsDisableSystemRoot
-            V2raySetTlsEnableSessionResumption
-            V2raySetTlsFingerprint
-
-            new_outbound=$(
-            $JQ_FILE --arg allowInsecure "$tls_allow_insecure" \
-            --argjson alpn "[$tls_alpn]" --arg disableSystemRoot "$tls_disable_system_root" \
-            --arg enableSessionResumption "[$tls_enable_session_resumption]" --arg fingerprint "$tls_fingerprint" \
-            '. * 
-            {
-                "streamSettings": {
-                    "xtlsSettings": {
-                        "allowInsecure": $allowInsecure | test("true"),
-                        "alpn": $alpn,
-                        "disableSystemRoot": $disableSystemRoot | test("true"),
-                        "enableSessionResumption": $enableSessionResumption | test("true"),
-                        "fingerprint": $fingerprint
-                    }
+            local sockopt_json="{}"
+            JQs build sockopt_json '
+                {
+                    "mark": ($mark | tonumber),
+                    "tcpKeepAliveInterval": ($keepalive | tonumber)
                 }
-            }' <<< "$new_outbound")
+                + (if $tfo == "true" then {"tcpFastOpen": true} elif $tfo == "false" then {"tcpFastOpen": false} else {} end)
+                + (if $tfoql != "" then {"tcpFastOpenQueueLength": ($tfoql | tonumber)} else {} end)
+                + (if $btd != "" then {"bindToDevice": $btd} else {} end)
+                + (if $mptcp == "true" then {"mptcp": true} elif $mptcp == "false" then {"mptcp": false} else {} end)
+            ' --arg mark "$sockopt_mark" --arg keepalive "$sockopt_tcp_keep_alive_interval" \
+                --arg tfo "$sockopt_tfo" --arg tfoql "$sockopt_tfo_queue_length" \
+                --arg btd "$sockopt_bind_to_device" --arg mptcp "$sockopt_mptcp"
 
-            while true 
-            do
-                if [ "$tls_disable_system_root" = false ] 
-                then
-                    echo
-                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
-                    if [ "$continue_yn" == "$i18n_no" ] 
-                    then
-                        break
-                    fi
-                fi
-                Println "$(eval_gettext "\$info 设置证书")"
-                V2raySetCertificates
-                merge=$(
-                $JQ_FILE -n --argjson certificates "[$certificate]" \
-                '{
-                    "streamSettings": {
-                        "xtlsSettings": {
-                            "certificates": $certificates
+            local stream_opts_json="{}"
+            JQs build stream_opts_json '
+                {
+                    "path": (if $net == "httpupgrade" then $hu_path else $path end),
+                    "host": (if $net == "http" then $http_host elif $net == "httpupgrade" then $hu_host else "" end),
+                    "service_name": $grpc_svc,
+                    "password": $hy2_pw,
+                    "use_udp_extension": ($hy2_udp == "true"),
+                    "mtu": ($kcp_mtu | tonumber),
+                    "seed": $kcp_seed,
+                    "sni": $sni,
+                    "alpn": $alpn,
+                    "pinned_sha256": $pinned,
+                    "sockopt": $sockopt
+                }
+                + (if ($med | tonumber) > 0 then {"max_early_data": ($med | tonumber)} else {} end)
+                + (if $edhn != "" then {"early_data_header": $edhn} else {} end)
+            ' --arg net "$network" --arg hu_path "$hu_path" --arg path "$path" \
+                --argjson http_host "$http_host_json" --arg hu_host "$hu_host" \
+                --arg grpc_svc "$grpc_service_name" --arg hy2_pw "$hy2_password" --arg hy2_udp "$hy2_use_udp_extension" \
+                --arg kcp_mtu "$kcp_mtu" --arg kcp_seed "$kcp_seed" \
+                --arg sni "$tls_server_name" --argjson alpn "$tls_alpn_json" \
+                --argjson pinned "$tls_pinned_sha256_json" --argjson sockopt "$sockopt_json" \
+                --arg med "$max_early_data" --arg edhn "$early_data_header_name"
+
+            local base_stream_json=""
+            base_stream_json=$(ProxyBuildStreamSettings "v2ray" "$v2_ver" "$v2_fmt" "$network" "$security" "$stream_opts_json")
+
+            JQs build final_stream_json '
+                $base_stream
+                | if $fmt == "jsonv4" then
+                    if $net == "ws" then
+                        .wsSettings = (
+                            (.wsSettings // {})
+                            | del(.earlyDataHeaderName)
+                            | (if ($ws_headers | length) > 0 then .headers = $ws_headers else . end)
+                            | (if ($med | tonumber) > 0 then .maxEarlyData = ($med | tonumber) else del(.maxEarlyData) end)
+                            | (if ($med | tonumber) > 0 and $edhn != "" then .earlyDataHeaderName = $edhn else . end)
+                            | (if $ubf == "true" then .useBrowserForwarding = true else . end)
+                        )
+                    elif $net == "tcp" then
+                        .tcpSettings = (
+                            {"header": {"type": $htype}}
+                            + (if $htype == "http" then {"header": {"type": "http", "request": $hreq, "response": $hresp}} else {} end)
+                        )
+                    elif $net == "kcp" then
+                        .kcpSettings = (
+                            {
+                                "mtu": ($kcp_mtu | tonumber),
+                                "tti": ($kcp_tti | tonumber),
+                                "uplinkCapacity": ($kcp_up | tonumber),
+                                "downlinkCapacity": ($kcp_down | tonumber),
+                                "congestion": ($kcp_cong == "true"),
+                                "readBufferSize": ($kcp_rbuf | tonumber),
+                                "writeBufferSize": ($kcp_wbuf | tonumber),
+                                "header": {"type": $htype}
+                            }
+                            + (if $kcp_seed != "" then {"seed": $kcp_seed} else {} end)
+                        )
+                    elif $net == "http" then
+                        .httpSettings = (
+                            (.httpSettings // {})
+                            + {"method": $http_method}
+                            + (if ($http_headers | length) > 0 then {"headers": $http_headers} else {} end)
+                        )
+                    elif $net == "quic" then
+                        .quicSettings = {
+                            "security": $qsec,
+                            "key": $qkey,
+                            "header": {"type": $htype}
                         }
-                    }
-                }')
-                JQs merge new_outbound "$merge"
-                if [ "$tls_disable_system_root" = true ] 
-                then
-                    echo
-                    inquirer list_input "$(gettext "是否继续添加证书")" ny_options continue_yn
-                    if [ "$continue_yn" == "$i18n_no" ] 
-                    then
-                        break
-                    fi
-                fi
-            done
+                    elif $net == "httpupgrade" then
+                        .httpupgradeSettings = (
+                            {"path": $hu_path}
+                            + (if $hu_host != "" then {"host": $hu_host} else {} end)
+                        )
+                    else . end
+                    | if $sec == "tls" then
+                        .tlsSettings = (
+                            (.tlsSettings // {})
+                            + {
+                                "allowInsecure": ($tls_ai == "true"),
+                                "disableSystemRoot": ($tls_dsr == "true")
+                            }
+                            + (if ($tls_certs | length) > 0 then {"certificates": $tls_certs} else {} end)
+                        )
+                    else . end
+                else
+                    if $sec == "tls" then
+                        .securitySettings = (
+                            (.securitySettings // {})
+                            + (if ($pinned | length) > 0 then {"pinnedPeerCertificateChainSha256": $pinned} else {} end)
+                            + (if ($tls_certs | length) > 0 then {"certificate": $tls_certs} else {} end)
+                        )
+                    else . end
+                end
+                | if $pe != "" then .packetEncoding = $pe else . end
+            ' \
+                --arg fmt "$v2_fmt" \
+                --arg net "$network" \
+                --arg sec "$security" \
+                --argjson base_stream "$base_stream_json" \
+                --argjson ws_headers "$ws_headers_json" \
+                --arg med "$max_early_data" \
+                --arg edhn "$early_data_header_name" \
+                --arg ubf "$use_browser_forwarding" \
+                --arg htype "$header_type" \
+                --argjson hreq "$header_http_request" \
+                --argjson hresp "$header_http_response" \
+                --arg kcp_mtu "$kcp_mtu" \
+                --arg kcp_tti "$kcp_tti" \
+                --arg kcp_up "$kcp_uplink_capacity" \
+                --arg kcp_down "$kcp_downlink_capacity" \
+                --arg kcp_cong "$kcp_congestion" \
+                --arg kcp_rbuf "$kcp_read_buffer_size" \
+                --arg kcp_wbuf "$kcp_write_buffer_size" \
+                --arg kcp_seed "$kcp_seed" \
+                --arg http_method "$http_method" \
+                --argjson http_headers "$http_headers_json" \
+                --arg qsec "$quic_security" \
+                --arg qkey "$quic_key" \
+                --arg hu_path "$hu_path" \
+                --arg hu_host "$hu_host" \
+                --arg tls_ai "$tls_allow_insecure" \
+                --arg tls_dsr "$tls_disable_system_root" \
+                --argjson pinned "$tls_pinned_sha256_json" \
+                --argjson tls_certs "$tls_certs_json" \
+                --arg pe "$stream_packet_encoding"
         fi
     fi
 
-    jq_path='["outbounds"]'
-    JQ add "$V2_CONFIG" "[$new_outbound]"
+    local outbound_json=""
+    JQs build outbound_json '
+        {
+            "protocol": $protocol,
+            "tag": $tag,
+            "settings": $settings
+        }
+        + (if $st != "" then {"sendThrough": $st} else {} end)
+        + (if $mux != null then {"mux": $mux} else {} end)
+        + (if $ps != null then {"proxySettings": $ps} else {} end)
+        + (if $stream != null then {"streamSettings": $stream} else {} end)
+    ' \
+        --arg protocol "$protocol" \
+        --arg tag "$tag" \
+        --argjson settings "$settings_json" \
+        --arg st "$send_through" \
+        --argjson mux "$mux_json" \
+        --argjson ps "$proxy_settings_json" \
+        --argjson stream "$final_stream_json"
+
+    if ! ProxyAddBound "$V2_CONFIG" outbounds "$outbound_json"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 出站 \$tag 添加失败: \$err_detail")\n"
+        return 1
+    fi
 
     Println "$(eval_gettext "\$info 出站 \$tag 添加成功")\n"
 }

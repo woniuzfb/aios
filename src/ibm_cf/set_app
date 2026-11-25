@@ -39,7 +39,7 @@ IbmSetCfAppRouteDomain()
 
     Println "$domains_list"
     echo -e "$(gettext "选择域名")"
-    while read -p "($(gettext "默认"): $default_domain_num): " domains_num
+    while read -p "($i18n_default: $default_domain_num): " domains_num
     do
         case $domains_num in
             "") 

@@ -1,6 +1,6 @@
 NginxSelectDomainServer()
 {
-    echo "`gettext \"输入序号\"`"
+    echo "$i18n_input_no"
     while read -p "$i18n_default_cancel" nginx_domain_servers_num
     do
         case "$nginx_domain_servers_num" in

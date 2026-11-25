@@ -3,8 +3,8 @@ NodejsMenu()
     [ ! -d "$IPTV_ROOT" ] && Println "$(eval_gettext "\$error 请先输入 tv 安装 !")\n" && exit 1
 
     echo
-    nodejs_options=( "$(gettext "安装")" "$(gettext "升级")" "$(gettext "运行 iptv node")" )
-    inquirer list_input_index "$(gettext "选择操作")" nodejs_options nodejs_options_index
+    nodejs_options=( "$i18n_install" "$(gettext "升级")" "$(gettext "运行 iptv node")" )
+    inquirer list_input_index "$i18n_select_action" nodejs_options nodejs_options_index
 
     if [ "$nodejs_options_index" -eq 0 ] 
     then

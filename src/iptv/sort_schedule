@@ -22,46 +22,63 @@ SortChannelSchedules()
     chnl_schedules_list="${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]}${normal}\n\n"
     chnl_schedules_options=()
 
+    local lbl_wait lbl_running lbl_ended lbl_once lbl_channel_name lbl_schedule lbl_anti_leech lbl_loop lbl_auto_remove lbl_start_time lbl_end_time
+    lbl_wait=$(gettext "等待")
+    lbl_running=$(gettext "进行")
+    lbl_ended=$(gettext "结束")
+    lbl_once=$(gettext "一次")
+    lbl_channel_name=$(gettext "频道名称")
+    lbl_schedule=$(gettext "计划")
+    lbl_anti_leech=$(gettext "防盗链")
+    lbl_loop=$(gettext "循环")
+    lbl_auto_remove=$(gettext "自动清除")
+    lbl_start_time=$(gettext "开始时间")
+    lbl_end_time=$(gettext "结束时间")
+
     for chnl_schedules_index in "${chnl_schedules_indices[@]}"
     do
-        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ]
         then
-            chnl_schedule_status_list="${green}$(gettext "等待")${normal}"
-        elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+            chnl_schedule_status_list="${green}$lbl_wait${normal}"
+        elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
         then
-            chnl_schedule_status_list="${blue}$(gettext "进行")${normal}"
+            chnl_schedule_status_list="${blue}$lbl_running${normal}"
         else
-            chnl_schedule_status_list="${red}$(gettext "结束")${normal}"
+            chnl_schedule_status_list="${red}$lbl_ended${normal}"
         fi
-        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+
+        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ]
         then
-            chnl_schedule_hls_change_list="${green}$(gettext "一次")${normal}"
-        elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+            chnl_schedule_hls_change_list="${green}$lbl_once${normal}"
+        elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ]
         then
-            chnl_schedule_hls_change_list="${green}$(gettext "是")${normal}"
+            chnl_schedule_hls_change_list="${green}$i18n_yes${normal}"
         else
-            chnl_schedule_hls_change_list="${red}$(gettext "否")${normal}"
+            chnl_schedule_hls_change_list="${red}$i18n_no${normal}"
         fi
-        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+
+        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ]
         then
-            chnl_schedule_loop_list="${green}$(gettext "是")${normal}"
+            chnl_schedule_loop_list="${green}$i18n_yes${normal}"
         else
-            chnl_schedule_loop_list="${red}$(gettext "否")${normal}"
+            chnl_schedule_loop_list="${red}$i18n_no${normal}"
         fi
-        if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+
+        if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ]
         then
-            chnl_schedule_auto_remove_list="${green}$(gettext "是")${normal}"
+            chnl_schedule_auto_remove_list="${green}$i18n_yes${normal}"
         else
-            chnl_schedule_auto_remove_list="${red}$(gettext "否")${normal}"
+            chnl_schedule_auto_remove_list="${red}$i18n_no${normal}"
         fi
-        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+
+        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ]
         then
-            chnl_schedule_channel_name_list="${indent_6}$(gettext "频道名称"): ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
+            chnl_schedule_channel_name_list="${indent_6}$lbl_channel_name: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
         else
             chnl_schedule_channel_name_list=""
         fi
-        chnl_schedules_options+=("$(gettext "计划")$((chnl_schedules_index+1))")
-        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}$(gettext "状态"): $chnl_schedule_status_list${indent_20}$(gettext "防盗链"): $chnl_schedule_hls_change_list\n${indent_6}$(gettext "循环"): $chnl_schedule_loop_list${indent_20}$(gettext "自动清除"): $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}$(gettext "开始时间"): $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}$(gettext "结束时间"): $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
+        chnl_schedules_options+=("$lbl_schedule$((chnl_schedules_index+1))")
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}$i18n_status: $chnl_schedule_status_list${indent_20}$lbl_anti_leech: $chnl_schedule_hls_change_list\n${indent_6}$lbl_loop: $chnl_schedule_loop_list${indent_20}$lbl_auto_remove: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}$lbl_start_time: $(FormatEpoch "${chnl_schedules_start_time[chnl_schedules_index]}" '+%c')\n${indent_6}$lbl_end_time: $(FormatEpoch "${chnl_schedules_end_time[chnl_schedules_index]}" '+%c')\n\n"
     done
 
     Println "$chnl_schedules_list"
@@ -114,7 +131,7 @@ SortChannelsSchedule()
         exit 1
     fi
 
-    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     echo "$(gettext "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnls_num

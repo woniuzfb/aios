@@ -1,0 +1,218 @@
+ProxyBuildStreamSettings()
+{
+    local core="$1"
+    local ver="$2"
+    local format="$3"
+    local transport="$4"
+    local security="$5"
+    local opts_json="${6:-}"
+    [ -z "$opts_json" ] && opts_json="{}"
+
+    if [ "$core" == "xray" ]
+    then
+        local use_method=0
+        ProxyCoreHasFeature "xray" "$ver" "json" "streamMethodKey" && use_method=1
+
+        $JQ_FILE -n \
+            --arg net "$transport" \
+            --arg sec "$security" \
+            --argjson use_method "$use_method" \
+            --argjson o "$opts_json" '
+            def net_key: if $use_method == 1 then "method" else "network" end;
+            def net_obj:
+                if $net == "raw" or $net == "tcp" then
+                    if ($o.raw_header_type // "") != "" then {rawSettings: {header: {type: $o.raw_header_type}}} else {} end
+                elif $net == "websocket" or $net == "ws" then
+                    {wsSettings: (
+                        {}
+                        + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                        + (if ($o.host // "") != "" then {host: $o.host} else {} end)
+                        + (if ($o.heartbeat // 0) > 0 then {heartbeatPeriod: $o.heartbeat} else {} end)
+                    )}
+                elif $net == "grpc" then
+                    {grpcSettings: (
+                        {}
+                        + (if ($o.service_name // "") != "" then {serviceName: $o.service_name} else {} end)
+                        + (if ($o.authority // "") != "" then {authority: $o.authority} else {} end)
+                        + (if ($o.multi_mode // false) == true then {multiMode: true} else {} end)
+                    )}
+                elif $net == "xhttp" or $net == "splithttp" then
+                    {xhttpSettings: (
+                        {}
+                        + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                        + (if ($o.host // "") != "" then {host: $o.host} else {} end)
+                        + (if ($o.mode // "") != "" then {mode: $o.mode} else {} end)
+                    )}
+                elif $net == "httpupgrade" then
+                    {httpupgradeSettings: (
+                        {}
+                        + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                        + (if ($o.host // "") != "" then {host: $o.host} else {} end)
+                    )}
+                elif $net == "kcp" or $net == "mkcp" then
+                    {kcpSettings: (
+                        {}
+                        + (if ($o.mtu // 0) > 0 then {mtu: $o.mtu} else {} end)
+                        + (if ($o.tti // 0) > 0 then {tti: $o.tti} else {} end)
+                        + (if ($o.uplink_capacity // 0) > 0 then {uplinkCapacity: $o.uplink_capacity} else {} end)
+                        + (if ($o.downlink_capacity // 0) > 0 then {downlinkCapacity: $o.downlink_capacity} else {} end)
+                        + (if ($o.congestion // null) != null then {congestion: $o.congestion} else {} end)
+                        + (if ($o.read_buffer_size // 0) > 0 then {readBufferSize: $o.read_buffer_size} else {} end)
+                        + (if ($o.write_buffer_size // 0) > 0 then {writeBufferSize: $o.write_buffer_size} else {} end)
+                        + (if ($o.header_type // "") != "" then {header: {type: $o.header_type}} else {} end)
+                        + (if ($o.seed // "") != "" then {seed: $o.seed} else {} end)
+                    )}
+                elif $net == "hysteria" then
+                    {hysteriaSettings: (
+                        {version: 2}
+                        + (if ($o.auth // "") != "" then {auth: $o.auth} else {} end)
+                        + (if ($o.udp_idle_timeout // 0) > 0 then {udpIdleTimeout: $o.udp_idle_timeout} else {} end)
+                    )}
+                elif $net == "masque" then
+                    {masqueSettings: (
+                        {}
+                        + (if ($o.host // "") != "" then {host: $o.host} else {} end)
+                        + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                        + (if ($o.user // "") != "" then {user: $o.user} else {} end)
+                        + (if ($o.pass // "") != "" then {pass: $o.pass} else {} end)
+                    )}
+                else {} end;
+            def sec_obj:
+                if $sec == "tls" then
+                    {tlsSettings: (
+                        {}
+                        + (if ($o.sni // "") != "" then {serverName: $o.sni} else {} end)
+                        + (if ($o.alpn | type) == "array" and ($o.alpn | length) > 0 then {alpn: $o.alpn} else {} end)
+                        + (if ($o.fingerprint // "") != "" then {fingerprint: $o.fingerprint} else {} end)
+                        + (if ($o.cert_file // "") != "" and ($o.key_file // "") != "" then {certificates: [{certificateFile: $o.cert_file, keyFile: $o.key_file}]} else {} end)
+                    )}
+                elif $sec == "reality" then
+                    {realitySettings: (
+                        {}
+                        + (if ($o.target // "") != "" then {target: $o.target} else {} end)
+                        + (if ($o.server_names | type) == "array" and ($o.server_names | length) > 0 then {serverNames: $o.server_names} else {} end)
+                        + (if ($o.private_key // "") != "" then {privateKey: $o.private_key} else {} end)
+                        + (if ($o.short_ids | type) == "array" and ($o.short_ids | length) > 0 then {shortIds: $o.short_ids} else {} end)
+                        + (if ($o.mldsa65_seed // "") != "" then {mldsa65Seed: $o.mldsa65_seed} else {} end)
+                        + (if ($o.mldsa65_verify // "") != "" then {mldsa65Verify: $o.mldsa65_verify} else {} end)
+                        + (if ($o.server_name // "") != "" then {serverName: $o.server_name} else {} end)
+                        + (if ($o.password // "") != "" then {password: $o.password} else {} end)
+                        + (if ($o.short_id // "") != "" then {shortId: $o.short_id} else {} end)
+                        + (if ($o.fingerprint // "") != "" then {fingerprint: $o.fingerprint} else {} end)
+                        + (if ($o.spider_x // "") != "" then {spiderX: $o.spider_x} else {} end)
+                    )}
+                else {} end;
+            def fm_obj:
+                if ($o.finalmask | type) == "object" and ($o.finalmask | length) > 0 then
+                    {finalmask: $o.finalmask}
+                elif ($o.finalmask_udp_type // "") != "" or ($o.finalmask_tcp_type // "") != "" then
+                    {finalmask: (
+                        {}
+                        + (if ($o.finalmask_tcp_type // "") != "" then {tcp: [({type: $o.finalmask_tcp_type} + (if ($o.finalmask_password // "") != "" then {settings: {password: $o.finalmask_password}} else {} end))]} else {} end)
+                        + (if ($o.finalmask_udp_type // "") != "" then {udp: [({type: $o.finalmask_udp_type} + (if ($o.finalmask_password // "") != "" then {settings: {password: $o.finalmask_password}} else {} end))]} else {} end)
+                    )}
+                else {} end;
+            def sock_obj:
+                if ($o.sockopt | type) == "object" and ($o.sockopt | length) > 0 then {sockopt: $o.sockopt} else {} end;
+            {(net_key): $net, security: $sec} + net_obj + sec_obj + fm_obj + sock_obj
+        '
+        return $?
+    fi
+
+    if [ "$format" == "jsonv5" ]
+    then
+        $JQ_FILE -n \
+            --arg net "$transport" \
+            --arg sec "$security" \
+            --argjson o "$opts_json" '
+            def t_name:
+                if $net == "hy2" or $net == "hysteria2" then "hysteria2"
+                elif $net == "ws" then "websocket"
+                else $net end;
+            def t_settings:
+                if (t_name == "websocket") then
+                    {} + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                elif (t_name == "grpc") then
+                    {} + (if ($o.service_name // "") != "" then {serviceName: $o.service_name} else {} end)
+                elif (t_name == "hysteria2") then
+                    {} + (if ($o.password // "") != "" then {password: $o.password} else {} end)
+                elif (t_name == "httpupgrade") then
+                    {}
+                    + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                    + (if ($o.host // "") != "" then {host: $o.host} else {} end)
+                else {} end;
+            def s_settings:
+                if $sec == "tls" then
+                    {}
+                    + (if ($o.sni // "") != "" then {serverName: $o.sni} else {} end)
+                    + (if ($o.alpn | type) == "array" and ($o.alpn | length) > 0 then {nextProtocol: $o.alpn} else {} end)
+                    + (if ($o.cert_file // "") != "" and ($o.key_file // "") != "" then {certificate: [{certificateFile: $o.cert_file, keyFile: $o.key_file}]} else {} end)
+                else {} end;
+            {transport: t_name, transportSettings: t_settings}
+            + (if $sec != "none" and $sec != "" then {security: $sec, securitySettings: s_settings} else {} end)
+            + (if ($o.sockopt | type) == "object" and ($o.sockopt | length) > 0 then {socketSettings: $o.sockopt} else {} end)
+        '
+        return $?
+    fi
+
+    $JQ_FILE -n \
+        --arg net "$transport" \
+        --arg sec "$security" \
+        --argjson o "$opts_json" '
+        def v4_net:
+            if $net == "hysteria2" then "hy2"
+            elif $net == "websocket" then "ws"
+            else $net end;
+        def net_obj:
+            if v4_net == "ws" then
+                {wsSettings: (
+                    {}
+                    + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                    + (if ($o.host // "") != "" then {headers: {Host: $o.host}} else {} end)
+                    + (if ($o.max_early_data // 0) > 0 then {maxEarlyData: $o.max_early_data, earlyDataHeaderName: ($o.early_data_header // "Sec-WebSocket-Protocol")} else {} end)
+                )}
+            elif v4_net == "grpc" then
+                {grpcSettings: (if ($o.service_name // "") != "" then {serviceName: $o.service_name} else {} end)}
+            elif v4_net == "http" then
+                {httpSettings: (
+                    {}
+                    + (if ($o.path // "") != "" then {path: $o.path} else {} end)
+                    + (if ($o.host | type) == "array" and ($o.host | length) > 0 then {host: $o.host} elif ($o.host // "") != "" then {host: [$o.host]} else {} end)
+                )}
+            elif v4_net == "hy2" then
+                {hy2Settings: (
+                    {}
+                    + (if ($o.password // "") != "" then {password: $o.password} else {} end)
+                    + (if ($o.use_udp_extension // false) == true then {use_udp_extension: true} else {} end)
+                )}
+            elif v4_net == "kcp" then
+                {kcpSettings: (
+                    {}
+                    + (if ($o.mtu // 0) > 0 then {mtu: $o.mtu} else {} end)
+                    + (if ($o.seed // "") != "" then {seed: $o.seed} else {} end)
+                )}
+            elif v4_net == "domainsocket" then
+                {dsSettings: {path: ($o.path // "/tmp/v2ray.sock")}}
+            else {} end;
+        def sec_obj:
+            if $sec == "tls" then
+                {tlsSettings: (
+                    {}
+                    + (if ($o.sni // "") != "" then {serverName: $o.sni} else {} end)
+                    + (if ($o.alpn | type) == "array" and ($o.alpn | length) > 0 then {alpn: $o.alpn} else {} end)
+                    + (if ($o.pinned_sha256 | type) == "array" and ($o.pinned_sha256 | length) > 0 then {pinnedPeerCertificateChainSha256: $o.pinned_sha256} else {} end)
+                    + (if ($o.cert_file // "") != "" and ($o.key_file // "") != "" then {certificates: [{certificateFile: $o.cert_file, keyFile: $o.key_file}]} else {} end)
+                )}
+            else {} end;
+        def sock_obj:
+            if ($o.sockopt | type) == "object" and ($o.sockopt | length) > 0 then
+                {sockopt: (
+                    $o.sockopt
+                    | if has("tcpFastOpen") and (.tcpFastOpen | type) == "number" then
+                        .tcpFastOpenQueueLength = .tcpFastOpen | .tcpFastOpen = true
+                      else . end
+                )}
+            else {} end;
+        {network: v4_net, security: $sec} + net_obj + sec_obj + sock_obj
+    '
+}

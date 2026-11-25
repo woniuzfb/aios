@@ -15,12 +15,12 @@ do
             SHOW_OUTPUT=1
             shift
         ;;
-        core|nginx|xray|v2ray|matrix|types|iptv|e2e|all)
+        core|nginx|xray|v2ray|matrix|types|iptv|e2e|core_matrix|all)
             TARGET_SUITE="$1"
             shift
         ;;
         *)
-            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e]\n' "$0" >&2
+            printf 'Usage: %s [--show-output|-v] [all|core|nginx|xray|v2ray|matrix|types|iptv|e2e|core_matrix]\n' "$0" >&2
             exit 2
         ;;
     esac
@@ -52,6 +52,10 @@ Include()
 
 JQ_FILE=$(command -v jq)
 dist="test"
+sh_locale="zh_CN"
+AIOS_TEST_SKIP_I18N_CHECK=1
+# shellcheck disable=SC1091
+. "$DEV_PATH/utils/i18n"
 info="[INFO]"
 error="[ERROR]"
 tip="[TIP]"
@@ -62,6 +66,20 @@ LogErr() { :; }
 . "$DEV_PATH/core"
 # shellcheck disable=SC1091
 . "$DEV_PATH/utils/jq"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/service/control"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/core_features"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/validate"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/core_manager"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/stream_editor"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/uri_codec"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/proxy/presets"
 # shellcheck disable=SC1091
 . "$DEV_PATH/src/proxy/common"
 # shellcheck disable=SC1091
@@ -169,6 +187,20 @@ LogErr() { :; }
 # shellcheck disable=SC1091
 . "$DEV_PATH/src/v2ray/set_reverse"
 # shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/stats"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_advanced"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/set_bound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/add_inbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/add_outbound"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/config_domain"
+# shellcheck disable=SC1091
+. "$DEV_PATH/src/v2ray/update_cert"
+# shellcheck disable=SC1091
 . "$DEV_PATH/src/v2ray/list_nginx_domain"
 
 # shellcheck disable=SC1091
@@ -192,6 +224,8 @@ trap 'MockInquirerCleanup; E2eSandboxCleanup' EXIT
 . "$DEV_PATH/test/suites/e2e_aios"
 # shellcheck disable=SC1091
 . "$DEV_PATH/test/suites/iptv"
+# shellcheck disable=SC1091
+. "$DEV_PATH/test/suites/core_matrix"
 
 case "$TARGET_SUITE" in
     core) RunSuiteCoreJq ;;
@@ -202,6 +236,7 @@ case "$TARGET_SUITE" in
     types) RunSuiteTypeSafety ;;
     e2e) RunSuiteE2eAios ;;
     iptv) RunSuiteIptv ;;
+    core_matrix) RunSuiteCoreMatrix ;;
     all)
         RunSuiteCoreJq
         RunSuiteNginx
@@ -210,6 +245,7 @@ case "$TARGET_SUITE" in
         RunSuiteMatrix
         RunSuiteTypeSafety
         RunSuiteIptv
+        RunSuiteCoreMatrix
         RunSuiteE2eAios
     ;;
 esac

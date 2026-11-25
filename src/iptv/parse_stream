@@ -552,7 +552,7 @@ ParseStream()
                 do
                     if [ -n "${streams_tags_list[streams_i]:-}" ] 
                     then
-                        streams_tags_list[streams_i]="$(gettext "流")#$streams_i $(gettext "标签"):\n${streams_tags_list[streams_i]}\n"
+                        streams_tags_list[streams_i]="$(gettext "流")#$streams_i $(gettext "标识"):\n${streams_tags_list[streams_i]}\n"
                     fi
                     if [ -n "${streams_program_id[streams_i]:-}" ] 
                     then

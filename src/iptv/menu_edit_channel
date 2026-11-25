@@ -1,8 +1,16 @@
 EditChannelMenu()
 {
     echo
-    edit_channel_options=( "$(gettext "设置")" "$(gettext "排序")" "$(gettext "隐藏")" "$(gettext "显示")" )
-    inquirer list_input_index "$(gettext "选择操作")" edit_channel_options edit_channel_options_index
+    local menu_key="${sh_locale:-zh_CN}"
+
+    if [ "${_menu_edit_channel_cache_key:-}" != "$menu_key" ]
+    then
+        _menu_edit_channel_options=( "$(gettext "设置")" "$(gettext "排序")" "$(gettext "隐藏")" "$(gettext "显示")" )
+        _menu_edit_channel_cache_key="$menu_key"
+    fi
+
+    edit_channel_options=( "${_menu_edit_channel_options[@]}" )
+    inquirer list_input_index "$i18n_select_action" edit_channel_options edit_channel_options_index
 
     if [ "$edit_channel_options_index" -eq 0 ] 
     then
@@ -89,6 +97,12 @@ EditChannelMenu()
             EditForSecurity
         )
 
+        local lbl_restart_chnl lbl_no_restart lbl_start_chnl lbl_no_start
+        lbl_restart_chnl=$(gettext "重启频道")
+        lbl_no_restart=$(gettext "不重启...")
+        lbl_start_chnl=$(gettext "启动频道")
+        lbl_no_start=$(gettext "不启动...")
+
         for chnls_pid_chosen_index in "${!chnls_indices[@]}"
         do
             chnl_pid=${chnls_pid_chosen[chnls_pid_chosen_index]}
@@ -97,7 +111,7 @@ EditChannelMenu()
             ListChannel
 
             echo
-            inquirer checkbox_input_indices "$(gettext "选择修改内容")" edit_options edit_options_indices
+            inquirer checkbox_input_indices "$i18n_select_edit" edit_options edit_options_indices
 
             for edit_options_index in "${edit_options_indices[@]}"
             do
@@ -107,35 +121,35 @@ EditChannelMenu()
             echo
             if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
             then
-                inquirer list_input_index "$(gettext "重启频道")" ny_options ny_index
+                inquirer list_input_index "$lbl_restart_chnl" ny_options ny_index
 
                 if [ "$ny_index" -eq 0 ]
                 then
-                    Println "$(gettext "不重启...")\n"
+                    Println "$lbl_no_restart\n"
                 else
                     StopChannel
                     GetChannel
                     CheckIfXtreamCodes
-                    if [ "$to_try" -eq 1 ] 
+                    if [ "$to_try" -eq 1 ]
                     then
                         continue
                     fi
                     StartChannel
                 fi
             else
-                inquirer list_input_index "$(gettext "启动频道")" ny_options ny_index
+                inquirer list_input_index "$lbl_start_chnl" ny_options ny_index
 
                 if [ "$ny_index" -eq 0 ]
                 then
-                    Println "$(gettext "不启动...")\n"
+                    Println "$lbl_no_start\n"
                 else
-                    if [ -d "$chnl_output_dir_root" ] 
+                    if [ -d "$chnl_output_dir_root" ]
                     then
                         StopChannel
                     fi
                     GetChannel
                     CheckIfXtreamCodes
-                    if [ "$to_try" -eq 1 ] 
+                    if [ "$to_try" -eq 1 ]
                     then
                         continue
                     fi
@@ -143,7 +157,7 @@ EditChannelMenu()
                 fi
             fi
         done
-    elif [ "$edit_channel_options_index" -eq 1 ] 
+    elif [ "$edit_channel_options_index" -eq 1 ]
     then
         GetChannels
         i18nGetMsg get_channels
@@ -152,7 +166,7 @@ EditChannelMenu()
         then
             Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
             exit 1
-        elif [ "$chnls_count" -eq 1 ] 
+        elif [ "$chnls_count" -eq 1 ]
         then
             Println "`eval_gettext \"\\\$error 请添加更多频道 !\"`\n"
             exit 1
@@ -160,8 +174,10 @@ EditChannelMenu()
 
         chnls_indices=("${!chnls_pid[@]}")
         chnls_options=()
+        local lbl_channel
+        lbl_channel=$(gettext "频道")
 
-        if [ -z "${kind:-}" ] 
+        if [ -z "${kind:-}" ]
         then
             for chnls_index in "${chnls_indices[@]}"
             do
@@ -171,18 +187,18 @@ EditChannelMenu()
                 else
                     chnls_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             done
         else
             for chnls_index in "${chnls_indices[@]}"
             do
-                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ]
                 then
                     chnls_flv_status_text="$i18n_running"
                 else
                     chnls_flv_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             done
         fi
 
@@ -204,7 +220,7 @@ EditChannelMenu()
         unset new_array
 
         Println "$(eval_gettext "\$info 频道排序成功")\n"
-    elif [ "$edit_channel_options_index" -eq 2 ] 
+    elif [ "$edit_channel_options_index" -eq 2 ]
     then
         GetChannels
         i18nGetMsg get_channels
@@ -218,15 +234,18 @@ EditChannelMenu()
         chnls_indices=("${!chnls_pid[@]}")
         chnls_options=()
         chnls_hide_indices=()
+        local lbl_channel lbl_hide_success
+        lbl_channel=$(gettext "频道")
+        lbl_hide_success=$(gettext "隐藏成功")
 
         for chnls_index in "${chnls_indices[@]}"
         do
-            if [ "${chnls_hide[chnls_index]}" = true ] 
+            if [ "${chnls_hide[chnls_index]}" = true ]
             then
                 continue
             fi
             chnls_hide_indices+=("$chnls_index")
-            if [ -z "${kind:-}" ] 
+            if [ -z "${kind:-}" ]
             then
                 if [ "${chnls_status[chnls_index]}" == "on" ]
                 then
@@ -234,19 +253,19 @@ EditChannelMenu()
                 else
                     chnls_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             else
-                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ]
                 then
                     chnls_flv_status_text="$i18n_running"
                 else
                     chnls_flv_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             fi
         done
 
-        if [ -z "${chnls_options:-}" ] 
+        if [ -z "${chnls_options:-}" ]
         then
             Println "$(eval_gettext "\$error 没有显示的频道")\n"
             exit 1
@@ -260,7 +279,7 @@ EditChannelMenu()
             jq_bool=true
             jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
             JQ update "$CHANNELS_FILE" true
-            Println "$info $(gettext "频道") [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] $(gettext "隐藏成功")"
+            Println "$info $lbl_channel [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] $lbl_hide_success"
         done
     else
         GetChannels
@@ -275,15 +294,18 @@ EditChannelMenu()
         chnls_indices=("${!chnls_pid[@]}")
         chnls_options=()
         chnls_hide_indices=()
+        local lbl_channel lbl_show_success
+        lbl_channel=$(gettext "频道")
+        lbl_show_success=$(gettext "显示成功")
 
         for chnls_index in "${chnls_indices[@]}"
         do
-            if [ "${chnls_hide[chnls_index]}" = false ] 
+            if [ "${chnls_hide[chnls_index]}" = false ]
             then
                 continue
             fi
             chnls_hide_indices+=("$chnls_index")
-            if [ -z "${kind:-}" ] 
+            if [ -z "${kind:-}" ]
             then
                 if [ "${chnls_status[chnls_index]}" == "on" ]
                 then
@@ -291,19 +313,19 @@ EditChannelMenu()
                 else
                     chnls_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             else
-                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ]
                 then
                     chnls_flv_status_text="$i18n_running"
                 else
                     chnls_flv_status_text="$i18n_stopped"
                 fi
-                chnls_options+=("$(gettext "频道")$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+                chnls_options+=("$lbl_channel$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
             fi
         done
 
-        if [ -z "${chnls_options:-}" ] 
+        if [ -z "${chnls_options:-}" ]
         then
             Println "$(eval_gettext "\$error 没有隐藏的频道")\n"
             exit 1
@@ -317,7 +339,7 @@ EditChannelMenu()
             jq_bool=true
             jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
             JQ update "$CHANNELS_FILE" false
-            Println "$info $(gettext "频道") [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] $(gettext "显示成功")"
+            Println "$info $lbl_channel [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] $lbl_show_success"
         done
     fi
 }

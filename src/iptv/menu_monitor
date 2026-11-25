@@ -9,8 +9,8 @@ MonitorMenu()
     [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
     echo
-    monitor_options=( "$(gettext "查看")" "$(gettext "开启")" "$(gettext "关闭")" )
-    inquirer list_input_index "$(gettext "选择操作")" monitor_options monitor_options_index
+    monitor_options=( "$i18n_view" "$i18n_open" "$i18n_close" )
+    inquirer list_input_index "$i18n_select_action" monitor_options monitor_options_index
 
     if [ "$monitor_options_index" -eq 0 ]
     then

@@ -124,7 +124,7 @@ NginxListLocalhost()
                     done
 
                     nginx_localhost_server_root+=("$server_root")
-                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}$(gettext "端口"): ${green}${nginx_localhost_listen:-$(gettext "未设置")}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
+                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}$i18n_port: ${green}${nginx_localhost_listen:-$i18n_not_set}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
                 fi
             done
             break

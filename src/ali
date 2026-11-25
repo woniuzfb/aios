@@ -5,18 +5,28 @@ Include src/openlist/acc
 Include src/openlist/api
 Include src/openlist/act
 
+if [ "${ali_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+then
+    openlist_options=( "$(gettext "文件管理")" "$(gettext "OpenList管理")" "$(gettext "账号管理")" "$(gettext "退出")" )
+    ali_menu_locale="${sh_locale:-zh_CN}"
+fi
+
 echo
-openlist_options=( "$(gettext "文件管理")" "$(gettext "OpenList管理")" "$(gettext "账号管理")" "$(gettext "退出")" )
-inquirer list_input_index "$(gettext "请选择")" openlist_options openlist_options_index
+inquirer list_input_index "$i18n_please_select" openlist_options openlist_options_index
 
 case $openlist_options_index in
     0) 
         OpenListAct
     ;;
     1) 
+        if [ "${ali_app_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+        then
+            openlist_app_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" "$(gettext "本地安装/升级")" )
+            ali_app_menu_locale="${sh_locale:-zh_CN}"
+        fi
+
         echo
-        openlist_app_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "本地安装/升级")" )
-        inquirer list_input_index "$(gettext "选择操作")" openlist_app_options openlist_app_options_index
+        inquirer list_input_index "$i18n_select_action" openlist_app_options openlist_app_options_index
 
         case $openlist_app_options_index in
             0) OpenListAppView
@@ -32,9 +42,14 @@ case $openlist_options_index in
         esac
     ;;
     2) 
+        if [ "${ali_acc_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+        then
+            openlist_acc_options=( "$i18n_view" "$i18n_add" "$(gettext "登录")" "$i18n_edit" "$i18n_delete" )
+            ali_acc_menu_locale="${sh_locale:-zh_CN}"
+        fi
+
         echo
-        openlist_acc_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "登录")" "$(gettext "修改")" "$(gettext "删除")" )
-        inquirer list_input_index "$(gettext "选择操作")" openlist_acc_options openlist_acc_options_index
+        inquirer list_input_index "$i18n_select_action" openlist_acc_options openlist_acc_options_index
 
         case $openlist_acc_options_index in
             0) OpenListAccView

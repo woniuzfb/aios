@@ -158,50 +158,141 @@ else
     Println "$(eval_gettext "\$error jq 下载出错, 无法连接 github ?")"
 fi
 
-archs=( 32 64 arm32-v5 arm32-v6 arm32-v7a arm64-v8a s390x)
+MirrorVerifySha256()
+{
+    local target_file="$1"
+    local dgst_file="$2"
+    if [ ! -s "$target_file" ] || [ ! -s "$dgst_file" ]
+    then
+        return 1
+    fi
 
-if v2ray_ver=$(curl -s -m 30 "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name')
-then
-    mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
-    for arch in "${archs[@]}"
+    local expected="" actual=""
+    expected=$(awk 'toupper($0) ~ /SHA2-?256/ {print tolower($NF); exit}' "$dgst_file" 2> /dev/null || true)
+    if [ -z "$expected" ]
+    then
+        expected=$(awk '{print tolower($1); exit}' "$dgst_file" 2> /dev/null || true)
+    fi
+
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]
+    then
+        return 1
+    fi
+
+    if command -v sha256sum > /dev/null 2>&1
+    then
+        actual=$(sha256sum "$target_file" | awk '{print tolower($1)}')
+    elif command -v shasum > /dev/null 2>&1
+    then
+        actual=$(shasum -a 256 "$target_file" | awk '{print tolower($1)}')
+    else
+        return 1
+    fi
+
+    [ "$actual" == "$expected" ]
+}
+
+MirrorSyncCoreReleases()
+{
+    local core="$1"
+    local repo="$2"
+    local asset_prefix="$3"
+    local pinned_vers="$4"
+    shift 4
+    local core_archs=("$@")
+    local recent_count="${PROXY_MIRROR_RECENT_COUNT:-5}"
+    local releases_json=""
+
+    if releases_json=$(curl -fsSL -m 30 "https://api.github.com/repos/${repo}/releases?per_page=${recent_count}" 2> /dev/null) && printf '%s' "$releases_json" | $JQ_FILE -e 'type == "array" and length > 0' > /dev/null 2>&1
+    then
+        printf '%s\n' "$releases_json" | $JQ_FILE '[.[] | select(.draft == false and .prerelease == false) | {tag_name, published_at, prerelease}]' > "$FFMPEG_MIRROR_ROOT/${core}_versions.json_tmp" \
+            && mv -f "$FFMPEG_MIRROR_ROOT/${core}_versions.json_tmp" "$FFMPEG_MIRROR_ROOT/${core}_versions.json"
+        printf '%s\n' "$releases_json" | $JQ_FILE 'first(.[] | select(.draft == false and .prerelease == false)) // .[0]' > "$FFMPEG_MIRROR_ROOT/${core}.json_tmp" \
+            && mv -f "$FFMPEG_MIRROR_ROOT/${core}.json_tmp" "$FFMPEG_MIRROR_ROOT/${core}.json"
+    else
+        Println "$(eval_gettext "\$error \$core 版本列表获取失败, 无法连接 github ?")"
+        return 1
+    fi
+
+    local all_tags=()
+    local t=""
+    while IFS= read -r t
     do
-        if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip" ]
-        then
-            Println "$(eval_gettext "\$info 下载 v2ray-linux-\$arch \$v2ray_ver ...")"
-            if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" \
-            && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp"
+        [ -n "$t" ] && all_tags+=("$t")
+    done < <(printf '%s\n' "$releases_json" | $JQ_FILE -r '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+
+    for t in $pinned_vers
+    do
+        local exists=0 x=""
+        for x in "${all_tags[@]+"${all_tags[@]}"}"
+        do
+            [ "$x" == "$t" ] && exists=1 && break
+        done
+        [ "$exists" -eq 0 ] && all_tags+=("$t")
+    done
+
+    local tag="" arch=""
+    for tag in "${all_tags[@]+"${all_tags[@]}"}"
+    do
+        mkdir -p "$FFMPEG_MIRROR_ROOT/${core}/${tag}/"
+        for arch in "${core_archs[@]+"${core_archs[@]}"}"
+        do
+            local zip_path="$FFMPEG_MIRROR_ROOT/${core}/${tag}/${asset_prefix}-${arch}.zip"
+            local dgst_path="${zip_path}.dgst"
+            if MirrorVerifySha256 "$zip_path" "$dgst_path"
             then
-                mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip"
-                mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst"
-            else
-                Println "$(eval_gettext "\$error v2ray-linux-\$arch \$v2ray_ver 下载出错, 无法连接 github ?")"
+                continue
             fi
+
+            Println "$(eval_gettext "\$info 下载 \${asset_prefix}-\${arch} \$tag ...")"
+            if curl -fsSL -m 120 "https://github.com/${repo}/releases/download/${tag}/${asset_prefix}-${arch}.zip" -o "${zip_path}_tmp" \
+            && curl -fsSL -m 30 "https://github.com/${repo}/releases/download/${tag}/${asset_prefix}-${arch}.zip.dgst" -o "${dgst_path}_tmp" \
+            && MirrorVerifySha256 "${zip_path}_tmp" "${dgst_path}_tmp"
+            then
+                mv -f "${zip_path}_tmp" "$zip_path"
+                mv -f "${dgst_path}_tmp" "$dgst_path"
+            else
+                rm -f "${zip_path}_tmp" "${dgst_path}_tmp"
+                Println "$(eval_gettext "\$error \${asset_prefix}-\${arch} \$tag 下载或校验出错")"
+            fi
+        done
+    done
+}
+
+v2ray_archs=( linux-32 linux-64 linux-arm32-v5 linux-arm32-v6 linux-arm32-v7a linux-arm64-v8a macos-64 macos-arm64-v8a )
+xray_archs=( linux-32 linux-64 linux-arm32-v5 linux-arm32-v6 linux-arm32-v7a linux-arm64-v8a linux-s390x macos-64 macos-arm64-v8a )
+
+MirrorSyncCoreReleases "v2ray" "$V2RAY_REPO" "v2ray" "${V2RAY_MIRROR_PINNED_VERSIONS:-v5.18.0}" "${v2ray_archs[@]+"${v2ray_archs[@]}"}"
+MirrorSyncCoreReleases "xray" "$XRAY_REPO" "Xray" "${XRAY_MIRROR_PINNED_VERSIONS:-v25.9.11 v26.5.3 v26.5.9 v26.6.22 v26.6.27}" "${xray_archs[@]+"${xray_archs[@]}"}"
+
+if geodata_json=$(curl -fsSL -m 30 "$PROXY_GEODATA_API" 2> /dev/null) && geodata_ver=$(printf '%s' "$geodata_json" | $JQ_FILE -r '.tag_name // empty') && [ -n "$geodata_ver" ]
+then
+    mkdir -p "$FFMPEG_MIRROR_ROOT/geodata/${geodata_ver}/"
+    printf '%s\n' "$geodata_json" > "$FFMPEG_MIRROR_ROOT/geodata/geodata.json_tmp" \
+        && mv -f "$FFMPEG_MIRROR_ROOT/geodata/geodata.json_tmp" "$FFMPEG_MIRROR_ROOT/geodata/geodata.json"
+    for geo_file in geoip.dat geosite.dat
+    do
+        geo_dst="$FFMPEG_MIRROR_ROOT/geodata/${geodata_ver}/${geo_file}"
+        geo_sum="${geo_dst}.sha256sum"
+        if MirrorVerifySha256 "$geo_dst" "$geo_sum"
+        then
+            continue
+        fi
+
+        Println "$(eval_gettext "\$info 下载 geodata \$geo_file \$geodata_ver ...")"
+        if curl -fsSL -m 60 "${PROXY_GEODATA_LINK}/${geodata_ver}/${geo_file}" -o "${geo_dst}_tmp" \
+        && curl -fsSL -m 30 "${PROXY_GEODATA_LINK}/${geodata_ver}/${geo_file}.sha256sum" -o "${geo_sum}_tmp" \
+        && MirrorVerifySha256 "${geo_dst}_tmp" "${geo_sum}_tmp"
+        then
+            mv -f "${geo_dst}_tmp" "$geo_dst"
+            mv -f "${geo_sum}_tmp" "$geo_sum"
+        else
+            rm -f "${geo_dst}_tmp" "${geo_sum}_tmp"
+            Println "$(eval_gettext "\$error geodata \$geo_file \$geodata_ver 下载或校验出错")"
         fi
     done
 else
-    Println "$(eval_gettext "\$error v2ray \$v2ray_ver 下载出错, 无法连接 github ?")"
-fi
-
-if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name')
-then
-    mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
-    for arch in "${archs[@]}"
-    do
-        if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip" ]
-        then
-            Println "$(eval_gettext "\$info 下载 Xray-linux-\$arch \$xray_ver ...")"
-            if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" \
-            && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp"
-            then
-                mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip"
-                mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst"
-            else
-                Println "$(eval_gettext "\$error Xray-linux-\$arch \$xray_ver 下载出错, 无法连接 github ?")"
-            fi
-        fi
-    done
-else
-    Println "$(eval_gettext "\$error xray \$xray_ver 下载出错, 无法连接 github ?")"
+    Println "$(eval_gettext "\$error geodata 下载出错, 无法连接 github ?")"
 fi
 
 if openwrt_aios_assets=$(curl -fsSL -m 30 "https://api.github.com/repos/${OPENWRT_AIOS_LINK#https://github.com/}/releases/latest" | $JQ_FILE -r '.assets[]? | select((.name | test("^aios-(xray|v2ray)[_-].*[_-](x86_64|aarch64_generic|aarch64_cortex-a53)\\.(ipk|apk)$")) or (.name | test("^aios-geodata[_-].*[_-]all\\.(ipk|apk)$"))) | "\(.name)\t\(.browser_download_url)"') && [ -n "$openwrt_aios_assets" ]
@@ -314,20 +405,6 @@ else
     Println "$(eval_gettext "\$error openlist.json 下载出错, 无法连接 github ?")"
 fi
 
-if curl -s -L "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
-then
-    mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
-else
-    Println "$(eval_gettext "\$error v2ray.json 下载出错, 无法连接 github ?")"
-fi
-
-if curl -s -L "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/xray.json_tmp"
-then
-    mv "$FFMPEG_MIRROR_ROOT/xray.json_tmp" "$FFMPEG_MIRROR_ROOT/xray.json"
-else
-    Println "$(eval_gettext "\$error xray.json 下载出错, 无法连接 github ?")"
-fi
-
 if curl -s -L "https://api.github.com/repos/${OPENWRT_AIOS_LINK#https://github.com/}/releases/latest" -o "$FFMPEG_MIRROR_ROOT/openwrt-aios.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/openwrt-aios.json_tmp" "$FFMPEG_MIRROR_ROOT/openwrt-aios.json"
@@ -431,14 +508,6 @@ then
     else
         Println "$(eval_gettext "\$error \${QUICTLS_TAG} 下载出错, 无法连接 github ?")"
     fi
-fi
-
-Println "$(eval_gettext "\$info 下载 v2ray install-release.sh ...")"
-if curl -s -L "$V2_LINK" -o "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp"
-then
-    mv "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp" "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh"
-else
-    Println "$(eval_gettext "\$error v2ray install-release.sh 下载出错, 无法连接 github ?")"
 fi
 
 Println "$(eval_gettext "\$info 下载 acme.sh ...")"

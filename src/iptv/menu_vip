@@ -7,27 +7,35 @@ VipMenu()
         return 0
     fi
 
-    Println "  `gettext \"VIP 面板\"`
+    local menu_key="${sh_locale:-zh_CN}"
 
-  ${red}1.${normal} `gettext \"查看 VIP 用户\"`
-  ${red}2.${normal} `gettext \"添加 VIP 用户\"`
-  ${red}3.${normal} `gettext \"设置 VIP 用户\"`
-  ${red}4.${normal} `gettext \"查看 VIP 频道\"`
-  ${red}5.${normal} `gettext \"添加 VIP 频道\"`
-  ${red}6.${normal} `gettext \"部署 VIP 频道\"`
-  ${red}7.${normal} `gettext \"设置 VIP 频道\"`
-  ${red}8.${normal} `gettext \"查看 VIP 服务器\"`
-  ${red}9.${normal} `gettext \"添加 VIP 服务器\"`
- ${red}10.${normal} `gettext \"设置 VIP 服务器\"`
- ${red}11.${normal} `gettext \"删除 VIP 用户\"`
- ${red}12.${normal} `gettext \"删除 VIP 频道\"`
- ${red}13.${normal} `gettext \"删除 VIP 服务器\"`
- ${red}14.${normal} `gettext \"开启 VIP\"`
- ${red}15.${normal} `gettext \"关闭 VIP\"`
+    if [ "${_menu_vip_cache_key:-}" != "$menu_key" ]
+    then
+        _menu_vip_cache="  $(gettext "VIP 面板")
 
- `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+  ${red}1.${normal} $(gettext "查看 VIP 用户")
+  ${red}2.${normal} $(gettext "添加 VIP 用户")
+  ${red}3.${normal} $(gettext "设置 VIP 用户")
+  ${red}4.${normal} $(gettext "查看 VIP 频道")
+  ${red}5.${normal} $(gettext "添加 VIP 频道")
+  ${red}6.${normal} $(gettext "部署 VIP 频道")
+  ${red}7.${normal} $(gettext "设置 VIP 频道")
+  ${red}8.${normal} $(gettext "查看 VIP 服务器")
+  ${red}9.${normal} $(gettext "添加 VIP 服务器")
+ ${red}10.${normal} $(gettext "设置 VIP 服务器")
+ ${red}11.${normal} $(gettext "删除 VIP 用户")
+ ${red}12.${normal} $(gettext "删除 VIP 频道")
+ ${red}13.${normal} $(gettext "删除 VIP 服务器")
+ ${red}14.${normal} $(gettext "开启 VIP")
+ ${red}15.${normal} $(gettext "关闭 VIP")
 
-    read -p "`gettext \"输入序号\"` [1-15]: " vip_menu_num
+ $(eval_gettext "\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板")\n\n"
+        _menu_vip_cache_key="$menu_key"
+    fi
+
+    Println "$_menu_vip_cache"
+
+    read -p "$i18n_input_no [1-15]: " vip_menu_num
 
     case "$vip_menu_num" in
         h)

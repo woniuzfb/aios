@@ -7,7 +7,7 @@ NginxRestart()
     fi
     echo
     nginx_actions=( "$(gettext "重载配置")" "$(gettext "强制重启")" )
-    inquirer list_input_index "$(gettext "选择操作")" nginx_actions nginx_actions_index
+    inquirer list_input_index "$i18n_select_action" nginx_actions nginx_actions_index
     if [ "$nginx_actions_index" -eq 0 ] 
     then
         nginx_action=reload-or-restart

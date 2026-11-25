@@ -1,6 +1,6 @@
 HAProxyInstall()
 {
-    local install="$(gettext "更新")"
+    local install="$i18n_update"
 
     if [ -z "${1:-}" ] 
     then
@@ -9,10 +9,10 @@ HAProxyInstall()
             Println "$(eval_gettext "\$error haproxy 已安装 !")\n"
             return 0
         fi
-        install="$(gettext "安装")"
+        install="$i18n_install"
     elif [[ ! -x $(command -v haproxy) ]] 
     then
-        install="$(gettext "安装")"
+        install="$i18n_install"
     fi
 
     DepsCheck

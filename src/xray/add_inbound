@@ -1,14 +1,8 @@
 XrayGetBin()
 {
-    if [ -n "${XRAY_FILE:-}" ] && [ -x "$XRAY_FILE" ]
+    if [ -n "${AIOS_XRAY_BIN:-}" ] && [ -x "$AIOS_XRAY_BIN" ]
     then
-        printf '%s' "$XRAY_FILE"
-    elif [ -n "${XCTL_FILE:-}" ] && [ -x "$XCTL_FILE" ]
-    then
-        printf '%s' "$XCTL_FILE"
-    elif command -v xray > /dev/null 2>&1
-    then
-        command -v xray
+        printf '%s' "$AIOS_XRAY_BIN"
     fi
 }
 
@@ -19,10 +13,32 @@ XrayAddInbound()
     echo
     inquirer list_input_index "$(gettext "选择入站模式")" mode_options mode_idx
 
-    local proto_options=( 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'tunnel' 'hysteria' 'wireguard' 'tun' 'masque' )
+    local proto_options=( 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'tunnel' 'hysteria' 'wireguard' 'tun' 'masque' 'vless-reverse' )
     local proto_idx=0
     inquirer list_input_index "$(gettext "选择入站协议")" proto_options proto_idx
     local protocol="${proto_options[$proto_idx]}"
+    local vless_reverse_mode=0
+    if [ "$protocol" == "vless-reverse" ]
+    then
+        protocol="vless"
+        vless_reverse_mode=1
+    fi
+
+    local cur_ver=""
+    cur_ver=$(ProxyGetTargetVersion "xray")
+    if [ "$protocol" == "tun" ] && ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "tunInbound"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 不支持 tun 入站 (需要 >= 26.1.13)")\n"
+        return 1
+    elif [ "$protocol" == "hysteria" ] && ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "hysteriaInbound"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 不支持 hysteria 入站 (需要 >= 26.3.23)")\n"
+        return 1
+    elif [ "$protocol" == "masque" ] && ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "masque"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 不支持 masque 入站 (需要 >= 26.9.30)")\n"
+        return 1
+    fi
 
     local default_listen="0.0.0.0"
     local tag_prefix="${protocol}-"
@@ -32,24 +48,27 @@ XrayAddInbound()
         tag_prefix="nginx-${protocol}-"
     fi
 
-    local listen port tag
-    inquirer text_input "$(gettext "输入监听地址")" listen "$default_listen"
-    inquirer text_input "$(gettext "输入监听端口 (留空随机)")" port ""
-    if [ -z "$port" ]
+    local listen="" port="" tag=""
+    if [ "$protocol" != "tun" ]
     then
-        port=$(GetFreePort)
-    fi
-    if [[ $port =~ ^[0-9]+$ ]]
-    then
-        if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+        inquirer text_input "$(gettext "输入监听地址")" listen "$default_listen"
+        inquirer text_input "$(gettext "输入监听端口 (留空随机)")" port ""
+        if [ -z "$port" ]
         then
-            Println "$(eval_gettext "\$error 监听端口必须在 1-65535 之间")\n"
+            port=$(GetFreePort)
+        fi
+        if [[ $port =~ ^[0-9]+$ ]]
+        then
+            if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error 监听端口必须在 1-65535 之间")\n"
+                return 1
+            fi
+        elif [[ ! $port =~ ^[0-9]+-[0-9]+$ ]]
+        then
+            Println "$(eval_gettext "\$error 监听端口格式无效 (应为端口或端口范围, 如 443 或 10000-20000)")\n"
             return 1
         fi
-    elif [[ ! $port =~ ^[0-9]+-[0-9]+$ ]]
-    then
-        Println "$(eval_gettext "\$error 监听端口格式无效 (应为端口或端口范围, 如 443 或 10000-20000)")\n"
-        return 1
     fi
     inquirer text_input "$(gettext "输入入站标识 (留空随机)")" tag ""
     if [ -z "$tag" ]
@@ -92,10 +111,16 @@ XrayAddInbound()
             inquirer text_input "$(gettext "输入流控 flow (如 xtls-rprx-vision, 可留空)")" flow ""
             inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             inquirer text_input "$(gettext "输入 decryption")" decryption "none"
+            local rev_tag="${XRAY_VLESS_REVERSE_TAG:-}"
+            if [ "$vless_reverse_mode" -eq 1 ]
+            then
+                inquirer text_input "$(gettext "输入 VLESS 内联反向代理 reverse.tag (可留空)")" rev_tag ""
+            fi
             JQs build settings_json '{
                 "decryption": $decryption,
                 "users": [{"id": $id, "flow": $flow, "email": $email, "level": 0}]
-            }' --arg decryption "$decryption" --arg id "$uuid" --arg flow "$flow" --arg email "$email"
+            } + (if $rev_tag != "" then {"reverse": {"tag": $rev_tag}} else {} end)' \
+                --arg decryption "$decryption" --arg id "$uuid" --arg flow "$flow" --arg email "$email" --arg rev_tag "$rev_tag"
         ;;
         vmess)
             local uuid email
@@ -128,7 +153,7 @@ XrayAddInbound()
         ;;
         trojan)
             local password email
-            inquirer text_input "$(gettext "输入密码")" password ""
+            inquirer text_input "$i18n_input_password" password ""
             inquirer text_input "$(gettext "输入用户 email (可留空)")" email ""
             JQs build settings_json '{
                 "users": [{"password": $password, "email": $email, "level": 0}]
@@ -137,13 +162,14 @@ XrayAddInbound()
         shadowsocks)
             local method password network email
             inquirer text_input "$(gettext "输入加密方式")" method "2022-blake3-aes-256-gcm"
+            method=$(ProxyNormalizeSsMethod "$method")
             inquirer text_input "$(gettext "输入密钥 (SS2022 留空自动生成)")" password ""
             if [ -z "$password" ] && [[ "$method" == 2022-* ]]
             then
-                local ss_bytes=32
-                if [[ "$method" == *aes-128* ]]
+                local ss_bytes=""
+                if ! ss_bytes=$(ProxySs2022KeyBytes "$method")
                 then
-                    ss_bytes=16
+                    ss_bytes=32
                 fi
                 password=$(openssl rand -base64 "$ss_bytes" 2> /dev/null | tr -d '\r\n')
                 if [ -z "$password" ]
@@ -165,13 +191,13 @@ XrayAddInbound()
         socks)
             local auth_opts=( 'noauth' 'password' )
             local auth="" udp_idx=1 user="" pass=""
-            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local yn_opts=( "$i18n_no" "$i18n_yes" )
             inquirer list_input "$(gettext "选择认证方式 auth")" auth_opts auth
             inquirer list_input_index "$(gettext "开启 UDP 转发")" yn_opts udp_idx
             if [ "$auth" == "password" ]
             then
                 inquirer text_input "$(gettext "输入用户名")" user ""
-                inquirer text_input "$(gettext "输入密码")" pass ""
+                inquirer text_input "$i18n_input_password" pass ""
                 JQs build settings_json '{
                     "auth": $auth,
                     "udp": ($udp == "1"),
@@ -189,7 +215,7 @@ XrayAddInbound()
             inquirer text_input "$(gettext "输入用户名 (留空无认证)")" user ""
             if [ -n "$user" ]
             then
-                inquirer text_input "$(gettext "输入密码")" pass ""
+                inquirer text_input "$i18n_input_password" pass ""
                 JQs build settings_json '{
                     "users": [{"user": $user, "pass": $pass}]
                 }' --arg user "$user" --arg pass "$pass"
@@ -197,7 +223,7 @@ XrayAddInbound()
         ;;
         tunnel)
             local rw_addr rw_port allowed_net fr_idx=0
-            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local yn_opts=( "$i18n_no" "$i18n_yes" )
             inquirer text_input "$(gettext "输入目标转发地址")" rw_addr "127.0.0.1"
             inquirer text_input "$(gettext "输入目标转发端口")" rw_port "8080"
             if [[ ! $rw_port =~ ^[0-9]+$ ]] || [ "$rw_port" -lt 1 ] || [ "$rw_port" -gt 65535 ]
@@ -232,8 +258,8 @@ XrayAddInbound()
                 then
                     local wg_out wg_pub=""
                     wg_out=$("$xray_bin" wg 2> /dev/null)
-                    secret_key=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
-                    wg_pub=$(printf '%s\n' "$wg_out" | awk -F': ' '/^Public[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
+                    secret_key=$(printf '%s\n' "$wg_out" | ProxyExtractXrayPrivKey | tr -d '\r\n ')
+                    wg_pub=$(printf '%s\n' "$wg_out" | ProxyExtractXrayPubKey | tr -d '\r\n ')
                     if [ -n "$secret_key" ]
                     then
                         Println "$(eval_gettext "\$info 已自动生成 WireGuard secretKey: \${green}\${secret_key}\${normal}")\n"
@@ -264,7 +290,7 @@ XrayAddInbound()
             }' --arg sk "$secret_key" --arg mtu "$mtu" --arg pk "$peer_pub" --arg ips "$allowed_ip"
         ;;
         tun)
-            local tun_name tun_mtu tun_gw tun_dns
+            local tun_name tun_mtu tun_gw tun_dns tun_auto_iface tun_auto_table
             inquirer text_input "$(gettext "TUN 网卡名称")" tun_name "xray0"
             inquirer text_input "MTU" tun_mtu "1500"
             if [[ ! $tun_mtu =~ ^[0-9]+$ ]]
@@ -274,12 +300,21 @@ XrayAddInbound()
             fi
             inquirer text_input "$(gettext "gateway (逗号分隔, 可留空)")" tun_gw ""
             inquirer text_input "$(gettext "dns (逗号分隔, 可留空)")" tun_dns ""
+            inquirer text_input "$(gettext "autoOutboundsInterface (如 auto 或网卡名, 可留空)")" tun_auto_iface ""
+            inquirer text_input "$(gettext "autoSystemRoutingTable (路由表编号, 可留空)")" tun_auto_table ""
+            if [ -n "$tun_auto_table" ] && [[ ! $tun_auto_table =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error autoSystemRoutingTable 必须为非负整数")\n"
+                return 1
+            fi
             JQs build settings_json '{
                 "name": $name,
                 "mtu": ($mtu | tonumber),
                 "gateway": (if $gw != "" then ($gw | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else null end),
-                "dns": (if $dns != "" then ($dns | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else null end)
-            }' --arg name "$tun_name" --arg mtu "$tun_mtu" --arg gw "$tun_gw" --arg dns "$tun_dns"
+                "dns": (if $dns != "" then ($dns | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else null end),
+                "autoOutboundsInterface": (if $iface != "" then $iface else null end),
+                "autoSystemRoutingTable": (if $rt != "" then ($rt | tonumber) else null end)
+            }' --arg name "$tun_name" --arg mtu "$tun_mtu" --arg gw "$tun_gw" --arg dns "$tun_dns" --arg iface "$tun_auto_iface" --arg rt "$tun_auto_table"
         ;;
         masque)
             local m_addr m_mtu m_pass m_email
@@ -306,7 +341,11 @@ XrayAddInbound()
     esac
 
     local network="" security=""
-    if [ "$protocol" == "masque" ]
+    if [ "$protocol" == "tun" ] || [ "$protocol" == "wireguard" ]
+    then
+        network=""
+        security=""
+    elif [ "$protocol" == "masque" ]
     then
         network="masque"
         security="tls"
@@ -384,8 +423,8 @@ XrayAddInbound()
             then
                 local x25519_out r_pub=""
                 x25519_out=$("$xray_bin" x25519 2> /dev/null)
-                r_pk=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^Private[ ]?[Kk]ey:/ {print $2; exit}' | tr -d '\r\n ')
-                r_pub=$(printf '%s\n' "$x25519_out" | awk -F': ' '/^(Password|Public[ ]?[Kk]ey):/ {print $2; exit}' | tr -d '\r\n ')
+                r_pk=$(printf '%s\n' "$x25519_out" | ProxyExtractXrayPrivKey | tr -d '\r\n ')
+                r_pub=$(printf '%s\n' "$x25519_out" | ProxyExtractXrayPubKey | tr -d '\r\n ')
                 if [ -n "$r_pk" ]
                 then
                     Println "$(eval_gettext "\$info 已自动生成 REALITY privateKey: \${green}\${r_pk}\${normal}")\n"
@@ -404,7 +443,7 @@ XrayAddInbound()
         inquirer text_input "$(gettext "REALITY shortIds (逗号分隔, 留空默认为 [\"\"])")" r_sid ""
     fi
 
-    local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+    local yn_opts=( "$i18n_no" "$i18n_yes" )
     local sniff_idx=1 route_only_idx=0
     inquirer list_input_index "$(gettext "开启流量探测 sniffing")" yn_opts sniff_idx
     if [ "$sniff_idx" -eq 1 ]
@@ -488,11 +527,61 @@ XrayAddInbound()
         ' <<< "$inbound_json")
     fi
 
+    local target_ver=""
+    target_ver=$(ProxyGetTargetVersion "xray")
+    local has_users=0 has_method=0 has_rewrite=0
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "inboundUsersKey" && has_users=1
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "streamMethodKey" && has_method=1
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "dnsRewriteKeys" && has_rewrite=1
+
+    inbound_json=$($JQ_FILE -c \
+        --arg proto "$protocol" \
+        --argjson has_users "$has_users" \
+        --argjson has_method "$has_method" \
+        --argjson has_rewrite "$has_rewrite" '
+        if $proto == "tun" then
+            del(.listen, .port, .streamSettings)
+        elif $proto == "wireguard" then
+            del(.streamSettings)
+        else . end
+        | if (.settings | type) == "object" and ($proto == "vless" or $proto == "vmess" or $proto == "trojan" or $proto == "hysteria" or $proto == "shadowsocks") then
+            ((.settings.users // .settings.clients) // null) as $u
+            | if $u == null then .
+              elif $has_users == 1 then .settings |= (del(.clients) | .users = $u)
+              else .settings |= (del(.users) | .clients = $u) end
+          elif (.settings | type) == "object" and ($proto == "socks" or $proto == "http") then
+            ((.settings.users // .settings.accounts) // null) as $u
+            | if $u == null then .
+              elif $has_users == 1 then .settings |= (del(.accounts) | .users = $u)
+              else .settings |= (del(.users) | .accounts = $u) end
+          elif (.settings | type) == "object" and ($proto == "tunnel" or $proto == "dokodemo-door") then
+            if $has_rewrite == 1 then
+                .settings |= (
+                    (if has("address") then (if has("rewriteAddress") | not then .rewriteAddress = .address else . end) | del(.address) else . end)
+                    | (if has("port") then (if has("rewritePort") | not then .rewritePort = .port else . end) | del(.port) else . end)
+                    | (if has("network") then (if has("allowedNetwork") | not then .allowedNetwork = .network else . end) | del(.network) else . end)
+                )
+            else
+                .settings |= (
+                    (if has("rewriteAddress") then .address = .rewriteAddress | del(.rewriteAddress) else . end)
+                    | (if has("rewritePort") then .port = .rewritePort | del(.rewritePort) else . end)
+                    | (if has("allowedNetwork") then .network = .allowedNetwork | del(.allowedNetwork) else . end)
+                )
+            end
+          else . end
+        | if (.streamSettings | type) == "object" then
+            (.streamSettings.method // .streamSettings.network // null) as $m
+            | if $m == null then .
+              elif $has_method == 1 then .streamSettings |= (del(.network) | .method = $m)
+              else .streamSettings |= (del(.method) | .network = $m) end
+          else . end
+    ' <<< "$inbound_json")
+
     if ! ProxyAddBound "$X_CONFIG" inbounds "$inbound_json"
     then
-        Println "$(eval_gettext "\$error 添加 Xray 入站 \${tag} 失败")\n"
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 添加 Xray 入站 \${tag} 失败: \$err_detail")\n"
         return 1
     fi
-    ProxyRestartIfActive xray
     Println "$(eval_gettext "\$info 已添加 Xray 入站 \${green}\${tag}\${normal} (\${protocol})")\n"
 }

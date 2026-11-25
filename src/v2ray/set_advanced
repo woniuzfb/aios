@@ -1,0 +1,215 @@
+V2raySetAdvanced()
+{
+    local actions=(
+        "$(gettext "设置日志级别 (log)")"
+        "$(gettext "配置 API 与统计 (api / stats)")"
+        "$(gettext "配置 FakeDNS (fakedns)")"
+        "$(gettext "配置 Observatory 测速 (observatory)")"
+        "$(gettext "配置 Services TUN (services.tun)")"
+        "$(gettext "配置浏览器转发 (browserForwarder)")"
+        "$(gettext "配置 BurstObservatory 测速 (services.burstObservatory)")"
+    )
+    local act_idx=0
+    inquirer list_input_index "$(gettext "选择 V2Ray 高级配置项")" actions act_idx
+
+    case "$act_idx" in
+        0)
+            local levels=( "debug" "info" "warning" "error" "none" )
+            local lv_idx=2
+            inquirer list_input_index "$(gettext "选择日志级别 loglevel")" levels lv_idx
+            local lv="${levels[lv_idx]}"
+            local v2_fmt=""
+            v2_fmt=$(ProxyGetV2rayFormat)
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                local lv_v5="Warning"
+                case "$lv" in
+                    debug) lv_v5="Debug" ;;
+                    info) lv_v5="Info" ;;
+                    warning) lv_v5="Warning" ;;
+                    error) lv_v5="Error" ;;
+                    none) lv_v5="None" ;;
+                esac
+
+                if ! ProxyMutateConfigTx "v2ray" '.log = ((.log // {}) | .error = ((.error // {type: "Console"}) + {level: $lv}))' --arg lv "$lv_v5"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新 V2Ray 日志级别失败: \$err_detail")\n"
+                    return 1
+                fi
+
+                Println "$(eval_gettext "\$info 已更新 V2Ray jsonv5 log.error.level 为 \$lv_v5")\n"
+            else
+                if ! ProxyMutateConfigTx "v2ray" '.log = ((.log // {}) + {loglevel: $lv})' --arg lv "$lv"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新 V2Ray 日志级别失败: \$err_detail")\n"
+                    return 1
+                fi
+
+                Println "$(eval_gettext "\$info 已更新 V2Ray loglevel 为 \$lv")\n"
+            fi
+        ;;
+        1)
+            local api_tag=""
+            inquirer text_input "$(gettext "API tag")" api_tag "api"
+
+            if ! ProxyMutateConfigTx "v2ray" '
+                .api = {tag: $tag, services: ["StatsService", "HandlerService", "LoggerService"]}
+                | .stats = (.stats // {})
+            ' --arg tag "$api_tag"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 V2Ray api 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray api 与 stats")\n"
+        ;;
+        2)
+            local ip_pool="" pool_size=""
+            inquirer text_input "$(gettext "FakeDNS ipPool")" ip_pool "198.18.0.0/15"
+            inquirer text_input "$(gettext "FakeDNS poolSize")" pool_size "65535"
+
+            if [[ ! "$pool_size" =~ ^[0-9]+$ ]] || [ "$pool_size" -le 0 ]
+            then
+                Println "$(eval_gettext "\$error FakeDNS poolSize 必须为正整数")\n"
+                return 1
+            fi
+
+            if ! ProxyMutateConfigTx "v2ray" '.fakedns = [{ipPool: $pool, poolSize: ($sz | tonumber)}]' --arg pool "$ip_pool" --arg sz "$pool_size"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 FakeDNS 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray fakedns")\n"
+        ;;
+        3)
+            local probe_url="" probe_interval="" selectors=""
+            inquirer text_input "$(gettext "探测 URL probeURL")" probe_url "https://www.gstatic.com/generate_204"
+            inquirer text_input "$(gettext "探测间隔 probeInterval (如 1m)")" probe_interval "1m"
+            inquirer text_input "$(gettext "目标出站前缀 subjectSelector (逗号分隔)")" selectors "proxy"
+
+            if ! ProxyMutateConfigTx "v2ray" '
+                .observatory = {
+                    subjectSelector: ($sel | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+                    probeURL: $url,
+                    probeInterval: $intv
+                }
+            ' --arg sel "$selectors" --arg url "$probe_url" --arg intv "$probe_interval"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 observatory 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray observatory")\n"
+        ;;
+        4)
+            local v2_ver="" v2_fmt=""
+            v2_ver=$(ProxyGetTargetVersion "v2ray")
+            v2_fmt=$(ProxyGetV2rayFormat)
+
+            if ! ProxyCoreHasFeature "v2ray" "$v2_ver" "$v2_fmt" "v5ServicesTun"
+            then
+                Println "$(eval_gettext "\$error 当前 V2Ray (\$v2_ver / \$v2_fmt) 不支持 services.tun, 请先切换为 jsonv5 格式并使用支持的内核版本")\n"
+                return 1
+            fi
+
+            local tun_name="" tun_mtu=""
+            inquirer text_input "$(gettext "TUN 网卡名称")" tun_name "tun0"
+            inquirer text_input "$(gettext "TUN MTU")" tun_mtu "1500"
+
+            if [[ ! "$tun_mtu" =~ ^[0-9]+$ ]] || [ "$tun_mtu" -le 0 ]
+            then
+                Println "$(eval_gettext "\$error TUN MTU 必须为正整数")\n"
+                return 1
+            fi
+
+            if ! ProxyMutateConfigTx "v2ray" '
+                .services = ((.services // {}) + {
+                    tun: {
+                        name: $name,
+                        mtu: ($mtu | tonumber),
+                        tag: "tun-in",
+                        ips: [{ip: [198, 18, 0, 1], prefix: 15}],
+                        routes: [{ip: [0, 0, 0, 0], prefix: 0}],
+                        enablePromiscuousMode: true,
+                        enableSpoofing: true,
+                        sniffingSettings: {enabled: true, destinationOverride: ["http", "tls"]}
+                    }
+                })
+            ' --arg name "$tun_name" --arg mtu "$tun_mtu"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 services.tun 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray services.tun")\n"
+        ;;
+        5)
+            local bf_addr="" bf_port=""
+            inquirer text_input "$(gettext "BrowserForwarder 监听地址 listenAddr")" bf_addr "127.0.0.1"
+            inquirer text_input "$(gettext "BrowserForwarder 监听端口 listenPort")" bf_port "8088"
+
+            if [[ ! "$bf_port" =~ ^[0-9]+$ ]] || [ "$bf_port" -lt 1 ] || [ "$bf_port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error listenPort 必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            if ! ProxyMutateConfigTx "v2ray" '.browserForwarder = {listenAddr: $addr, listenPort: ($port | tonumber)}' \
+                --arg addr "$bf_addr" --arg port "$bf_port"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 browserForwarder 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray browserForwarder")\n"
+        ;;
+        6)
+            local bo_selectors="" bo_dest="" bo_conn="" bo_interval="" bo_sampling="" bo_timeout=""
+            inquirer text_input "$(gettext "目标出站前缀 subjectSelector (逗号分隔)")" bo_selectors "proxy"
+            inquirer text_input "$(gettext "探测目标 URL destination")" bo_dest "https://www.gstatic.com/generate_204"
+            inquirer text_input "$(gettext "连通性检测 URL connectivity (可留空)")" bo_conn ""
+            inquirer text_input "$(gettext "探测间隔 interval (纳秒 int64, 默认 300000000000 即 5m)")" bo_interval "300000000000"
+            inquirer text_input "$(gettext "采样次数 sampling (正整数)")" bo_sampling "3"
+            inquirer text_input "$(gettext "单次超时 timeout (纳秒 int64, 默认 5000000000 即 5s)")" bo_timeout "5000000000"
+
+            if [[ ! "$bo_interval" =~ ^[0-9]+$ ]] || [[ ! "$bo_sampling" =~ ^[0-9]+$ ]] || [[ ! "$bo_timeout" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error interval、sampling 与 timeout 必须为非负整数")\n"
+                return 1
+            fi
+
+            if ! ProxyMutateConfigTx "v2ray" '
+                .services = ((.services // {}) + {
+                    burstObservatory: {
+                        subjectSelector: ($sel | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+                        pingConfig: (
+                            {
+                                destination: $dest,
+                                interval: ($intv | tonumber),
+                                sampling: ($samp | tonumber),
+                                timeout: ($tout | tonumber)
+                            }
+                            + (if $conn != "" then {connectivity: $conn} else {} end)
+                        )
+                    }
+                })
+            ' --arg sel "$bo_selectors" --arg dest "$bo_dest" --arg conn "$bo_conn" \
+                --arg intv "$bo_interval" --arg samp "$bo_sampling" --arg tout "$bo_timeout"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 services.burstObservatory 失败: \$err_detail")\n"
+                return 1
+            fi
+
+            Println "$(eval_gettext "\$info 已更新 V2Ray services.burstObservatory")\n"
+        ;;
+    esac
+}

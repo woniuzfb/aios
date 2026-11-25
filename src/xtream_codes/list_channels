@@ -2,16 +2,39 @@ XtreamCodesListChnls()
 {
     FFmpegInstall
 
-    while true 
+    local lbl_input_server_no lbl_select_domain lbl_default_back lbl_mac_addr lbl_in_use lbl_select_mac lbl_acc_expire lbl_genre_prompt lbl_input_chnl_no lbl_search_result lbl_return lbl_err_retry lbl_screenshot lbl_input_ss_pos lbl_return_err lbl_retry lbl_add_chnl lbl_add_replace_src lbl_replace lbl_select_replace_src lbl_push_flv
+    lbl_input_server_no=$(gettext "请输入服务器的序号")
+    lbl_select_domain=$(gettext "选择域名")
+    lbl_default_back=$(gettext "(默认: 回到上级): ")
+    lbl_mac_addr=$(gettext "mac 地址")
+    lbl_in_use=$(gettext "使用中")
+    lbl_select_mac=$(gettext "请选择 mac")
+    lbl_acc_expire=$(gettext "账号到期时间")
+    lbl_genre_prompt=$(gettext "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址")
+    lbl_input_chnl_no=$(gettext "输入频道序号: ")
+    lbl_search_result=$(gettext "搜索结果")
+    lbl_return=$(gettext "返回")
+    lbl_err_retry=$(gettext "错误, 请重试")
+    lbl_screenshot=$(gettext "截图")
+    lbl_input_ss_pos=$(gettext "输入截图位置")
+    lbl_return_err=$(gettext "返回错误")
+    lbl_retry=$(gettext "请重试")
+    lbl_add_chnl=$(gettext "是否添加此频道")
+    lbl_add_replace_src=$(gettext "是否 添加/替换 现有频道直播源")
+    lbl_replace=$(gettext "替换")
+    lbl_select_replace_src=$(gettext "选择替换的直播源")
+    lbl_push_flv=$(gettext "是否推流 flv")
+
+    while true
     do
-        if [ -n "${xtream_codes_list:-}" ] 
+        if [ -n "${xtream_codes_list:-}" ]
         then
             Println "$xtream_codes_list"
         else
             XtreamCodesList mac
         fi
 
-        Println "$(gettext "请输入服务器的序号")"
+        Println "$lbl_input_server_no"
         while read -p "$i18n_default_cancel" server_num
         do
             case $server_num in
@@ -19,7 +42,7 @@ XtreamCodesListChnls()
                 ;;
                 *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
-                *) 
+                *)
                     if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
                     then
                         ips_index=${ips_mac[server_num-1]}
@@ -33,7 +56,7 @@ XtreamCodesListChnls()
 
         domain=${new_domains[ips_index]}
 
-        if [[ $domain == *"|"* ]] 
+        if [[ $domain == *"|"* ]]
         then
             IFS="|" read -ra domains <<< "$domain"
             domains_list=""
@@ -44,15 +67,15 @@ XtreamCodesListChnls()
             done
             Println "$domains_list"
 
-            Println "$(gettext "选择域名")"
-            while read -p "$(gettext "(默认: 回到上级): ")" domains_num
+            Println "$lbl_select_domain"
+            while read -p "$lbl_default_back" domains_num
             do
                 case $domains_num in
                     ""|a) continue 2
                     ;;
                     *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                     ;;
-                    *) 
+                    *)
                         if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
                         then
                             domain=${domains[domains_num-1]}
@@ -71,7 +94,7 @@ XtreamCodesListChnls()
         macs=()
         for account in ${accounts[@]+"${accounts[@]}"}
         do
-            if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+            if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]
             then
                 macs+=("$account")
             fi
@@ -81,17 +104,17 @@ XtreamCodesListChnls()
         XtreamCodesGetChnls
 
         macs_count=${#macs[@]}
-        if [ "$macs_count" -gt 1 ] 
+        if [ "$macs_count" -gt 1 ]
         then
-            macs_list="$(gettext "mac 地址"): \n\n"
+            macs_list="$lbl_mac_addr: \n\n"
             for((i=0;i<macs_count;i++));
             do
                 using=""
                 for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
-                    if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
+                    if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ]
                     then
-                        using="${red}[$(gettext "使用中")]${normal}"
+                        using="${red}[$lbl_in_use]${normal}"
                         break
                     fi
                 done
@@ -99,8 +122,8 @@ XtreamCodesListChnls()
             done
             Println "$macs_list"
 
-            Println "$(gettext "请选择 mac")"
-            while read -p "$(gettext "(默认: 回到上级): ")" macs_num
+            Println "$lbl_select_mac"
+            while read -p "$lbl_default_back" macs_num
             do
                 case $macs_num in
                     ""|a) continue 2
@@ -267,17 +290,17 @@ XtreamCodesListChnls()
             then
                 genres_list_pages=()
 
-                while true 
+                while true
                 do
-                    Println "$genres_list\n\n${green}$(gettext "账号到期时间"):${normal} $exp_date\n"
+                    Println "$genres_list\n\n${green}$lbl_acc_expire:${normal} $exp_date\n"
 
-                    if [ "${return_err:-0}" -eq 1 ] 
+                    if [ "${return_err:-0}" -eq 1 ]
                     then
                         return_err=0
                         Println "$(eval_gettext "\$error 返回错误, 请重试")"
                     fi
 
-                    Println "$(gettext "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址")"
+                    Println "$lbl_genre_prompt"
                     while read -p "$i18n_default_cancel" genres_num 
                     do
                         case "$genres_num" in
@@ -425,27 +448,27 @@ XtreamCodesListChnls()
                             fi
                         fi
 
-                        echo && while read -p "$(gettext "输入频道序号: ")" xc_chnls_num 
+                        echo && while read -p "$lbl_input_chnl_no" xc_chnls_num
                         do
-                            if [[ $xc_chnls_num =~ ^s\ * ]] 
+                            if [[ $xc_chnls_num =~ ^s\ * ]]
                             then
                                 search_phrase=${xc_chnls_num#*s }
                                 Trim search_phrase
-                                if [ -z "$search_phrase" ] 
+                                if [ -z "$search_phrase" ]
                                 then
                                     Println "$(eval_gettext "\$error 搜索内容不能为空")\n"
                                 else
                                     SearchXtreamCodesChnls
                                 fi
 
-                                if [ -n "$search_result" ] 
+                                if [ -n "$search_result" ]
                                 then
-                                    Println "$(gettext "搜索结果"):\n\n$search_result"
+                                    Println "$lbl_search_result:\n\n$search_result"
                                 else
                                     Println "$(eval_gettext "\$error 没有搜索结果")\n"
                                 fi
                                 continue
-                            elif [[ $xc_chnls_num =~ ^p\ [0-9]+ ]] 
+                            elif [[ $xc_chnls_num =~ ^p\ [0-9]+ ]]
                             then
                                 if [ "${xc_chnls_num#* }" -le "$pages" ]
                                 then
@@ -493,7 +516,7 @@ XtreamCodesListChnls()
                             esac
                         done
 
-                        if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                        if [ "$use_proxy_yn" == "$i18n_yes" ]
                         then
                             stream_link="$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}"
                             Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
@@ -506,11 +529,11 @@ XtreamCodesListChnls()
                                 --cookie "$cookies" "$create_link_url" \
                                 | $JQ_FILE -r '.js.cmd') || true
 
-                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
+                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]]
                             then
                                 stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                             else
-                                Println "$error $(gettext "返回") cmd: ${cmd:-$(gettext "无")} $(gettext "错误, 请重试")"
+                                Println "$error $lbl_return cmd: ${cmd:-$i18n_none} $lbl_err_retry"
                                 continue
                             fi
                             stream_link=${stream_link// /}
@@ -524,14 +547,14 @@ XtreamCodesListChnls()
                         printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
                         echo
-                        inquirer list_input_index "$(gettext "截图")" ny_options ny_index
+                        inquirer list_input_index "$lbl_screenshot" ny_options ny_index
 
-                        if [[ $ny_index -eq 1 ]] 
+                        if [[ $ny_index -eq 1 ]]
                         then
                             Println "$(eval_gettext "\$tip 格式如 HH:MM:SS")"
-                            inquirer text_input "$(gettext "输入截图位置")" ss 00:00:03
+                            inquirer text_input "$lbl_input_ss_pos" ss 00:00:03
 
-                            if TMP_FILE=$(mktemp -q) 
+                            if TMP_FILE=$(mktemp -q)
                             then
                                 chmod +r "$TMP_FILE"
                             else
@@ -546,7 +569,7 @@ XtreamCodesListChnls()
                             $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                            if [ ! -x "$IMGCAT_FILE" ] 
+                            if [ ! -x "$IMGCAT_FILE" ]
                             then
                                 ImgcatInstall
                             fi
@@ -570,10 +593,10 @@ XtreamCodesListChnls()
                                 -H "User-Agent: $user_agent" \
                                 --cookie "$cookies" \
                                 "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
-                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]]
                             then
                                 Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '$(StripSuffix "$headers" 4)' --cookie '$cookies'"
-                                Println "$error $(gettext "返回错误")[ stream_link: ${stream_link:-$(gettext "无")} ], $(gettext "请重试")"
+                                Println "$error $lbl_return_err[ stream_link: ${stream_link:-$i18n_none} ], $lbl_retry"
                                 continue
                             fi
 
@@ -584,9 +607,9 @@ XtreamCodesListChnls()
                             printf -v headers_command '%b' "$Authorization: Bearer $access_token"
                             printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                            if [[ $ny_index -eq 1 ]] 
+                            if [[ $ny_index -eq 1 ]]
                             then
-                                if TMP_FILE=$(mktemp -q) 
+                                if TMP_FILE=$(mktemp -q)
                                 then
                                     chmod +r "$TMP_FILE"
                                 else
@@ -616,12 +639,12 @@ XtreamCodesListChnls()
                         if [ "$EXIT_STATUS" -eq 0 ]
                         then
                             echo
-                            inquirer list_input "$(gettext "是否添加此频道")" ny_options add_channel_yn
+                            inquirer list_input "$lbl_add_chnl" ny_options add_channel_yn
                             if [ "$add_channel_yn" == "$i18n_yes" ]
                             then
-                                if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                                if [ "$use_proxy_yn" == "$i18n_yes" ]
                                 then
-                                    if [[ $stream_link =~ cmd= ]] 
+                                    if [[ $stream_link =~ cmd= ]]
                                     then
                                         headers=""
                                         headers_command=""
@@ -634,7 +657,7 @@ XtreamCodesListChnls()
                                 stream_links=("$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address")
 
                                 echo
-                                inquirer list_input "$(gettext "是否 添加/替换 现有频道直播源")" ny_options add_channel_yn
+                                inquirer list_input "$lbl_add_replace_src" ny_options add_channel_yn
 
                                 if [ "$add_channel_yn" == "$i18n_yes" ]
                                 then
@@ -649,17 +672,17 @@ XtreamCodesListChnls()
                                         ListChannel
 
                                         echo
-                                        change_options=( "$(gettext "添加")" "$(gettext "替换")" )
+                                        change_options=( "$i18n_add" "$lbl_replace" )
                                         inquirer list_input_index "$(eval_gettext "如何修改频道 [ \$chnl_channel_name ]")" change_options change_options_index
 
-                                        if [ "$change_options_index" -eq 0 ] 
+                                        if [ "$change_options_index" -eq 0 ]
                                         then
                                             jq_pre=true
                                             jq_path='["channels",'"$chnls_index"',"stream_link"]'
                                             JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
                                         else
                                             echo
-                                            inquirer list_input_index "$(gettext "选择替换的直播源")" chnl_stream_links chnl_stream_links_index
+                                            inquirer list_input_index "$lbl_select_replace_src" chnl_stream_links chnl_stream_links_index
 
                                             jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
                                             JQ update "$CHANNELS_FILE" "${stream_links[0]}"
@@ -669,7 +692,7 @@ XtreamCodesListChnls()
                                     done
                                 else
                                     echo
-                                    inquirer list_input "$(gettext "是否推流 flv")" ny_options add_channel_flv_yn
+                                    inquirer list_input "$lbl_push_flv" ny_options add_channel_flv_yn
 
                                     if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                                     then

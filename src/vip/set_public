@@ -8,7 +8,7 @@ VipSetPublicRoot()
     fi
     jq_path='["config","public_root"]'
     JQ update "$VIP_FILE" "$vip_public_root"
-    Println "  $(gettext "VIP 公开目录"): ${green} ${vip_public_root:-$(gettext "无")} ${normal}\n"
+    Println "  $(gettext "VIP 公开目录"): ${green} ${vip_public_root:-$i18n_none} ${normal}\n"
 }
 
 VipSetPublicHost()

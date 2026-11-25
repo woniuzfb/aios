@@ -1,0 +1,1649 @@
+ProxyEnsureDirs()
+{
+    mkdir -p \
+        "$PROXY_ROOT" \
+        "$PROXY_CORES_ROOT/xray" \
+        "$PROXY_CORES_ROOT/v2ray" \
+        "$PROXY_GEODATA_ROOT" \
+        "$PROXY_XDG_ROOT" \
+        "$PROXY_TMP_ROOT" \
+        "$X_ROOT" "$X_BACKUP_ROOT" "$X_LOG_ROOT" \
+        "$V2_ROOT" "$V2_BACKUP_ROOT" "$V2_LOG_ROOT" \
+        "$AIOS_PREFIX/bin"
+
+    if [ ! -s "$PROXY_CORES_MANIFEST" ]
+    then
+        printf '{"schemaVersion":1,"cores":{"xray":{"current":"","versions":{}},"v2ray":{"current":"","versions":{}}}}\n' > "$PROXY_CORES_MANIFEST"
+    fi
+
+    if [ ! -s "$X_META" ]
+    then
+        printf '{"core":"xray","format":"json","target_version":"auto"}\n' > "$X_META"
+    fi
+
+    if [ ! -s "$V2_META" ]
+    then
+        printf '{"core":"v2ray","format":"jsonv4","target_version":"auto"}\n' > "$V2_META"
+    fi
+
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ]
+    then
+        local nologin_shell="/usr/sbin/nologin"
+        if [ ! -x "$nologin_shell" ] && [ -x /sbin/nologin ]
+        then
+            nologin_shell="/sbin/nologin"
+        elif [ ! -x "$nologin_shell" ]
+        then
+            nologin_shell="/bin/false"
+        fi
+
+        local svc_user=""
+        for svc_user in aios-xray aios-v2ray
+        do
+            if ! id -u "$svc_user" > /dev/null 2>&1
+            then
+                if command -v useradd > /dev/null 2>&1
+                then
+                    if ! useradd -r -M -s "$nologin_shell" "$svc_user"
+                    then
+                        Println "$(eval_gettext "\$error 创建系统用户失败: \$svc_user")\n"
+                        return 1
+                    fi
+                elif command -v adduser > /dev/null 2>&1
+                then
+                    if adduser --help 2>&1 | grep -q '\--group '
+                    then
+                        if ! adduser "$svc_user" --system --group --no-create-home --shell "$nologin_shell"
+                        then
+                            Println "$(eval_gettext "\$error 创建系统用户失败: \$svc_user")\n"
+                            return 1
+                        fi
+                    else
+                        if ! adduser "$svc_user" --system --no-create-home
+                        then
+                            Println "$(eval_gettext "\$error 创建系统用户失败: \$svc_user")\n"
+                            return 1
+                        fi
+
+                        if command -v usermod > /dev/null 2>&1
+                        then
+                            usermod -s "$nologin_shell" "$svc_user" || true
+                        fi
+                    fi
+                else
+                    Println "$(eval_gettext "\$error 缺少 useradd/adduser 命令, 无法创建系统用户: \$svc_user")\n"
+                    return 1
+                fi
+            fi
+        done
+
+        if id -u aios-xray > /dev/null 2>&1
+        then
+            chown root:aios-xray "$X_ROOT" || return 1
+            chmod 750 "$X_ROOT" || return 1
+            chown -R aios-xray:aios-xray "$X_LOG_ROOT" || return 1
+            chmod 750 "$X_LOG_ROOT" || return 1
+        fi
+
+        if id -u aios-v2ray > /dev/null 2>&1
+        then
+            chown root:aios-v2ray "$V2_ROOT" || return 1
+            chmod 750 "$V2_ROOT" || return 1
+            chown -R aios-v2ray:aios-v2ray "$V2_LOG_ROOT" || return 1
+            chmod 750 "$V2_LOG_ROOT" || return 1
+        fi
+
+        chmod 700 "$X_BACKUP_ROOT" "$V2_BACKUP_ROOT" || return 1
+        chmod 600 "$X_META" "$V2_META" || return 1
+    fi
+}
+
+ProxyDetectArch()
+{
+    local core="$1"
+    local os_name arch_name
+    os_name=$(uname -s | tr '[:upper:]' '[:lower:]')
+    arch_name=$(uname -m)
+
+    if [ "$os_name" == "darwin" ]
+    then
+        case "$arch_name" in
+            arm64|aarch64)
+                printf '%s' "macos-arm64-v8a"
+            ;;
+            x86_64|amd64)
+                printf '%s' "macos-64"
+            ;;
+            *)
+                return 1
+            ;;
+        esac
+        return 0
+    fi
+
+    if [ "$os_name" == "linux" ]
+    then
+        case "$arch_name" in
+            x86_64|amd64)
+                printf '%s' "linux-64"
+            ;;
+            i386|i686)
+                printf '%s' "linux-32"
+            ;;
+            aarch64|arm64)
+                printf '%s' "linux-arm64-v8a"
+            ;;
+            armv7l)
+                printf '%s' "linux-arm32-v7a"
+            ;;
+            armv6l)
+                printf '%s' "linux-arm32-v6"
+            ;;
+            armv5*)
+                printf '%s' "linux-arm32-v5"
+            ;;
+            s390x)
+                if [ "$core" == "xray" ]
+                then
+                    printf '%s' "linux-s390x"
+                else
+                    return 1
+                fi
+            ;;
+            *)
+                return 1
+            ;;
+        esac
+        return 0
+    fi
+
+    return 1
+}
+
+ProxyVerifyDgstSha256()
+{
+    local zip_file="$1"
+    local dgst_file="$2"
+
+    if [ ! -s "$zip_file" ] || [ ! -s "$dgst_file" ]
+    then
+        return 1
+    fi
+
+    local expected="" actual=""
+    expected=$(awk 'toupper($0) ~ /SHA2-?256/ {print tolower($NF); exit}' "$dgst_file" 2> /dev/null || true)
+    if [ -z "$expected" ]
+    then
+        expected=$(awk '{print tolower($1); exit}' "$dgst_file" 2> /dev/null || true)
+    fi
+
+    if [[ ! "$expected" =~ ^[0-9a-f]{64}$ ]]
+    then
+        return 1
+    fi
+
+    actual=$(ProxySha256File "$zip_file") || return 1
+    actual=$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')
+
+    [ "$actual" == "$expected" ]
+}
+
+ProxyWriteServiceUnit()
+{
+    local core="$1"
+    local svc_id="aios-${core}"
+    local bin="" cfg_file="" log_dir="" format="json"
+
+    if [ "$core" == "xray" ]
+    then
+        bin="$AIOS_XRAY_BIN"
+        cfg_file="$X_CONFIG"
+        log_dir="$X_LOG_ROOT"
+    elif [ "$core" == "v2ray" ]
+    then
+        bin="$AIOS_V2RAY_BIN"
+        cfg_file="$V2_CONFIG"
+        log_dir="$V2_LOG_ROOT"
+        format=$(ProxyGetV2rayFormat)
+    else
+        return 1
+    fi
+
+    local needs_bind=0 needs_tun=0
+    read -r needs_bind needs_tun <<< "$(ProxyConfigNeedsCaps "$cfg_file" "$core")"
+
+    if [ "$needs_tun" -eq 1 ] && [ "${dist:-}" != "mac" ]
+    then
+        if [ ! -c /dev/net/tun ] || [ ! -r /dev/net/tun ] || [ ! -w /dev/net/tun ]
+        then
+            Println "$(eval_gettext "\$error 缺少或无法读写 /dev/net/tun 设备, 无法启用 TUN 模式")\n"
+            return 1
+        fi
+    fi
+
+    ServiceResolveLabel "$svc_id"
+
+    if [ "$dist" == "mac" ]
+    then
+        mkdir -p "$HOME/Library/LaunchAgents" "$log_dir" 2> /dev/null || true
+        local args_xml=""
+        if [ "$core" == "xray" ]
+        then
+            args_xml="        <string>${bin}</string>
+        <string>run</string>
+        <string>-c</string>
+        <string>${cfg_file}</string>"
+        else
+            local cli_fmt
+            cli_fmt=$(ProxyV2rayFormatCliValue "$format")
+            args_xml="        <string>${bin}</string>
+        <string>run</string>
+        <string>-format</string>
+        <string>${cli_fmt}</string>
+        <string>-c</string>
+        <string>${cfg_file}</string>"
+        fi
+
+        local env_xml=""
+        if [ "$core" == "xray" ]
+        then
+            env_xml="        <key>XRAY_LOCATION_ASSET</key>
+        <string>${PROXY_GEODATA_CURRENT}</string>"
+        else
+            ProxyEnsureXdgLink "$PROXY_GEODATA_CURRENT" "$PROXY_XDG_ROOT" || true
+            env_xml="        <key>V2RAY_LOCATION_ASSET</key>
+        <string>${PROXY_GEODATA_CURRENT}</string>
+        <key>XDG_DATA_HOME</key>
+        <string>${PROXY_XDG_ROOT}</string>
+        <key>XDG_DATA_DIRS</key>
+        <string>${PROXY_XDG_ROOT}</string>
+        <key>V2RAY_CONF_GEOLOADER</key>
+        <string>memconservative</string>"
+        fi
+
+        cat > "$service_file" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${service_label}</string>
+    <key>ProgramArguments</key>
+    <array>
+${args_xml}
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+${env_xml}
+    </dict>
+    <key>StandardOutPath</key>
+    <string>${log_dir}/stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>${log_dir}/stderr.log</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+EOF
+        return 0
+    fi
+
+    local caps=""
+    [ "$needs_bind" -eq 1 ] && caps="CAP_NET_BIND_SERVICE"
+    [ "$needs_tun" -eq 1 ] && caps="${caps:+$caps }CAP_NET_ADMIN"
+
+    local cap_block=""
+    if [ -n "$caps" ]
+    then
+        cap_block="AmbientCapabilities=${caps}
+CapabilityBoundingSet=${caps}"
+    fi
+
+    local exec_cmd="" env_block=""
+    if [ "$core" == "xray" ]
+    then
+        exec_cmd="${bin} run -c ${cfg_file}"
+        env_block="Environment=XRAY_LOCATION_ASSET=${PROXY_GEODATA_CURRENT}"
+    else
+        ProxyEnsureXdgLink "$PROXY_GEODATA_CURRENT" "$PROXY_XDG_ROOT" || true
+        local cli_fmt
+        cli_fmt=$(ProxyV2rayFormatCliValue "$format")
+        exec_cmd="${bin} run -format ${cli_fmt} -c ${cfg_file}"
+        env_block="Environment=V2RAY_LOCATION_ASSET=${PROXY_GEODATA_CURRENT}
+Environment=XDG_DATA_HOME=${PROXY_XDG_ROOT}
+Environment=XDG_DATA_DIRS=${PROXY_XDG_ROOT}
+Environment=V2RAY_CONF_GEOLOADER=memconservative"
+    fi
+
+    mkdir -p "${service_file%/*}" 2> /dev/null || true
+    cat > "$service_file" <<EOF
+[Unit]
+Description=AIOS Isolated ${core} Service
+After=syslog.target network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aios-${core}
+Group=aios-${core}
+${cap_block}
+${env_block}
+ExecStart=${exec_cmd}
+LimitNOFILE=65536
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    if command -v systemctl > /dev/null 2>&1
+    then
+        systemctl daemon-reload > /dev/null 2>&1 || true
+    fi
+}
+
+ProxySetupLogrotate()
+{
+    if [ "${dist:-}" == "mac" ] || [ ! -d /etc/logrotate.d ]
+    then
+        return 0
+    fi
+
+    cat > /etc/logrotate.d/aios-proxy <<EOF
+${X_LOG_ROOT}/*.log ${V2_LOG_ROOT}/*.log {
+    daily
+    size 50M
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
+EOF
+}
+
+ProxyCoreImport()
+{
+    local core="$1"
+    local src_bin="$2"
+    local source_label="${3:-local-import}"
+
+    ProxyEnsureDirs
+
+    if [ ! -f "$src_bin" ]
+    then
+        Println "$(eval_gettext "\$error 二进制文件不存在: \$src_bin")\n"
+        return 1
+    fi
+
+    chmod +x "$src_bin" 2> /dev/null || true
+    local info=""
+    if ! info=$(ProxyDetectBinaryInfo "$src_bin")
+    then
+        Println "$(eval_gettext "\$error 无法识别二进制版本: \$src_bin")\n"
+        return 1
+    fi
+
+    local detected_core="${info%%|*}"
+    local detected_ver="${info#*|}"
+    if [ "$detected_core" != "$core" ]
+    then
+        Println "$(eval_gettext "\$error 二进制内核不匹配: 期望 \$core, 实际为 \$detected_core")\n"
+        return 1
+    fi
+
+    if ! ProxyValidateSupportedVersion "$core" "$detected_ver"
+    then
+        Println "$(eval_gettext "\$error 不支持的 \$core 版本: \$detected_ver")\n"
+        return 1
+    fi
+
+    local tag="v${detected_ver}"
+    local slot_dir="${PROXY_CORES_ROOT}/${core}/${tag}"
+    local dst_bin="${slot_dir}/${core}"
+    mkdir -p "$slot_dir"
+
+    cp "$src_bin" "${dst_bin}.tmp.$$"
+    chmod 755 "${dst_bin}.tmp.$$"
+    mv -f "${dst_bin}.tmp.$$" "$dst_bin"
+
+    local sha256="" now_iso=""
+    sha256=$(ProxySha256File "$dst_bin")
+    now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || echo "")
+
+    local tmp_m="${PROXY_CORES_MANIFEST}.tmp.$$"
+    $JQ_FILE \
+        --arg core "$core" \
+        --arg tag "$tag" \
+        --arg ver "$detected_ver" \
+        --arg bin "${core}/${tag}/${core}" \
+        --arg sha "$sha256" \
+        --arg src "$source_label" \
+        --arg ts "$now_iso" \
+        '.cores[$core].versions[$tag] = {tag: $tag, version: $ver, binary: $bin, sha256: $sha, source: $src, installedAt: $ts}' \
+        "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"
+
+    local cur_link="${PROXY_CORES_ROOT}/${core}/current"
+    local bin_link=""
+    [ "$core" == "xray" ] && bin_link="$AIOS_XRAY_BIN" || bin_link="$AIOS_V2RAY_BIN"
+
+    if [ ! -L "$cur_link" ]
+    then
+        ProxyAtomicSymlinkSwap "$tag" "$cur_link"
+        local tmp_m2="${PROXY_CORES_MANIFEST}.tmp.$$"
+        $JQ_FILE --arg core "$core" --arg tag "$tag" '.cores[$core].current = $tag' "$PROXY_CORES_MANIFEST" > "$tmp_m2" && mv -f "$tmp_m2" "$PROXY_CORES_MANIFEST"
+    fi
+
+    if [ ! -L "$bin_link" ]
+    then
+        ProxyAtomicSymlinkSwap "${cur_link}/${core}" "$bin_link"
+    fi
+
+    printf '%s\n' "$tag"
+    return 0
+}
+
+ProxyCoreInstall()
+{
+    local core="$1"
+    local req_tag="${2:-}"
+
+    ProxyEnsureDirs
+
+    local repo="" asset_prefix="" default_tag=""
+    if [ "$core" == "xray" ]
+    then
+        repo="$XRAY_REPO"
+        asset_prefix="Xray"
+        default_tag="v${XRAY_LATEST_TESTED_VER}"
+    elif [ "$core" == "v2ray" ]
+    then
+        repo="$V2RAY_REPO"
+        asset_prefix="v2ray"
+        default_tag="v${V2RAY_LATEST_TESTED_VER}"
+    else
+        return 1
+    fi
+
+    if [ -z "$req_tag" ] || [ "$req_tag" == "latest" ]
+    then
+        req_tag="$default_tag"
+    fi
+
+    local norm_ver=""
+    if ! norm_ver=$(ProxyNormalizeVersion "$req_tag") || ! ProxyValidateSupportedVersion "$core" "$norm_ver"
+    then
+        Println "$(eval_gettext "\$error 无效或不受支持的版本: \$req_tag")\n"
+        return 1
+    fi
+    req_tag="v${norm_ver}"
+
+    local arch=""
+    if ! arch=$(ProxyDetectArch "$core")
+    then
+        Println "$(eval_gettext "\$error 不支持的系统架构")\n"
+        return 1
+    fi
+
+    local zip_name="${asset_prefix}-${arch}.zip"
+    local dgst_name="${zip_name}.dgst"
+    local work_dir="${PROXY_TMP_ROOT}/install_${core}_${req_tag}_$$"
+    mkdir -p "$work_dir"
+
+    local gh_url="https://github.com/${repo}/releases/download/${req_tag}"
+    local mirror_url="${FFMPEG_MIRROR_LINK}/${core}/${req_tag}"
+    local source_used="github:${req_tag}"
+
+    if ! { curl -fsSL -m 60 "${gh_url}/${zip_name}" -o "${work_dir}/${zip_name}" && curl -fsSL -m 30 "${gh_url}/${dgst_name}" -o "${work_dir}/${dgst_name}"; }
+    then
+        source_used="mirror:${req_tag}"
+        if ! { curl -fsSL -m 60 "${mirror_url}/${zip_name}" -o "${work_dir}/${zip_name}" && curl -fsSL -m 30 "${mirror_url}/${dgst_name}" -o "${work_dir}/${dgst_name}"; }
+        then
+            rm -rf "$work_dir"
+            Println "$(eval_gettext "\$error 下载 \$core \$req_tag 失败")\n"
+            return 1
+        fi
+    fi
+
+    if ! ProxyVerifyDgstSha256 "${work_dir}/${zip_name}" "${work_dir}/${dgst_name}"
+    then
+        rm -rf "$work_dir"
+        Println "$(eval_gettext "\$error \$zip_name SHA256 校验失败")\n"
+        return 1
+    fi
+
+    if ! unzip -qo "${work_dir}/${zip_name}" "$core" -d "${work_dir}/out" 2> /dev/null
+    then
+        rm -rf "$work_dir"
+        Println "$(eval_gettext "\$error 解压 \$zip_name 失败")\n"
+        return 1
+    fi
+
+    if ! ProxyCoreImport "$core" "${work_dir}/out/${core}" "$source_used" > /dev/null
+    then
+        rm -rf "$work_dir"
+        return 1
+    fi
+
+    rm -rf "$work_dir"
+
+    if [ ! -f "${PROXY_GEODATA_CURRENT}/geoip.dat" ] || [ ! -f "${PROXY_GEODATA_CURRENT}/geosite.dat" ]
+    then
+        ProxyGeodataUpdate > /dev/null 2>&1 || true
+    fi
+
+    ProxyWriteServiceUnit "$core" || true
+    ProxySetupLogrotate || true
+    return 0
+}
+
+ProxyGeodataUpdate()
+{
+    local req_tag="${1:-latest}"
+    ProxyEnsureDirs
+
+    local lock_owned=0
+    if [ -z "${PROXY_ACTIVE_LOCK_DIR:-}" ]
+    then
+        ProxyAcquireLock "$PROXY_LOCK_FILE" || return 1
+        lock_owned=1
+    fi
+
+    if [ "$req_tag" == "latest" ]
+    then
+        req_tag=$(curl -fsSL -m 20 "$PROXY_GEODATA_API" 2> /dev/null | $JQ_FILE -r '.tag_name // empty' 2> /dev/null || true)
+        if [ -z "$req_tag" ]
+        then
+            req_tag=$(curl -fsSL -m 20 "${PROXY_GEODATA_MIRROR_LINK}/geodata.json" 2> /dev/null | $JQ_FILE -r '.tag_name // empty' 2> /dev/null || true)
+        fi
+    fi
+
+    if [ -z "$req_tag" ]
+    then
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    local stage_dir="${PROXY_GEODATA_ROOT}/${req_tag}"
+    local tmp_dir="${PROXY_TMP_ROOT}/geodata_${req_tag}_$$"
+    local cand_xdg="${PROXY_TMP_ROOT}/xdg_${req_tag}_$$"
+    mkdir -p "$tmp_dir" "$cand_xdg"
+    chmod 755 "$PROXY_TMP_ROOT" "$tmp_dir" "$cand_xdg"
+
+    local f=""
+    for f in geoip.dat geosite.dat
+    do
+        if ! { curl -fsSL -m 60 "${PROXY_GEODATA_LINK}/${req_tag}/${f}" -o "${tmp_dir}/${f}" && curl -fsSL -m 30 "${PROXY_GEODATA_LINK}/${req_tag}/${f}.sha256sum" -o "${tmp_dir}/${f}.sha256sum"; }
+        then
+            if ! { curl -fsSL -m 60 "${PROXY_GEODATA_MIRROR_LINK}/${req_tag}/${f}" -o "${tmp_dir}/${f}" && curl -fsSL -m 30 "${PROXY_GEODATA_MIRROR_LINK}/${req_tag}/${f}.sha256sum" -o "${tmp_dir}/${f}.sha256sum"; }
+            then
+                rm -rf "$tmp_dir" "$cand_xdg"
+                [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+                return 1
+            fi
+        fi
+
+        if ! ProxyVerifyDgstSha256 "${tmp_dir}/${f}" "${tmp_dir}/${f}.sha256sum"
+        then
+            rm -rf "$tmp_dir" "$cand_xdg"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+
+        chmod 644 "${tmp_dir}/${f}"
+    done
+
+    if [ -x "$AIOS_XRAY_BIN" ] && [ -s "$X_CONFIG" ]
+    then
+        if ! ProxyTestConfigWithBinary "xray" "$AIOS_XRAY_BIN" "$X_CONFIG" "json" "$tmp_dir" "$cand_xdg"
+        then
+            rm -rf "$tmp_dir" "$cand_xdg"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    if [ -x "$AIOS_V2RAY_BIN" ] && [ -s "$V2_CONFIG" ]
+    then
+        local v2_fmt
+        v2_fmt=$(ProxyGetV2rayFormat)
+        if ! ProxyTestConfigWithBinary "v2ray" "$AIOS_V2RAY_BIN" "$V2_CONFIG" "$v2_fmt" "$tmp_dir" "$cand_xdg"
+        then
+            rm -rf "$tmp_dir" "$cand_xdg"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    mkdir -p "$stage_dir"
+    cp "${tmp_dir}/geoip.dat" "${stage_dir}/geoip.dat"
+    cp "${tmp_dir}/geosite.dat" "${stage_dir}/geosite.dat"
+    chmod 644 "${stage_dir}/geoip.dat" "${stage_dir}/geosite.dat"
+
+    local old_geo=""
+    [ -L "$PROXY_GEODATA_CURRENT" ] && old_geo=$(readlink "$PROXY_GEODATA_CURRENT" 2> /dev/null || true)
+
+    local active_svcs=()
+    local svc=""
+    for svc in aios-xray aios-v2ray
+    do
+        if ServiceControlIsActive "$svc"
+        then
+            active_svcs+=("$svc")
+        fi
+    done
+
+    if ! ProxyAtomicSymlinkSwap "$req_tag" "$PROXY_GEODATA_CURRENT" || ! ProxyEnsureXdgLink "$PROXY_GEODATA_CURRENT" "$PROXY_XDG_ROOT"
+    then
+        if [ -n "$old_geo" ]
+        then
+            ProxyAtomicSymlinkSwap "$old_geo" "$PROXY_GEODATA_CURRENT" || true
+            ProxyEnsureXdgLink "$PROXY_GEODATA_CURRENT" "$PROXY_XDG_ROOT" || true
+        fi
+        rm -rf "$tmp_dir" "$cand_xdg"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    local restart_failed=0
+    for svc in "${active_svcs[@]+"${active_svcs[@]}"}"
+    do
+        local svc_core="${svc#aios-}"
+        local svc_cfg=""
+        if [ "$svc_core" == "xray" ]
+        then
+            svc_cfg="$X_CONFIG"
+        else
+            svc_cfg="$V2_CONFIG"
+        fi
+
+        if ! ServiceControl restart "$svc" > /dev/null 2>&1 || ! ProxyCheckReadiness "$svc_core" "$svc_cfg"
+        then
+            restart_failed=1
+            break
+        fi
+    done
+
+    if [ "$restart_failed" -eq 1 ]
+    then
+        if [ -n "$old_geo" ]
+        then
+            ProxyAtomicSymlinkSwap "$old_geo" "$PROXY_GEODATA_CURRENT" || true
+            ProxyEnsureXdgLink "$PROXY_GEODATA_CURRENT" "$PROXY_XDG_ROOT" || true
+            for svc in "${active_svcs[@]+"${active_svcs[@]}"}"
+            do
+                ServiceControl restart "$svc" > /dev/null 2>&1 || true
+            done
+        fi
+        rm -rf "$tmp_dir" "$cand_xdg"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    local g_sha="" s_sha=""
+    g_sha=$(ProxySha256File "${stage_dir}/geoip.dat")
+    s_sha=$(ProxySha256File "${stage_dir}/geosite.dat")
+    $JQ_FILE -n --arg tag "$req_tag" --arg g "$g_sha" --arg s "$s_sha" \
+        '{tag: $tag, geoip_sha256: $g, geosite_sha256: $s}' > "${PROXY_GEODATA_ROOT}/manifest.json"
+
+    rm -rf "$tmp_dir" "$cand_xdg"
+    [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+    return 0
+}
+
+ProxyCoreRemove()
+{
+    local core="$1"
+    local target_tag="$2"
+
+    local cur_tag=""
+    cur_tag=$(readlink "${PROXY_CORES_ROOT}/${core}/current" 2> /dev/null || true)
+    if [ "$target_tag" == "$cur_tag" ]
+    then
+        Println "$(eval_gettext "\$error 无法删除当前活跃版本: \$target_tag")\n"
+        return 1
+    fi
+
+    local lkg_link=""
+    [ "$core" == "xray" ] && lkg_link="$X_LKG_LINK" || lkg_link="$V2_LKG_LINK"
+    if [ -L "$lkg_link" ] && [ -s "${lkg_link}/snapshot.json" ]
+    then
+        local lkg_tag=""
+        lkg_tag=$($JQ_FILE -r '.current_tag // empty' "${lkg_link}/snapshot.json" 2> /dev/null || true)
+        if [ "$target_tag" == "$lkg_tag" ]
+        then
+            Println "$(eval_gettext "\$error 无法删除被 last-known-good 引用的版本: \$target_tag")\n"
+            return 1
+        fi
+    fi
+
+    rm -rf "${PROXY_CORES_ROOT:?}/${core}/${target_tag}"
+    local tmp_m="${PROXY_CORES_MANIFEST}.tmp.$$"
+    $JQ_FILE --arg core "$core" --arg tag "$target_tag" 'del(.cores[$core].versions[$tag])' "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"
+}
+
+ProxyAdaptConfigForTarget()
+{
+    local core="$1"
+    local src_cfg="$2"
+    local dst_cfg="$3"
+    local target_ver="$4"
+    local target_fmt="${5:-json}"
+
+    if [ ! -s "$src_cfg" ]
+    then
+        printf '{}\n' > "$dst_cfg"
+        return 0
+    fi
+
+    if [ "$core" == "xray" ]
+    then
+        local has_users=0 has_flat=0 has_method=0 has_rewrite=0
+        ProxyCoreHasFeature "xray" "$target_ver" "json" "inboundUsersKey" && has_users=1
+        ProxyCoreHasFeature "xray" "$target_ver" "json" "flatOutbounds" && has_flat=1
+        ProxyCoreHasFeature "xray" "$target_ver" "json" "streamMethodKey" && has_method=1
+        ProxyCoreHasFeature "xray" "$target_ver" "json" "dnsRewriteKeys" && has_rewrite=1
+
+        local jq_err_file="${dst_cfg}.err.$$"
+        if ! $JQ_FILE \
+            --argjson has_users "$has_users" \
+            --argjson has_flat "$has_flat" \
+            --argjson has_method "$has_method" \
+            --argjson has_rewrite "$has_rewrite" '
+            def pick_users($pref; $alt):
+                (if ($pref | type) == "array" then $pref else [] end) as $lp
+                | (if ($alt | type) == "array" then $alt else [] end) as $la
+                | if ($lp | length) > 0 then $lp
+                  elif ($la | length) > 0 then $la
+                  elif ($pref | type) == "array" or ($alt | type) == "array" then []
+                  else null end;
+
+            def adapt_in:
+                if (.settings | type) != "object" then .
+                elif (.protocol == "vless" or .protocol == "vmess" or .protocol == "trojan" or .protocol == "hysteria" or .protocol == "shadowsocks") then
+                    (((.settings.users | type) == "array" and (.settings.users | length) > 0) or ((.settings.clients | type) == "array" and (.settings.clients | length) > 0)) as $had_any
+                    | (if $has_users == 1 then pick_users(.settings.users; .settings.clients) else pick_users(.settings.clients; .settings.users) end) as $u
+                    | if $u == null then .
+                      elif $had_any and (($u | map(select(type == "object")) | length) == 0) then
+                          error("user migration resulted in no valid users")
+                      elif $has_users == 1 then
+                          .settings |= (del(.clients) | .users = $u)
+                      else
+                          .settings |= (del(.users) | .clients = $u)
+                      end
+                elif (.protocol == "socks" or .protocol == "http") then
+                    (((.settings.users | type) == "array" and (.settings.users | length) > 0) or ((.settings.accounts | type) == "array" and (.settings.accounts | length) > 0)) as $had_any
+                    | (if $has_users == 1 then pick_users(.settings.users; .settings.accounts) else pick_users(.settings.accounts; .settings.users) end) as $u
+                    | if $u == null then .
+                      elif $had_any and (($u | map(select(type == "object")) | length) == 0) then
+                          error("account migration resulted in no valid accounts")
+                      elif $has_users == 1 then
+                          .settings |= (del(.accounts) | .users = $u)
+                      else
+                          .settings |= (del(.users) | .accounts = $u)
+                      end
+                elif (.protocol == "tunnel" or .protocol == "dokodemo-door") then
+                    if $has_rewrite == 1 then
+                        .settings |= (
+                            (if has("address") and (has("rewriteAddress") | not) then .rewriteAddress = .address | del(.address) else . end)
+                            | (if has("port") and (has("rewritePort") | not) then .rewritePort = .port | del(.port) else . end)
+                            | (if has("network") and (has("allowedNetwork") | not) then .allowedNetwork = .network | del(.network) else . end)
+                        )
+                    else
+                        .settings |= (
+                            (if has("rewriteAddress") and (has("address") | not) then .address = .rewriteAddress | del(.rewriteAddress) else . end)
+                            | (if has("rewritePort") and (has("port") | not) then .port = .rewritePort | del(.rewritePort) else . end)
+                            | (if has("allowedNetwork") and (has("network") | not) then .network = .allowedNetwork | del(.allowedNetwork) else . end)
+                        )
+                    end
+                else . end
+                | if (.streamSettings | type) == "object" then
+                    (.streamSettings.method // .streamSettings.network // null) as $m
+                    | if $m == null then .
+                      elif $has_method == 1 then
+                          .streamSettings |= (del(.network) | .method = $m)
+                      else
+                          .streamSettings |= (del(.method) | .network = $m)
+                      end
+                  else . end;
+
+            def adapt_out:
+                if (.settings | type) != "object" then .
+                elif (.protocol == "vless" or .protocol == "vmess") then
+                    if $has_flat == 1 then
+                        if (.settings.vnext | type) == "array" and (.settings.vnext | length) > 1 then
+                            error("refusing to flatten outbound with multiple vnext servers: \(.tag // .protocol)")
+                        elif (.settings.vnext | type) == "array" and (.settings.vnext | length) == 1 then
+                            (.settings.vnext[0]) as $v
+                            | if ($v.users | type) == "array" and ($v.users | length) > 1 then
+                                  error("refusing to flatten outbound with multiple vnext users: \(.tag // .protocol)")
+                              else
+                                  ($v.users[0] // {}) as $u
+                                  | .settings = ($u + {address: $v.address, port: $v.port})
+                              end
+                        else . end
+                    else
+                        if (.settings | has("address")) and (.settings | has("vnext") | not) then
+                            .settings as $s
+                            | .settings = {vnext: [{address: $s.address, port: $s.port, users: [($s | del(.address, .port))]}]}
+                        else . end
+                    end
+                elif (.protocol == "trojan" or .protocol == "shadowsocks") then
+                    if $has_flat == 1 then
+                        if (.settings.servers | type) == "array" and (.settings.servers | length) > 1 then
+                            error("refusing to flatten outbound with multiple servers: \(.tag // .protocol)")
+                        elif (.settings.servers | type) == "array" and (.settings.servers | length) == 1 then
+                            .settings = .settings.servers[0]
+                        else . end
+                    else
+                        if (.settings | has("address")) and (.settings | has("servers") | not) then
+                            .settings = {servers: [.settings]}
+                        else . end
+                    end
+                elif (.protocol == "socks" or .protocol == "http") then
+                    if $has_flat == 1 then
+                        if (.settings.servers | type) == "array" and (.settings.servers | length) > 1 then
+                            error("refusing to flatten outbound with multiple servers: \(.tag // .protocol)")
+                        elif (.settings.servers | type) == "array" and (.settings.servers | length) == 1 then
+                            (.settings.servers[0]) as $srv
+                            | if ($srv.users | type) == "array" and ($srv.users | length) > 1 then
+                                  error("refusing to flatten outbound with multiple server users: \(.tag // .protocol)")
+                              else
+                                  ($srv.users[0] // {}) as $u
+                                  | .settings = ({address: $srv.address, port: $srv.port} + $u)
+                              end
+                        else . end
+                    else
+                        if (.settings | has("address")) and (.settings | has("servers") | not) then
+                            .settings as $s
+                            | .settings = {servers: ([{address: $s.address, port: $s.port} + (if ($s.user // "") != "" then {users: [{user: $s.user, pass: ($s.pass // "")}]} else {} end)])}
+                        else . end
+                    end
+                elif .protocol == "dns" then
+                    if $has_rewrite == 1 then
+                        .settings |= (
+                            (if has("network") and (has("rewriteNetwork") | not) then .rewriteNetwork = .network | del(.network) else . end)
+                            | (if has("address") and (has("rewriteAddress") | not) then .rewriteAddress = .address | del(.address) else . end)
+                            | (if has("port") and (has("rewritePort") | not) then .rewritePort = .port | del(.port) else . end)
+                        )
+                    else
+                        .settings |= (
+                            (if has("rewriteNetwork") and (has("network") | not) then .network = .rewriteNetwork | del(.rewriteNetwork) else . end)
+                            | (if has("rewriteAddress") and (has("address") | not) then .address = .rewriteAddress | del(.rewriteAddress) else . end)
+                            | (if has("rewritePort") and (has("port") | not) then .port = .rewritePort | del(.rewritePort) else . end)
+                        )
+                    end
+                else . end
+                | if (.streamSettings | type) == "object" then
+                    (.streamSettings.method // .streamSettings.network // null) as $m
+                    | if $m == null then .
+                      elif $has_method == 1 then
+                          .streamSettings |= (del(.network) | .method = $m)
+                      else
+                          .streamSettings |= (del(.method) | .network = $m)
+                      end
+                  else . end;
+
+            (if (.inbounds | type) == "array" then .inbounds |= map(if type == "object" then adapt_in else . end) else . end)
+            | (if (.outbounds | type) == "array" then .outbounds |= map(if type == "object" then adapt_out else . end) else . end)
+        ' "$src_cfg" > "$dst_cfg" 2> "$jq_err_file"
+        then
+            local jq_err=""
+            jq_err=$(cat "$jq_err_file" 2> /dev/null || true)
+            rm -f "$jq_err_file" "$dst_cfg" 2> /dev/null || true
+            PROXY_LAST_VALIDATE_ERROR="${jq_err:-xray config adaptation failed}"
+            return 1
+        fi
+
+        rm -f "$jq_err_file" 2> /dev/null || true
+        return 0
+    fi
+
+    if [ "$core" == "v2ray" ]
+    then
+        if [ "$target_fmt" == "jsonv5" ]
+        then
+            $JQ_FILE '
+                def map_level($l):
+                    (($l // "warning") | ascii_downcase) as $lv
+                    | if $lv == "debug" then "Debug"
+                      elif $lv == "info" then "Info"
+                      elif $lv == "error" then "Error"
+                      elif $lv == "none" then "None"
+                      else "Warning" end;
+                def map_log:
+                    if (.log | type) == "object" and (.log.error | type) != "object" and (.log.access | type) != "object" then
+                        {
+                            access: (
+                                if (.log.access | type) == "string" and (.log.access | length) > 0 then
+                                    (if .log.access == "none" then {type: "None"} else {type: "File", path: .log.access} end)
+                                else {type: "None"} end
+                            ),
+                            error: (
+                                map_level(.log.loglevel) as $lvl
+                                | if (.log.error | type) == "string" and (.log.error | length) > 0 then
+                                      (if .log.error == "none" then {type: "None", level: $lvl} else {type: "File", path: .log.error, level: $lvl} end)
+                                  else {type: "Console", level: $lvl} end
+                            )
+                        }
+                    else .log end;
+                def map_stream($st):
+                    if ($st | type) != "object" then null
+                    elif ($st | has("transport")) then $st
+                    else
+                        ($st.network // "tcp") as $n
+                        | (if $n == "raw" then "tcp"
+                           elif $n == "ws" then "websocket"
+                           elif $n == "kcp" then "mkcp"
+                           elif $n == "h2" then "http"
+                           elif $n == "ds" then "domainsocket"
+                           elif $n == "hy2" then "hysteria2"
+                           else $n end) as $tn
+                        | (if $tn == "tcp" then ($st.tcpSettings // $st.rawSettings // {})
+                           elif $tn == "websocket" then ($st.wsSettings // {})
+                           elif $tn == "mkcp" then ($st.kcpSettings // {})
+                           elif $tn == "http" then ($st.httpSettings // {})
+                           elif $tn == "quic" then ($st.quicSettings // {})
+                           elif $tn == "domainsocket" then ($st.dsSettings // {})
+                           elif $tn == "grpc" then ($st.grpcSettings // {})
+                           elif $tn == "hysteria2" then ($st.hy2Settings // $st.hysteria2Settings // {})
+                           else {} end) as $ts
+                        | ({transport: $tn, transportSettings: $ts}
+                           + (if ($st.security // "none") != "none" and ($st.security // "") != "" then
+                                {security: $st.security, securitySettings: ($st.tlsSettings // {})}
+                              else {} end)
+                           + (if ($st.sockopt | type) == "object" then
+                                {socketSettings: $st.sockopt}
+                              else {} end))
+                    end;
+                def adapt_v5_in:
+                    if .protocol == "socks" and (.settings | type) == "object" then
+                        .settings |= (
+                            (if has("udp") and (has("udpEnabled") | not) then .udpEnabled = .udp | del(.udp) else . end)
+                            | del(.auth)
+                        )
+                    else . end
+                    | if (.streamSettings | type) == "object" then
+                        .streamSettings = map_stream(.streamSettings)
+                      else . end;
+                def adapt_v5_out:
+                    if (.settings | type) != "object" then .settings = {} else . end
+                    | if (.streamSettings | type) == "object" then
+                        .streamSettings = map_stream(.streamSettings)
+                      else . end;
+                (if has("log") then .log = map_log else . end)
+                | (if (.inbounds | type) == "array" then .inbounds |= map(if type == "object" then adapt_v5_in else . end) else . end)
+                | (if (.outbounds | type) == "array" then .outbounds |= map(if type == "object" then adapt_v5_out else . end) else . end)
+            ' "$src_cfg" > "$dst_cfg"
+            return $?
+        else
+            $JQ_FILE '
+                def map_log_v4:
+                    if (.log | type) == "object" and (.log.error | type) == "object" then
+                        ({loglevel: ((.log.error.level // "warning") | ascii_downcase)}
+                         + (if (.log.error.type // "") == "File" and (.log.error.path // "") != "" then {error: .log.error.path} else {} end)
+                         + (if (.log.access | type) == "object" and (.log.access.type // "") == "File" and (.log.access.path // "") != "" then {access: .log.access.path} else {} end))
+                    else .log end;
+                def map_stream_v4($st):
+                    if ($st | type) != "object" then null
+                    elif ($st | has("network")) then $st
+                    else
+                        ($st.transport // "tcp") as $tn
+                        | (if $tn == "websocket" then "ws"
+                           elif $tn == "mkcp" then "kcp"
+                           elif $tn == "hysteria2" then "hy2"
+                           else $tn end) as $n
+                        | ({network: $n, security: ($st.security // "none")}
+                           + (if $n == "tcp" then {tcpSettings: ($st.transportSettings // {})}
+                              elif $n == "ws" then {wsSettings: ($st.transportSettings // {})}
+                              elif $n == "kcp" then {kcpSettings: ($st.transportSettings // {})}
+                              elif $n == "http" then {httpSettings: ($st.transportSettings // {})}
+                              elif $n == "quic" then {quicSettings: ($st.transportSettings // {})}
+                              elif $n == "domainsocket" then {dsSettings: ($st.transportSettings // {})}
+                              elif $n == "grpc" then {grpcSettings: ($st.transportSettings // {})}
+                              elif $n == "hy2" then {hy2Settings: ($st.transportSettings // {})}
+                              else {} end)
+                           + (if ($st.security // "none") == "tls" then {tlsSettings: ($st.securitySettings // {})} else {} end)
+                           + (if ($st.socketSettings | type) == "object" then {sockopt: $st.socketSettings} else {} end))
+                    end;
+                def adapt_v4_in:
+                    if .protocol == "socks" and (.settings | type) == "object" then
+                        .settings |= (
+                            (if has("udpEnabled") and (has("udp") | not) then .udp = .udpEnabled | del(.udpEnabled) else . end)
+                            | if has("auth") then . else .auth = "noauth" end
+                        )
+                    else . end
+                    | if (.streamSettings | type) == "object" then
+                        .streamSettings = map_stream_v4(.streamSettings)
+                      else . end;
+                def adapt_v4_out:
+                    if (.streamSettings | type) == "object" then
+                        .streamSettings = map_stream_v4(.streamSettings)
+                      else . end;
+                (if has("log") then .log = map_log_v4 else . end)
+                | (if (.inbounds | type) == "array" then .inbounds |= map(if type == "object" then adapt_v4_in else . end) else . end)
+                | (if (.outbounds | type) == "array" then .outbounds |= map(if type == "object" then adapt_v4_out else . end) else . end)
+            ' "$src_cfg" > "$dst_cfg"
+            return $?
+        fi
+    fi
+
+    cp "$src_cfg" "$dst_cfg"
+    return 0
+}
+
+ProxySyncCertPerms()
+{
+    local core="$1"
+    local cert_file="$2"
+    local key_file="$3"
+    local svc_user="aios-${core}"
+
+    if [ "${dist:-}" == "mac" ] || [ "$(id -u 2> /dev/null || echo 1)" -ne 0 ]
+    then
+        return 0
+    fi
+
+    if ! id -u "$svc_user" > /dev/null 2>&1
+    then
+        Println "$(eval_gettext "\$error 证书授权失败, 系统用户不存在: \$svc_user")\n"
+        return 1
+    fi
+
+    local target="" parent_dir=""
+    if command -v setfacl > /dev/null 2>&1
+    then
+        for target in "$cert_file" "$key_file"
+        do
+            [ -z "$target" ] || [ ! -f "$target" ] && continue
+            parent_dir="${target%/*}"
+            if [ -n "$parent_dir" ] && [ -d "$parent_dir" ] && [ "$parent_dir" != "/" ]
+            then
+                if ! setfacl -m "u:${svc_user}:x" "$parent_dir"
+                then
+                    Println "$(eval_gettext "\$error 设置证书目录 ACL 权限失败: \$parent_dir")\n"
+                    return 1
+                fi
+            fi
+
+            if ! setfacl -m "u:${svc_user}:r" "$target"
+            then
+                Println "$(eval_gettext "\$error 设置证书文件 ACL 权限失败: \$target")\n"
+                return 1
+            fi
+        done
+        return 0
+    fi
+
+    if ! getent group aios-cert > /dev/null 2>&1
+    then
+        if ! groupadd -r aios-cert
+        then
+            Println "$(eval_gettext "\$error 创建证书共享用户组 aios-cert 失败")\n"
+            return 1
+        fi
+    fi
+
+    if ! usermod -aG aios-cert "$svc_user"
+    then
+        Println "$(eval_gettext "\$error 将 \$svc_user 加入 aios-cert 组失败")\n"
+        return 1
+    fi
+
+    for target in "$cert_file" "$key_file"
+    do
+        [ -z "$target" ] || [ ! -f "$target" ] && continue
+        parent_dir="${target%/*}"
+        if [ -n "$parent_dir" ] && [ -d "$parent_dir" ] && [ "$parent_dir" != "/" ]
+        then
+            local dir_perm=""
+            dir_perm=$(stat -c %a "$parent_dir" 2> /dev/null || echo "")
+            local other_digit="${dir_perm#"${dir_perm%?}"}"
+            if [ -z "$other_digit" ] || [ $((other_digit & 1)) -eq 0 ]
+            then
+                if ! chgrp aios-cert "$parent_dir" || ! chmod g+x "$parent_dir"
+                then
+                    Println "$(eval_gettext "\$error 设置证书目录组遍历权限失败: \$parent_dir")\n"
+                    return 1
+                fi
+            fi
+        fi
+
+        if ! chgrp aios-cert "$target" || ! chmod 640 "$target"
+        then
+            Println "$(eval_gettext "\$error 设置证书文件组读取权限失败: \$target")\n"
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+ProxyTxWriteState()
+{
+    local state_file="$1"
+    local state="$2"
+    local tx_id="$3"
+    local snap_dir="$4"
+    local detail="${5:-}"
+    local tmp_s="${state_file}.tmp.$$"
+
+    $JQ_FILE -n \
+        --arg state "$state" \
+        --arg tx_id "$tx_id" \
+        --arg snap "$snap_dir" \
+        --arg detail "$detail" \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ 2> /dev/null || echo "")" \
+        '{state: $state, tx_id: $tx_id, snapshot_dir: $snap, detail: $detail, updated_at: $ts}' > "$tmp_s"
+    chmod 600 "$tmp_s" 2> /dev/null || true
+    mv -f "$tmp_s" "$state_file"
+}
+
+ProxyRollbackFromSnapshot()
+{
+    local core="$1"
+    local snap_dir="$2"
+    local cfg_file="" meta_file="" svc_name="aios-${core}"
+
+    if [ "$core" == "xray" ]
+    then
+        cfg_file="$X_CONFIG"
+        meta_file="$X_META"
+    elif [ "$core" == "v2ray" ]
+    then
+        cfg_file="$V2_CONFIG"
+        meta_file="$V2_META"
+    else
+        return 1
+    fi
+
+    if [ ! -s "${snap_dir}/snapshot.json" ]
+    then
+        return 1
+    fi
+
+    local old_tag="" was_active=0 was_enabled=0
+    old_tag=$($JQ_FILE -r '.current_tag // empty' "${snap_dir}/snapshot.json" 2> /dev/null || true)
+    was_active=$($JQ_FILE -r '.was_active // 0' "${snap_dir}/snapshot.json" 2> /dev/null || echo 0)
+    was_enabled=$($JQ_FILE -r '.was_enabled // 0' "${snap_dir}/snapshot.json" 2> /dev/null || echo 0)
+
+    if [ -n "$old_tag" ]
+    then
+        ProxyAtomicSymlinkSwap "$old_tag" "${PROXY_CORES_ROOT}/${core}/current" || return 1
+    fi
+
+    if [ -f "${snap_dir}/config.json" ]
+    then
+        cp "${snap_dir}/config.json" "${cfg_file}.rb.$$" || return 1
+        ProxyApplyConfigPerms "$core" "${cfg_file}.rb.$$" || true
+        mv -f "${cfg_file}.rb.$$" "$cfg_file" || return 1
+    fi
+
+    if [ -f "${snap_dir}/meta.json" ]
+    then
+        cp "${snap_dir}/meta.json" "${meta_file}.rb.$$" || return 1
+        chmod 600 "${meta_file}.rb.$$" 2> /dev/null || true
+        mv -f "${meta_file}.rb.$$" "$meta_file" || return 1
+    fi
+
+    if [ -f "${snap_dir}/manifest.json" ]
+    then
+        cp "${snap_dir}/manifest.json" "${PROXY_CORES_MANIFEST}.rb.$$" || return 1
+        mv -f "${PROXY_CORES_MANIFEST}.rb.$$" "$PROXY_CORES_MANIFEST" || return 1
+    fi
+
+    ServiceResolveLabel "$svc_name"
+    if [ -f "${snap_dir}/service.unit" ] && [ -n "${service_file:-}" ]
+    then
+        cp "${snap_dir}/service.unit" "$service_file" || return 1
+        if [ "${dist:-}" != "mac" ] && command -v systemctl > /dev/null 2>&1
+        then
+            systemctl daemon-reload > /dev/null 2>&1 || true
+        fi
+    elif [ "$was_enabled" -eq 0 ] && [ -n "${service_file:-}" ] && [ -f "$service_file" ]
+    then
+        rm -f "$service_file" 2> /dev/null || true
+    fi
+
+    if [ "$was_active" -eq 1 ]
+    then
+        if ! ServiceControl restart "$svc_name" > /dev/null 2>&1 || ! ProxyCheckReadiness "$core" "$cfg_file"
+        then
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
+ProxyRecoverPendingTx()
+{
+    local core="$1"
+    local tx_file=""
+    if [ "$core" == "xray" ]
+    then
+        tx_file="$X_TX_STATE"
+    else
+        tx_file="$V2_TX_STATE"
+    fi
+
+    if [ ! -s "$tx_file" ]
+    then
+        return 0
+    fi
+
+    local state="" tx_id="" snap_dir=""
+    state=$($JQ_FILE -r '.state // empty' "$tx_file" 2> /dev/null || true)
+    tx_id=$($JQ_FILE -r '.tx_id // empty' "$tx_file" 2> /dev/null || true)
+    snap_dir=$($JQ_FILE -r '.snapshot_dir // empty' "$tx_file" 2> /dev/null || true)
+
+    case "$state" in
+        committed|rolled_back|"")
+            return 0
+        ;;
+        preparing)
+            rm -rf "${PROXY_TMP_ROOT:?}/tx_${tx_id}"* 2> /dev/null || true
+            ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "cleaned preparing state"
+            return 0
+        ;;
+        swapping|verifying)
+            if ProxyRollbackFromSnapshot "$core" "$snap_dir"
+            then
+                ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "recovered from ${state}"
+                return 0
+            else
+                ProxyTxWriteState "$tx_file" "recovery_failed" "$tx_id" "$snap_dir" "manual_recovery_required"
+                return 1
+            fi
+        ;;
+        recovery_failed)
+            return 1
+        ;;
+    esac
+}
+
+ProxyCoreSwitch()
+{
+    local core="$1"
+    local target_tag="$2"
+    local target_fmt="${3:-}"
+    local cand_cfg_override="${4:-}"
+
+    ProxyEnsureDirs
+
+    local root_dir="" cfg_file="" meta_file="" tx_file="" backup_root="" lkg_link="" svc_name="aios-${core}"
+    if [ "$core" == "xray" ]
+    then
+        root_dir="$X_ROOT"
+        cfg_file="$X_CONFIG"
+        meta_file="$X_META"
+        tx_file="$X_TX_STATE"
+        backup_root="$X_BACKUP_ROOT"
+        lkg_link="$X_LKG_LINK"
+        target_fmt="json"
+    elif [ "$core" == "v2ray" ]
+    then
+        root_dir="$V2_ROOT"
+        cfg_file="$V2_CONFIG"
+        meta_file="$V2_META"
+        tx_file="$V2_TX_STATE"
+        backup_root="$V2_BACKUP_ROOT"
+        lkg_link="$V2_LKG_LINK"
+        [ -z "$target_fmt" ] && target_fmt=$(ProxyGetV2rayFormat)
+    else
+        return 1
+    fi
+
+    local target_bin="${PROXY_CORES_ROOT}/${core}/${target_tag}/${core}"
+    if [ ! -x "$target_bin" ]
+    then
+        PROXY_LAST_VALIDATE_ERROR="target slot binary not found: ${target_bin}"
+        return 1
+    fi
+
+    local info="" target_ver=""
+    if ! info=$(ProxyDetectBinaryInfo "$target_bin")
+    then
+        PROXY_LAST_VALIDATE_ERROR="unable to detect version of ${target_bin}"
+        return 1
+    fi
+    target_ver="${info#*|}"
+
+    if ! ProxyValidateSupportedVersion "$core" "$target_ver"
+    then
+        PROXY_LAST_VALIDATE_ERROR="unsupported version ${target_ver}"
+        return 1
+    fi
+
+    local lock_owned=0
+    if [ -z "${PROXY_ACTIVE_LOCK_DIR:-}" ]
+    then
+        ProxyAcquireLock "$PROXY_LOCK_FILE" || return 1
+        lock_owned=1
+    fi
+
+    if ! ProxyRecoverPendingTx "$core"
+    then
+        PROXY_LAST_VALIDATE_ERROR="unresolved recovery_failed state; manual recovery required"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    local tx_id
+    tx_id="$(date +%Y%m%d_%H%M%S 2> /dev/null || echo 0)_$$"
+    local snap_dir="${backup_root}/tx_${tx_id}"
+    mkdir -p "$snap_dir"
+    chmod 700 "$snap_dir" 2> /dev/null || true
+
+    local old_tag="" was_active=0 was_enabled=0
+    old_tag=$(readlink "${PROXY_CORES_ROOT}/${core}/current" 2> /dev/null || true)
+    if ServiceControlIsActive "$svc_name"
+    then
+        was_active=1
+    fi
+
+    if ServiceControlIsEnabled "$svc_name"
+    then
+        was_enabled=1
+    fi
+
+    [ -f "$cfg_file" ] && cp "$cfg_file" "${snap_dir}/config.json" || true
+    [ -f "$meta_file" ] && cp "$meta_file" "${snap_dir}/meta.json" || true
+    [ -f "$PROXY_CORES_MANIFEST" ] && cp "$PROXY_CORES_MANIFEST" "${snap_dir}/manifest.json" || true
+    ServiceResolveLabel "$svc_name"
+    [ -f "${service_file:-}" ] && cp "$service_file" "${snap_dir}/service.unit" || true
+
+    $JQ_FILE -n \
+        --arg cur "$old_tag" \
+        --arg target "$target_tag" \
+        --argjson active "$was_active" \
+        --argjson enabled "$was_enabled" \
+        '{current_tag: $cur, target_tag: $target, was_active: $active, was_enabled: $enabled}' > "${snap_dir}/snapshot.json"
+
+    ProxyTxWriteState "$tx_file" "preparing" "$tx_id" "$snap_dir"
+
+    local cand_cfg="${root_dir}/.switch.config.tmp.$$.json"
+    if [ -n "$cand_cfg_override" ] && [ -s "$cand_cfg_override" ]
+    then
+        cp "$cand_cfg_override" "$cand_cfg"
+    else
+        if ! ProxyAdaptConfigForTarget "$core" "$cfg_file" "$cand_cfg" "$target_ver" "$target_fmt"
+        then
+            rm -f "$cand_cfg"
+            ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "adapt failed"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    if [ -s "$cand_cfg" ] && [ "$($JQ_FILE -r 'keys | length' "$cand_cfg" 2> /dev/null || echo 0)" -gt 0 ]
+    then
+        if ! ProxyApplyConfigPerms "$core" "$cand_cfg"
+        then
+            PROXY_LAST_VALIDATE_ERROR="failed to apply candidate config permissions"
+            rm -f "$cand_cfg"
+            ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "candidate perms failed"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+
+        if ! ProxyValidateCandidateRules "$core" "$cand_cfg" "$target_ver" "$target_fmt" || ! ProxyTestConfigWithBinary "$core" "$target_bin" "$cand_cfg" "$target_fmt"
+        then
+            PROXY_LAST_VALIDATE_ERROR="${PROXY_LAST_VALIDATE_ERROR:-${PROXY_LAST_TEST_OUTPUT:-target -test failed}}"
+            rm -f "$cand_cfg"
+            ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "preflight -test failed"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    ProxyTxWriteState "$tx_file" "swapping" "$tx_id" "$snap_dir"
+
+    local swap_ok=1
+    local swap_err=""
+
+    if ! ProxyAtomicSymlinkSwap "$target_tag" "${PROXY_CORES_ROOT}/${core}/current"
+    then
+        swap_ok=0
+        swap_err="atomic symlink swap failed for current"
+    fi
+
+    local bin_link=""
+    if [ "$core" == "xray" ]
+    then
+        bin_link="$AIOS_XRAY_BIN"
+    else
+        bin_link="$AIOS_V2RAY_BIN"
+    fi
+
+    if [ "$swap_ok" -eq 1 ] && [ ! -L "$bin_link" ]
+    then
+        if ! ProxyAtomicSymlinkSwap "${PROXY_CORES_ROOT}/${core}/current/${core}" "$bin_link"
+        then
+            swap_ok=0
+            swap_err="atomic symlink swap failed for ${bin_link}"
+        fi
+    fi
+
+    if [ "$swap_ok" -eq 1 ]
+    then
+        if [ -s "$cand_cfg" ]
+        then
+            if ! ProxyApplyConfigPerms "$core" "$cand_cfg" || ! mv -f "$cand_cfg" "$cfg_file"
+            then
+                swap_ok=0
+                swap_err="config replace failed"
+            fi
+        else
+            rm -f "$cand_cfg"
+        fi
+    fi
+
+    if [ "$swap_ok" -eq 1 ]
+    then
+        local tmp_meta="${meta_file}.tmp.$$"
+        if ! { $JQ_FILE --arg fmt "$target_fmt" '.format = $fmt' "$meta_file" > "$tmp_meta" && chmod 600 "$tmp_meta" && mv -f "$tmp_meta" "$meta_file"; }
+        then
+            rm -f "$tmp_meta" 2> /dev/null || true
+            swap_ok=0
+            swap_err="meta.json update failed"
+        fi
+    fi
+
+    if [ "$swap_ok" -eq 1 ]
+    then
+        local tmp_m="${PROXY_CORES_MANIFEST}.tmp.$$"
+        if ! { $JQ_FILE --arg core "$core" --arg tag "$target_tag" '.cores[$core].current = $tag' "$PROXY_CORES_MANIFEST" > "$tmp_m" && mv -f "$tmp_m" "$PROXY_CORES_MANIFEST"; }
+        then
+            rm -f "$tmp_m" 2> /dev/null || true
+            swap_ok=0
+            swap_err="manifest.json update failed"
+        fi
+    fi
+
+    if [ "$swap_ok" -eq 1 ]
+    then
+        if ! ProxyWriteServiceUnit "$core"
+        then
+            swap_ok=0
+            swap_err="service unit update failed"
+        fi
+    fi
+
+    if [ "$swap_ok" -eq 0 ]
+    then
+        rm -f "$cand_cfg" 2> /dev/null || true
+        if ProxyRollbackFromSnapshot "$core" "$snap_dir"
+        then
+            ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "swap failed (${swap_err}); rolled back"
+        else
+            ProxyTxWriteState "$tx_file" "recovery_failed" "$tx_id" "$snap_dir" "manual_recovery_required"
+        fi
+
+        PROXY_LAST_VALIDATE_ERROR="switch swap failed: ${swap_err}"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    ProxyTxWriteState "$tx_file" "verifying" "$tx_id" "$snap_dir"
+
+    if [ "$was_active" -eq 1 ]
+    then
+        local obs="${PROXY_OBSERVE_SECONDS:-3}"
+        if ! ServiceControl restart "$svc_name" > /dev/null 2>&1 || ! { [ "$obs" -le 0 ] || sleep "$obs"; ProxyCheckReadiness "$core" "$cfg_file"; }
+        then
+            if ProxyRollbackFromSnapshot "$core" "$snap_dir"
+            then
+                ProxyTxWriteState "$tx_file" "rolled_back" "$tx_id" "$snap_dir" "health check failed; rolled back"
+            else
+                ProxyTxWriteState "$tx_file" "recovery_failed" "$tx_id" "$snap_dir" "manual_recovery_required"
+            fi
+
+            PROXY_LAST_VALIDATE_ERROR="switch verification failed"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    ProxyTxWriteState "$tx_file" "committed" "$tx_id" "$snap_dir"
+
+    # Point last-known-good to the committed pre-switch snapshot so rollback and slot-removal protection retain the previous working slot
+    if [ -n "$old_tag" ]
+    then
+        ProxyAtomicSymlinkSwap "tx_${tx_id}" "$lkg_link"
+    fi
+
+    ProxyPruneBackups "$backup_root"
+    [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+    return 0
+}
+
+ProxyCoreMenu()
+{
+    local core="$1"
+    ProxyEnsureDirs
+
+    local actions=(
+        "$(gettext "查看已安装版本槽位")"
+        "$(gettext "安装指定版本内核")"
+        "$(gettext "导入本地二进制内核")"
+        "$(gettext "切换活跃内核版本")"
+        "$(gettext "删除旧版本槽位")"
+        "$(gettext "更新共享 GeoData 规则库")"
+    )
+
+    if [ "$core" == "v2ray" ]
+    then
+        actions+=( "$(gettext "切换 V2Ray 配置格式 (jsonv4 / jsonv5)")" )
+    fi
+
+    local act_idx=0
+    inquirer list_input_index "$(gettext "选择内核与版本管理操作")" actions act_idx
+
+    case "$act_idx" in
+        0)
+            local cur_tag=""
+            cur_tag=$(readlink "${PROXY_CORES_ROOT}/${core}/current" 2> /dev/null || echo "-")
+            Println "$(eval_gettext "\$info 当前活跃版本: \$cur_tag")\n"
+            $JQ_FILE -r --arg c "$core" '
+                (.cores[$c].versions // {}) | to_entries[]
+                | "  - \(.key) (\(.value.source // "unknown"), \(.value.installedAt // "-"))"
+            ' "$PROXY_CORES_MANIFEST" 2> /dev/null || true
+        ;;
+        1)
+            local def_ver=""
+            if [ "$core" == "xray" ]
+            then
+                def_ver="v${XRAY_LATEST_TESTED_VER}"
+            else
+                def_ver="v${V2RAY_LATEST_TESTED_VER}"
+            fi
+
+            local req_tag=""
+            inquirer text_input "$(eval_gettext "输入要安装的版本号 (如 \$def_ver)")" req_tag "$def_ver"
+            ProxyCoreInstall "$core" "$req_tag"
+        ;;
+        2)
+            local bin_path=""
+            inquirer text_input "$(gettext "输入本地二进制绝对路径")" bin_path ""
+            ProxyCoreImport "$core" "$bin_path" "local-import"
+        ;;
+        3)
+            local slot_tags=()
+            local t=""
+            while IFS= read -r t
+            do
+                [ -n "$t" ] && slot_tags+=("$t")
+            done < <($JQ_FILE -r --arg c "$core" '(.cores[$c].versions // {}) | keys[]' "$PROXY_CORES_MANIFEST" 2> /dev/null || true)
+
+            if [ "${#slot_tags[@]}" -eq 0 ]
+            then
+                Println "$(eval_gettext "\$error 暂无可切换的已安装版本")\n"
+                return 1
+            fi
+
+            local s_idx=0
+            inquirer list_input_index "$(gettext "选择要切换的目标版本")" slot_tags s_idx
+
+            if ProxyCoreSwitch "$core" "${slot_tags[s_idx]}"
+            then
+                local switched="${slot_tags[s_idx]}"
+                Println "$(eval_gettext "\$info 已切换至 \$switched")\n"
+            else
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 切换失败: \$err_detail")\n"
+                return 1
+            fi
+        ;;
+        4)
+            local example_tag=""
+            if [ "$core" == "xray" ]
+            then
+                example_tag="v${XRAY_MIN_VER:-25.9.11}"
+            else
+                example_tag="v${V2RAY_MIN_VER:-5.18.0}"
+            fi
+
+            local del_tag=""
+            inquirer text_input "$(eval_gettext "输入要删除的版本标签 (如 \$example_tag)")" del_tag ""
+            ProxyCoreRemove "$core" "$del_tag"
+        ;;
+        5)
+            if ProxyGeodataUpdate "latest"
+            then
+                Println "$(eval_gettext "\$info GeoData 更新完成")\n"
+            else
+                Println "$(eval_gettext "\$error GeoData 更新失败")\n"
+                return 1
+            fi
+        ;;
+        6)
+            local cur_tag=""
+            cur_tag=$(readlink "${PROXY_CORES_ROOT}/v2ray/current" 2> /dev/null || true)
+
+            if [ -z "$cur_tag" ]
+            then
+                Println "$(eval_gettext "\$error 请先安装 aios-v2ray 内核")\n"
+                return 1
+            fi
+
+            local fmt_opts=( "jsonv4" "jsonv5" )
+            local f_idx=0
+            inquirer list_input_index "$(gettext "选择目标配置格式")" fmt_opts f_idx
+            local target_fmt="${fmt_opts[f_idx]}"
+
+            if ProxyCoreSwitch "v2ray" "$cur_tag" "$target_fmt"
+            then
+                Println "$(eval_gettext "\$info 已切换 V2Ray 配置格式为 \$target_fmt")\n"
+            else
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 切换格式失败: \$err_detail")\n"
+                return 1
+            fi
+        ;;
+    esac
+}

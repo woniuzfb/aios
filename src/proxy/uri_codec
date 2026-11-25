@@ -1,0 +1,602 @@
+ProxyUriPercentDecode()
+{
+    local s="${1:-}"
+    if command -v python3 > /dev/null 2>&1
+    then
+        printf '%s' "$s" | $JQ_FILE -Rr '
+            gsub("\\+"; "%20")
+            | gsub("%(?![0-9A-Fa-f]{2})"; "%25")
+            | @text
+        ' | python3 -c 'import sys,urllib.parse; sys.stdout.write(urllib.parse.unquote(sys.stdin.read()))' 2> /dev/null && return 0
+    fi
+
+    local normalized="${s//+/ }"
+    printf '%b' "${normalized//%/\\x}"
+}
+
+ProxyBase64Decode()
+{
+    local raw="${1:-}"
+    raw=$(printf '%s' "$raw" | tr '_-' '/+' | tr -d '[:space:]')
+    local mod=$(( ${#raw} % 4 ))
+    if [ "$mod" -eq 2 ]
+    then
+        raw="${raw}=="
+    elif [ "$mod" -eq 3 ]
+    then
+        raw="${raw}="
+    elif [ "$mod" -eq 1 ]
+    then
+        return 1
+    fi
+
+    if printf '%s' "$raw" | base64 -d 2> /dev/null
+    then
+        return 0
+    fi
+
+    printf '%s' "$raw" | base64 -D 2> /dev/null
+}
+
+ProxyUriValidatePort()
+{
+    local p="${1:-}"
+    if [[ "$p" =~ ^[0-9]+$ ]] && [ "$p" -ge 1 ] && [ "$p" -le 65535 ]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+ProxyParseUriToOutbound()
+{
+    local uri="$1"
+    local core="${2:-xray}"
+    local ver="${3:-}"
+    local format="${4:-json}"
+
+    [ -z "$ver" ] && ver=$(ProxyGetTargetVersion "$core")
+
+    if [[ "$uri" != *"://"* ]]
+    then
+        return 1
+    fi
+
+    local scheme="${uri%%://*}"
+    scheme=$(printf '%s' "$scheme" | tr '[:upper:]' '[:lower:]')
+    local rest="${uri#*://}"
+    local remark=""
+    if [[ "$rest" == *"#"* ]]
+    then
+        remark=$(ProxyUriPercentDecode "${rest##*#}")
+        rest="${rest%#*}"
+    fi
+
+    local query=""
+    if [[ "$rest" == *"?"* ]]
+    then
+        query="${rest#*\?}"
+        rest="${rest%%\?*}"
+    fi
+
+    local tag="${remark:-import-${scheme}}"
+    local use_flat=0
+    if [ "$core" == "xray" ] && ProxyCoreHasFeature "xray" "$ver" "json" "flatOutbounds"
+    then
+        use_flat=1
+    fi
+
+    case "$scheme" in
+        vless)
+            local user_id="${rest%%@*}"
+            local hostport="${rest#*@}"
+            local host="${hostport%:*}"
+            host="${host#[}"; host="${host%]}"
+            local port="${hostport##*:}"
+            if [ -z "$host" ] || ! ProxyUriValidatePort "$port"
+            then
+                return 1
+            fi
+
+            local net="raw" sec="none" sni="" fp="" pbk="" sid="" spx="" flow="" path="" qhost="" svc="" enc="none"
+            local pqv="" alpn="" mode="" authority=""
+            [ "$core" == "v2ray" ] && net="tcp"
+
+            local q_parts=() kv="" k="" v=""
+            if [ -n "$query" ]
+            then
+                IFS='&' read -r -a q_parts <<< "$query"
+            fi
+
+            for kv in ${q_parts[@]+"${q_parts[@]}"}
+            do
+                [ -z "$kv" ] && continue
+                k="${kv%%=*}"
+                v=""
+                if [[ "$kv" == *"="* ]]
+                then
+                    v=$(ProxyUriPercentDecode "${kv#*=}")
+                fi
+                case "$k" in
+                    type) net="$v" ;;
+                    security) sec="$v" ;;
+                    sni) sni="$v" ;;
+                    fp) fp="$v" ;;
+                    pbk) pbk="$v" ;;
+                    sid) sid="$v" ;;
+                    spx) spx="$v" ;;
+                    pqv) pqv="$v" ;;
+                    alpn) alpn="$v" ;;
+                    mode) mode="$v" ;;
+                    authority) authority="$v" ;;
+                    flow) flow="$v" ;;
+                    path) path="$v" ;;
+                    host) qhost="$v" ;;
+                    serviceName) svc="$v" ;;
+                    encryption) enc="$v" ;;
+                esac
+            done
+
+            if [ "$core" == "v2ray" ] && [ "$sec" == "reality" ]
+            then
+                return 1
+            fi
+
+            local multi_mode=false
+            if [ "$net" == "grpc" ] && [ "$mode" == "multi" ]
+            then
+                multi_mode=true
+            fi
+
+            local stream_json
+            stream_json=$(ProxyBuildStreamSettings "$core" "$ver" "$format" "$net" "$sec" \
+                "$($JQ_FILE -n \
+                    --arg sni "$sni" --arg fp "$fp" --arg pbk "$pbk" --arg sid "$sid" --arg spx "$spx" \
+                    --arg pqv "$pqv" --arg alpn "$alpn" --arg mode "$mode" --arg authority "$authority" \
+                    --argjson multi "$multi_mode" --arg path "$path" --arg host "$qhost" --arg svc "$svc" '
+                    {
+                        sni: $sni,
+                        server_name: $sni,
+                        fingerprint: $fp,
+                        password: $pbk,
+                        short_id: $sid,
+                        spider_x: $spx,
+                        mldsa65_verify: $pqv,
+                        alpn: (if $alpn != "" then ($alpn | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else [] end),
+                        mode: $mode,
+                        authority: $authority,
+                        multi_mode: $multi,
+                        path: $path,
+                        host: $host,
+                        service_name: $svc
+                    }
+                ')")
+
+            if [ "$use_flat" -eq 1 ]
+            then
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg id "$user_id" --arg enc "$enc" --arg flow "$flow" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"vless",settings:({address:$addr,port:$port,id:$id,encryption:$enc}+(if $flow!="" then {flow:$flow} else {} end)),streamSettings:$st}'
+            else
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg id "$user_id" --arg enc "$enc" --arg flow "$flow" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"vless",settings:{vnext:[{address:$addr,port:$port,users:[({id:$id,encryption:$enc}+(if $flow!="" then {flow:$flow} else {} end))]}]},streamSettings:$st}'
+            fi
+        ;;
+        vmess)
+            local decoded_json=""
+            if ! decoded_json=$(ProxyBase64Decode "$rest") || [ -z "$decoded_json" ]
+            then
+                return 1
+            fi
+
+            if ! printf '%s\n' "$decoded_json" | $JQ_FILE -e 'type == "object"' > /dev/null 2>&1
+            then
+                return 1
+            fi
+
+            local sep=$'\x1f'
+            local v_ps="" v_add="" v_port="" v_id="" v_aid="" v_scy="" v_net="" v_type="" v_host="" v_path="" v_tls="" v_sni="" v_alpn="" v_fp=""
+            IFS="$sep" read -r v_ps v_add v_port v_id v_aid v_scy v_net v_type v_host v_path v_tls v_sni v_alpn v_fp < <($JQ_FILE -r --arg sep "$sep" '
+                [
+                    (.ps // "" | tostring),
+                    (.add // "" | tostring),
+                    (.port // "" | tostring),
+                    (.id // "" | tostring),
+                    (.aid // "0" | tostring),
+                    (.scy // "auto" | tostring),
+                    (.net // "tcp" | tostring),
+                    (.type // "" | tostring),
+                    (.host // "" | tostring),
+                    (.path // "" | tostring),
+                    (.tls // "" | tostring),
+                    (.sni // "" | tostring),
+                    (.alpn // "" | tostring),
+                    (.fp // "" | tostring)
+                ] | join($sep)
+            ' <<< "$decoded_json")
+
+            v_add="${v_add#[}"; v_add="${v_add%]}"
+            if [ -z "$v_add" ] || [ -z "$v_id" ] || ! ProxyUriValidatePort "$v_port"
+            then
+                return 1
+            fi
+
+            if [ -z "$remark" ] && [ -n "$v_ps" ]
+            then
+                tag="$v_ps"
+            fi
+
+            if [ -z "$v_scy" ]
+            then
+                v_scy="auto"
+            fi
+
+            if [[ ! "$v_aid" =~ ^[0-9]+$ ]]
+            then
+                v_aid=0
+            fi
+
+            local net="$v_net"
+            if [ "$core" == "xray" ] && [ "$net" == "tcp" ]
+            then
+                net="raw"
+            elif [ "$net" == "h2" ]
+            then
+                net="http"
+            fi
+
+            local sec="none"
+            if [ "$v_tls" == "tls" ]
+            then
+                sec="tls"
+            fi
+
+            local svc="" path="$v_path"
+            if [ "$net" == "grpc" ]
+            then
+                svc="$v_path"
+                path=""
+            fi
+
+            local hdr_type=""
+            if [ -n "$v_type" ] && [ "$v_type" != "none" ]
+            then
+                hdr_type="$v_type"
+            fi
+
+            local stream_json
+            stream_json=$(ProxyBuildStreamSettings "$core" "$ver" "$format" "$net" "$sec" \
+                "$($JQ_FILE -n \
+                    --arg sni "${v_sni:-$v_host}" --arg fp "$v_fp" --arg alpn "$v_alpn" \
+                    --arg path "$path" --arg host "$v_host" --arg svc "$svc" --arg hdr "$hdr_type" '
+                    {
+                        sni: $sni,
+                        fingerprint: $fp,
+                        alpn: (if $alpn != "" then ($alpn | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else [] end),
+                        path: $path,
+                        host: $host,
+                        service_name: $svc,
+                        raw_header_type: $hdr,
+                        header_type: $hdr
+                    }
+                ')")
+
+            if [ "$use_flat" -eq 1 ]
+            then
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$v_add" --argjson port "$v_port" --arg id "$v_id" --arg scy "$v_scy" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"vmess",settings:{address:$addr,port:$port,id:$id,security:$scy},streamSettings:$st}'
+            else
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$v_add" --argjson port "$v_port" --arg id "$v_id" --argjson aid "$v_aid" --arg scy "$v_scy" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"vmess",settings:{vnext:[{address:$addr,port:$port,users:[{id:$id,alterId:$aid,security:$scy}]}]},streamSettings:$st}'
+            fi
+        ;;
+        trojan)
+            local pass
+            pass=$(ProxyUriPercentDecode "${rest%%@*}")
+            local hostport="${rest#*@}"
+            local host="${hostport%:*}"
+            host="${host#[}"; host="${host%]}"
+            local port="${hostport##*:}"
+            if [ -z "$host" ] || ! ProxyUriValidatePort "$port"
+            then
+                return 1
+            fi
+
+            local net="raw" sec="tls" sni="" path="" qhost="" svc=""
+            [ "$core" == "v2ray" ] && net="tcp"
+
+            local q_parts=() kv="" k="" v=""
+            if [ -n "$query" ]
+            then
+                IFS='&' read -r -a q_parts <<< "$query"
+            fi
+
+            for kv in ${q_parts[@]+"${q_parts[@]}"}
+            do
+                [ -z "$kv" ] && continue
+                k="${kv%%=*}"
+                v=""
+                if [[ "$kv" == *"="* ]]
+                then
+                    v=$(ProxyUriPercentDecode "${kv#*=}")
+                fi
+                case "$k" in
+                    type) net="$v" ;;
+                    security) sec="$v" ;;
+                    sni) sni="$v" ;;
+                    path) path="$v" ;;
+                    host) qhost="$v" ;;
+                    serviceName) svc="$v" ;;
+                esac
+            done
+
+            local stream_json
+            stream_json=$(ProxyBuildStreamSettings "$core" "$ver" "$format" "$net" "$sec" \
+                "$($JQ_FILE -n --arg sni "$sni" --arg path "$path" --arg host "$qhost" --arg svc "$svc" \
+                    '{sni:$sni,path:$path,host:$host,service_name:$svc}')")
+
+            if [ "$use_flat" -eq 1 ]
+            then
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg pw "$pass" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"trojan",settings:{address:$addr,port:$port,password:$pw},streamSettings:$st}'
+            else
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg pw "$pass" --argjson st "$stream_json" \
+                    '{tag:$tag,protocol:"trojan",settings:{servers:[{address:$addr,port:$port,password:$pw}]},streamSettings:$st}'
+            fi
+        ;;
+        ss)
+            local user_part="" hostport="" decoded=""
+            if [[ "$rest" == *"@"* ]]
+            then
+                user_part="${rest%@*}"
+                hostport="${rest##*@}"
+                if [[ "$user_part" == *":"* ]] || [[ "$user_part" =~ %3[aA] ]]
+                then
+                    decoded=$(ProxyUriPercentDecode "$user_part")
+                else
+                    decoded=$(ProxyBase64Decode "$user_part") || return 1
+                fi
+            else
+                decoded=$(ProxyBase64Decode "$rest") || return 1
+                hostport="${decoded##*@}"
+                decoded="${decoded%@*}"
+            fi
+
+            local method pass host port
+            method=$(ProxyNormalizeSsMethod "${decoded%%:*}")
+            pass="${decoded#*:}"
+            host="${hostport%:*}"
+            host="${host#[}"; host="${host%]}"
+            port="${hostport##*:}"
+            if [ -z "$host" ] || [ -z "$method" ] || ! ProxyUriValidatePort "$port"
+            then
+                return 1
+            fi
+
+            if [ "$core" == "v2ray" ] && [ "$format" == "jsonv4" ] && ! ProxyValidateV2raySsMethod "$method"
+            then
+                return 1
+            fi
+
+            if [ "$use_flat" -eq 1 ]
+            then
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg m "$method" --arg pw "$pass" \
+                    '{tag:$tag,protocol:"shadowsocks",settings:{address:$addr,port:$port,method:$m,password:$pw}}'
+            else
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --arg m "$method" --arg pw "$pass" \
+                    '{tag:$tag,protocol:"shadowsocks",settings:{servers:[{address:$addr,port:$port,method:$m,password:$pw}]}}'
+            fi
+        ;;
+        hy2|hysteria2)
+            local auth
+            auth=$(ProxyUriPercentDecode "${rest%%@*}")
+            local hostport="${rest#*@}"
+            local host="${hostport%:*}"
+            host="${host#[}"; host="${host%]}"
+            local port="${hostport##*:}"
+            if [ -z "$host" ] || ! ProxyUriValidatePort "$port"
+            then
+                return 1
+            fi
+
+            local sni=""
+            local q_parts=() kv="" k="" v=""
+            if [ -n "$query" ]
+            then
+                IFS='&' read -r -a q_parts <<< "$query"
+            fi
+
+            for kv in ${q_parts[@]+"${q_parts[@]}"}
+            do
+                [ -z "$kv" ] && continue
+                k="${kv%%=*}"
+                v=""
+                if [[ "$kv" == *"="* ]]
+                then
+                    v=$(ProxyUriPercentDecode "${kv#*=}")
+                fi
+                [ "$k" == "sni" ] && sni="$v"
+            done
+
+            if [ "$core" == "xray" ]
+            then
+                if ! ProxyCoreHasFeature "xray" "$ver" "json" "hysteriaOutbound"
+                then
+                    return 1
+                fi
+                local st
+                st=$(ProxyBuildStreamSettings "xray" "$ver" "json" "hysteria" "tls" \
+                    "$($JQ_FILE -n --arg sni "${sni:-$host}" --arg auth "$auth" '{sni:$sni,auth:$auth}')")
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --argjson st "$st" \
+                    '{tag:$tag,protocol:"hysteria",settings:{version:2,address:$addr,port:$port},streamSettings:$st}'
+            else
+                if ! ProxyCoreHasFeature "v2ray" "$ver" "$format" "hysteria2"
+                then
+                    return 1
+                fi
+                local st
+                st=$(ProxyBuildStreamSettings "v2ray" "$ver" "$format" "hy2" "tls" \
+                    "$($JQ_FILE -n --arg sni "${sni:-$host}" --arg pw "$auth" '{sni:$sni,password:$pw}')")
+                $JQ_FILE -n --arg tag "$tag" --arg addr "$host" --argjson port "$port" --argjson st "$st" \
+                    '{tag:$tag,protocol:"hysteria2",settings:{servers:[{address:$addr,port:$port}]},streamSettings:$st}'
+            fi
+        ;;
+        *)
+            return 1
+        ;;
+    esac
+}
+
+ProxyImportUrisInteractive()
+{
+    local core="$1"
+    local format="json"
+    local cfg_file=""
+    if [ "$core" == "v2ray" ]
+    then
+        format=$(ProxyGetV2rayFormat)
+        cfg_file="$V2_CONFIG"
+    elif [ "$core" == "xray" ]
+    then
+        cfg_file="$X_CONFIG"
+    else
+        return 1
+    fi
+
+    local ver
+    ver=$(ProxyGetTargetVersion "$core")
+    local uri_input=""
+    inquirer text_input "$(gettext "输入要导入的分享链接 URI 或文件路径 (支持多条空格分隔, vless/vmess/trojan/ss/hy2)")" uri_input ""
+    if [ -z "$uri_input" ]
+    then
+        Println "$(eval_gettext "\$error URI 不能为空")\n"
+        return 1
+    fi
+
+    local raw_uris=()
+    local line="" token=""
+    local line_tokens=()
+    if [ -f "$uri_input" ] && [ -r "$uri_input" ]
+    then
+        while IFS= read -r line || [ -n "$line" ]
+        do
+            line="${line%$'\r'}"
+            line_tokens=()
+            read -r -a line_tokens <<< "$line"
+            for token in ${line_tokens[@]+"${line_tokens[@]}"}
+            do
+                [ -n "$token" ] && raw_uris+=("$token")
+            done
+        done < "$uri_input"
+    else
+        while IFS= read -r line || [ -n "$line" ]
+        do
+            line="${line%$'\r'}"
+            line_tokens=()
+            read -r -a line_tokens <<< "$line"
+            for token in ${line_tokens[@]+"${line_tokens[@]}"}
+            do
+                [ -n "$token" ] && raw_uris+=("$token")
+            done
+        done <<< "$uri_input"
+    fi
+
+    if [ "${#raw_uris[@]}" -eq 0 ]
+    then
+        Println "$(eval_gettext "\$error 未解析到有效的分享链接 URI")\n"
+        return 1
+    fi
+
+    local existing_json="{}"
+    if [ -s "$cfg_file" ]
+    then
+        existing_json=$(cat "$cfg_file")
+    fi
+
+    local parsed_items=()
+    local failed_count=0
+    local u="" out_json=""
+    for u in "${raw_uris[@]}"
+    do
+        if out_json=$(ProxyParseUriToOutbound "$u" "$core" "$ver" "$format") && [ -n "$out_json" ]
+        then
+            parsed_items+=("$out_json")
+        else
+            failed_count=$((failed_count + 1))
+            local masked_u
+            masked_u=$(printf '%s' "$u" | ProxyRedactSecrets)
+            Println "$(eval_gettext "\$error 无法解析或当前内核不支持该 URI: \$masked_u")\n"
+        fi
+    done
+
+    if [ "${#parsed_items[@]}" -eq 0 ]
+    then
+        Println "$(eval_gettext "\$error 没有可导入的有效 URI")\n"
+        return 1
+    fi
+
+    local items_stream=""
+    for out_json in "${parsed_items[@]}"
+    do
+        items_stream="${items_stream}${out_json}"$'\n'
+    done
+
+    local items_json=""
+    items_json=$(printf '%s' "$items_stream" | $JQ_FILE -s '.')
+
+    local candidate_json=""
+    candidate_json=$(printf '%s\n' "$existing_json" | $JQ_FILE --argjson new_items "$items_json" '
+        def alloc_tag($base; $used):
+            if ($used | index($base)) == null then
+                $base
+            else
+                (2 | until(. as $n | ($used | index("\($base)-\($n)")) == null; . + 1) | "\($base)-\(.)")
+            end;
+        (if (.outbounds | type) == "array" then .outbounds else [] end) as $orig
+        | ($orig | map(select(type == "object") | .tag // empty)) as $init_tags
+        | (reduce $new_items[] as $item (
+            {used: $init_tags, added: []};
+            alloc_tag(($item.tag // "import"); .used) as $final_tag
+            | .used += [$final_tag]
+            | .added += [($item | .tag = $final_tag)]
+          )) as $res
+        | .outbounds = ($orig + $res.added)
+    ')
+
+    local tmp_old="" tmp_new="" diff_out=""
+    tmp_old=$(mktemp "${TMPDIR:-/tmp}/aios_uri_old.XXXXXX")
+    tmp_new=$(mktemp "${TMPDIR:-/tmp}/aios_uri_new.XXXXXX")
+    printf '%s\n' "$existing_json" | $JQ_FILE '.' | ProxyRedactSecrets > "$tmp_old"
+    printf '%s\n' "$candidate_json" | $JQ_FILE '.' | ProxyRedactSecrets > "$tmp_new"
+
+    if command -v diff > /dev/null 2>&1
+    then
+        diff_out=$(diff -u "$tmp_old" "$tmp_new" 2> /dev/null || true)
+    fi
+
+    rm -f "$tmp_old" "$tmp_new"
+
+    if [ -n "$diff_out" ]
+    then
+        Println "\n$(gettext "即将应用的配置变更 Diff (已脱敏)"):\n${diff_out}\n"
+    else
+        local preview=""
+        preview=$(printf '%s\n' "$items_json" | ProxyRedactSecrets)
+        Println "\n$(gettext "即将写入出站预览 (已脱敏)"):\n${preview}\n"
+    fi
+
+    if ! ProxyConfigTx "$core" "$candidate_json"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 导入 URI 失败: \$err_detail")\n"
+        return 1
+    fi
+
+    local imported_count="${#parsed_items[@]}"
+    if [ "$failed_count" -gt 0 ]
+    then
+        Println "$(eval_gettext "\$info 已成功导入 \$imported_count 条出站 (跳过 \$failed_count 条无效 URI)")\n"
+    else
+        Println "$(eval_gettext "\$info 已成功导入 \$imported_count 条出站")\n"
+    fi
+}

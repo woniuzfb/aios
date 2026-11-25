@@ -1,8 +1,8 @@
 NginxConfigLocalhost()
 {
     echo
-    config_localhost_options=( "$(gettext "修改指令")" "$(gettext "添加 flv 设置")" "$(gettext "添加 nodejs 设置")" "$(gettext "添加 SNI 域名分流")" "$(gettext "添加 SSL 协议分流")" "$(gettext "添加 ALPN 协议分流")" "$(gettext "添加 分流后端")" "$(gettext "删除 SNI 域名分流")" "$(gettext "删除 SSL 协议分流")" "$(gettext "删除 ALPN 协议分流")" "$(gettext "删除 分流后端")" "$(gettext "取消")" )
-    inquirer list_input_index "$(gettext "选择操作")" config_localhost_options config_localhost_options_index
+    config_localhost_options=( "$(gettext "修改指令")" "$(gettext "添加 flv 设置")" "$(gettext "添加 nodejs 设置")" "$(gettext "添加 SNI 域名分流")" "$(gettext "添加 SSL 协议分流")" "$(gettext "添加 ALPN 协议分流")" "$(gettext "添加 分流后端")" "$(gettext "删除 SNI 域名分流")" "$(gettext "删除 SSL 协议分流")" "$(gettext "删除 ALPN 协议分流")" "$(gettext "删除 分流后端")" "$i18n_cancel" )
+    inquirer list_input_index "$i18n_select_action" config_localhost_options config_localhost_options_index
 
     if [ "$config_localhost_options_index" -eq 0 ] 
     then
@@ -66,7 +66,7 @@ NginxConfigLocalhost()
 
         case $config_localhost_options_index in
             3) 
-                Println "$(gettext "SNI 域名分流:")\n\n${nginx_stream_server_name_list:-$(gettext "无")}\n\n"
+                Println "$(gettext "SNI 域名分流:")\n\n${nginx_stream_server_name_list:-$i18n_none}\n\n"
                 ExitOnText "$(gettext "输入指令(分流域名)")" server_name_directive
 
                 echo
@@ -97,7 +97,7 @@ NginxConfigLocalhost()
                 Println "$(eval_gettext "\$info SNI 域名分流添加成功")\n"
             ;;
             4) 
-                Println "$(gettext "SSL 协议分流"):\n\n${nginx_stream_protocol_list:-$(gettext "无")}\n"
+                Println "$(gettext "SSL 协议分流"):\n\n${nginx_stream_protocol_list:-$i18n_none}\n"
                 Println "$(eval_gettext "\$tip 空字符用 '' 表示")"
                 ExitOnText "$(gettext "输入指令(分流 SSL 协议)")" protocol_directive
 
@@ -134,7 +134,7 @@ NginxConfigLocalhost()
                 Println "$(eval_gettext "\$info SSL 协议分流添加成功")\n"
             ;;
             5) 
-                Println "$(gettext "ALPN 协议分流:")\n\n${nginx_stream_alpn_protocols_list:-$(gettext "无")}\n\n"
+                Println "$(gettext "ALPN 协议分流:")\n\n${nginx_stream_alpn_protocols_list:-$i18n_none}\n\n"
                 ExitOnText "$(gettext "输入指令(分流 ALPN 协议)")" alpn_protocols_directive
 
                 alpn_protocols_directive=${alpn_protocols_directive//\\/\\\\}
@@ -167,7 +167,7 @@ NginxConfigLocalhost()
                 Println "$(eval_gettext "\$info ALPN 协议分流添加成功")\n"
             ;;
             6) 
-                Println "$(gettext "分流后端"):\n\n${nginx_stream_upstream_list:-$(gettext "无")}\n\n"
+                Println "$(gettext "分流后端"):\n\n${nginx_stream_upstream_list:-$i18n_none}\n\n"
                 ExitOnText "$(gettext "输入指令(分流后端名称)")" upstream_args
 
                 Println "$(eval_gettext "\$tip 比如: 127.0.0.1:8888")"

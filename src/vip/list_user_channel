@@ -18,7 +18,7 @@ VipListUserChannel()
             then
                 expire_text=$(date +%c --date=@"$vip_user_expire")
             else
-                expire_text="$(gettext "无")"
+                expire_text="$i18n_none"
             fi
             if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
             then

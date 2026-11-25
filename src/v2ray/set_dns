@@ -20,7 +20,7 @@ V2raySetDns()
             Println "$(eval_gettext "\$tip 格式如 v2fly.org, domain:v2fly.org, geosite:cn")"
             inquirer text_input "$(gettext "输入域名或规则")" domain ""
             inquirer text_input "$(gettext "输入目标 IP/域名 (逗号分隔)")" ips ""
-            JQ mutate "$V2_CONFIG" '
+            ProxyMutateConfigTx "v2ray" '
                 def trim: gsub("^[ \t]+|[ \t]+$"; "");
                 .dns.hosts = ((.dns.hosts // {}) + {
                     ($d | trim): (
@@ -30,12 +30,12 @@ V2raySetDns()
                             ($v | trim)
                         end
                     )
-                })' --arg d "$domain" --arg v "$ips"
+                })' --arg d "$domain" --arg v "$ips" || return 1
             Println "$(eval_gettext "\$info 静态 IP 添加成功: \${green}\${domain}\${normal}")\n"
         ;;
         1)
             local addr port client_ip domains expect_ips
-            local skip_fb_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local skip_fb_opts=( "$i18n_no" "$i18n_yes" )
             local skip_fb_idx=0
             inquirer text_input "$(gettext "输入 DNS 地址 (如 1.1.1.1, https://...)")" addr "1.1.1.1"
             inquirer text_input "$(gettext "输入端口 (留空默认)")" port ""
@@ -67,49 +67,45 @@ V2raySetDns()
                     }' --arg addr "$addr" --arg port "$port" --arg cip "$client_ip" --arg dom "$domains" \
                     --arg eip "$expect_ips" --arg sf "$skip_fb_idx"
             fi
-            jq_path='["dns","servers"]'
-            JQ add "$V2_CONFIG" "[$srv_json]"
+            ProxyMutateConfigTx "v2ray" '.dns.servers = ((.dns.servers // []) + [$item])' --argjson item "$srv_json" || return 1
             Println "$(eval_gettext "\$info DNS 服务器添加成功: \${green}\${addr}\${normal}")\n"
         ;;
         2)
             local cip
             inquirer text_input "$(gettext "输入全局 clientIp (留空清除)")" cip ""
-            jq_path='["dns","clientIp"]'
             if [ -z "$cip" ]
             then
-                JQ delete "$V2_CONFIG"
+                ProxyMutateConfigTx "v2ray" 'del(.dns.clientIp)' || return 1
             else
-                JQ update "$V2_CONFIG" "$cip"
+                ProxyMutateConfigTx "v2ray" '.dns.clientIp = $cip' --arg cip "$cip" || return 1
             fi
             Println "$(eval_gettext "\$info DNS clientIp 设置成功")\n"
         ;;
         3)
             local dtag
             inquirer text_input "$(gettext "输入 DNS 标识 tag")" dtag "dns_inbound"
-            jq_path='["dns","tag"]'
-            JQ update "$V2_CONFIG" "$dtag"
+            ProxyMutateConfigTx "v2ray" '.dns.tag = $t' --arg t "$dtag" || return 1
             Println "$(eval_gettext "\$info DNS tag 设置成功: \${green}\${dtag}\${normal}")\n"
         ;;
         4)
             local qs_options=( 'UseIP' 'UseIPv4' 'UseIPv6' )
             local qs=""
             inquirer list_input "$(gettext "选择 DNS 查询策略 queryStrategy")" qs_options qs
-            jq_path='["dns","queryStrategy"]'
-            JQ update "$V2_CONFIG" "$qs"
+            ProxyMutateConfigTx "v2ray" '.dns.queryStrategy = $qs' --arg qs "$qs" || return 1
             Println "$(eval_gettext "\$info queryStrategy 已设置为 \${green}\${qs}\${normal}")\n"
         ;;
         5)
-            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local yn_opts=( "$i18n_no" "$i18n_yes" )
             local dc_idx=0 df_idx=0 dfm_idx=0
             inquirer list_input_index "$(gettext "禁用缓存 disableCache")" yn_opts dc_idx
             inquirer list_input_index "$(gettext "禁用回退 disableFallback")" yn_opts df_idx
             inquirer list_input_index "$(gettext "匹配时不回退 disableFallbackIfMatch")" yn_opts dfm_idx
 
-            JQ mutate "$V2_CONFIG" '.dns = ((.dns // {}) * {
+            ProxyMutateConfigTx "v2ray" '.dns = ((.dns // {}) * {
                 "disableCache": ($dc == "1"),
                 "disableFallback": ($df == "1"),
                 "disableFallbackIfMatch": ($dfm == "1")
-            })' --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx"
+            })' --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx" || return 1
             Println "$(eval_gettext "\$info V2Ray DNS 全局开关已更新")\n"
         ;;
         6)
@@ -127,7 +123,7 @@ V2raySetDns()
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的静态 IP")" host_keys del_idx
             local del_key="${host_keys[$del_idx]}"
-            JQ mutate "$V2_CONFIG" 'del(.dns.hosts[$k])' --arg k "$del_key"
+            ProxyMutateConfigTx "v2ray" 'del(.dns.hosts[$k])' --arg k "$del_key" || return 1
             Println "$(eval_gettext "\$info 已删除静态 IP: \${green}\${del_key}\${normal}")\n"
         ;;
         7)
@@ -144,11 +140,9 @@ V2raySetDns()
             fi
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的 DNS 服务器")" srv_opts del_idx
-            jq_path='["dns","servers",'"$del_idx"']'
-            JQ delete "$V2_CONFIG"
-            Println "$(eval_gettext "\$info 已删除 DNS 服务器:") ${green}${srv_opts[$del_idx]}${normal}\n"
+            ProxyMutateConfigTx "v2ray" 'del(.dns.servers[$i])' --argjson i "$del_idx" || return 1
+            local del_srv="${srv_opts[$del_idx]}"
+            Println "$(eval_gettext "\$info 已删除 DNS 服务器: \${green}\${del_srv}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive v2ray
 }

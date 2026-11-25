@@ -7,7 +7,7 @@ OpenListAppAdd()
         openlists_txt=""
         for((i=0;i<openlists_count;i++));
         do
-            openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[i]}\n"
+            openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}${i18n_name}: ${openlists_name[i]:-$i18n_none}\n${indent_6}${i18n_address}: ${openlists_url[i]}\n"
         done
 
         Println "$openlists_txt"
@@ -59,7 +59,7 @@ OpenListAppView()
     openlists_txt=""
     for((i=0;i<openlists_count;i++));
     do
-        openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}$(gettext "名称"): ${openlists_name[i]:-$(gettext "无")}\n${indent_6}$(gettext "地址"): ${openlists_url[i]}\n"
+        openlists_txt="$openlists_txt\n${green}$((i+1)).${normal}${indent_6}${i18n_name}: ${openlists_name[i]:-$i18n_none}\n${indent_6}${i18n_address}: ${openlists_url[i]}\n"
     done
 
     Println "$openlists_txt\n"

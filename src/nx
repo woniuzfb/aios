@@ -171,9 +171,11 @@ case ${1:-} in
     ;;
 esac
 
-Println "  $(gettext "nginx 管理面板") ${normal}${red}[v$sh_ver]${normal}
-
-  ${green}1.${normal} $(gettext "安装")
+if [ "${NGINX_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${NGINX_MENU_TEXT:-}" ]
+then
+    NGINX_MENU_TITLE="$(gettext "nginx 管理面板")"
+    NGINX_MENU_TEXT="
+  ${green}1.${normal} ${i18n_install}
   ${green}2.${normal} $(gettext "卸载")
   ${green}3.${normal} $(gettext "升级")
 ————————————
@@ -184,7 +186,7 @@ Println "  $(gettext "nginx 管理面板") ${normal}${red}[v$sh_ver]${normal}
   ${green}8.${normal} $(gettext "查看本地")
   ${green}9.${normal} $(gettext "修改本地")
 ————————————
- ${green}10.${normal} $(gettext "状态")
+ ${green}10.${normal} ${i18n_status}
  ${green}11.${normal} $(gettext "开关")
  ${green}12.${normal} $(gettext "重启")
 ————————————
@@ -204,7 +206,12 @@ Println "  $(gettext "nginx 管理面板") ${normal}${red}[v$sh_ver]${normal}
  $(eval_gettext "\$tip 输入: nx 打开面板")
 
 "
-read -p "`gettext \"输入序号\"` [1-24]: " nginx_num
+    NGINX_MENU_LOCALE="${sh_locale:-zh_CN}"
+fi
+
+Println "  ${NGINX_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+${NGINX_MENU_TEXT}"
+read -p "$i18n_input_no [1-24]: " nginx_num
 case "$nginx_num" in
     1) 
         NginxInstall

@@ -1,8 +1,8 @@
 EditChannelSchedule()
 {
     echo
-    channel_schedule_options=( "$(gettext "开始日期")" "$(gettext "结束日期")" "$(gettext "循环")" "$(gettext "自动清除")" "$(gettext "防盗链")" "$(gettext "频道名称")" "$(gettext "状态")" )
-    inquirer checkbox_input_indices "$(gettext "选择修改") [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] $(gettext "计划") $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
+    channel_schedule_options=( "$(gettext "开始日期")" "$(gettext "结束日期")" "$(gettext "循环")" "$(gettext "自动清除")" "$(gettext "防盗链")" "$(gettext "频道名称")" "$i18n_status" )
+    inquirer checkbox_input_indices "$i18n_select_edit [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] $(gettext "计划") $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
 
     for channel_schedule_options_index in "${channel_schedule_options_indices[@]}"
     do
@@ -127,7 +127,7 @@ EditChannelSchedules()
 {
     ListChannelSchedules
 
-    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     echo "$(gettext "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnl_schedules_num
@@ -211,7 +211,7 @@ EditChannelsSchedule()
         exit 1
     fi
 
-    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     echo "$(gettext "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnls_num

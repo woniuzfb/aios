@@ -12,7 +12,7 @@ V2raySetPolicy()
     echo
     inquirer list_input_index "$(gettext "选择 V2Ray 策略操作")" actions action_idx
 
-    local sw_opts=( "$(gettext "关闭")" "$(gettext "开启")" )
+    local sw_opts=( "$i18n_close" "$i18n_open" )
 
     case "$action_idx" in
         0)
@@ -42,7 +42,7 @@ V2raySetPolicy()
                 fi
             done
 
-            if ! JQ mutate "$V2_CONFIG" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
+            if ! ProxyMutateConfigTx "v2ray" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
                 ($lvl): {
                     "handshake": ($hs | tonumber),
                     "connIdle": ($ci | tonumber),
@@ -76,7 +76,7 @@ V2raySetPolicy()
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的用户等级")" lvls del_idx
             local del_lvl="${lvls[$del_idx]}"
-            if ! JQ mutate "$V2_CONFIG" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
+            if ! ProxyMutateConfigTx "v2ray" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
             then
                 Println "$(eval_gettext "\$error 删除等级 \${del_lvl} 策略失败")\n"
                 return 1
@@ -89,9 +89,7 @@ V2raySetPolicy()
             local sw_idx=1 sw_bool=false
             inquirer list_input_index "$(eval_gettext "设置 \${sys_key}")" sw_opts sw_idx
             [ "$sw_idx" -eq 1 ] && sw_bool=true
-            jq_bool=true
-            jq_path='["policy","system","'"$sys_key"'"]'
-            if ! JQ update "$V2_CONFIG" "$sw_bool"
+            if ! ProxyMutateConfigTx "v2ray" '.policy.system = ((.policy.system // {}) + {($k): $v})' --arg k "$sys_key" --argjson v "$sw_bool"
             then
                 Println "$(eval_gettext "\$error 更新系统策略 \${sys_key} 失败")\n"
                 return 1
@@ -99,6 +97,4 @@ V2raySetPolicy()
             Println "$(eval_gettext "\$info 已更新系统策略 \${green}\${sys_key}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive v2ray
 }

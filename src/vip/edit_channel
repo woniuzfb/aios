@@ -89,7 +89,7 @@ $(eval_gettext "选择修改频道 \${green}[ \$vip_channel_name ]\${normal} 内
                             Println "$(eval_gettext "\$info 频道名称修改成功")\n"
                         ;;
                         3) 
-                            Println "$(gettext "原频道 epg"): ${red}${vip_channel_epg_id:-$(gettext "无")}${normal}"
+                            Println "$(gettext "原频道 epg"): ${red}${vip_channel_epg_id:-$i18n_none}${normal}"
                             VipSetChannelEpgId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"epg_id"]'
                             JQ update "$VIP_FILE" "$vip_channel_epg_id"

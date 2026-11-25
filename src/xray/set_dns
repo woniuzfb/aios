@@ -25,17 +25,18 @@ XraySetDns()
                 Println "$(eval_gettext "\$error 域名和目标 IP/域名不能为空")\n"
                 return 1
             fi
-            if ! JQ mutate "$X_CONFIG" '.dns.hosts = ((.dns.hosts // {}) + {($d): (if ($v | contains(",")) then ($v | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else ($v | gsub("^\\s+|\\s+$"; "")) end)})' \
+            if ! ProxyMutateConfigTx "xray" '.dns.hosts = ((.dns.hosts // {}) + {($d): (if ($v | contains(",")) then ($v | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) else ($v | gsub("^\\s+|\\s+$"; "")) end)})' \
                 --arg d "$domain" --arg v "$ips"
             then
-                Println "$(eval_gettext "\$error 添加静态 IP 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 添加静态 IP 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 静态 IP 添加成功: \${green}\${domain}\${normal}")\n"
         ;;
         1)
             local addr port client_ip domains expected_ips unexpected_ips timeout_ms
-            local skip_fb_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local skip_fb_opts=( "$i18n_no" "$i18n_yes" )
             local skip_fb_idx=0 final_q_idx=0
             inquirer text_input "$(gettext "输入 DNS 地址 (如 1.1.1.1, https://...)")" addr "1.1.1.1"
             inquirer text_input "$(gettext "输入端口 (留空默认)")" port ""
@@ -76,10 +77,10 @@ XraySetDns()
                     --arg eip "$expected_ips" --arg uip "$unexpected_ips" --arg tms "$timeout_ms" \
                     --arg sf "$skip_fb_idx" --arg fq "$final_q_idx"
             fi
-            jq_path='["dns","servers"]'
-            if ! JQ add "$X_CONFIG" "[$srv_json]"
+            if ! ProxyMutateConfigTx "xray" '.dns.servers = ((.dns.servers // []) + [$item])' --argjson item "$srv_json"
             then
-                Println "$(eval_gettext "\$error 添加 DNS 服务器失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 添加 DNS 服务器失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info DNS 服务器添加成功: \${green}\${addr}\${normal}")\n"
@@ -87,18 +88,19 @@ XraySetDns()
         2)
             local cip
             inquirer text_input "$(gettext "输入全局 clientIp (留空清除)")" cip ""
-            jq_path='["dns","clientIp"]'
             if [ -z "$cip" ]
             then
-                if ! JQ delete "$X_CONFIG"
+                if ! ProxyMutateConfigTx "xray" 'del(.dns.clientIp)'
                 then
-                    Println "$(eval_gettext "\$error 清除 DNS clientIp 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 清除 DNS clientIp 失败: \$err_detail")\n"
                     return 1
                 fi
             else
-                if ! JQ update "$X_CONFIG" "$cip"
+                if ! ProxyMutateConfigTx "xray" '.dns.clientIp = $cip' --arg cip "$cip"
                 then
-                    Println "$(eval_gettext "\$error 设置 DNS clientIp 失败")\n"
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 设置 DNS clientIp 失败: \$err_detail")\n"
                     return 1
                 fi
             fi
@@ -107,10 +109,10 @@ XraySetDns()
         3)
             local dtag
             inquirer text_input "$(gettext "输入 DNS 标识 tag")" dtag "dns_inbound"
-            jq_path='["dns","tag"]'
-            if ! JQ update "$X_CONFIG" "$dtag"
+            if ! ProxyMutateConfigTx "xray" '.dns.tag = $t' --arg t "$dtag"
             then
-                Println "$(eval_gettext "\$error 设置 DNS tag 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 设置 DNS tag 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info DNS tag 设置成功: \${green}\${dtag}\${normal}")\n"
@@ -119,16 +121,16 @@ XraySetDns()
             local qs_options=( 'UseIP' 'UseIPv4' 'UseIPv6' 'UseSystem' )
             local qs=""
             inquirer list_input "$(gettext "选择 DNS 查询策略 queryStrategy")" qs_options qs
-            jq_path='["dns","queryStrategy"]'
-            if ! JQ update "$X_CONFIG" "$qs"
+            if ! ProxyMutateConfigTx "xray" '.dns.queryStrategy = $qs' --arg qs "$qs"
             then
-                Println "$(eval_gettext "\$error 设置 queryStrategy 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 设置 queryStrategy 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info queryStrategy 已设置为 \${green}\${qs}\${normal}")\n"
         ;;
         5)
-            local yn_opts=( "$(gettext "否")" "$(gettext "是")" )
+            local yn_opts=( "$i18n_no" "$i18n_yes" )
             local dc_idx=0 df_idx=0 dfm_idx=0 ss_idx=0 pq_idx=0 sh_idx=0 ttl=""
             inquirer list_input_index "$(gettext "禁用缓存 disableCache")" yn_opts dc_idx
             inquirer list_input_index "$(gettext "禁用回退 disableFallback")" yn_opts df_idx
@@ -146,7 +148,7 @@ XraySetDns()
             inquirer list_input_index "$(gettext "启用并行查询 enableParallelQuery")" yn_opts pq_idx
             inquirer list_input_index "$(gettext "使用系统 Hosts useSystemHosts")" yn_opts sh_idx
 
-            if ! JQ mutate "$X_CONFIG" '.dns = ((.dns // {}) * {
+            if ! ProxyMutateConfigTx "xray" '.dns = ((.dns // {}) * {
                 "disableCache": ($dc == "1"),
                 "disableFallback": ($df == "1"),
                 "disableFallbackIfMatch": ($dfm == "1"),
@@ -157,7 +159,8 @@ XraySetDns()
                 --arg dc "$dc_idx" --arg df "$df_idx" --arg dfm "$dfm_idx" \
                 --arg ss "$ss_idx" --arg pq "$pq_idx" --arg sh "$sh_idx" --arg ttl "$ttl"
             then
-                Println "$(eval_gettext "\$error 更新 Xray DNS 全局开关失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 更新 Xray DNS 全局开关失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info Xray DNS 全局开关已更新")\n"
@@ -177,10 +180,10 @@ XraySetDns()
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的静态 IP")" host_keys del_idx
             local del_key="${host_keys[$del_idx]}"
-            jq_path='["dns","hosts","'"$del_key"'"]'
-            if ! JQ delete "$X_CONFIG"
+            if ! ProxyMutateConfigTx "xray" 'del(.dns.hosts[$k])' --arg k "$del_key"
             then
-                Println "$(eval_gettext "\$error 删除静态 IP 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除静态 IP 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已删除静态 IP: \${green}\${del_key}\${normal}")\n"
@@ -199,16 +202,14 @@ XraySetDns()
             fi
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的 DNS 服务器")" srv_opts del_idx
-            jq_path='["dns","servers",'"$del_idx"']'
-            if ! JQ delete "$X_CONFIG"
+            if ! ProxyMutateConfigTx "xray" 'del(.dns.servers[$i])' --argjson i "$del_idx"
             then
-                Println "$(eval_gettext "\$error 删除 DNS 服务器失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除 DNS 服务器失败: \$err_detail")\n"
                 return 1
             fi
             local del_srv="${srv_opts[$del_idx]}"
             Println "$(eval_gettext "\$info 已删除 DNS 服务器: \${green}\${del_srv}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }

@@ -5,7 +5,7 @@ dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
 echo
 dnscrypt_options=( "$(gettext "安装/升级 dnscrypt proxy")" "$(gettext "开关 edns0")" "$(gettext "开关 ipv6 查询")" )
-inquirer list_input_index "$(gettext "选择操作")" dnscrypt_options dnscrypt_options_index
+inquirer list_input_index "$i18n_select_action" dnscrypt_options dnscrypt_options_index
 
 if [ "$dnscrypt_options_index" -eq 1 ] 
 then
@@ -40,8 +40,8 @@ then
         exit 1
     fi
     echo
-    switch_options=( "$(gettext "开启")" "$(gettext "关闭")" )
-    inquirer list_input_index "$(gettext "选择操作")" switch_options switch_options_index
+    switch_options=( "$i18n_open" "$i18n_close" )
+    inquirer list_input_index "$i18n_select_action" switch_options switch_options_index
     if [ "$switch_options_index" -eq 0 ] 
     then
         echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"

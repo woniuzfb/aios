@@ -20,7 +20,7 @@ IbmGetUsers()
         space=${space%\"}
         ibm_users_space+=("$space")
 
-        ibm_users_list="$ibm_users_list ${green}$ibm_users_count.${normal}${indent_6}$(gettext "地区"): ${green}$region${normal}  $(gettext "资源组"): ${green}$resource_group${normal}\n${indent_6}$(gettext "邮箱"): ${green}$email${normal}  $(gettext "密码"): ${green}$pass${normal}\n${indent_6}$(gettext "组织"): ${green}$org${normal}  $(gettext "空间"): ${green}$space${normal}\n\n"
+        ibm_users_list="$ibm_users_list ${green}$ibm_users_count.${normal}${indent_6}$(gettext "地区"): ${green}$region${normal}  $(gettext "资源组"): ${green}$resource_group${normal}\n${indent_6}$(gettext "邮箱"): ${green}$email${normal}  $i18n_password: ${green}$pass${normal}\n${indent_6}$(gettext "组织"): ${green}$org${normal}  $(gettext "空间"): ${green}$space${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.region,.resource_group,.org,.space]|join(" ")' "$IBM_CONFIG")
     return 0
 }

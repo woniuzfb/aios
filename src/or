@@ -168,9 +168,11 @@ case ${1:-} in
     ;;
 esac
 
-Println "  $(gettext "openresty 管理面板") ${normal}${red}[v$sh_ver]${normal}
-
-  ${green}1.${normal} $(gettext "安装")
+if [ "${OPENRESTY_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${OPENRESTY_MENU_TEXT:-}" ]
+then
+    OPENRESTY_MENU_TITLE="$(gettext "openresty 管理面板")"
+    OPENRESTY_MENU_TEXT="
+  ${green}1.${normal} ${i18n_install}
   ${green}2.${normal} $(gettext "卸载")
   ${green}3.${normal} $(gettext "升级")
 ————————————
@@ -181,7 +183,7 @@ Println "  $(gettext "openresty 管理面板") ${normal}${red}[v$sh_ver]${normal
   ${green}8.${normal} $(gettext "查看本地")
   ${green}9.${normal} $(gettext "修改本地")
 ————————————
- ${green}10.${normal} $(gettext "状态")
+ ${green}10.${normal} ${i18n_status}
  ${green}11.${normal} $(gettext "开关")
  ${green}12.${normal} $(gettext "重启")
 ————————————
@@ -194,7 +196,12 @@ Println "  $(gettext "openresty 管理面板") ${normal}${red}[v$sh_ver]${normal
  $(eval_gettext "\$tip 输入: or 打开面板")
 
 "
-read -p "`gettext \"输入序号\"` [1-17]: " openresty_num
+    OPENRESTY_MENU_LOCALE="${sh_locale:-zh_CN}"
+fi
+
+Println "  ${OPENRESTY_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+${OPENRESTY_MENU_TEXT}"
+read -p "$i18n_input_no [1-17]: " openresty_num
 case "$openresty_num" in
     1) 
         OpenrestyInstall

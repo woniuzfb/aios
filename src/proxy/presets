@@ -1,0 +1,184 @@
+ProxyBuildPresetConfig()
+{
+    local preset_id="$1"
+    local core="$2"
+    local ver="${3:-}"
+    local format="${4:-json}"
+
+    [ -z "$ver" ] && ver=$(ProxyGetTargetVersion "$core")
+
+    case "$preset_id" in
+        xray-vless-reality-server)
+            local xray_bin=""
+            xray_bin=$(ProxyDetectCoreBin "xray")
+            if [ -z "$xray_bin" ] || [ ! -x "$xray_bin" ]
+            then
+                Println "$(eval_gettext "\$error 未检测到可用的 aios-xray 二进制, 无法生成 REALITY X25519 密钥对")\n" >&2
+                return 1
+            fi
+
+            local x25519_out="" priv_key="" pub_key=""
+            if ! x25519_out=$("$xray_bin" x25519 2>&1)
+            then
+                Println "$(eval_gettext "\$error 调用 aios-xray x25519 生成密钥对失败")\n" >&2
+                return 1
+            fi
+
+            priv_key=$(printf '%s\n' "$x25519_out" | ProxyExtractXrayPrivKey | tr -d '\r\n ')
+            pub_key=$(printf '%s\n' "$x25519_out" | ProxyExtractXrayPubKey | tr -d '\r\n ')
+            if [ -z "$priv_key" ] || [ -z "$pub_key" ]
+            then
+                Println "$(eval_gettext "\$error 解析 aios-xray x25519 密钥对输出失败")\n" >&2
+                return 1
+            fi
+
+            local u_key stream_opts stream_json
+            u_key=$(ProxyXrayInboundUserKey "vless" "$ver")
+            stream_opts=$($JQ_FILE -n --arg pk "$priv_key" '{"target":"www.example.com:443","server_names":["www.example.com"],"private_key":$pk,"short_ids":["01234567"]}')
+            stream_json=$(ProxyBuildStreamSettings "xray" "$ver" "json" "raw" "reality" "$stream_opts")
+            $JQ_FILE -n --arg uk "$u_key" --argjson st "$stream_json" '{
+                log: {logLevel: "warning"},
+                inbounds: [{
+                    tag: "vless-reality-in",
+                    listen: "0.0.0.0",
+                    port: 443,
+                    protocol: "vless",
+                    settings: {decryption: "none", ($uk): [{id: "11111111-1111-4111-8111-111111111111", flow: "xtls-rprx-vision", email: "user@example.com"}]},
+                    streamSettings: $st,
+                    sniffing: {enabled: true, destOverride: ["http", "tls", "quic"]}
+                }],
+                outbounds: [
+                    {tag: "direct", protocol: "freedom"},
+                    {tag: "block", protocol: "blackhole"}
+                ]
+            }'
+        ;;
+        xray-local-socks-http)
+            $JQ_FILE -n '{
+                log: {logLevel: "warning"},
+                inbounds: [
+                    {tag: "socks-in", listen: "127.0.0.1", port: 10808, protocol: "socks", settings: {auth: "noauth", udp: true}},
+                    {tag: "http-in", listen: "127.0.0.1", port: 10809, protocol: "http", settings: {}}
+                ],
+                outbounds: [
+                    {tag: "direct", protocol: "freedom"},
+                    {tag: "block", protocol: "blackhole"}
+                ],
+                routing: {
+                    domainStrategy: "IPIfNonMatch",
+                    rules: [{ip: ["geoip:private"], outboundTag: "direct"}]
+                }
+            }'
+        ;;
+        v2ray-local-socks-http)
+            if [ "$format" == "jsonv5" ]
+            then
+                $JQ_FILE -n '{
+                    log: {access: {type: "None"}, error: {type: "Console", level: "Warning"}},
+                    inbounds: [
+                        {tag: "socks-in", listen: "127.0.0.1", port: 10808, protocol: "socks", settings: {udpEnabled: true}}
+                    ],
+                    outbounds: [
+                        {tag: "direct", protocol: "freedom", settings: {}},
+                        {tag: "block", protocol: "blackhole", settings: {}}
+                    ]
+                }'
+            else
+                $JQ_FILE -n '{
+                    log: {loglevel: "warning"},
+                    inbounds: [
+                        {tag: "socks-in", listen: "127.0.0.1", port: 10808, protocol: "socks", settings: {auth: "noauth", udp: true}},
+                        {tag: "http-in", listen: "127.0.0.1", port: 10809, protocol: "http", settings: {}}
+                    ],
+                    outbounds: [
+                        {tag: "direct", protocol: "freedom"},
+                        {tag: "block", protocol: "blackhole", settings: {response: {type: "none"}}}
+                    ],
+                    routing: {
+                        domainStrategy: "IPIfNonMatch",
+                        rules: [{type: "field", ip: ["geoip:private"], outboundTag: "direct"}]
+                    }
+                }'
+            fi
+        ;;
+        *)
+            return 1
+        ;;
+    esac
+}
+
+ProxyApplyPresetInteractive()
+{
+    local core="$1"
+    local format="json"
+    local preset_ids=()
+    local preset_labels=()
+
+    if [ "$core" == "xray" ]
+    then
+        preset_ids=( "xray-vless-reality-server" "xray-local-socks-http" )
+        preset_labels=(
+            "$(gettext "Xray VLESS + REALITY 服务端模板")"
+            "$(gettext "Xray 本机 SOCKS5 / HTTP 客户端模板")"
+        )
+    elif [ "$core" == "v2ray" ]
+    then
+        format=$(ProxyGetV2rayFormat)
+        preset_ids=( "v2ray-local-socks-http" )
+        preset_labels=(
+            "$(gettext "V2Ray 本机 SOCKS5 / HTTP 客户端模板")"
+        )
+    else
+        return 1
+    fi
+
+    local p_idx=0
+    inquirer list_input_index "$(gettext "选择要应用的配置预设模板")" preset_labels p_idx
+    local chosen="${preset_ids[p_idx]}"
+    local ver
+    ver=$(ProxyGetTargetVersion "$core")
+
+    local preset_json=""
+    if ! preset_json=$(ProxyBuildPresetConfig "$chosen" "$core" "$ver" "$format") || [ -z "$preset_json" ]
+    then
+        Println "$(eval_gettext "\$error 生成预设配置失败")\n"
+        return 1
+    fi
+
+    local preview=""
+    preview=$(printf '%s\n' "$preset_json" | ProxyRedactSecrets)
+    Println "\n$(gettext "预设配置预览 (已脱敏)"):\n${preview}\n"
+
+    local confirm_opts=( "$(gettext "否")" "$(gettext "是")" )
+    local confirm_idx=0
+    inquirer list_input_index "$(gettext "确认应用此预设模板覆盖当前配置?")" confirm_opts confirm_idx
+    if [ "$confirm_idx" -ne 1 ]
+    then
+        Println "$(eval_gettext "\$info 已取消应用预设")\n"
+        return 0
+    fi
+
+    if ! ProxyConfigTx "$core" "$preset_json"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 应用预设失败: \$err_detail")\n"
+        return 1
+    fi
+
+    Println "$(eval_gettext "\$info 已成功应用预设模板: \$chosen")\n"
+
+    if [ "$chosen" == "xray-vless-reality-server" ]
+    then
+        local xray_bin="" gen_priv="" gen_pub=""
+        xray_bin=$(ProxyDetectCoreBin "xray")
+        gen_priv=$(printf '%s\n' "$preset_json" | $JQ_FILE -r '.inbounds[0].streamSettings.realitySettings.privateKey // ""')
+        if [ -n "$xray_bin" ] && [ -x "$xray_bin" ] && [ -n "$gen_priv" ]
+        then
+            gen_pub=$("$xray_bin" x25519 -i "$gen_priv" 2> /dev/null | ProxyExtractXrayPubKey | tr -d '\r\n ')
+            if [ -n "$gen_pub" ]
+            then
+                Println "$(eval_gettext "\$info 已生成 REALITY 客户端公钥 (请妥善保存用于客户端配置): \${green}\${gen_pub}\${normal}")\n"
+            fi
+        fi
+    fi
+}

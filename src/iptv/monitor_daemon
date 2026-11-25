@@ -29,7 +29,7 @@ MonitorSet()
             monitor_flv_push_links+=("${chnls_flv_push_link[i]}")
             monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
 
-            flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}$(gettext "推"): ${chnls_flv_push_link[i]}\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$(gettext "无")}\n\n"
+            flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}$(gettext "推"): ${chnls_flv_push_link[i]}\n${indent_6}$(gettext "拉"): ${chnls_flv_pull_link[i]:-$i18n_none}\n\n"
         elif [ -d "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" = true ] && [ "${chnls_seg_count[i]}" != 0 ]
         then
             hls_count=$((hls_count + 1))
@@ -41,8 +41,8 @@ MonitorSet()
     if [ "$flv_count" -gt 0 ]
     then
         Println "$flv_list"
-        Println "  ${green}$((flv_count+1)).${normal}${indent_6}$(gettext "全部")"
-        Println "  ${green}$((flv_count+2)).${normal}${indent_6}$(gettext "不设置")"
+        Println "  ${green}$((flv_count+1)).${normal}${indent_6}$i18n_all"
+        Println "  ${green}$((flv_count+2)).${normal}${indent_6}$i18n_blank"
 
         Println "$(gettext "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)")"
         while read -p "$(gettext "(默认: 不设置): ")" flv_nums
@@ -75,8 +75,8 @@ MonitorSet()
     if [ -n "$hls_list" ]
     then
         Println "$hls_list"
-        Println "  ${green}$((hls_count+1)).${normal}${indent_6}$(gettext "全部")"
-        Println "  ${green}$((hls_count+2)).${normal}${indent_6}$(gettext "不设置")"
+        Println "  ${green}$((hls_count+1)).${normal}${indent_6}$i18n_all"
+        Println "  ${green}$((hls_count+2)).${normal}${indent_6}$i18n_blank"
 
         Println "$(gettext "请选择需要监控的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)")"
         while read -p "$(gettext "(默认: 不设置): ")" hls_nums
@@ -413,7 +413,7 @@ Monitor()
                                         break 2
                                     elif [ "$chnl_status" == "off" ]
                                     then
-                                        MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $(gettext "已开启")"
+                                        MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $i18n_enabled"
                                         MonitorHlsRestartChannel
                                         break 2
                                     fi
@@ -470,7 +470,7 @@ Monitor()
                                             encrypt_command="-key $encrypt_key -iv $iv_hex"
                                         else
                                             GetChannel
-                                            MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $(gettext "已开启")"
+                                            MonitorLog "${channel_name[hls_index]:-$chnl_channel_name} $i18n_enabled"
                                             MonitorHlsRestartChannel
                                             break 2
                                         fi

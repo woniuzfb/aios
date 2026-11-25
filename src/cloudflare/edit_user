@@ -45,12 +45,12 @@ CloudflareEditUser()
     Println "$(eval_gettext "  用户密码: \${green} \$cf_user_pass_new \${normal}")\n"
 
     Println "$(gettext "请输入用户 Token")"
-    read -p "($(gettext "默认"): ${cf_user_token:-$i18n_blank}): " cf_user_token_new
+    read -p "($i18n_default: ${cf_user_token:-$i18n_blank}): " cf_user_token_new
     cf_user_token_new=${cf_user_token_new:-$cf_user_token}
     Println "  $(gettext "用户 Token"): ${green} ${cf_user_token_new:-$i18n_blank} ${normal}\n"
 
     Println "$(gettext "请输入用户 Key")"
-    read -p "($(gettext "默认"): ${cf_user_api_key:-$i18n_blank}): " cf_user_api_key_new
+    read -p "($i18n_default: ${cf_user_api_key:-$i18n_blank}): " cf_user_api_key_new
     cf_user_api_key_new=${cf_user_api_key_new:-$cf_user_api_key}
     Println "  $(gettext "用户 Token"): ${green} ${cf_user_api_key_new:-$i18n_blank} ${normal}\n"
 

@@ -23,8 +23,16 @@ XrayListStats()
     local api_server
     api_server=$(XrayGetApiServer)
 
+    local bin
+    bin=$(ProxyDetectCoreBin "xray")
+    if [ ! -x "$bin" ]
+    then
+        Println "$(eval_gettext "\$error 未找到隔离版 aios-xray (\$bin)")\n"
+        return 1
+    fi
+
     local raw_stats
-    if ! raw_stats=$("$XCTL_FILE" api statsquery --server="$api_server" 2>&1)
+    if ! raw_stats=$("$bin" api statsquery --server="$api_server" 2>&1)
     then
         Println "$(eval_gettext "\$error 无法连接 Xray API (\$api_server), 请确认已开启 api 与 stats: \${raw_stats}")\n"
         return 1
@@ -52,7 +60,7 @@ XrayResetStats()
 {
     if [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ] && [ -t 0 ]
     then
-        local confirm_opts=( "$(gettext "否")" "$(gettext "是")" )
+        local confirm_opts=( "$i18n_no" "$i18n_yes" )
         local confirm_idx=0
         echo
         inquirer list_input_index "$(gettext "确认重置 Xray 所有流量统计?")" confirm_opts confirm_idx
@@ -66,8 +74,16 @@ XrayResetStats()
     local api_server
     api_server=$(XrayGetApiServer)
 
+    local bin
+    bin=$(ProxyDetectCoreBin "xray")
+    if [ ! -x "$bin" ]
+    then
+        Println "$(eval_gettext "\$error 未找到隔离版 aios-xray (\$bin)")\n"
+        return 1
+    fi
+
     local err_msg=""
-    if err_msg=$("$XCTL_FILE" api statsquery --server="$api_server" --reset 2>&1)
+    if err_msg=$("$bin" api statsquery --server="$api_server" --reset 2>&1)
     then
         Println "$(eval_gettext "\$info 已重置 Xray 流量统计")\n"
     else

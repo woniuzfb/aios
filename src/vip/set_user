@@ -40,7 +40,7 @@ VipSetUserSum()
 
 "
 
-    while read -p "($(gettext "默认"): 2): " vip_user_sum_num 
+    while read -p "($i18n_default: 2): " vip_user_sum_num 
     do
         case $vip_user_sum_num in
             1) 
@@ -53,7 +53,7 @@ VipSetUserSum()
             2|"") 
                 vip_user_sum="tsum"
                 Println "$(gettext "请输入天数")"
-                while read -p "($(gettext "默认"): 1): " vip_user_expire_days 
+                while read -p "($i18n_default: 1): " vip_user_expire_days 
                 do
                     case $vip_user_expire_days in
                         ""|1) 
@@ -88,7 +88,7 @@ VipSetUserSum()
             ;;
         esac
     done
-    Println "  $(gettext "验证类型"): ${green} $vip_user_sum ${normal}\n  $(gettext "到期天数"): ${green} ${vip_user_expire_days:-$(gettext "无")} ${normal}\n"
+    Println "  $(gettext "验证类型"): ${green} $vip_user_sum ${normal}\n  $(gettext "到期天数"): ${green} ${vip_user_expire_days:-$i18n_none} ${normal}\n"
 }
 
 VipSetUserName()

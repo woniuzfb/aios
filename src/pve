@@ -13,8 +13,10 @@ fi
 
 ShFileCheck
 
-Println "  $(gettext "Proxmox VE 管理面板") ${normal}${red}[v$sh_ver]${normal}
-
+if [ "${pve_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+then
+    pve_menu_title_cache=$(gettext "Proxmox VE 管理面板")
+    pve_menu_body_cache="
   ${green}1.${normal} $(gettext "设置 apt 源")
   ${green}2.${normal} $(gettext "设置 vimrc")
   ${green}3.${normal} $(gettext "设置 显示器")
@@ -35,13 +37,18 @@ Println "  $(gettext "Proxmox VE 管理面板") ${normal}${red}[v$sh_ver]${norma
  ${green}15.${normal} $(gettext "更新脚本")
 
 "
-read -p "`gettext \"输入序号\"` [1-15]: " pve_num
+    pve_menu_locale="${sh_locale:-zh_CN}"
+fi
+
+Println "  ${pve_menu_title_cache} ${normal}${red}[v$sh_ver]${normal}
+${pve_menu_body_cache}"
+read -p "$i18n_input_no [1-15]: " pve_num
 
 case $pve_num in
     1)
         echo
         apt_options=( "$(gettext "切换 非订阅源/订阅 源")" "$(gettext "切换 debian 国内/国外 源")" )
-        inquirer list_input_index "$(gettext "选择操作")" apt_options apt_options_index
+        inquirer list_input_index "$i18n_select_action" apt_options apt_options_index
 
         VERSION_CODENAME=$(AptGetCodename)
 
@@ -104,7 +111,7 @@ case $pve_num in
 
         echo
         monitor_options=( "$(gettext "自动关闭显示器")" "$(gettext "取消自动关闭显示器")" )
-        inquirer list_input_index "$(gettext "选择操作")" monitor_options monitor_options_index
+        inquirer list_input_index "$i18n_select_action" monitor_options monitor_options_index
 
         if [ "$monitor_options_index" -eq 0 ]
         then
@@ -275,7 +282,7 @@ case $pve_num in
 
         echo
         nbfc_options=( "$(gettext "查看状态")" "$(gettext "设置寄存器值")" "$(gettext "开启自动控制")" "$(gettext "设置风扇转速")" "$(gettext "搜索配置")" "$(gettext "应用配置")" )
-        inquirer list_input_index "$(gettext "选择操作")" nbfc_options nbfc_options_index
+        inquirer list_input_index "$i18n_select_action" nbfc_options nbfc_options_index
 
         cd /opt/nbfc
 
@@ -698,6 +705,7 @@ case $pve_num in
             configs_count=0
             configs_time=()
             configs_name=()
+            pve_i18n_date=$(gettext "日期")
             for file in "${files[@]}"
             do
                 if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]]
@@ -715,7 +723,7 @@ case $pve_num in
                 configs_name+=("$config_name")
                 configs_count=$((configs_count+1))
                 printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
-                configs_list="$configs_list $configs_count.${indent_6}$(gettext "名称"): ${green}${config_name_list:-$(gettext "无")}${normal} $(gettext "日期"): ${green}$config_date${normal}\n\n"
+                configs_list="$configs_list $configs_count.${indent_6}${i18n_name}: ${green}${config_name_list:-$i18n_none}${normal} ${pve_i18n_date}: ${green}$config_date${normal}\n\n"
             done
 
             Println "$configs_list"
@@ -788,8 +796,8 @@ case $pve_num in
             exit 1
         fi
         echo
-        switch_options=( "$(gettext "开启")" "$(gettext "关闭")" )
-        inquirer list_input_index "$(gettext "选择操作")" switch_options switch_options_index
+        switch_options=( "$i18n_open" "$i18n_close" )
+        inquirer list_input_index "$i18n_select_action" switch_options switch_options_index
         if [ -f /opt/AdGuardHome/AdGuardHome.yaml ]
         then
             /opt/AdGuardHome/AdGuardHome -s stop || true

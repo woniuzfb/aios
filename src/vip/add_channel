@@ -8,7 +8,7 @@ VipAddChannel()
     then
         if [ ! -f "$IPTV_ROOT/VIP" ] 
         then
-            Println "$(eval_gettext "\$info 获取频道中...")"
+            Println "$(eval_gettext "\$info 获取频道...")"
             if ! curl -s -L "$VIP_CHANNELS_LINK" -o "${VIP_CHANNELS_FILE}_tmp"
             then
                 if [ ! -s "$VIP_CHANNELS_FILE" ] 
@@ -75,13 +75,13 @@ VipAddChannel()
                 vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
             else
                 flag=0
-                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\r\033[47C$(gettext "频道ID"): ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-$(gettext "无")}\n\n"
+                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\r\033[47C$(gettext "频道ID"): ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$i18n_none}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-$i18n_none}\n\n"
             fi
         done
 
         if [ "$flag" -eq 1 ] 
         then
-            vip_channels_list="$vip_channels_list\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$(gettext "无")}\n\n"
+            vip_channels_list="$vip_channels_list\n\033[7C$(gettext "频道ID"): ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-$i18n_none}\n\n"
         fi
 
         Println "$vip_channels_list"

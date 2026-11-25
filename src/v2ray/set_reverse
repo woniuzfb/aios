@@ -13,12 +13,12 @@ V2raySetReverse()
             JQs build item_json '{"tag": $t, "domain": $d}' --arg t "$r_tag" --arg d "$r_domain"
             if [ "$action_idx" -eq 0 ]
             then
-                jq_path='["reverse","bridges"]'
-                JQ add "$V2_CONFIG" "[$item_json]"
+                ProxyMutateConfigTx "v2ray" '.reverse = ((.reverse // {}) | .bridges = ((.bridges // []) + [$item]))' \
+                    --argjson item "$item_json" || return 1
                 Println "$(eval_gettext "\$info 已添加 Bridge \${green}\${r_tag}\${normal}")\n"
             else
-                jq_path='["reverse","portals"]'
-                JQ add "$V2_CONFIG" "[$item_json]"
+                ProxyMutateConfigTx "v2ray" '.reverse = ((.reverse // {}) | .portals = ((.portals // []) + [$item]))' \
+                    --argjson item "$item_json" || return 1
                 Println "$(eval_gettext "\$info 已添加 Portal \${green}\${r_tag}\${normal}")\n"
             fi
         ;;
@@ -38,11 +38,8 @@ V2raySetReverse()
             fi
             local del_idx=0
             inquirer list_input_index "$(eval_gettext "选择要删除的 \${r_key}")" r_opts del_idx
-            jq_path='["reverse","'"$r_key"'",'"$del_idx"']'
-            JQ delete "$V2_CONFIG"
+            ProxyMutateConfigTx "v2ray" 'del(.reverse[$k][$i])' --arg k "$r_key" --argjson i "$del_idx" || return 1
             Println "$(eval_gettext "\$info 已删除 \${r_key}:") ${green}${r_opts[$del_idx]}${normal}\n"
         ;;
     esac
-
-    ProxyRestartIfActive v2ray
 }

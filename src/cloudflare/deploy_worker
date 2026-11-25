@@ -8,7 +8,7 @@ CloudflareDeployWorker()
         exit 1
     fi
 
-    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}$(gettext "全部")"
+    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}$i18n_all"
 
     Println "$(gettext "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11")"
     while read -p "$i18n_default_cancel" cf_workers_num
@@ -98,7 +98,7 @@ CloudflareDeployWorker()
         exit 1
     fi
 
-    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}$(gettext "全部")"
+    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}$i18n_all"
 
     cf_users_indices=()
     Println "$(gettext "选择用户, 多个用户用空格分隔, 比如 5 7 9-11")"

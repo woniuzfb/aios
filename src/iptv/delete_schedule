@@ -10,7 +10,7 @@ DelChannelSchedules()
 {
     ListChannelSchedules
 
-    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     echo "$(gettext "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnl_schedules_num
@@ -105,7 +105,7 @@ DelChannelsSchedule()
         exit 1
     fi
 
-    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$(gettext "全部")\n\n"
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}$i18n_all\n\n"
 
     echo "$(gettext "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)")"
     while read -p "$i18n_default_cancel" chnls_num

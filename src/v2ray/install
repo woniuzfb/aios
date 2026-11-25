@@ -1,82 +1,63 @@
 V2rayInstall()
 {
-    if [ -s "$V2_CONFIG" ]
-    then
-        Println "$(eval_gettext "\$error v2ray 已存在...")\n"
-        ExitOnList n "`gettext \"是否覆盖原安装\"`"
-    fi
-
+    local req_tag="${1:-v${V2RAY_LATEST_TESTED_VER}}"
     DepsCheck
     JQInstall
+    ProxyEnsureDirs
 
-    if ! grep -q 'v2ray:' < "/etc/passwd"
+    if [ -x "$AIOS_V2RAY_BIN" ] && [ -t 0 ] && [ -z "${1:-}" ]
     then
-        if grep -q '\--group ' < <(adduser --help)
-        then
-            adduser v2ray --system --group --no-create-home > /dev/null
-        else
-            adduser v2ray --system --no-create-home > /dev/null
-        fi
-        usermod -s /usr/sbin/nologin v2ray
+        Println "$(eval_gettext "\$info aios-v2ray 已存在, 可继续安装其他版本到隔离槽位")\n"
     fi
 
-    Println "$(eval_gettext "\$info 安装 v2ray...")"
+    Println "$(eval_gettext "\$info 安装隔离版 aios-v2ray (\$req_tag)...")"
 
-    { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
-    | sed "s+nobody+v2ray+g" \
-    | sed "s+ 'sha1'++g" \
-    | sed "s+ 'sha256'++g" \
-    | sed "s+ 'sha512'++g" \
-    | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
-    | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
+    if ProxyCoreInstall "v2ray" "$req_tag"
+    then
+        if [ ! -s "$V2_CONFIG" ]
+        then
+            local init_cfg='{"log":{"loglevel":"warning"},"inbounds":[],"outbounds":[{"tag":"direct","protocol":"freedom"}]}'
+            if ! ProxyConfigTx "v2ray" "$init_cfg" 1
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 初始化 V2Ray 配置失败: \$err_detail")\n"
+                return 1
+            fi
+        fi
 
-    sed -i "s+nobody+v2ray+g" "/etc/systemd/system/v2ray.service"
-    sed -i "s+nobody+v2ray+g" "/etc/systemd/system/v2ray@.service"
+        local start_err=""
+        if ! start_err=$(ServiceControl start aios-v2ray 2>&1)
+        then
+            Println "$(eval_gettext "\$error aios-v2ray 启动失败: \${start_err}")\n"
+            return 1
+        fi
 
-    mkdir -p /var/log/v2ray/
-    [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
-    chown -R v2ray:v2ray /var/log/v2ray/
-    chown -R v2ray:v2ray /usr/local/share/v2ray/
-
-    ServiceControl start v2ray
-
-    Println "$(eval_gettext "\$info v2ray 安装完成")\n"
+        Println "$(eval_gettext "\$info aios-v2ray 安装完成")\n"
+    else
+        Println "$(eval_gettext "\$error aios-v2ray 安装失败")\n"
+        return 1
+    fi
 }
 
 V2rayUpdate()
 {
+    local req_tag="${1:-v${V2RAY_LATEST_TESTED_VER}}"
     DepsCheck
     JQInstall
     ShFileUpdate v2ray
+    ProxyEnsureDirs
 
-    if ! grep -q "v2ray:" < "/etc/passwd"
+    if ProxyCoreInstall "v2ray" "$req_tag"
     then
-        if grep -q '\--group ' < <(adduser --help)
+        if ProxyCoreSwitch "v2ray" "$req_tag"
         then
-            adduser v2ray --system --group --no-create-home > /dev/null
+            Println "$(eval_gettext "\$info aios-v2ray 已安全切换至 \$req_tag")\n"
         else
-            adduser v2ray --system --no-create-home > /dev/null
+            local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+            Println "$(eval_gettext "\$error aios-v2ray 切换失败: \$err_detail")\n"
+            return 1
         fi
-        usermod -s /usr/sbin/nologin v2ray
+    else
+        return 1
     fi
-
-    { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
-    | sed "s+nobody+v2ray+g" \
-    | sed "s+ 'sha1'++g" \
-    | sed "s+ 'sha256'++g" \
-    | sed "s+ 'sha512'++g" \
-    | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
-    | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
-
-    sed -i "s+nobody+v2ray+g" "/etc/systemd/system/v2ray.service"
-    sed -i "s+nobody+v2ray+g" "/etc/systemd/system/v2ray@.service"
-
-    mkdir -p /var/log/v2ray/
-    [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
-    chown -R v2ray:v2ray /var/log/v2ray/
-    chown -R v2ray:v2ray /usr/local/share/v2ray/
-
-    ServiceControl restart v2ray
-
-    Println "$(eval_gettext "\$info v2ray 升级完成")\n"
 }

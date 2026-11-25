@@ -3,7 +3,7 @@ VipDeployChannel()
     VipListChannel
 
     deploy_options=( "$(gettext "快速部署(使用默认值)")" "$(gettext "手动部署")" )
-    inquirer list_input_index "$(gettext "选择操作")" deploy_options deploy_options_index
+    inquirer list_input_index "$i18n_select_action" deploy_options deploy_options_index
 
     for vip_channels_num in "${vip_channels_num_arr[@]}"
     do

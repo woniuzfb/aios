@@ -22,9 +22,9 @@ VipEditHost()
                     vip_host_status=${vip_hosts_status[vip_hosts_index]}
                     if [ "$vip_host_status" == "on" ] 
                     then
-                        vip_host_status_text="${green}$(gettext "启用")${normal}"
+                        vip_host_status_text="${green}$i18n_enabled${normal}"
                     else
-                        vip_host_status_text="${red}$(gettext "禁用")${normal}"
+                        vip_host_status_text="${red}$i18n_disabled${normal}"
                     fi
                     break
                 else
@@ -35,7 +35,7 @@ VipEditHost()
     done
 
     Println "
-$(gettext "选择修改内容")
+$i18n_select_edit
 
     ${green}1.${normal} $(gettext "修改 IP/域名")
     ${green}2.${normal} $(gettext "修改 端口")

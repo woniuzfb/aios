@@ -4,7 +4,17 @@ E2eSandboxInit()
 {
     local built_aios="${1:-$REPO_ROOT/aios.sh}"
     E2E_SANDBOX_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aios-e2e.XXXXXX")
-    mkdir -p "$E2E_SANDBOX_DIR/bin" "$E2E_SANDBOX_DIR/etc/xray" "$E2E_SANDBOX_DIR/etc/v2ray" "$E2E_SANDBOX_DIR/aios"
+    mkdir -p \
+        "$E2E_SANDBOX_DIR/bin" \
+        "$E2E_SANDBOX_DIR/aios/proxy/xray/backups" \
+        "$E2E_SANDBOX_DIR/aios/proxy/xray/logs" \
+        "$E2E_SANDBOX_DIR/aios/proxy/v2ray/backups" \
+        "$E2E_SANDBOX_DIR/aios/proxy/v2ray/logs" \
+        "$E2E_SANDBOX_DIR/aios/proxy/cores/xray" \
+        "$E2E_SANDBOX_DIR/aios/proxy/cores/v2ray" \
+        "$E2E_SANDBOX_DIR/aios/proxy/geodata/current" \
+        "$E2E_SANDBOX_DIR/aios/proxy/xdg" \
+        "$E2E_SANDBOX_DIR/mock_svc_state"
 
     cp "$built_aios" "$E2E_SANDBOX_DIR/bin/tv"
     chmod +x "$E2E_SANDBOX_DIR/bin/tv"
@@ -17,15 +27,21 @@ E2eSandboxInit()
     ln -sf "$(command -v jq)" "$E2E_SANDBOX_DIR/bin/jq"
     printf 'sh_locale=zh_CN\nexport LANG=zh_CN.UTF-8\nlocale_fix=0\n' > "$E2E_SANDBOX_DIR/bin/tv-i18n"
 
-    # Mock xray binary
-    cat > "$E2E_SANDBOX_DIR/bin/xray" <<'MOCKX'
+    # Mock isolated aios-xray binary (no public xray binary in sandbox PATH)
+    cat > "$E2E_SANDBOX_DIR/bin/aios-xray" <<'MOCKX'
 #!/bin/bash
 case "${1:-}" in
+    version)
+        printf 'Xray 26.11.9 (Xray, Penetrates Everything.) Mock\n'
+    ;;
     uuid)
         printf '00000000-0000-4000-8000-00000000aaaa\n'
     ;;
     x25519)
-        printf 'Private key: mock-priv-key-1234567890\nPublic key: mock-pub-key-1234567890\n'
+        printf 'PrivateKey: mock-priv-key-1234567890\nPassword (PublicKey): mock-pub-key-1234567890\n'
+    ;;
+    wg)
+        printf 'PrivateKey: mock-wg-priv-1234567890\nPassword (PublicKey): mock-wg-pub-1234567890\n'
     ;;
     api)
         printf '{"stat":[{"name":"inbound>>>vless-reality>>>traffic>>>uplink","value":2097152},{"name":"inbound>>>vless-reality>>>traffic>>>downlink","value":5242880},{"name":"user>>>alice@example.test>>>online","value":1}]}\n'
@@ -34,29 +50,35 @@ case "${1:-}" in
         printf 'Configuration OK.\n'
     ;;
     *)
-        printf 'Xray mock\n'
+        printf 'aios-xray mock\n'
     ;;
 esac
 MOCKX
-    chmod +x "$E2E_SANDBOX_DIR/bin/xray"
+    chmod +x "$E2E_SANDBOX_DIR/bin/aios-xray"
 
-    # Mock v2ctl binary
-    cat > "$E2E_SANDBOX_DIR/bin/v2ctl" <<'MOCKV2'
+    # Mock isolated aios-v2ray binary (v5 CLI, no v2ctl in sandbox PATH)
+    cat > "$E2E_SANDBOX_DIR/bin/aios-v2ray" <<'MOCKV2'
 #!/bin/bash
 case "${1:-}" in
+    version)
+        printf 'V2Ray 5.56.0 (V2Fly, a community-driven edition of V2Ray.) Mock\n'
+    ;;
     uuid)
         printf '00000000-0000-4000-8000-00000000bbbb\n'
     ;;
     api)
-        printf 'stat: <\n  name: "inbound>>>vmess-direct>>>traffic>>>uplink"\n  value: 1048576\n>\n'
+        printf '{"stat":[{"name":"inbound>>>vmess-direct>>>traffic>>>uplink","value":1048576}]}\n'
+    ;;
+    test|run)
+        printf 'Configuration OK.\n'
     ;;
     *)
-        printf 'v2ctl mock\n'
+        printf 'aios-v2ray mock\n'
     ;;
 esac
 MOCKV2
-    chmod +x "$E2E_SANDBOX_DIR/bin/v2ctl"
-    # Mock dig & curl binaries for offline GetServerIp / checks
+    chmod +x "$E2E_SANDBOX_DIR/bin/aios-v2ray"
+
     cat > "$E2E_SANDBOX_DIR/bin/dig" <<'MOCKDIG'
 #!/bin/bash
 printf '203.0.113.10\n'
@@ -69,9 +91,49 @@ printf '203.0.113.10\n'
 MOCKCURL
     chmod +x "$E2E_SANDBOX_DIR/bin/curl"
 
-    # Mock systemctl / service for safe status/restart tests
+    # Stateful mock systemctl for safe status/restart/rollback failure injection
     cat > "$E2E_SANDBOX_DIR/bin/systemctl" <<'MOCKSYS'
 #!/bin/bash
+STATE_DIR="${AIOS_MOCK_SVC_STATE_DIR:-}"
+action="${1:-}"
+shift || true
+target=""
+for arg in "$@"
+do
+    case "$arg" in
+        -*) continue ;;
+        *) target="$arg" ;;
+    esac
+done
+if [ -n "$STATE_DIR" ]
+then
+    case "$action" in
+        is-active)
+            [ -f "$STATE_DIR/${target}.active" ] && exit 0 || exit 3
+        ;;
+        start|restart)
+            if [ -f "$STATE_DIR/fail_next_restart" ]
+            then
+                rm -f "$STATE_DIR/fail_next_restart"
+                rm -f "$STATE_DIR/${target}.active"
+                printf 'mock restart failed\n' >&2
+                exit 1
+            fi
+            if [ -f "$STATE_DIR/fail_all_restarts" ]
+            then
+                rm -f "$STATE_DIR/${target}.active"
+                printf 'mock persistent restart failure\n' >&2
+                exit 1
+            fi
+            touch "$STATE_DIR/${target}.active"
+            exit 0
+        ;;
+        stop)
+            rm -f "$STATE_DIR/${target}.active"
+            exit 0
+        ;;
+    esac
+fi
 printf 'systemctl mock: %s\n' "$*"
 MOCKSYS
     chmod +x "$E2E_SANDBOX_DIR/bin/systemctl"
@@ -93,10 +155,10 @@ E2eLoadFixture()
 
     if [ "$target" == "xray" ]
     then
-        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/etc/xray/config.json"
+        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/aios/proxy/xray/config.json"
     elif [ "$target" == "v2ray" ]
     then
-        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/etc/v2ray/config.json"
+        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
     fi
 }
 
@@ -108,6 +170,7 @@ E2eRunPty()
 
     PATH="$E2E_SANDBOX_DIR/bin:$PATH" \
     AIOS_PREFIX="$E2E_SANDBOX_DIR" \
+    AIOS_MOCK_SVC_STATE_DIR="$E2E_SANDBOX_DIR/mock_svc_state" \
     LANG=zh_CN.UTF-8 \
     LANGUAGE=zh_CN \
         bash "$REPO_ROOT/test/lib/pty_driver" \

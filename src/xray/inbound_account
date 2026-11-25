@@ -1,19 +1,10 @@
 XrayGenUuid()
 {
     local xray_bin=""
-    if [ -n "${XRAY_FILE:-}" ] && [ -x "$XRAY_FILE" ]
-    then
-        xray_bin="$XRAY_FILE"
-    elif [ -n "${XCTL_FILE:-}" ] && [ -x "$XCTL_FILE" ]
-    then
-        xray_bin="$XCTL_FILE"
-    elif command -v xray > /dev/null 2>&1
-    then
-        xray_bin=$(command -v xray)
-    fi
+    xray_bin=$(ProxyDetectCoreBin "xray")
 
     local gen=""
-    if [ -n "$xray_bin" ]
+    if [ -n "$xray_bin" ] && [ -x "$xray_bin" ]
     then
         gen=$("$xray_bin" uuid 2> /dev/null | head -n 1 | tr -d '\r\n')
     fi
@@ -31,11 +22,12 @@ XrayGenUuid()
 XrayGenSs2022Key()
 {
     local method="$1"
-    local bytes=32
-    if [[ "$method" == *aes-128* ]]
+    local bytes=""
+    if ! bytes=$(ProxySs2022KeyBytes "$method")
     then
-        bytes=16
+        return 1
     fi
+
     openssl rand -base64 "$bytes" 2> /dev/null | tr -d '\r\n'
 }
 
@@ -46,23 +38,15 @@ XrayAddInboundAccount()
     local bound_tag="${inbounds_tag[idx]}"
     local protocol="${inbounds_protocol[idx]}"
     local user_json=""
-    local acc_key="users"
+    local target_ver=""
+    target_ver=$(ProxyGetTargetVersion "xray")
+    local acc_key=""
 
     if [ "$protocol" == "wireguard" ]
     then
         acc_key="peers"
     else
-        acc_key=$(JQs query "$X_CONFIG" '
-            if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
-                and (.inbounds[$i].settings | type) == "object"
-            then
-                if (.inbounds[$i].settings.users | type) == "array" then "users"
-                elif (.inbounds[$i].settings.clients | type) == "array" then "clients"
-                elif (.inbounds[$i].settings.accounts | type) == "array" then "accounts"
-                else "users" end
-            else "users" end
-        ' --argjson i "$idx")
-        acc_key="${acc_key:-users}"
+        acc_key=$(ProxyXrayInboundUserKey "$protocol" "$target_ver")
     fi
 
     case "$protocol" in
@@ -103,19 +87,32 @@ XrayAddInboundAccount()
         ;;
         trojan)
             local password email
-            inquirer text_input "$(gettext "输入密码")" password ""
+            inquirer text_input "$i18n_input_password" password ""
             inquirer text_input "$(gettext "输入 email (可留空)")" email ""
             JQs build user_json '{"password": $pw, "email": $email, "level": 0}' \
                 --arg pw "$password" --arg email "$email"
         ;;
         shadowsocks)
-            local inb_method
-            inb_method=$(JQs query "$X_CONFIG" '
+            local inb_method="" inb_psk=""
+            SetDelimiters
+            IFS="$field_sep" read -r inb_method inb_psk < <(JQs query "$X_CONFIG" '
                 if (.inbounds | type) == "array" and (.inbounds[$i] | type) == "object"
                     and (.inbounds[$i].settings | type) == "object"
-                then (.inbounds[$i].settings.method // "")
-                else "" end
-            ' --argjson i "$idx")
+                then [(.inbounds[$i].settings.method // "" | tostring), (.inbounds[$i].settings.password // "" | tostring)] | join($sep)
+                else $sep end
+            ' --argjson i "$idx" --arg sep "$field_sep")
+            inb_method=$(ProxyNormalizeSsMethod "$inb_method")
+            local ss_rc=0
+            ProxyValidateXraySsMultiUser "$inb_method" "$inb_psk" || ss_rc=$?
+            if [ "$ss_rc" -eq 2 ]
+            then
+                Println "$(eval_gettext "\$error 2022-blake3-chacha20-poly1305 不支持多用户入站")\n"
+                return 1
+            elif [ "$ss_rc" -eq 3 ]
+            then
+                Println "$(eval_gettext "\$error SS-2022 多用户入站缺少顶层服务端 password PSK")\n"
+                return 1
+            fi
             local password email user_method=""
             if [[ "$inb_method" == 2022-* ]]
             then
@@ -135,7 +132,8 @@ XrayAddInboundAccount()
                     --arg pw "$password" --arg email "$email"
             else
                 inquirer text_input "$(gettext "输入用户加密方式 method")" user_method "${inb_method:-aes-256-gcm}"
-                inquirer text_input "$(gettext "输入密码")" password ""
+                user_method=$(ProxyNormalizeSsMethod "$user_method")
+                inquirer text_input "$i18n_input_password" password ""
                 inquirer text_input "$(gettext "输入 email (可留空)")" email ""
                 JQs build user_json '{"method": $method, "password": $pw, "email": $email, "level": 0}' \
                     --arg method "$user_method" --arg pw "$password" --arg email "$email"
@@ -144,7 +142,7 @@ XrayAddInboundAccount()
         socks|http)
             local user pass
             inquirer text_input "$(gettext "输入用户名")" user ""
-            inquirer text_input "$(gettext "输入密码")" pass ""
+            inquirer text_input "$i18n_input_password" pass ""
             JQs build user_json '{"user": $user, "pass": $pass}' \
                 --arg user "$user" --arg pass "$pass"
         ;;
@@ -184,13 +182,40 @@ XrayAddInboundAccount()
         ;;
     esac
 
-    jq_path='["inbounds",'"$idx"',"settings","'"$acc_key"'"]'
-    if ! JQ add "$X_CONFIG" "[$user_json]"
+    if ! ProxyMutateConfigTx "xray" '
+        def arr($x): if ($x | type) == "array" then $x else [] end;
+        def pick_list($a; $b; $c):
+            if (arr($a) | length) > 0 then arr($a)
+            elif (arr($b) | length) > 0 then arr($b)
+            elif (arr($c) | length) > 0 then arr($c)
+            else [] end;
+        .inbounds[$i].settings |= (
+            (if $proto == "shadowsocks" and ((.method // "") | ascii_downcase | startswith("2022-") | not)
+                and ((.password // "") != "")
+                and ((pick_list(.users; .clients; .accounts) | length) == 0)
+             then
+                .[$k] = [{method: ((.method // "aes-256-gcm") | ascii_downcase), password: .password, email: (.email // ""), level: (.level // 0)}]
+                | del(.password, .email)
+             else . end)
+            | (if $k == "users" then
+                .users = (pick_list(.users; .clients; .accounts) + [$u])
+                | del(.clients, .accounts)
+               elif $k == "clients" then
+                .clients = (pick_list(.clients; .users; null) + [$u])
+                | del(.users)
+               elif $k == "accounts" then
+                .accounts = (pick_list(.accounts; .users; null) + [$u])
+                | del(.users)
+               else
+                .[$k] = (arr(.[$k]) + [$u])
+               end)
+        )
+    ' --argjson i "$idx" --arg k "$acc_key" --arg proto "$protocol" --argjson u "$user_json"
     then
-        Println "$(eval_gettext "\$error 向入站 \${bound_tag} 添加账号失败")\n"
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 向入站 \${bound_tag} 添加账号失败: \$err_detail")\n"
         return 1
     fi
-    ProxyRestartIfActive xray
     Println "$(eval_gettext "\$info 已向入站 \${green}\${bound_tag}\${normal} 添加账号")\n"
 }
 
@@ -242,13 +267,13 @@ XrayDeleteInboundAccount()
     local user_idx=0
     echo
     inquirer list_input_index "$(gettext "选择要删除的账号")" user_options user_idx
-    jq_path='["inbounds",'"$idx"',"settings","'"$acc_key"'",'"$user_idx"']'
-    if ! JQ delete "$X_CONFIG"
+    if ! ProxyMutateConfigTx "xray" 'del(.inbounds[$i].settings[$k][$u])' \
+        --argjson i "$idx" --arg k "$acc_key" --argjson u "$user_idx"
     then
-        Println "$(eval_gettext "\$error 删除账号失败")\n"
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 删除账号失败: \$err_detail")\n"
         return 1
     fi
-    ProxyRestartIfActive xray
     local del_user="${user_options[user_idx]}"
     Println "$(eval_gettext "\$info 已删除账号 \${green}\${del_user}\${normal}")\n"
 }

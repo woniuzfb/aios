@@ -89,6 +89,34 @@ AssertJsonEq()
     AssertEq "$expected" "$actual" "$label"
 }
 
+AssertOk()
+{
+    local label="$1"
+    shift
+    if "$@" > /dev/null 2>&1
+    then
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s\n' "$label"
+    else
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s (command failed: %s)\n' "$label" "$*" >&2
+    fi
+}
+
+AssertFail()
+{
+    local label="$1"
+    shift
+    if "$@" > /dev/null 2>&1
+    then
+        FAIL_COUNT=$((FAIL_COUNT + 1))
+        printf '[FAIL] %s (expected failure but succeeded: %s)\n' "$label" "$*" >&2
+    else
+        PASS_COUNT=$((PASS_COUNT + 1))
+        printf '[PASS] %s\n' "$label"
+    fi
+}
+
 _MockInquirerEnsureStateDir()
 {
     if [ -z "${MOCK_INQUIRER_STATE_DIR:-}" ] || [ ! -d "$MOCK_INQUIRER_STATE_DIR" ]

@@ -84,7 +84,7 @@ CloudflareListSubdomain()
                 ssl_status="$(gettext "SSL 状态"): ${green}$(gettext "激活")${normal}\n"
                 ssl_meta_tag=""
             else
-                ssl_status="$(gettext "SSL 状态"): ${red}$(gettext "无")${normal}\n"
+                ssl_status="$(gettext "SSL 状态"): ${red}$i18n_none${normal}\n"
                 if [ -n "$cf_zone_ssl_meta_tag" ]
                 then
                     ssl_meta_tag="\n$(eval_gettext "请在子域名页面 HEAD 处添加 \${green}\$cf_zone_ssl_meta_tag\${normal} 以激活 ssl")\n"
@@ -100,7 +100,7 @@ CloudflareListSubdomain()
         ssl_status="$(gettext "SSL 状态"): ${green}$(gettext "激活")${normal}\n"
         ssl_meta_tag=""
     else
-        ssl_status="$(gettext "SSL 状态"): ${red}$(gettext "无")${normal}\n"
+        ssl_status="$(gettext "SSL 状态"): ${red}$i18n_none${normal}\n"
         if [ -n "$cf_zone_ssl_meta_tag" ]
         then
             ssl_meta_tag="\n$(eval_gettext "请在子域名页面 HEAD 处添加 \${green}\$cf_zone_ssl_meta_tag\${normal} 以激活 ssl")\n"

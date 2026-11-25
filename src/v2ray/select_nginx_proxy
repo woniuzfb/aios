@@ -1,6 +1,6 @@
 V2rayNginxSelectDomainServerProxy()
 {
-    echo "`gettext \"输入序号\"`"
+    echo "$i18n_input_no"
     while read -p "$i18n_default_cancel" v2ray_nginx_domain_server_proxies_num
     do
         case "$v2ray_nginx_domain_server_proxies_num" in

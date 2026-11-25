@@ -1,0 +1,1010 @@
+ProxyAcquireLock()
+{
+    local lock_path="${1:-$PROXY_LOCK_FILE}"
+    local timeout_sec="${2:-30}"
+    local stale_sec="${3:-300}"
+    local lock_dir="${lock_path}.d"
+    local pid_file="${lock_dir}/pid"
+    local waited=0
+    local missing_pid_waited=0
+    local missing_pid_limit=5
+
+    if [ "$stale_sec" -lt "$missing_pid_limit" ]
+    then
+        missing_pid_limit="$stale_sec"
+    fi
+
+    local lock_parent="${lock_path%/*}"
+    mkdir -p "$lock_parent" 2> /dev/null || true
+    if [ ! -d "$lock_parent" ] || [ ! -w "$lock_parent" ]
+    then
+        return 1
+    fi
+
+    while ! mkdir "$lock_dir" 2> /dev/null
+    do
+        if [ -f "$pid_file" ]
+        then
+            missing_pid_waited=0
+            local holder_pid="" holder_ts="" now_ts=""
+            IFS=':' read -r holder_pid holder_ts < "$pid_file" 2> /dev/null || true
+            now_ts=$(date +%s 2> /dev/null || echo 0)
+
+            local is_stale=0
+            if [ -n "$holder_pid" ] && [[ "$holder_pid" =~ ^[0-9]+$ ]]
+            then
+                if ! kill -0 "$holder_pid" 2> /dev/null
+                then
+                    is_stale=1
+                fi
+            fi
+
+            if [ "$is_stale" -eq 0 ] && [ -n "$holder_ts" ] && [[ "$holder_ts" =~ ^[0-9]+$ ]] && [ "$now_ts" -gt 0 ]
+            then
+                if [ $((now_ts - holder_ts)) -ge "$stale_sec" ]
+                then
+                    is_stale=1
+                fi
+            fi
+
+            if [ "$is_stale" -eq 1 ]
+            then
+                if mv "$lock_dir" "${lock_dir}.stale.$$" 2> /dev/null
+                then
+                    rm -rf "${lock_dir}.stale.$$" 2> /dev/null || true
+                fi
+                continue
+            fi
+        elif [ -d "$lock_dir" ]
+        then
+            local dir_mtime="" now_ts=""
+            now_ts=$(date +%s 2> /dev/null || echo 0)
+            if [ "${dist:-}" == "mac" ]
+            then
+                dir_mtime=$(stat -f %m "$lock_dir" 2> /dev/null || echo 0)
+            else
+                dir_mtime=$(stat -c %Y "$lock_dir" 2> /dev/null || stat -f %m "$lock_dir" 2> /dev/null || echo 0)
+            fi
+
+            if { [ "$now_ts" -gt 0 ] && [ "$dir_mtime" -gt 0 ] && [ $((now_ts - dir_mtime)) -ge "$missing_pid_limit" ]; } || [ "$missing_pid_waited" -ge "$missing_pid_limit" ]
+            then
+                if mv "$lock_dir" "${lock_dir}.stale.$$" 2> /dev/null
+                then
+                    rm -rf "${lock_dir}.stale.$$" 2> /dev/null || true
+                    missing_pid_waited=0
+                    continue
+                fi
+            fi
+
+            missing_pid_waited=$((missing_pid_waited + 1))
+        fi
+
+        if [ "$waited" -ge "$timeout_sec" ]
+        then
+            return 1
+        fi
+
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    local now_ts
+    now_ts=$(date +%s 2> /dev/null || echo 0)
+    printf '%s:%s\n' "$$" "$now_ts" > "${pid_file}.tmp.$$" && mv -f "${pid_file}.tmp.$$" "$pid_file"
+    PROXY_ACTIVE_LOCK_DIR="$lock_dir"
+    return 0
+}
+
+ProxyReleaseLock()
+{
+    local lock_dir="${1:-${PROXY_ACTIVE_LOCK_DIR:-${PROXY_LOCK_FILE}.d}}"
+    if [ -n "$lock_dir" ] && [ -d "$lock_dir" ]
+    then
+        rm -rf "$lock_dir" 2> /dev/null || true
+    fi
+    if [ "$lock_dir" == "${PROXY_ACTIVE_LOCK_DIR:-}" ]
+    then
+        PROXY_ACTIVE_LOCK_DIR=""
+    fi
+}
+
+ProxySha256File()
+{
+    local target="$1"
+    if [ ! -f "$target" ]
+    then
+        return 1
+    fi
+
+    if command -v sha256sum > /dev/null 2>&1
+    then
+        sha256sum "$target" | awk '{print $1}'
+    elif command -v shasum > /dev/null 2>&1
+    then
+        shasum -a 256 "$target" | awk '{print $1}'
+    else
+        return 1
+    fi
+}
+
+ProxyAtomicSymlinkSwap()
+{
+    local target="$1"
+    local link_path="$2"
+    local parent_dir="${link_path%/*}"
+    local ts=""
+    ts=$(date +%s 2> /dev/null || echo 0)
+    local tmp_link="${parent_dir}/.link.tmp.$$.${ts}"
+
+    mkdir -p "$parent_dir" 2> /dev/null || return 1
+    rm -f "$tmp_link" 2> /dev/null || true
+
+    if ! ln -s "$target" "$tmp_link"
+    then
+        return 1
+    fi
+
+    if mv -fT "$tmp_link" "$link_path" 2> /dev/null
+    then
+        return 0
+    fi
+
+    if command -v python3 > /dev/null 2>&1
+    then
+        if python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' "$tmp_link" "$link_path" 2> /dev/null
+        then
+            return 0
+        fi
+    fi
+
+    if command -v perl > /dev/null 2>&1
+    then
+        if perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' "$tmp_link" "$link_path" 2> /dev/null
+        then
+            return 0
+        fi
+    fi
+
+    rm -f "$tmp_link" 2> /dev/null || true
+    return 1
+}
+
+ProxyApplyConfigPerms()
+{
+    local core="$1"
+    local target_file="$2"
+
+    if [ ! -f "$target_file" ]
+    then
+        return 1
+    fi
+
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ] && id -u "aios-${core}" > /dev/null 2>&1
+    then
+        chown "root:aios-${core}" "$target_file" 2> /dev/null || return 1
+        chmod 640 "$target_file" 2> /dev/null || return 1
+    else
+        chmod 600 "$target_file" 2> /dev/null || return 1
+    fi
+    return 0
+}
+
+ProxyEnsureXdgLink()
+{
+    local geodata_dir="${1:-$PROXY_GEODATA_CURRENT}"
+    local xdg_root="${2:-$PROXY_XDG_ROOT}"
+
+    mkdir -p "$xdg_root" 2> /dev/null || return 1
+    ProxyAtomicSymlinkSwap "$geodata_dir" "$xdg_root/v2ray"
+}
+
+ProxyConfigNeedsCaps()
+{
+    local cfg_file="$1"
+    local core="$2"
+    local needs_bind=0 needs_tun=0
+
+    if [ ! -s "$cfg_file" ]
+    then
+        printf '0 0\n'
+        return 0
+    fi
+
+    local ports_out=""
+    ports_out=$($JQ_FILE -r '
+        (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+        | select(type == "object")
+        | (.port // empty | tostring)
+    ' "$cfg_file" 2> /dev/null || true)
+
+    local p="" tok="" p_start="" p_end=""
+    local port_tokens=()
+    while IFS= read -r p
+    do
+        [ -z "$p" ] && continue
+        port_tokens=()
+        IFS=',' read -r -a port_tokens <<< "$p"
+        for tok in "${port_tokens[@]+"${port_tokens[@]}"}"
+        do
+            tok="${tok//[[:space:]]/}"
+            if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]
+            then
+                p_start="${BASH_REMATCH[1]}"
+                p_end="${BASH_REMATCH[2]}"
+                if { [ "$p_start" -gt 0 ] && [ "$p_start" -lt 1024 ]; } || { [ "$p_end" -gt 0 ] && [ "$p_end" -lt 1024 ]; }
+                then
+                    needs_bind=1
+                    break 2
+                fi
+            elif [[ "$tok" =~ ^[0-9]+$ ]] && [ "$tok" -gt 0 ] && [ "$tok" -lt 1024 ]
+            then
+                needs_bind=1
+                break 2
+            fi
+        done
+    done <<< "$ports_out"
+
+    if [ "$core" == "xray" ]
+    then
+        if $JQ_FILE -e '
+            (if (.inbounds | type) == "array" then .inbounds else [] end)
+            | any(type == "object" and .protocol == "tun")
+        ' "$cfg_file" > /dev/null 2>&1
+        then
+            needs_tun=1
+        fi
+    else
+        if $JQ_FILE -e '
+            (.services | type) == "object" and (.services.tun | type) == "object"
+        ' "$cfg_file" > /dev/null 2>&1
+        then
+            needs_tun=1
+        fi
+    fi
+
+    printf '%s %s\n' "$needs_bind" "$needs_tun"
+}
+
+ProxyTestConfigWithBinary()
+{
+    local core="$1"
+    local bin="$2"
+    local cfg_file="$3"
+    local format="${4:-json}"
+    local geodata_dir="${5:-$PROXY_GEODATA_CURRENT}"
+    local xdg_root="${6:-$PROXY_XDG_ROOT}"
+
+    if [ ! -x "$bin" ] || [ ! -s "$cfg_file" ]
+    then
+        return 1
+    fi
+
+    local run_as_user=""
+    if [ "${dist:-}" != "mac" ] && [ "$(id -u 2> /dev/null || echo 1)" -eq 0 ] && [ "${AIOS_TEST_SKIP_DROP_PRIV:-0}" != "1" ]
+    then
+        local svc_user="aios-${core}"
+        if id -u "$svc_user" > /dev/null 2>&1
+        then
+            run_as_user="$svc_user"
+        fi
+    fi
+
+    local cmd_args=()
+    if [ "$core" == "xray" ]
+    then
+        cmd_args=( "$bin" run -test -c "$cfg_file" )
+    else
+        local cli_fmt
+        cli_fmt=$(ProxyV2rayFormatCliValue "$format")
+        cmd_args=( "$bin" test -format "$cli_fmt" -c "$cfg_file" )
+    fi
+
+    local test_out="" test_rc=0
+    if [ "$core" == "xray" ]
+    then
+        if [ -n "$run_as_user" ] && command -v runuser > /dev/null 2>&1
+        then
+            test_out=$(env XRAY_LOCATION_ASSET="$geodata_dir" runuser -u "$run_as_user" -- "${cmd_args[@]}" 2>&1) || test_rc=$?
+        elif [ -n "$run_as_user" ] && command -v setpriv > /dev/null 2>&1
+        then
+            local svc_uid svc_gid
+            svc_uid=$(id -u "$run_as_user")
+            svc_gid=$(id -g "$run_as_user")
+            test_out=$(env XRAY_LOCATION_ASSET="$geodata_dir" setpriv --reuid="$svc_uid" --regid="$svc_gid" --init-groups "${cmd_args[@]}" 2>&1) || test_rc=$?
+        elif [ -n "$run_as_user" ] && command -v su > /dev/null 2>&1
+        then
+            test_out=$(env XRAY_LOCATION_ASSET="$geodata_dir" su -s /bin/sh "$run_as_user" -c 'exec "$@"' -- _ "${cmd_args[@]}" 2>&1) || test_rc=$?
+        else
+            test_out=$(env XRAY_LOCATION_ASSET="$geodata_dir" "${cmd_args[@]}" 2>&1) || test_rc=$?
+        fi
+    else
+        ProxyEnsureXdgLink "$geodata_dir" "$xdg_root" > /dev/null 2>&1 || true
+        if [ -n "$run_as_user" ] && command -v runuser > /dev/null 2>&1
+        then
+            test_out=$(env V2RAY_LOCATION_ASSET="$geodata_dir" XDG_DATA_HOME="$xdg_root" XDG_DATA_DIRS="$xdg_root" V2RAY_CONF_GEOLOADER="memconservative" runuser -u "$run_as_user" -- "${cmd_args[@]}" 2>&1) || test_rc=$?
+        elif [ -n "$run_as_user" ] && command -v setpriv > /dev/null 2>&1
+        then
+            local svc_uid svc_gid
+            svc_uid=$(id -u "$run_as_user")
+            svc_gid=$(id -g "$run_as_user")
+            test_out=$(env V2RAY_LOCATION_ASSET="$geodata_dir" XDG_DATA_HOME="$xdg_root" XDG_DATA_DIRS="$xdg_root" V2RAY_CONF_GEOLOADER="memconservative" setpriv --reuid="$svc_uid" --regid="$svc_gid" --init-groups "${cmd_args[@]}" 2>&1) || test_rc=$?
+        elif [ -n "$run_as_user" ] && command -v su > /dev/null 2>&1
+        then
+            test_out=$(env V2RAY_LOCATION_ASSET="$geodata_dir" XDG_DATA_HOME="$xdg_root" XDG_DATA_DIRS="$xdg_root" V2RAY_CONF_GEOLOADER="memconservative" su -s /bin/sh "$run_as_user" -c 'exec "$@"' -- _ "${cmd_args[@]}" 2>&1) || test_rc=$?
+        else
+            test_out=$(env V2RAY_LOCATION_ASSET="$geodata_dir" XDG_DATA_HOME="$xdg_root" XDG_DATA_DIRS="$xdg_root" V2RAY_CONF_GEOLOADER="memconservative" "${cmd_args[@]}" 2>&1) || test_rc=$?
+        fi
+    fi
+
+    PROXY_LAST_TEST_OUTPUT="$test_out"
+    return "$test_rc"
+}
+
+ProxyValidateCandidateRules()
+{
+    local core="$1"
+    local cfg_file="$2"
+    local ver="$3"
+    local format="${4:-json}"
+
+    if [ ! -s "$cfg_file" ]
+    then
+        PROXY_LAST_VALIDATE_ERROR="candidate config is empty"
+        return 1
+    fi
+
+    if ! ProxyValidateSupportedVersion "$core" "$ver"
+    then
+        PROXY_LAST_VALIDATE_ERROR="unsupported ${core} version: ${ver}"
+        return 1
+    fi
+
+    local findings=""
+    if [ "$core" == "xray" ]
+    then
+        local f_legacy_rev=0 f_tun=0 f_hy_out=0 f_hy_in=0 f_masque=0 f_ss_uot=0 f_req_tls=0
+        ProxyCoreHasFeature "xray" "$ver" "json" "legacyReverse" && f_legacy_rev=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "tunInbound" && f_tun=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "hysteriaOutbound" && f_hy_out=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "hysteriaInbound" && f_hy_in=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "masque" && f_masque=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "ssUot" && f_ss_uot=1
+        ProxyCoreHasFeature "xray" "$ver" "json" "requireTlsPublicVlessTrojan" && f_req_tls=1
+
+        if ! findings=$($JQ_FILE -r \
+            --arg ver "$ver" \
+            --argjson f_legacy_rev "$f_legacy_rev" \
+            --argjson f_tun "$f_tun" \
+            --argjson f_hy_out "$f_hy_out" \
+            --argjson f_hy_in "$f_hy_in" \
+            --argjson f_masque "$f_masque" \
+            --argjson f_ss_uot "$f_ss_uot" \
+            --argjson f_req_tls "$f_req_tls" '
+            if type != "object" then
+                "ERR\tcandidate config is not a valid JSON object"
+            else
+                (if (.inbounds | type) == "array" then .inbounds else [] end) as $inbs
+                | (if (.outbounds | type) == "array" then .outbounds else [] end) as $outs
+                | (
+                    (if $f_legacy_rev == 0 and has("reverse") and .reverse != null then
+                        "ERR\tXray \($ver) removed top-level legacy reverse; migrate to VLESS inline reverse"
+                     else empty end),
+                    (if $f_tun == 0 and ($inbs | any(type == "object" and .protocol == "tun")) then
+                        "ERR\tXray \($ver) does not support tun inbound"
+                     else empty end),
+                    (if $f_hy_out == 0 and ($outs | any(type == "object" and .protocol == "hysteria")) then
+                        "ERR\tXray \($ver) does not support hysteria outbound"
+                     else empty end),
+                    (if $f_hy_in == 0 and ($inbs | any(type == "object" and .protocol == "hysteria")) then
+                        "ERR\tXray \($ver) does not support hysteria inbound"
+                     else empty end),
+                    (if $f_masque == 0 and (($inbs + $outs) | any(type == "object" and .protocol == "masque")) then
+                        "ERR\tXray \($ver) does not support masque protocol"
+                     else empty end),
+                    (if $f_ss_uot == 0 and ($outs | any(type == "object" and .protocol == "shadowsocks" and (.settings | type) == "object" and (
+                        (.settings.uot // false) == true
+                        or ((.settings.uotVersion // 0) != 0 and (.settings.uotVersion // "") != "")
+                        or ((if (.settings.servers | type) == "array" then .settings.servers else [] end) | any(type == "object" and (
+                            (.uot // false) == true
+                            or ((.uotVersion // 0) != 0 and (.uotVersion // "") != "")
+                        )))
+                    ))) then
+                        "ERR\tXray \($ver) removed shadowsocks uot/uotVersion; manual confirmation required before upgrading"
+                     else empty end),
+                    (if $inbs | any(type == "object" and .protocol == "shadowsocks" and (.settings | type) == "object"
+                        and (((.settings.method // "") | ascii_downcase) == "2022-blake3-chacha20-poly1305")
+                        and (((if (.settings.users | type) == "array" then .settings.users else [] end) + (if (.settings.clients | type) == "array" then .settings.clients else [] end)) | length > 0)) then
+                        "ERR\tXray shadowsocks 2022-blake3-chacha20-poly1305 does not support multi-user inbound"
+                     else empty end),
+                    (if (((.routing.balancers // []) | any(type == "object" and ((.strategy.type // "") == "leastPing" or (.strategy.type // "") == "leastLoad")))
+                        and ((has("observatory") or has("burstObservatory")) | not)) then
+                        "ERR\tXray leastPing/leastLoad balancer requires observatory or burstObservatory"
+                     else empty end),
+                    (if $f_req_tls == 1 then
+                        $outs[]
+                        | select(type == "object" and (.protocol == "vless" or .protocol == "trojan"))
+                        | ((.streamSettings.security // "none") | tostring) as $sec
+                        | select($sec == "none" or $sec == "")
+                        | (if (.settings | type) == "object" then .settings else {} end) as $set
+                        | if .protocol == "trojan" then
+                            (
+                                (if ($set.address | type) == "string" and ($set.address | length) > 0 then $set.address else empty end),
+                                ((if ($set.servers | type) == "array" then $set.servers else [] end)[]
+                                    | select(type == "object" and (.address | type) == "string" and (.address | length) > 0)
+                                    | .address)
+                            )
+                          else
+                            (
+                                (if ($set.address | type) == "string" and ($set.address | length) > 0 and (($set.encryption // "none") == "none") then
+                                    $set.address
+                                 else empty end),
+                                ((if ($set.vnext | type) == "array" then $set.vnext else [] end)[]
+                                    | select(type == "object" and (.address | type) == "string" and (.address | length) > 0)
+                                    | select(
+                                        ((.users | type) != "array")
+                                        or ((.users | length) == 0)
+                                        or (.users | any(type == "object" and ((.encryption // "none") == "none")))
+                                      )
+                                    | .address)
+                            )
+                          end
+                        | "PUB\t\(.)"
+                     else empty end)
+                )
+            end
+        ' "$cfg_file" 2> /dev/null)
+        then
+            PROXY_LAST_VALIDATE_ERROR="candidate config is not a valid JSON object"
+            return 1
+        fi
+
+        local kind="" payload=""
+        while IFS=$'\t' read -r kind payload
+        do
+            [ -z "$kind" ] && continue
+            if [ "$kind" == "ERR" ]
+            then
+                PROXY_LAST_VALIDATE_ERROR="$payload"
+                return 1
+            elif [ "$kind" == "PUB" ]
+            then
+                if ProxyIsPublicTargetAddress "$payload"
+                then
+                    PROXY_LAST_VALIDATE_ERROR="Xray ${ver} prohibits plaintext VLESS/Trojan outbound to public address: ${payload}"
+                    return 1
+                fi
+            fi
+        done <<< "$findings"
+    elif [ "$core" == "v2ray" ]
+    then
+        if ! findings=$($JQ_FILE -r --arg fmt "$format" '
+            def valid_v4_ss($m):
+                ($m | ascii_downcase) as $lm
+                | ($lm == "" or $lm == "aes-128-gcm" or $lm == "aes-256-gcm" or $lm == "chacha20-poly1305" or $lm == "chacha20-ietf-poly1305" or $lm == "none" or $lm == "plain");
+            if type != "object" then
+                "ERR\tcandidate config is not a valid JSON object"
+            else
+                (if (.inbounds | type) == "array" then .inbounds else [] end) as $inbs
+                | (if (.outbounds | type) == "array" then .outbounds else [] end) as $outs
+                | ($inbs + $outs) as $all
+                | (
+                    (if $all | any(type == "object" and (.streamSettings | type) == "object" and (
+                        (((.streamSettings.security // "") | ascii_downcase) == "xtls")
+                        or (((.streamSettings.security // "") | ascii_downcase) == "reality")
+                    )) then
+                        "ERR\tV2Ray does not support security xtls or reality"
+                     else empty end),
+                    (if $fmt == "jsonv4" then
+                        (if $all | any(type == "object" and (.streamSettings.sockopt.tcpFastOpen | type) == "number") then
+                            "ERR\tV2Ray sockopt.tcpFastOpen must be boolean (use tcpFastOpenQueueLength for queue size)"
+                         else empty end),
+                        (if $all | any(type == "object" and (.streamSettings.tlsSettings | type) == "object"
+                            and (.streamSettings.tlsSettings | has("pinnedPeerCertificateChainSha256"))
+                            and .streamSettings.tlsSettings.pinnedPeerCertificateChainSha256 != null
+                            and (
+                                ((.streamSettings.tlsSettings.pinnedPeerCertificateChainSha256 | type) != "array")
+                                or ((.streamSettings.tlsSettings.pinnedPeerCertificateChainSha256 | all(type == "string")) | not)
+                            )) then
+                            "ERR\tV2Ray tlsSettings.pinnedPeerCertificateChainSha256 must be an array of strings"
+                         else empty end),
+                        (
+                            [
+                                ($all[]
+                                    | select(type == "object" and .protocol == "shadowsocks" and (.settings | type) == "object")
+                                    | .settings as $s
+                                    | (
+                                        (if ($s.method | type) == "string" then $s.method else empty end),
+                                        ((if ($s.clients | type) == "array" then $s.clients else [] end)[] | select(type == "object" and (.method | type) == "string") | .method),
+                                        ((if ($s.users | type) == "array" then $s.users else [] end)[] | select(type == "object" and (.method | type) == "string") | .method),
+                                        ((if ($s.servers | type) == "array" then $s.servers else [] end)[] | select(type == "object" and (.method | type) == "string") | .method)
+                                    )
+                                    | select(valid_v4_ss(.) | not))
+                            ]
+                            | if length > 0 then
+                                "ERR\tV2Ray jsonv4 shadowsocks unsupported method: \(.[0])"
+                              else empty end
+                        )
+                     else empty end)
+                )
+            end
+        ' "$cfg_file" 2> /dev/null)
+        then
+            PROXY_LAST_VALIDATE_ERROR="candidate config is not a valid JSON object"
+            return 1
+        fi
+
+        local kind="" payload=""
+        while IFS=$'\t' read -r kind payload
+        do
+            [ -z "$kind" ] && continue
+            if [ "$kind" == "ERR" ]
+            then
+                PROXY_LAST_VALIDATE_ERROR="$payload"
+                return 1
+            fi
+        done <<< "$findings"
+    fi
+
+    PROXY_LAST_VALIDATE_ERROR=""
+    return 0
+}
+
+ProxyPruneBackups()
+{
+    local backup_root="$1"
+    local keep="${2:-${PROXY_BACKUP_KEEP:-20}}"
+    local lkg_link="${backup_root}/last-known-good"
+    local lkg_target=""
+
+    if [ ! -d "$backup_root" ]
+    then
+        return 0
+    fi
+
+    if [ -L "$lkg_link" ]
+    then
+        lkg_target=$(readlink "$lkg_link" 2> /dev/null || true)
+        lkg_target="${lkg_target##*/}"
+    fi
+
+    local entries=()
+    local item=""
+    while IFS= read -r item
+    do
+        [ -z "$item" ] && continue
+        [ "$item" == "last-known-good" ] && continue
+        [ -n "$lkg_target" ] && [ "$item" == "$lkg_target" ] && continue
+        entries+=("$item")
+    done < <(ls -1t "$backup_root" 2> /dev/null || true)
+
+    local total=${#entries[@]}
+    local i
+    for((i=keep;i<total;i++));
+    do
+        rm -rf "${backup_root:?}/${entries[i]}" 2> /dev/null || true
+    done
+}
+
+ProxyPreflightCheck()
+{
+    local core="$1"
+    local cfg_file="$2"
+    local conflicts=""
+
+    if [ ! -s "$cfg_file" ]
+    then
+        return 0
+    fi
+
+    local ports_out=""
+    ports_out=$($JQ_FILE -r '
+        (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+        | select(type == "object" and (.port // "" | tostring) != "" and (.port // 0) != 0)
+        | (.port | tostring)
+    ' "$cfg_file" 2> /dev/null || true)
+
+    local own_pids=""
+    own_pids=$(pgrep -f "aios-${core}" 2> /dev/null | tr '\n' '|' || true)
+
+    local ss_snapshot=""
+    local has_ss=0
+    if command -v ss > /dev/null 2>&1
+    then
+        has_ss=1
+        ss_snapshot=$(ss -tulnp 2> /dev/null || true)
+    fi
+
+    local p="" tok="" p_start="" p_end="" single_port=""
+    local port_tokens=() check_ports=()
+    while IFS= read -r p
+    do
+        [ -z "$p" ] && continue
+        port_tokens=()
+        IFS=',' read -r -a port_tokens <<< "$p"
+        for tok in "${port_tokens[@]+"${port_tokens[@]}"}"
+        do
+            tok="${tok//[[:space:]]/}"
+            check_ports=()
+            if [[ "$tok" =~ ^([0-9]+)-([0-9]+)$ ]]
+            then
+                p_start="${BASH_REMATCH[1]}"
+                p_end="${BASH_REMATCH[2]}"
+                if [ "$p_end" -lt "$p_start" ]
+                then
+                    continue
+                fi
+
+                if [ $((p_end - p_start)) -le 256 ]
+                then
+                    local cur_p
+                    for((cur_p=p_start;cur_p<=p_end;cur_p++));
+                    do
+                        check_ports+=("$cur_p")
+                    done
+                else
+                    check_ports+=("$p_start" "$p_end")
+                fi
+            elif [[ "$tok" =~ ^[0-9]+$ ]]
+            then
+                check_ports+=("$tok")
+            else
+                continue
+            fi
+
+            for single_port in "${check_ports[@]+"${check_ports[@]}"}"
+            do
+                local hit=""
+                if [ "$has_ss" -eq 1 ]
+                then
+                    hit=$(printf '%s\n' "$ss_snapshot" | awk -v pt=":${single_port}" '$5 ~ pt"$" {print}' || true)
+                elif command -v lsof > /dev/null 2>&1
+                then
+                    hit=$(lsof -nP -i ":${single_port}" 2> /dev/null | tail -n +2 || true)
+                fi
+
+                if [ -n "$hit" ]
+                then
+                    if [ -n "$own_pids" ] && printf '%s\n' "$hit" | grep -qE "pid=(${own_pids%\|})| (${own_pids%\|}) " 2> /dev/null
+                    then
+                        continue
+                    fi
+                    conflicts="${conflicts}port ${single_port}: ${hit}\n"
+                fi
+            done
+        done
+    done <<< "$ports_out"
+
+    if [ -n "$conflicts" ]
+    then
+        PROXY_PREFLIGHT_WARNINGS="$conflicts"
+        return 1
+    fi
+
+    PROXY_PREFLIGHT_WARNINGS=""
+    return 0
+}
+
+ProxyConfigTx()
+{
+    local core="$1"
+    local candidate_json="$2"
+    local skip_restart="${3:-0}"
+
+    local root_dir="" cfg_file="" backup_root="" svc_name="" format="json" bin="" ver=""
+    if [ "$core" == "xray" ]
+    then
+        root_dir="$X_ROOT"
+        cfg_file="$X_CONFIG"
+        backup_root="$X_BACKUP_ROOT"
+        svc_name="aios-xray"
+        format="json"
+    elif [ "$core" == "v2ray" ]
+    then
+        root_dir="$V2_ROOT"
+        cfg_file="$V2_CONFIG"
+        backup_root="$V2_BACKUP_ROOT"
+        svc_name="aios-v2ray"
+        format=$(ProxyGetV2rayFormat)
+    else
+        return 1
+    fi
+
+    if [ -z "$candidate_json" ]
+    then
+        PROXY_LAST_VALIDATE_ERROR="empty candidate json"
+        return 1
+    fi
+
+    ver=$(ProxyGetTargetVersion "$core")
+    bin=$(ProxyDetectCoreBin "$core")
+
+    local lock_owned=0
+    if [ -z "${PROXY_ACTIVE_LOCK_DIR:-}" ]
+    then
+        if ! ProxyAcquireLock "$PROXY_LOCK_FILE"
+        then
+            PROXY_LAST_VALIDATE_ERROR="failed to acquire proxy lock"
+            return 1
+        fi
+        lock_owned=1
+    fi
+
+    mkdir -p "$root_dir" "$backup_root" 2> /dev/null || true
+
+    local tmp_cfg="${root_dir}/.config.tmp.$$.json"
+    local bak_cfg=""
+    local ts
+    ts=$(date +%Y%m%d_%H%M%S 2> /dev/null || echo "$$")
+
+    if ! printf '%s\n' "$candidate_json" | $JQ_FILE '.' > "$tmp_cfg" 2> /dev/null
+    then
+        rm -f "$tmp_cfg" 2> /dev/null || true
+        PROXY_LAST_VALIDATE_ERROR="invalid JSON payload"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if ! ProxyValidateCandidateRules "$core" "$tmp_cfg" "$ver" "$format"
+    then
+        rm -f "$tmp_cfg" 2> /dev/null || true
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if ! ProxyApplyConfigPerms "$core" "$tmp_cfg"
+    then
+        rm -f "$tmp_cfg" 2> /dev/null || true
+        PROXY_LAST_VALIDATE_ERROR="failed to apply candidate config permissions"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if [ -x "$bin" ]
+    then
+        if ! ProxyTestConfigWithBinary "$core" "$bin" "$tmp_cfg" "$format"
+        then
+            PROXY_LAST_VALIDATE_ERROR="${PROXY_LAST_TEST_OUTPUT:-core -test failed}"
+            rm -f "$tmp_cfg" 2> /dev/null || true
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    local old_bind=0 old_tun=0 new_bind=0 new_tun=0
+    if [ -s "$cfg_file" ]
+    then
+        read -r old_bind old_tun <<< "$(ProxyConfigNeedsCaps "$cfg_file" "$core")"
+    fi
+    read -r new_bind new_tun <<< "$(ProxyConfigNeedsCaps "$tmp_cfg" "$core")"
+
+    local svc_active=0
+    if ServiceControlIsActive "$svc_name"
+    then
+        svc_active=1
+    fi
+
+    local unit_file="" bak_unit="" need_unit_sync=0
+    ServiceResolveLabel "$svc_name"
+    unit_file="${service_file:-}"
+
+    if [ -n "$unit_file" ] && [ -f "$unit_file" ]
+    then
+        need_unit_sync=1
+        bak_unit="${root_dir}/.unit.bak.$$"
+        cp -p "$unit_file" "$bak_unit" 2> /dev/null || cp "$unit_file" "$bak_unit"
+    elif [ "$old_bind" -ne "$new_bind" ] || [ "$old_tun" -ne "$new_tun" ] || { [ "$skip_restart" -ne 1 ] && [ "$svc_active" -eq 1 ]; }
+    then
+        need_unit_sync=1
+    fi
+
+    if [ -f "$cfg_file" ]
+    then
+        bak_cfg="${backup_root}/cfg_${ts}_$$.json"
+        cp -p "$cfg_file" "$bak_cfg" 2> /dev/null || cp "$cfg_file" "$bak_cfg"
+        chmod 600 "$bak_cfg" 2> /dev/null || true
+    fi
+
+    if ! mv -f "$tmp_cfg" "$cfg_file"
+    then
+        rm -f "$tmp_cfg" "$bak_unit" 2> /dev/null || true
+        PROXY_LAST_VALIDATE_ERROR="atomic replace config failed"
+        [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+        return 1
+    fi
+
+    if [ "$need_unit_sync" -eq 1 ]
+    then
+        if ! ProxyWriteServiceUnit "$core"
+        then
+            if [ -n "$bak_cfg" ] && [ -f "$bak_cfg" ]
+            then
+                cp "$bak_cfg" "${root_dir}/.rollback.tmp.$$"
+                ProxyApplyConfigPerms "$core" "${root_dir}/.rollback.tmp.$$" || true
+                mv -f "${root_dir}/.rollback.tmp.$$" "$cfg_file"
+            else
+                rm -f "$cfg_file" 2> /dev/null || true
+            fi
+
+            if [ -n "$bak_unit" ] && [ -f "$bak_unit" ] && [ -n "$unit_file" ]
+            then
+                cp "$bak_unit" "$unit_file" 2> /dev/null || true
+                if [ "${dist:-}" != "mac" ] && command -v systemctl > /dev/null 2>&1
+                then
+                    systemctl daemon-reload > /dev/null 2>&1 || true
+                fi
+            elif [ -n "$unit_file" ] && [ -f "$unit_file" ]
+            then
+                rm -f "$unit_file" 2> /dev/null || true
+            fi
+
+            rm -f "$bak_unit" 2> /dev/null || true
+            PROXY_LAST_VALIDATE_ERROR="service unit update failed; rolled back previous config"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    if [ "$skip_restart" -ne 1 ] && [ "$svc_active" -eq 1 ]
+    then
+        if ! ServiceControl restart "$svc_name" > /dev/null 2>&1 || ! ProxyCheckReadiness "$core" "$cfg_file"
+        then
+            if [ -n "$bak_cfg" ] && [ -f "$bak_cfg" ]
+            then
+                cp "$bak_cfg" "${root_dir}/.rollback.tmp.$$"
+                ProxyApplyConfigPerms "$core" "${root_dir}/.rollback.tmp.$$" || true
+                mv -f "${root_dir}/.rollback.tmp.$$" "$cfg_file"
+            fi
+
+            if [ -n "$bak_unit" ] && [ -f "$bak_unit" ] && [ -n "$unit_file" ]
+            then
+                cp "$bak_unit" "$unit_file" 2> /dev/null || true
+                if [ "${dist:-}" != "mac" ] && command -v systemctl > /dev/null 2>&1
+                then
+                    systemctl daemon-reload > /dev/null 2>&1 || true
+                fi
+            else
+                ProxyWriteServiceUnit "$core" > /dev/null 2>&1 || true
+            fi
+
+            ServiceControl restart "$svc_name" > /dev/null 2>&1 || true
+            rm -f "$bak_unit" 2> /dev/null || true
+            PROXY_LAST_VALIDATE_ERROR="service restart failed; rolled back previous config"
+            [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+            return 1
+        fi
+    fi
+
+    rm -f "$bak_unit" 2> /dev/null || true
+    ProxyPruneBackups "$backup_root"
+    [ "$lock_owned" -eq 1 ] && ProxyReleaseLock
+    return 0
+}
+
+ProxyCheckReadiness()
+{
+    local core="$1"
+    local cfg_file="$2"
+    local svc_name="aios-${core}"
+
+    if ! ServiceControlIsActive "$svc_name"
+    then
+        return 1
+    fi
+
+    if [ -n "${AIOS_MOCK_SVC_STATE_DIR:-}" ] || [ ! -s "$cfg_file" ]
+    then
+        return 0
+    fi
+
+    if [ -n "${mock_state:-}" ] && [ -d "${mock_state}" ]
+    then
+        return 0
+    fi
+
+    local raw_ports=""
+    raw_ports=$($JQ_FILE -r '
+        [
+            (
+                (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+                | select(type == "object" and (.protocol // "") != "tun")
+                | (.port // empty | tostring)
+                | select(length > 0 and . != "0")
+            ),
+            (
+                if (.api | type) == "object" and (.api.listen | type) == "string" and (.api.listen | contains(":")) then
+                    (.api.listen | split(":") | last)
+                else empty end
+            )
+        ] | unique[]
+    ' "$cfg_file" 2> /dev/null || true)
+
+    if [ -z "$raw_ports" ]
+    then
+        return 0
+    fi
+
+    local probe_ports=()
+    local p="" tok="" probe_port=""
+    local port_tokens=()
+    while IFS= read -r p
+    do
+        [ -z "$p" ] && continue
+        port_tokens=()
+        IFS=',' read -r -a port_tokens <<< "$p"
+        for tok in "${port_tokens[@]+"${port_tokens[@]}"}"
+        do
+            tok="${tok//[[:space:]]/}"
+            probe_port="${tok%%-*}"
+            if [[ "$probe_port" =~ ^[0-9]+$ ]] && [ "$probe_port" -gt 0 ]
+            then
+                probe_ports+=("$probe_port")
+            fi
+        done
+    done <<< "$raw_ports"
+
+    if [ "${#probe_ports[@]}" -eq 0 ]
+    then
+        return 0
+    fi
+
+    if command -v ss > /dev/null 2>&1
+    then
+        local ss_out=""
+        ss_out=$(ss -tuln 2> /dev/null || true)
+        for probe_port in "${probe_ports[@]+"${probe_ports[@]}"}"
+        do
+            if ! printf '%s\n' "$ss_out" | awk -v pt=":${probe_port}" '$5 ~ pt"$" {found=1} END {exit !found}'
+            then
+                return 1
+            fi
+        done
+        return 0
+    fi
+
+    if command -v lsof > /dev/null 2>&1
+    then
+        for probe_port in "${probe_ports[@]+"${probe_ports[@]}"}"
+        do
+            if ! lsof -nP -iTCP:"${probe_port}" -sTCP:LISTEN > /dev/null 2>&1 && ! lsof -nP -iUDP:"${probe_port}" > /dev/null 2>&1
+            then
+                return 1
+            fi
+        done
+        return 0
+    fi
+
+    return 0
+}
+
+ProxyMutateConfigTx()
+{
+    local core="$1"
+    local filter="$2"
+    shift 2
+
+    local cfg_file=""
+    if [ "$core" == "xray" ]
+    then
+        cfg_file="$X_CONFIG"
+    elif [ "$core" == "v2ray" ]
+    then
+        cfg_file="$V2_CONFIG"
+    else
+        return 1
+    fi
+
+    local src_json="{}"
+    if [ -s "$cfg_file" ]
+    then
+        src_json=$(cat "$cfg_file")
+    fi
+
+    local candidate=""
+    if ! candidate=$(printf '%s\n' "$src_json" | $JQ_FILE "$@" "$filter")
+    then
+        PROXY_LAST_VALIDATE_ERROR="jq mutation failed"
+        return 1
+    fi
+
+    ProxyConfigTx "$core" "$candidate"
+}

@@ -1,82 +1,62 @@
 XrayInstall()
 {
-    if [ -s "$X_CONFIG" ]
-    then
-        Println "$(eval_gettext "\$error xray 已存在...")\n"
-        ExitOnList n "`gettext \"是否覆盖原安装\"`"
-    fi
-
+    local req_tag="${1:-v${XRAY_LATEST_TESTED_VER}}"
     DepsCheck
     JQInstall
+    ProxyEnsureDirs
 
-    if ! grep -q "xray:" < "/etc/passwd"
+    if [ -x "$AIOS_XRAY_BIN" ] && [ -t 0 ] && [ -z "${1:-}" ]
     then
-        if grep -q '\--group ' < <(adduser --help)
-        then
-            adduser xray --system --group --no-create-home > /dev/null
-        else
-            adduser xray --system --no-create-home > /dev/null
-        fi
-        usermod -s /usr/sbin/nologin xray
+        Println "$(eval_gettext "\$info aios-xray 已存在, 可继续安装其他版本到隔离槽位")\n"
     fi
 
-    Println "$(eval_gettext "\$info 安装 xray...")"
+    Println "$(eval_gettext "\$info 安装隔离版 aios-xray (\$req_tag)...")"
+    if ProxyCoreInstall "xray" "$req_tag"
+    then
+        if [ ! -s "$X_CONFIG" ]
+        then
+            local default_cfg='{"log":{"logLevel":"warning"},"inbounds":[],"outbounds":[{"tag":"direct","protocol":"freedom"}]}'
+            if ! ProxyConfigTx "xray" "$default_cfg" 1
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 初始化 Xray 默认配置失败: \$err_detail")\n"
+                return 1
+            fi
+        fi
 
-    { curl -s -m 10 "$X_LINK" || curl -s -m 30 "$X_LINK_FALLBACK"; } \
-    | sed "s+nobody+xray+g" \
-    | sed "s+ 'sha1'++g" \
-    | sed "s+ 'sha256'++g" \
-    | sed "s+ 'sha512'++g" \
-    | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/xray.json+g" \
-    | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/xray+g" | bash
+        local svc_err=""
+        if ! svc_err=$(ServiceControl start aios-xray 2>&1)
+        then
+            Println "$(eval_gettext "\$error 启动 aios-xray 服务失败: \$svc_err")\n"
+            return 1
+        fi
 
-    sed -i "s+nobody+xray+g" "/etc/systemd/system/xray.service"
-    sed -i "s+nobody+xray+g" "/etc/systemd/system/xray@.service"
-
-    mkdir -p /var/log/xray/
-    [ ! -e "/var/log/xray/error.log" ] && printf '%s' "" > /var/log/xray/error.log
-    chown -R xray:xray /var/log/xray/
-    chown -R xray:xray /usr/local/share/xray/
-
-    ServiceControl start xray
-
-    Println "$(eval_gettext "\$info xray 安装完成")\n"
+        Println "$(eval_gettext "\$info aios-xray 安装完成")\n"
+    else
+        Println "$(eval_gettext "\$error aios-xray 安装失败")\n"
+        return 1
+    fi
 }
 
 XrayUpdate()
 {
+    local req_tag="${1:-v${XRAY_LATEST_TESTED_VER}}"
     DepsCheck
     JQInstall
     ShFileUpdate xray
+    ProxyEnsureDirs
 
-    if ! grep -q "xray:" < "/etc/passwd"
+    if ProxyCoreInstall "xray" "$req_tag"
     then
-        if grep -q '\--group ' < <(adduser --help)
+        if ProxyCoreSwitch "xray" "$req_tag"
         then
-            adduser xray --system --group --no-create-home > /dev/null
+            Println "$(eval_gettext "\$info aios-xray 已安全切换至 \$req_tag")\n"
         else
-            adduser xray --system --no-create-home > /dev/null
+            local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+            Println "$(eval_gettext "\$error aios-xray 切换失败: \$err_detail")\n"
+            return 1
         fi
-        usermod -s /usr/sbin/nologin xray
+    else
+        return 1
     fi
-
-    { curl -s -m 10 "$X_LINK" || curl -s -m 30 "$X_LINK_FALLBACK"; } \
-    | sed "s+nobody+xray+g" \
-    | sed "s+ 'sha1'++g" \
-    | sed "s+ 'sha256'++g" \
-    | sed "s+ 'sha512'++g" \
-    | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/xray.json+g" \
-    | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/xray+g" | bash
-
-    sed -i "s+nobody+xray+g" "/etc/systemd/system/xray.service"
-    sed -i "s+nobody+xray+g" "/etc/systemd/system/xray@.service"
-
-    mkdir -p /var/log/xray/
-    [ ! -e "/var/log/xray/error.log" ] && printf '%s' "" > /var/log/xray/error.log
-    chown -R xray:xray /var/log/xray/
-    chown -R xray:xray /usr/local/share/xray/
-
-    ServiceControl restart xray
-
-    Println "$(eval_gettext "\$info xray 升级完成")\n"
 }

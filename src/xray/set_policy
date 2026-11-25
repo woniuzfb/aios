@@ -12,7 +12,7 @@ XraySetPolicy()
     echo
     inquirer list_input_index "$(gettext "选择 Xray 策略操作")" actions action_idx
 
-    local sw_opts=( "$(gettext "关闭")" "$(gettext "开启")" )
+    local sw_opts=( "$i18n_close" "$i18n_open" )
 
     case "$action_idx" in
         0)
@@ -33,8 +33,8 @@ XraySetPolicy()
             inquirer text_input "$(gettext "connIdle (秒)")" ci "300"
             inquirer text_input "$(gettext "uplinkOnly (秒)")" uo "1"
             inquirer text_input "$(gettext "downlinkOnly (秒)")" do_s "1"
-            inquirer text_input "bufferSize (KB)" buf "0"
-            if [[ ! $hs =~ ^[0-9]+$ ]] || [[ ! $ci =~ ^[0-9]+$ ]] || [[ ! $uo =~ ^[0-9]+$ ]] || [[ ! $do_s =~ ^[0-9]+$ ]] || [[ ! $buf =~ ^[0-9]+$ ]]
+            inquirer text_input "bufferSize (KB, $(gettext "留空使用默认"))" buf ""
+            if [[ ! $hs =~ ^[0-9]+$ ]] || [[ ! $ci =~ ^[0-9]+$ ]] || [[ ! $uo =~ ^[0-9]+$ ]] || [[ ! $do_s =~ ^[0-9]+$ ]] || { [ -n "$buf" ] && [[ ! $buf =~ ^[0-9]+$ ]]; }
             then
                 Println "$(eval_gettext "\$error handshake / connIdle / uplinkOnly / downlinkOnly / bufferSize 必须为非负整数")\n"
                 return 1
@@ -43,22 +43,22 @@ XraySetPolicy()
             inquirer list_input_index "$(gettext "用户下行流量统计 statsUserDownlink")" sw_opts dn_idx
             inquirer list_input_index "$(gettext "用户在线统计 statsUserOnline")" sw_opts online_idx
 
-            if ! JQ mutate "$X_CONFIG" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
-                ($lvl): {
+            if ! ProxyMutateConfigTx "xray" '.policy.levels = ((.policy.levels // .policy.level // {}) * {
+                ($lvl): ({
                     "handshake": ($hs | tonumber),
                     "connIdle": ($ci | tonumber),
                     "uplinkOnly": ($uo | tonumber),
                     "downlinkOnly": ($do_s | tonumber),
-                    "bufferSize": ($buf | tonumber),
                     "statsUserUplink": ($up == "1"),
                     "statsUserDownlink": ($dn == "1"),
                     "statsUserOnline": ($online == "1")
-                }
+                } + (if $buf != "" then {"bufferSize": ($buf | tonumber)} else {} end))
             }) | del(.policy.level)' \
                 --arg lvl "$lvl" --arg hs "$hs" --arg ci "$ci" --arg uo "$uo" --arg do_s "$do_s" \
                 --arg buf "$buf" --arg up "$up_idx" --arg dn "$dn_idx" --arg online "$online_idx"
             then
-                Println "$(eval_gettext "\$error 更新等级 \${lvl} 策略失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 更新等级 \${lvl} 策略失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已更新等级 \${green}\${lvl}\${normal} 策略")\n"
@@ -78,9 +78,10 @@ XraySetPolicy()
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的用户等级")" lvls del_idx
             local del_lvl="${lvls[$del_idx]}"
-            if ! JQ mutate "$X_CONFIG" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
+            if ! ProxyMutateConfigTx "xray" 'del(.policy.level[$k], .policy.levels[$k])' --arg k "$del_lvl"
             then
-                Println "$(eval_gettext "\$error 删除等级 \${del_lvl} 策略失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除等级 \${del_lvl} 策略失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已删除等级 \${green}\${del_lvl}\${normal} 策略")\n"
@@ -91,16 +92,13 @@ XraySetPolicy()
             local sw_idx=1 sw_bool=false
             inquirer list_input_index "$(eval_gettext "设置 \${sys_key}")" sw_opts sw_idx
             [ "$sw_idx" -eq 1 ] && sw_bool=true
-            jq_bool=true
-            jq_path='["policy","system","'"$sys_key"'"]'
-            if ! JQ update "$X_CONFIG" "$sw_bool"
+            if ! ProxyMutateConfigTx "xray" '.policy.system = ((.policy.system // {}) + {($k): $v})' --arg k "$sys_key" --argjson v "$sw_bool"
             then
-                Println "$(eval_gettext "\$error 更新系统策略 \${sys_key} 失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 更新系统策略 \${sys_key} 失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已更新系统策略 \${green}\${sys_key}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }

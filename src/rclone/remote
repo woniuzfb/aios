@@ -12,13 +12,17 @@ RcloneRemoteView()
     rclone_remotes_options=()
 
     local i rclone_remotes_list="" rclone_remote_list=""
+    local i18n_type i18n_vendor i18n_user
+    i18n_type=$(gettext "类型")
+    i18n_vendor=$(gettext "供应")
+    i18n_user=$(gettext "用户")
 
     for((i=0;i<rclone_remotes_count;i++));
     do
-        rclone_remote_list="$(gettext "名称"): ${rclone_remotes_name[i]} $(gettext "类型"): ${rclone_remotes_type[i]}\n$(gettext "供应"): ${rclone_remotes_vendor[i]} $(gettext "用户"): ${rclone_remotes_user[i]}\n$(gettext "地址"): ${rclone_remotes_url[i]}\n\n"
+        rclone_remote_list="${i18n_name}: ${rclone_remotes_name[i]} ${i18n_type}: ${rclone_remotes_type[i]}\n${i18n_vendor}: ${rclone_remotes_vendor[i]} ${i18n_user}: ${rclone_remotes_user[i]}\n${i18n_address}: ${rclone_remotes_url[i]}\n\n"
         rclone_remotes_list="${rclone_remotes_list}${green}$((i+1)).${normal} $rclone_remote_list"
         rclone_remotes+=("$rclone_remote_list")
-        rclone_remotes_options+=("$(gettext "名称"): ${rclone_remotes_name[i]} $(gettext "地址"): ${rclone_remotes_url[i]}")
+        rclone_remotes_options+=("${i18n_name}: ${rclone_remotes_name[i]} ${i18n_address}: ${rclone_remotes_url[i]}")
     done
 
     Println "$rclone_remotes_list"
@@ -95,7 +99,7 @@ RcloneRemoteEdit()
     echo
     inquirer checkbox_input_indices "$(gettext "选择修改的远端")" rclone_remotes_options rclone_remotes_indices
 
-    rclone_remote_edit_options=( "$(gettext "名称")" "$(gettext "类型")" "$(gettext "地址")" "$(gettext "供应")" "$(gettext "用户")" "$(gettext "密码")" )
+    rclone_remote_edit_options=( "$i18n_name" "$(gettext "类型")" "$i18n_address" "$(gettext "供应")" "$(gettext "用户")" "$i18n_password" )
     rclone_remote_vendors=( rclone other )
 
     for rclone_remotes_index in "${rclone_remotes_indices[@]}"

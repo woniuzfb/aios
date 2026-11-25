@@ -1,3 +1,54 @@
+i18nSetupFastPath()
+{
+    if [ "${sh_locale:-zh_CN}" == "zh_CN" ]
+    then
+        gettext()
+        {
+            printf '%s' "$1"
+        }
+    else
+        unset -f gettext 2> /dev/null || true
+    fi
+}
+
+i18nResetCache()
+{
+    i18n_loaded_base=0
+    i18n_loaded_iptv_common=0
+    i18n_loaded_get_default=0
+    i18n_loaded_get_channels=0
+    i18n_loaded_get_channel=0
+
+    unset i18n_yes i18n_no i18n_cancel i18n_canceled i18n_default_cancel \
+        i18n_input_correct_no i18n_input_correct_number i18n_blank i18n_random \
+        i18n_none i18n_select_action i18n_name i18n_please_select i18n_install \
+        i18n_edit i18n_delete i18n_input_no i18n_all i18n_add i18n_default \
+        i18n_address i18n_password i18n_input_password i18n_domain i18n_skip \
+        i18n_select_edit i18n_status i18n_view i18n_enabled i18n_disabled \
+        i18n_port i18n_account i18n_update i18n_close i18n_open i18n_not_set \
+        i18n_source i18n_live i18n_proxy i18n_xtream_codes_proxy i18n_user_agent \
+        i18n_headers i18n_cookies i18n_output_dir_name i18n_video_shift \
+        i18n_audio_shift i18n_seconds i18n_playlist_name i18n_playlist_link \
+        i18n_seg_dir_name i18n_seg_name i18n_seg_length i18n_seg_count \
+        i18n_video_codec i18n_audio_codec i18n_delay i18n_subtitle i18n_drawtext \
+        i18n_crf i18n_bitrate i18n_resolution i18n_running i18n_stopped \
+        i18n_rate_control i18n_average_bitrate i18n_constant_bitrate \
+        i18n_constrained_encoding i18n_encrypt i18n_encrypt_session \
+        i18n_keyinfo_name i18n_key_name i18n_input_flags i18n_output_flags \
+        i18n_channel_name i18n_sync i18n_sync_file i18n_sync_index i18n_sync_pairs \
+        i18n_schedule_file i18n_flv_delay_seconds i18n_flv_restart_nums \
+        i18n_hls_delay_seconds i18n_hls_min_bitrate i18n_hls_max_seg_size \
+        i18n_hls_restart_nums i18n_hls_key_period i18n_hls_end_list \
+        i18n_anti_ddos_port i18n_anti_ddos_syn_flood i18n_anti_ddos \
+        i18n_anti_leech_default i18n_anti_leech i18n_recheck_period \
+        i18n_pid i18n_codec i18n_video_audio_shift i18n_video_quality \
+        i18n_playlist_file i18n_flv_push_link i18n_flv_pull_link \
+        i18n_channel_try_again i18n_flv_h265 i18n_sync_not_set \
+        i18n_sync_not_enabled
+
+    PROXY_I18N_JSON=""
+}
+
 i18nInstall()
 {
     local sh_locale=${1:-zh_CN}
@@ -12,10 +63,13 @@ i18nInstall()
 
     DepInstall wget
 
-    if [ "$sh_locale" == "zh_CN" ] 
+    if [ "$sh_locale" == "zh_CN" ]
     then
         echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-        Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
+        i18nSetupFastPath
+        i18nResetCache
+        i18nGetMsg
+        Println "$(eval_gettext "\${green}成功!\${normal}")\n"
         return 0
     fi
 
@@ -32,6 +86,9 @@ i18nInstall()
         chmod 644 "$tmp_mo"
         mv -f "$tmp_mo" "$mo_file"
         echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+        i18nSetupFastPath
+        i18nResetCache
+        i18nGetMsg
         Println "$(eval_gettext "\${green}成功!\${normal}")\n"
     else
         rm -f "$tmp_mo"
@@ -43,27 +100,57 @@ i18nInstall()
 i18nGetMsg()
 {
     case ${1:-} in
-        "") 
-            i18n_yes=$(gettext "是")
-            i18n_no=$(gettext "否")
-            i18n_cancel=$(gettext "取消")
-            i18n_canceled=$(gettext "已取消")
-            i18n_default_cancel=$(gettext "(默认: 取消): ")
-            i18n_input_correct_no=$(gettext "请输入正确的序号")
-            i18n_input_correct_number=$(gettext "请输入正确的数字")
+        "")
+            [ "${i18n_loaded_base:-0}" -eq 1 ] && return 0
+            i18n_yes=${i18n_yes:-$(gettext "是")}
+            i18n_no=${i18n_no:-$(gettext "否")}
+            i18n_cancel=${i18n_cancel:-$(gettext "取消")}
+            i18n_canceled=${i18n_canceled:-$(gettext "已取消")}
+            i18n_default_cancel=${i18n_default_cancel:-$(gettext "(默认: 取消): ")}
+            i18n_input_correct_no=${i18n_input_correct_no:-$(gettext "请输入正确的序号")}
+            i18n_input_correct_number=${i18n_input_correct_number:-$(gettext "请输入正确的数字")}
             i18n_blank=${i18n_blank:-$(gettext "不设置")}
             i18n_random=${i18n_random:-$(gettext "随机")}
-            info="${green}`gettext \"[信息]\"`${normal}"
-            error="${red}`gettext \"[错误]\"`${normal}"
-            tip="${green}`gettext \"[注意]\"`${normal}"
+            i18n_none=${i18n_none:-$(gettext "无")}
+            i18n_select_action=${i18n_select_action:-$(gettext "选择操作")}
+            i18n_name=${i18n_name:-$(gettext "名称")}
+            i18n_please_select=${i18n_please_select:-$(gettext "请选择")}
+            i18n_install=${i18n_install:-$(gettext "安装")}
+            i18n_edit=${i18n_edit:-$(gettext "修改")}
+            i18n_delete=${i18n_delete:-$(gettext "删除")}
+            i18n_input_no=${i18n_input_no:-$(gettext "输入序号")}
+            i18n_all=${i18n_all:-$(gettext "全部")}
+            i18n_add=${i18n_add:-$(gettext "添加")}
+            i18n_default=${i18n_default:-$(gettext "默认")}
+            i18n_address=${i18n_address:-$(gettext "地址")}
+            i18n_password=${i18n_password:-$(gettext "密码")}
+            i18n_input_password=${i18n_input_password:-$(gettext "输入密码")}
+            i18n_domain=${i18n_domain:-$(gettext "域名")}
+            i18n_skip=${i18n_skip:-$(gettext "跳过")}
+            i18n_select_edit=${i18n_select_edit:-$(gettext "选择修改")}
+            i18n_status=${i18n_status:-$(gettext "状态")}
+            i18n_view=${i18n_view:-$(gettext "查看")}
+            i18n_enabled=${i18n_enabled:-$(gettext "已开启")}
+            i18n_disabled=${i18n_disabled:-$(gettext "已关闭")}
+            i18n_port=${i18n_port:-$(gettext "端口")}
+            i18n_account=${i18n_account:-$(gettext "账号")}
+            i18n_update=${i18n_update:-$(gettext "更新")}
+            i18n_close=${i18n_close:-$(gettext "关闭")}
+            i18n_open=${i18n_open:-$(gettext "开启")}
+            i18n_not_set=${i18n_not_set:-$(gettext "未设置")}
+            info="${green}$(gettext "[信息]")${normal}"
+            error="${red}$(gettext "[错误]")${normal}"
+            tip="${green}$(gettext "[注意]")${normal}"
             yn_options=( "$i18n_yes" "$i18n_no" )
             ny_options=( "$i18n_no" "$i18n_yes" )
             tf_options=( true false )
             ft_options=( false true )
             zo_options=( 0 1 )
             oz_options=( 1 0 )
+            i18n_loaded_base=1
         ;;
-        get_default)
+        iptv_common)
+            [ "${i18n_loaded_iptv_common:-0}" -eq 1 ] && return 0
             i18n_proxy=${i18n_proxy:-$(gettext "代理")}
             i18n_xtream_codes_proxy=${i18n_xtream_codes_proxy:-$(gettext "xtream codes 代理")}
             i18n_user_agent=${i18n_user_agent:-$(gettext "user agent")}
@@ -86,14 +173,20 @@ i18nGetMsg()
             i18n_rate_control=${i18n_rate_control:-$(gettext "码率控制")}
             i18n_encrypt=${i18n_encrypt:-$(gettext "加密")}
             i18n_encrypt_session=${i18n_encrypt_session:-$(gettext "加密 session")}
-            i18n_keyinfo_name=${i18n_keyinfo_name:-$(gettext "keyinfo名称")}
-            i18n_key_name=${i18n_key_name:-$(gettext "key名称")}
+            i18n_keyinfo_name=${i18n_keyinfo_name:-$(gettext "keyinfo 名称")}
+            i18n_key_name=${i18n_key_name:-$(gettext "key 名称")}
             i18n_input_flags=${i18n_input_flags:-$(gettext "输入参数")}
             i18n_output_flags=${i18n_output_flags:-$(gettext "输出参数")}
             i18n_sync=${i18n_sync:-$(gettext "sync")}
             i18n_sync_file=${i18n_sync_file:-$(gettext "sync file")}
             i18n_sync_index=${i18n_sync_index:-$(gettext "sync index")}
             i18n_sync_pairs=${i18n_sync_pairs:-$(gettext "sync pairs")}
+            i18n_hls_end_list=${i18n_hls_end_list:-$(gettext "EXT-X-ENDLIST")}
+            i18n_loaded_iptv_common=1
+        ;;
+        get_default)
+            [ "${i18n_loaded_get_default:-0}" -eq 1 ] && return 0
+            i18nGetMsg iptv_common
             i18n_schedule_file=${i18n_schedule_file:-$(gettext "节目表文件")}
             i18n_flv_delay_seconds=${i18n_flv_delay_seconds:-$(gettext "flv 超时时间")}
             i18n_flv_restart_nums=${i18n_flv_restart_nums:-$(gettext "flv 重启次数")}
@@ -102,31 +195,27 @@ i18nGetMsg()
             i18n_hls_max_seg_size=${i18n_hls_max_seg_size:-$(gettext "hls 允许最大分片")}
             i18n_hls_restart_nums=${i18n_hls_restart_nums:-$(gettext "hls 重启次数")}
             i18n_hls_key_period=${i18n_hls_key_period:-$(gettext "hls key 持续时间")}
-            i18n_hls_end_list=${i18n_hls_end_list:-$(gettext "EXT-X-ENDLIST")}
             i18n_anti_ddos_port=${i18n_anti_ddos_port:-$(gettext "anti ddos 封禁端口")}
             i18n_anti_ddos_syn_flood=${i18n_anti_ddos_syn_flood:-$(gettext "SYN Flood 防御")}
             i18n_anti_ddos=${i18n_anti_ddos:-$(gettext "anti ddos")}
-            i18n_anti_leech=${i18n_anti_leech:-$(gettext "anti leech")}
+            i18n_anti_leech_default=${i18n_anti_leech_default:-$(gettext "anti leech")}
             i18n_recheck_period=${i18n_recheck_period:-$(gettext "重启失败后定时检查间隔时间")}
+            i18n_loaded_get_default=1
         ;;
-        get_channels) 
+        get_channels)
+            [ "${i18n_loaded_get_channels:-0}" -eq 1 ] && return 0
+            i18nGetMsg iptv_common
             i18n_source=${i18n_source:-$(gettext "源")}
-            i18n_proxy=${i18n_proxy:-$(gettext "代理")}
             i18n_output_dir_name=${i18n_output_dir_name:-$(gettext "输出目录")}
             i18n_video_shift=${i18n_video_shift:-$(gettext "画面延迟")}
             i18n_audio_shift=${i18n_audio_shift:-$(gettext "声音延迟")}
             i18n_seconds=${i18n_seconds:-$(gettext "秒")}
-            i18n_rate_control=${i18n_rate_control:-$(gettext "码率控制")}
             i18n_average_bitrate=${i18n_average_bitrate:-$(gettext "平均码率")}
             i18n_constant_bitrate=${i18n_constant_bitrate:-$(gettext "固定码率")}
             i18n_constrained_encoding=${i18n_constrained_encoding:-$(gettext "限制性编码")}
-            i18n_crf=${i18n_crf:-$(gettext "固定质量因子")}
-            i18n_bitrate=${i18n_bitrate:-$(gettext "码率")}
-            i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
             i18n_running=${i18n_running:-$(gettext "运行中")}
             i18n_stopped=${i18n_stopped:-$(gettext "已停止")}
             i18n_pid=${i18n_pid:-$(gettext "进程ID")}
-            i18n_status=${i18n_status:-$(gettext "状态")}
             i18n_channel_name=${i18n_channel_name:-$(gettext "频道名称")}
             i18n_codec=${i18n_codec:-$(gettext "编码")}
             i18n_video_audio_shift=${i18n_video_audio_shift:-$(gettext "延迟")}
@@ -134,61 +223,20 @@ i18nGetMsg()
             i18n_playlist_file=${i18n_playlist_file:-$(gettext "路径")}
             i18n_flv_push_link=${i18n_flv_push_link:-$(gettext "推流地址")}
             i18n_flv_pull_link=${i18n_flv_pull_link:-$(gettext "拉流地址")}
+            i18n_loaded_get_channels=1
         ;;
         get_channel)
+            [ "${i18n_loaded_get_channel:-0}" -eq 1 ] && return 0
+            i18nGetMsg get_channels
             i18n_channel_try_again=${i18n_channel_try_again:-$(gettext "频道发生变化, 请重试 !")}
-            i18n_source=${i18n_source:-$(gettext "源")}
             i18n_live=${i18n_live:-$(gettext "无限时长直播")}
-            i18n_proxy=${i18n_proxy:-$(gettext "代理")}
-            i18n_xtream_codes_proxy=${i18n_xtream_codes_proxy:-$(gettext "xtream codes 代理")}
-            i18n_user_agent=${i18n_user_agent:-$(gettext "user agent")}
-            i18n_headers=${i18n_headers:-$(gettext "headers")}
-            i18n_cookies=${i18n_cookies:-$(gettext "cookies")}
-            i18n_output_dir_name=${i18n_output_dir_name:-$(gettext "输出目录")}
-            i18n_video_shift=${i18n_video_shift:-$(gettext "画面延迟")}
-            i18n_audio_shift=${i18n_audio_shift:-$(gettext "声音延迟")}
-            i18n_seconds=${i18n_seconds:-$(gettext "秒")}
-            i18n_playlist_name=${i18n_playlist_name:-$(gettext "m3u8名称")}
-            i18n_playlist_link=${i18n_playlist_link:-$(gettext "m3u8链接")}
-            i18n_seg_dir_name=${i18n_seg_dir_name:-$(gettext "分片子目录")}
-            i18n_seg_name=${i18n_seg_name:-$(gettext "分片名称")}
-            i18n_seg_length=${i18n_seg_length:-$(gettext "分片时长")}
-            i18n_seg_count=${i18n_seg_count:-$(gettext "分片数")}
-            i18n_video_codec=${i18n_video_codec:-$(gettext "视频编码")}
-            i18n_audio_codec=${i18n_audio_codec:-$(gettext "音频编码")}
-            i18n_delay=${i18n_delay:-$(gettext "延迟")}
-            i18n_subtitle=${i18n_subtitle:-$(gettext "字幕")}
-            i18n_drawtext=${i18n_drawtext:-$(gettext "drawtext 水印")}
-            i18n_crf=${i18n_crf:-$(gettext "固定质量因子")}
-            i18n_bitrate=${i18n_bitrate:-$(gettext "码率")}
-            i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
-            i18n_running=${i18n_running:-$(gettext "运行中")}
-            i18n_stopped=${i18n_stopped:-$(gettext "已停止")}
-            i18n_rate_control=${i18n_rate_control:-$(gettext "码率控制")}
-            i18n_average_bitrate=${i18n_average_bitrate:-$(gettext "平均码率")}
-            i18n_constant_bitrate=${i18n_constant_bitrate:-$(gettext "固定码率")}
-            i18n_constrained_encoding=${i18n_constrained_encoding:-$(gettext "限制性编码")}
-            i18n_encrypt=${i18n_encrypt:-$(gettext "加密")}
-            i18n_encrypt_session=${i18n_encrypt_session:-$(gettext "加密 session")}
-            i18n_keyinfo_name=${i18n_keyinfo_name:-$(gettext "keyinfo名称")}
-            i18n_key_name=${i18n_key_name:-$(gettext "key名称")}
-            i18n_input_flags=${i18n_input_flags:-$(gettext "输入参数")}
-            i18n_output_flags=${i18n_output_flags:-$(gettext "输出参数")}
-            i18n_channel_name=${i18n_channel_name:-$(gettext "频道名称")}
-            i18n_sync=${i18n_sync:-$(gettext "sync")}
-            i18n_sync_file=${i18n_sync_file:-$(gettext "sync file")}
-            i18n_sync_index=${i18n_sync_index:-$(gettext "sync index")}
-            i18n_sync_pairs=${i18n_sync_pairs:-$(gettext "sync pairs")}
-            i18n_hls_end_list=${i18n_hls_end_list:-$(gettext "EXT-X-ENDLIST")}
             i18n_flv_h265=${i18n_flv_h265:-$(gettext "FLV h265")}
-            i18n_flv_push_link=${i18n_flv_push_link:-$(gettext "推流地址")}
-            i18n_flv_pull_link=${i18n_flv_pull_link:-$(gettext "拉流地址")}
             i18n_anti_leech=${i18n_anti_leech:-$(gettext "防盗链")}
-            i18n_none=${i18n_none:-$(gettext "无")}
             i18n_sync_not_set=${i18n_sync_not_set:-$(gettext "请先设置 sync")}
             i18n_sync_not_enabled=${i18n_sync_not_enabled:-$(gettext "请先开启 sync")}
+            i18n_loaded_get_channel=1
         ;;
-        *) 
+        *)
         ;;
     esac
 }
@@ -197,30 +245,30 @@ LocaleFix()
 {
     Println "${green}[INFO]${normal} Installing language (locale) support, it takes awhile..."
 
-    if [ "$dist" == "rpm" ] 
+    if [ "$dist" == "rpm" ]
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
             setenforce 0
         fi
 
-        yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
+        yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN > /dev/null 2>&1 || true
 
-        if [[ -x $(command -v localectl) ]] 
+        if [[ -x $(command -v localectl) ]]
         then
-            localectl set-locale LANG=$1.UTF-8 >/dev/null
-        elif [ -s /etc/sysconfig/i18n ] 
+            localectl set-locale LANG=$1.UTF-8 > /dev/null
+        elif [ -s /etc/sysconfig/i18n ]
         then
             sed -i '/LANG=/d' /etc/sysconfig/i18n
             echo "LANG=$1.UTF-8" >> /etc/sysconfig/i18n
         fi
     else
-        if [ "$dist" == "deb" ] 
+        if [ "$dist" == "deb" ]
         then
             DebFixSources
         fi
 
-        if [[ ! -x $(command -v locale-gen) ]] 
+        if [[ ! -x $(command -v locale-gen) ]]
         then
             AptUpdate
             if ! AptInstall locales
@@ -229,16 +277,16 @@ LocaleFix()
             fi
         fi
 
-        if [ -s /etc/locale.gen ] 
+        if [ -s /etc/locale.gen ]
         then
             sed -i "s/# $1.UTF-8 UTF-8/$1.UTF-8 UTF-8/" /etc/locale.gen
         fi
 
-        locale-gen $1.UTF-8 >/dev/null
+        locale-gen $1.UTF-8 > /dev/null
         update-locale LANG=$1.UTF-8 LANGUAGE
     fi
 
-    if ! grep -q "$1" < <(locale -a 2> /dev/null) 
+    if ! grep -q "$1" < <(locale -a 2> /dev/null)
     then
         Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
     fi
@@ -246,34 +294,34 @@ LocaleFix()
 
 i18nCheck()
 {
-    if [ -z "${sh_locale:-}" ] 
+    if [ -z "${sh_locale:-}" ]
     then
         sh_locale="zh_CN"
 
-        if [ "${locale_fix:-1}" -eq 1 ] && ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+        if [ "${locale_fix:-1}" -eq 1 ] && ! grep -q 'zh_CN' < <(locale -a 2> /dev/null)
         then
             LocaleFix zh_CN
         fi
 
         echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
-    elif [ "$sh_locale" == "zh_CN" ] 
+    elif [ "$sh_locale" == "zh_CN" ]
     then
-        if [ "${locale_fix:-1}" -eq 1 ] 
+        if [ "${locale_fix:-1}" -eq 1 ]
         then
-            if ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+            if ! grep -q 'zh_CN' < <(locale -a 2> /dev/null)
             then
                 LocaleFix zh_CN
             fi
             echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
         fi
     else
-        if [ "${locale_fix:-1}" -eq 1 ] && [ "$sh_locale" == "en" ] && ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
+        if [ "${locale_fix:-1}" -eq 1 ] && [ "$sh_locale" == "en" ] && ! grep -q 'en_US' < <(locale -a 2> /dev/null)
         then
             LocaleFix en_US
             echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
         fi
 
-        if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo" ] 
+        if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/${TEXTDOMAIN}.mo" ]
         then
             i18nInstall "$sh_locale"
         fi
@@ -282,15 +330,25 @@ i18nCheck()
 
 eval_gettext()
 {
-    gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
+    if [ "${sh_locale:-zh_CN}" == "zh_CN" ]
+    then
+        printf '%s' "$1" | (export PATH $(envsubst --variables "$1"); envsubst "$1")
+    else
+        gettext "$1" | (export PATH $(envsubst --variables "$1"); envsubst "$1")
+    fi
 }
 
-if [ -s "$i18n_FILE" ] 
+if [ "${AIOS_TEST_SKIP_I18N_CHECK:-0}" != "1" ]
 then
-    # shellcheck source=/dev/null
-    . "$i18n_FILE"
+    if [ -s "$i18n_FILE" ]
+    then
+        # shellcheck source=/dev/null
+        . "$i18n_FILE"
+    fi
+
+    i18nCheck
 fi
 
-i18nCheck
+i18nSetupFastPath
 
 i18nGetMsg

@@ -22,7 +22,7 @@ VipGetUsers()
         then
             expire_text=$(date +%c --date=@"$expire")
         else
-            expire_text="$(gettext "无")"
+            expire_text="$i18n_none"
         fi
         if [ -n "${vip_public_host:-}" ] 
         then

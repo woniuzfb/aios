@@ -2,7 +2,7 @@ ColorMenu()
 {
     echo
     color_options=( "$(gettext "设置颜色")" "$(gettext "恢复默认")" )
-    inquirer list_input_index "$(gettext "选择操作")" color_options color_options_index
+    inquirer list_input_index "$i18n_select_action" color_options color_options_index
 
     if [ "$color_options_index" -eq 1 ]
     then
@@ -20,7 +20,7 @@ ColorMenu()
     echo
     color_options=( "${red}$(gettext "默认红色文字")${normal}" "${green}$(gettext "默认绿色文字")${normal}" "${yellow}$(gettext "默认黄色文字")${normal}"
         "${blue}$(gettext "默认蓝色文字")${normal}" "${cyan}$(gettext "默认青色文字")${normal}" "${white}$(gettext "默认白色文字")${normal}" "$(gettext "默认黑色背景")" )
-    inquirer list_input_index "$(gettext "选择修改内容")" color_options color_options_index
+    inquirer list_input_index "$i18n_select_edit" color_options color_options_index
 
     echo
     inquirer color_pick "$(gettext "设置") ${color_options[color_options_index]}" color_pick

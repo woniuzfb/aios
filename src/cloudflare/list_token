@@ -65,7 +65,7 @@ CloudflareListToken()
     do
         IFS="|" read -r token_id token_name token_status token_permission <<< "${tokens[i]}"
         tokens_id+=("$token_id")
-        tokens_list="$tokens_list ${green}$((i+1)).${normal}${indent_6}$(gettext "名称"): ${green}$token_name${normal}  $(gettext "状态"): ${green}$token_status${normal}\n${indent_6}$(gettext "权限"): ${green}${token_permission:-$(gettext "无")}${normal}\n\n"
+        tokens_list="$tokens_list ${green}$((i+1)).${normal}${indent_6}$i18n_name: ${green}$token_name${normal}  $i18n_status: ${green}$token_status${normal}\n${indent_6}$(gettext "权限"): ${green}${token_permission:-$i18n_none}${normal}\n\n"
     done
 
     Println "$tokens_list"

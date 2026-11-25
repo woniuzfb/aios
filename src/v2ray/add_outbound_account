@@ -3,6 +3,8 @@ V2rayAddOutboundAccount()
     ProxySelectBound "$V2_CONFIG" outbounds "$(gettext "选择要添加服务端/用户的出站")" || return 1
     local idx="$selected_bound_index"
     local protocol="${outbounds_protocol[idx]}"
+    local v2_fmt=""
+    v2_fmt=$(ProxyGetV2rayFormat)
     local item_json=""
 
     case "$protocol" in
@@ -13,13 +15,41 @@ V2rayAddOutboundAccount()
             inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "alterId" alter_id "0"
             inquirer text_input "$(gettext "加密方式 security")" sec "auto"
-            JQs build item_json '{
-                "address": $addr,
-                "port": ($port | tonumber),
-                "users": [{"id": $id, "alterId": ($aid | tonumber), "security": $sec}]
-            }' --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg aid "$alter_id" --arg sec "$sec"
-            jq_path='["outbounds",'"$idx"',"settings","vnext"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ] || [[ ! "$alter_id" =~ ^[0-9]+$ ]]
+            then
+                Println "$(eval_gettext "\$error 端口或 alterId 格式无效")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "uuid": $id
+                }' --arg addr "$addr" --arg port "$port" --arg id "$uuid"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings = ((.outbounds[$i].settings // {}) * $item)' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "users": [{"id": $id, "alterId": ($aid | tonumber), "security": $sec}]
+                }' --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg aid "$alter_id" --arg sec "$sec"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings.vnext = ((.outbounds[$i].settings.vnext // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         vless)
             local addr port uuid enc
@@ -27,45 +57,163 @@ V2rayAddOutboundAccount()
             inquirer text_input "$(gettext "服务端端口 port")" port "443"
             inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "encryption" enc "none"
-            JQs build item_json '{
-                "address": $addr,
-                "port": ($port | tonumber),
-                "users": [{"id": $id, "encryption": $enc}]
-            }' --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg enc "$enc"
-            jq_path='["outbounds",'"$idx"',"settings","vnext"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "uuid": $id
+                }' --arg addr "$addr" --arg port "$port" --arg id "$uuid"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings = ((.outbounds[$i].settings // {}) * $item)' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "users": [{"id": $id, "encryption": $enc}]
+                }' --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg enc "$enc"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings.vnext = ((.outbounds[$i].settings.vnext // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         trojan)
             local addr port pw email
             inquirer text_input "$(gettext "服务端地址 address")" addr ""
             inquirer text_input "$(gettext "服务端端口 port")" port "443"
-            inquirer text_input "$(gettext "密码 password")" pw ""
+            inquirer text_input "$i18n_password" pw ""
             inquirer text_input "$(gettext "email (可留空)")" email ""
-            JQs build item_json '{"address": $addr, "port": ($port | tonumber), "password": $pw, "email": $email}' \
-                --arg addr "$addr" --arg port "$port" --arg pw "$pw" --arg email "$email"
-            jq_path='["outbounds",'"$idx"',"settings","servers"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{"address": $addr, "port": ($port | tonumber), "password": $pw}' \
+                    --arg addr "$addr" --arg port "$port" --arg pw "$pw"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings = ((.outbounds[$i].settings // {}) * $item)' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{"address": $addr, "port": ($port | tonumber), "password": $pw, "email": $email}' \
+                    --arg addr "$addr" --arg port "$port" --arg pw "$pw" --arg email "$email"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings.servers = ((.outbounds[$i].settings.servers // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         shadowsocks)
             local addr port method pw email
-            local iv_opts=( "$(gettext "默认(不设置)")" "$(gettext "关闭")" "$(gettext "开启")" )
+            local iv_opts=( "$(gettext "默认(不设置)")" "$i18n_close" "$i18n_open" )
             local iv_idx=0
             inquirer text_input "$(gettext "服务端地址 address")" addr ""
             inquirer text_input "$(gettext "服务端端口 port")" port "8388"
             inquirer text_input "$(gettext "加密方式 method")" method "aes-256-gcm"
-            inquirer text_input "$(gettext "密码 password")" pw ""
+            inquirer text_input "$i18n_password" pw ""
             inquirer text_input "$(gettext "email (可留空)")" email ""
             inquirer list_input_index "$(gettext "启用 IV 检查 ivCheck (可选)")" iv_opts iv_idx
-            JQs build item_json '{
-                "address": $addr,
-                "port": ($port | tonumber),
-                "method": $m,
-                "password": $pw,
-                "email": $email,
-                "ivCheck": (if $iv == "2" then true elif $iv == "1" then false else null end)
-            }' --arg addr "$addr" --arg port "$port" --arg m "$method" --arg pw "$pw" --arg email "$email" --arg iv "$iv_idx"
-            jq_path='["outbounds",'"$idx"',"settings","servers"]'
-            JQ add "$V2_CONFIG" "[$item_json]"
+
+            if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '{"address": $addr, "port": ($port | tonumber), "method": $m, "password": $pw}' \
+                    --arg addr "$addr" --arg port "$port" --arg m "$method" --arg pw "$pw"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings = ((.outbounds[$i].settings // {}) * $item)' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '{
+                    "address": $addr,
+                    "port": ($port | tonumber),
+                    "method": $m,
+                    "password": $pw,
+                    "email": $email,
+                    "ivCheck": (if $iv == "2" then true elif $iv == "1" then false else null end)
+                }' --arg addr "$addr" --arg port "$port" --arg m "$method" --arg pw "$pw" --arg email "$email" --arg iv "$iv_idx"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings.servers = ((.outbounds[$i].settings.servers // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
+        ;;
+        socks|http)
+            local addr port user pass
+            inquirer text_input "$(gettext "服务端地址 address")" addr "127.0.0.1"
+            inquirer text_input "$(gettext "服务端端口 port")" port "1080"
+            inquirer text_input "$(gettext "用户名 (可留空)")" user ""
+            inquirer text_input "$(gettext "密码 (可留空)")" pass ""
+
+            if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]
+            then
+                Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
+                return 1
+            fi
+
+            if [ "$v2_fmt" == "jsonv5" ]
+            then
+                JQs build item_json '
+                    {"address": $addr, "port": ($port | tonumber)}
+                    + (if $u != "" then {"username": $u, "password": $p} else {} end)
+                ' --arg addr "$addr" --arg port "$port" --arg u "$user" --arg p "$pass"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings = ((.outbounds[$i].settings // {}) * $item)' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 更新出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            else
+                JQs build item_json '
+                    {"address": $addr, "port": ($port | tonumber)}
+                    + (if $u != "" then {"users": [{"user": $u, "pass": $p}]} else {} end)
+                ' --arg addr "$addr" --arg port "$port" --arg u "$user" --arg p "$pass"
+                if ! ProxyMutateConfigTx "v2ray" '.outbounds[$i].settings.servers = ((.outbounds[$i].settings.servers // []) + [$item])' \
+                    --argjson i "$idx" --argjson item "$item_json"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 添加出站服务端失败: \$err_detail")\n"
+                    return 1
+                fi
+            fi
         ;;
         *)
             Println "$(eval_gettext "\$error 出站协议 \${protocol} 不支持添加服务端账号")\n"
@@ -73,7 +221,6 @@ V2rayAddOutboundAccount()
         ;;
     esac
 
-    ProxyRestartIfActive v2ray
     local target_tag="${outbounds_tag[idx]}"
     Println "$(eval_gettext "\$info 已向出站 \${green}\$target_tag\${normal} 添加服务端/账号")\n"
 }

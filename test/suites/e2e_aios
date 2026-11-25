@@ -63,8 +63,8 @@ RunSuiteE2eAios()
 
     E2eSandboxInit "$e2e_built_aios"
     rm -f "$e2e_built_aios"
-    local x_cfg="$E2E_SANDBOX_DIR/etc/xray/config.json"
-    local v2_cfg="$E2E_SANDBOX_DIR/etc/v2ray/config.json"
+    local x_cfg="$E2E_SANDBOX_DIR/aios/proxy/xray/config.json"
+    local v2_cfg="$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
     local pty_mode=""
     [ "$SHOW_OUTPUT" -eq 1 ] && pty_mode="--verbose"
 
@@ -131,6 +131,9 @@ RunSuiteE2eAios()
 
     out=$(E2eRunPty x '[{"wait":"打开面板","send":"19<ENTER>"}]' "$pty_mode")
     AssertContains "$out" "bridge-1" "e2e x menu 19: renders Xray reverse bridge"
+
+    # Remove deprecated top-level reverse before 26.11.9 transactional mutation tests
+    $JQ_FILE 'del(.reverse)' "$x_cfg" > "${x_cfg}.clean" && mv -f "${x_cfg}.clean" "$x_cfg"
 
     # 7. Menu 3: 配置域名 -> 选择入站 3 (tls-trojan) -> 修改证书文件路径
     out=$(E2eRunPty x '[{"wait":"打开面板","send":"3<ENTER>"},{"wait":"选择要管理证书的直连入站","send":"<DOWN><DOWN><ENTER>"},{"wait":"选择证书操作","send":"<ENTER>"},{"wait":"certificateFile","send":"/etc/ssl/e2e-updated.crt<ENTER>"}]' "$pty_mode")

@@ -39,7 +39,7 @@ CloudflareEditWorker()
         edit_worker_options+=("$(gettext "修改 worker 源站")")
     fi
 
-    inquirer list_input_index "$(gettext "选择操作")" edit_worker_options edit_worker_options_index
+    inquirer list_input_index "$i18n_select_action" edit_worker_options edit_worker_options_index
 
     if [ "$edit_worker_options_index" -eq 0 ] 
     then

@@ -24,7 +24,11 @@ Include src/xtream_codes/list_channels "$@"
 
 Include src/xtream_codes/add_mac "$@"
 
-Println "  $(gettext "Xtream Codes 面板") ${normal}
+_menu_cx_key="${sh_locale:-zh_CN}"
+
+if [ "${_menu_cx_cache_key:-}" != "$_menu_cx_key" ]
+then
+    _menu_cx_cache="  $(gettext "Xtream Codes 面板") ${normal}
 
 ${green}1.${normal} $(gettext "查看账号")
 ${green}2.${normal} $(gettext "添加账号")
@@ -37,7 +41,11 @@ ${green}7.${normal} $(gettext "添加 mac 地址")
 ${green}8.${normal} $(gettext "浏览频道")
 
 "
-read -p "`gettext \"输入序号\"` [1-8]: " xtream_codes_num
+    _menu_cx_cache_key="$_menu_cx_key"
+fi
+
+Println "$_menu_cx_cache"
+read -p "$i18n_input_no [1-8]: " xtream_codes_num
 
 case $xtream_codes_num in
     1) 

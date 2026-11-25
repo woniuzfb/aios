@@ -16,35 +16,40 @@ V2rayGetInbounds()
     fi
 
     SetDelimiters
-    local s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
-    while IFS="$field_sep" read -r s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
+    local real_idx s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
+    while IFS="$field_sep" read -r real_idx s_net s_path s_sni s_usage s_cert_file s_key_file s_cert _sentinel
     do
-        inbounds_stream_network+=("$s_net")
-        inbounds_stream_path+=("$s_path")
-        inbounds_stream_tls_server_name+=("$s_sni")
-        inbounds_stream_tls_certificates_usage+=("$s_usage")
-        inbounds_stream_tls_certificates_certificate_file+=("$s_cert_file")
-        inbounds_stream_tls_certificates_key_file+=("$s_key_file")
-        inbounds_stream_tls_certificates_certificate+=("$s_cert")
+        inbounds_stream_network[real_idx]="$s_net"
+        inbounds_stream_path[real_idx]="$s_path"
+        inbounds_stream_tls_server_name[real_idx]="$s_sni"
+        inbounds_stream_tls_certificates_usage[real_idx]="$s_usage"
+        inbounds_stream_tls_certificates_certificate_file[real_idx]="$s_cert_file"
+        inbounds_stream_tls_certificates_key_file[real_idx]="$s_key_file"
+        inbounds_stream_tls_certificates_certificate[real_idx]="$s_cert"
     done < <($JQ_FILE -r --arg sep "$field_sep" '
         def obj($x): if ($x | type) == "object" then $x else {} end;
         def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
-        (if (.inbounds | type) == "array" then .inbounds else [] end)[]
-        | select(type == "object")
-        | obj(.streamSettings) as $st
+        (if (.inbounds | type) == "array" then .inbounds else [] end)
+        | to_entries[]
+        | select(.value | type == "object")
+        | .key as $idx
+        | .value as $ib
+        | obj($ib.streamSettings) as $st
         | obj($st.tlsSettings) as $tls
         | arr_objs($tls.certificates) as $certs
         | [
-            ($st.network // "tcp" | tostring),
+            ($idx | tostring),
+            ($st.network // $st.transport // "tcp" | tostring),
             (
                 obj($st.wsSettings).path
                 // obj($st.httpSettings).path
                 // obj($st.httpupgradeSettings).path
                 // obj($st.dsSettings).path
+                // obj($st.transportSettings).path
                 // ""
                 | tostring
             ),
-            ($tls.serverName // "" | tostring),
+            ($tls.serverName // obj($st.securitySettings).serverName // "" | tostring),
             ($certs | map(.usage // "encipherment" | tostring) | join("|")),
             ($certs | map(.certificateFile // "" | tostring) | join("|")),
             ($certs | map(.keyFile // "" | tostring) | join("|")),
@@ -61,4 +66,71 @@ V2rayGetInbounds()
           ]
         | join($sep)
     ' "$V2_CONFIG")
+}
+
+V2raySelectInbound()
+{
+    local filter_mode="${1:-}"
+    local prompt_title="${2:-$(gettext "选择入站")}"
+
+    if [ -z "$filter_mode" ]
+    then
+        if [ "${list_inbounds_options_index:-0}" -eq 1 ]
+        then
+            filter_mode="nginx"
+        elif [ "${list_inbounds_options_index:-0}" -eq 2 ]
+        then
+            filter_mode="direct"
+        else
+            filter_mode="all"
+        fi
+    fi
+
+    V2rayGetInbounds
+
+    local candidate_indices=()
+    if [ "$filter_mode" == "nginx" ]
+    then
+        candidate_indices=(${inbounds_nginx_index[@]+"${inbounds_nginx_index[@]}"})
+    elif [ "$filter_mode" == "direct" ]
+    then
+        candidate_indices=(${inbounds_other_index[@]+"${inbounds_other_index[@]}"})
+    else
+        candidate_indices=(${inbounds_json_index[@]+"${inbounds_json_index[@]}"})
+    fi
+
+    if [ "${#candidate_indices[@]}" -eq 0 ]
+    then
+        Println "$(eval_gettext "\$error 没有可选的入站")\n"
+        return 1
+    fi
+
+    if [ "${3:-}" == "render" ]
+    then
+        local rendered=""
+        rendered=$(ProxyRenderInbounds "$V2_CONFIG" v2ray "$filter_mode")
+        if [ -n "$rendered" ]
+        then
+            Println "$rendered"
+        fi
+    fi
+
+    local options=()
+    local i ridx
+    for((i=0;i<${#candidate_indices[@]};i++));
+    do
+        ridx="${candidate_indices[i]}"
+        options+=("$((i+1)). [${inbounds_protocol[ridx]}] ${inbounds_tag[ridx]} (${inbounds_listen[ridx]}:${inbounds_port[ridx]})")
+    done
+
+    local sel_pos=0
+    echo
+    inquirer list_input_index "$prompt_title" options sel_pos
+
+    inbounds_index="${candidate_indices[sel_pos]}"
+    inbound_i="$inbounds_index"
+    inbound_tag="${inbounds_tag[inbounds_index]}"
+    inbound_port="${inbounds_port[inbounds_index]}"
+    inbound_protocol="${inbounds_protocol[inbounds_index]}"
+    return 0
 }

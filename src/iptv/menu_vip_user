@@ -6,7 +6,7 @@ VipUserMenu()
   ${red}2.${normal} `gettext \"输入 VIP 授权码\"`
 
  `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
-    read -p "`gettext \"输入序号\"` [1-2]: " vip_menu_num
+    read -p "$i18n_input_no [1-2]: " vip_menu_num
     case "$vip_menu_num" in
         h)
             kind=""

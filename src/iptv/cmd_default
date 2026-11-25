@@ -36,10 +36,10 @@ channel_name=$(JQs get jq_payload)
 IFS="${delimiters[1]}" read -r -a channels_name <<< "$channel_name"
 
 echo
-channels_name+=("$(gettext "全部")")
+channels_name+=("$i18n_all")
 inquirer list_input "$(gettext "选择添加的频道")" channels_name channel_name
 
-if [ "$channel_name" != "$(gettext "全部")" ]
+if [ "$channel_name" != "$i18n_all" ]
 then
     channels=$($JQ_FILE '[.[]|select(.channel_name=="'"$channel_name"'")]' <<< "$channels")
 fi

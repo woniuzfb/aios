@@ -1,7 +1,9 @@
 IbmCfMenu()
 {
-    Println "  $(gettext "IBM CF 面板") ${normal}${red}[v$sh_ver]${normal}
-
+    if [ "${IBM_CF_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${IBM_CF_MENU_TEXT:-}" ]
+    then
+        IBM_CF_MENU_TITLE="$(gettext "IBM CF 面板")"
+        IBM_CF_MENU_TEXT="
   ${green}1.${normal} $(gettext "安装 IBM CF CLI")
   ${green}2.${normal} $(gettext "更新 IBM CF CLI")
   ${green}3.${normal} $(gettext "删除 IBM CF CLI")
@@ -23,6 +25,11 @@ IbmCfMenu()
  ${green}19.${normal} $(gettext "更新脚本")
 
  $(eval_gettext "\${tip} 输入: ibm 打开面板")\n\n"
+        IBM_CF_MENU_LOCALE="${sh_locale:-zh_CN}"
+    fi
+
+    Println "  ${IBM_CF_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+${IBM_CF_MENU_TEXT}"
     read -p "$i18n_default_cancel" ibm_cf_num
     case $ibm_cf_num in
         1) IbmInstallCfCli

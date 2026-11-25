@@ -1,0 +1,14 @@
+# Pinned SHA256 checksums for scripts/fetch_test_cores.sh (format: <sha256>  <key>)
+# Platform-independent GeoData (Loyalsoldier/v2ray-rules-dat)
+283119b5c7679d3cc9a750e1b6da693ecfd42e5d5036b57f0c2d0505f76e36f4  geodata/geoip.dat
+daaae9760ab5e687845817967257a6e9883d42ac9c09f4b774a32bd5cb39b4d7  geodata/geosite.dat
+# Xray cores (macos-arm64-v8a)
+9607c03515859495f7e3ed312750a4741d8b3603fe5dd198633a66be1939d7bc  xray/v25.9.11/macos-arm64-v8a/xray
+c4d7265a0711e0db16c235255b3d6e85e0712464519de0a1e7384873e14fcced  xray/v26.5.3/macos-arm64-v8a/xray
+0add5f56c146d9ce2a7808a787f90de42257217a13ec49f5f1fc1d7364dd266a  xray/v26.5.9/macos-arm64-v8a/xray
+41fbf37043de37a09692dbc450bce7ea20a0e92772a2f311b6d810d555411e56  xray/v26.6.22/macos-arm64-v8a/xray
+a208f2f45abb922fad19b743fbc218d57b59c043a5ca27282574e9e192b4ad46  xray/v26.6.27/macos-arm64-v8a/xray
+1b2d5ebe3a4c332203db24b81a052c6d6688a7f80705090f031b7416013ee1b2  xray/v26.11.9/macos-arm64-v8a/xray
+# V2Ray cores (macos-arm64-v8a)
+188e39641910977a145cb60db9e334369764fc0743a66cc91f701d69208929e4  v2ray/v5.18.0/macos-arm64-v8a/v2ray
+5df24c072436b95020e58358b2957e802def977889f6ea7a80d647ab9ec6de38  v2ray/v5.56.0/macos-arm64-v8a/v2ray

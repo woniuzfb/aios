@@ -1,10 +1,28 @@
 XrayAddOutbound()
 {
-    local proto_options=( 'freedom' 'blackhole' 'dns' 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'loopback' 'hysteria' 'wireguard' 'masque' )
+    local proto_options=( 'freedom' 'blackhole' 'dns' 'vless' 'vmess' 'trojan' 'shadowsocks' 'socks' 'http' 'loopback' 'hysteria' 'wireguard' 'masque' 'vless-reverse' )
     local proto_idx=0
     echo
     inquirer list_input_index "$(gettext "选择出站协议")" proto_options proto_idx
     local protocol="${proto_options[$proto_idx]}"
+    local vless_reverse_mode=0
+    if [ "$protocol" == "vless-reverse" ]
+    then
+        protocol="vless"
+        vless_reverse_mode=1
+    fi
+
+    local cur_ver=""
+    cur_ver=$(ProxyGetTargetVersion "xray")
+    if [ "$protocol" == "hysteria" ] && ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "hysteriaOutbound"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 不支持 hysteria 出站 (需要 >= 26.1.13)")\n"
+        return 1
+    elif [ "$protocol" == "masque" ] && ! ProxyCoreHasFeature "xray" "$cur_ver" "json" "masque"
+    then
+        Println "$(eval_gettext "\$error Xray \${cur_ver} 不支持 masque 出站 (需要 >= 26.9.30)")\n"
+        return 1
+    fi
 
     local tag send_through target_strategy="" dialer_proxy
     inquirer text_input "$(gettext "输入出站标识 (留空随机)")" tag ""
@@ -23,7 +41,7 @@ XrayAddOutbound()
     local hy_auth=""
     case "$protocol" in
         freedom)
-            local redirect proxy_proto
+            local redirect proxy_proto final_rules_raw="" final_rules_json="null"
             inquirer text_input "$(gettext "输入 redirect (可留空)")" redirect ""
             inquirer text_input "$(gettext "输入 proxyProtocol (0/1/2, 可留空)")" proxy_proto ""
             if [ -n "$proxy_proto" ] && [[ ! $proxy_proto =~ ^[0-2]$ ]]
@@ -31,10 +49,23 @@ XrayAddOutbound()
                 Println "$(eval_gettext "\$error proxyProtocol 必须为 0、1 或 2")\n"
                 return 1
             fi
+            if ProxyCoreHasFeature "xray" "$cur_ver" "json" "freedomFinalRules"
+            then
+                inquirer text_input "$(gettext "输入 finalRules JSON 数组 (可留空)")" final_rules_raw ""
+                if [ -n "$final_rules_raw" ]
+                then
+                    if ! final_rules_json=$(printf '%s\n' "$final_rules_raw" | $JQ_FILE -ce 'if type == "array" then . else error("not array") end' 2> /dev/null)
+                    then
+                        Println "$(eval_gettext "\$error finalRules 必须为合法的 JSON 数组")\n"
+                        return 1
+                    fi
+                fi
+            fi
             JQs build settings_json '{
                 "redirect": $redirect,
-                "proxyProtocol": (if $pp != "" then ($pp | tonumber) else null end)
-            }' --arg redirect "$redirect" --arg pp "$proxy_proto"
+                "proxyProtocol": (if $pp != "" then ($pp | tonumber) else null end),
+                "finalRules": $fr
+            }' --arg redirect "$redirect" --arg pp "$proxy_proto" --argjson fr "$final_rules_json"
         ;;
         blackhole)
             local resp_type
@@ -69,13 +100,19 @@ XrayAddOutbound()
             inquirer text_input "$(gettext "用户 UUID")" uuid ""
             inquirer text_input "encryption" encryption "none"
             inquirer text_input "$(gettext "flow (可留空)")" flow ""
+            local rev_tag="${XRAY_VLESS_REVERSE_TAG:-}"
+            if [ "$vless_reverse_mode" -eq 1 ]
+            then
+                inquirer text_input "$(gettext "输入 VLESS 内联反向代理 reverse.tag (可留空)")" rev_tag ""
+            fi
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
                 "id": $id,
                 "encryption": $enc,
                 "flow": $flow
-            }' --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg enc "$encryption" --arg flow "$flow"
+            } + (if $rev_tag != "" then {"reverse": {"tag": $rev_tag}} else {} end)' \
+                --arg addr "$addr" --arg port "$port" --arg id "$uuid" --arg enc "$encryption" --arg flow "$flow" --arg rev_tag "$rev_tag"
         ;;
         vmess)
             local addr port uuid sec
@@ -104,7 +141,7 @@ XrayAddOutbound()
                 Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "$(gettext "密码 password")" password ""
+            inquirer text_input "$i18n_password" password ""
             JQs build settings_json '{
                 "address": $addr,
                 "port": ($port | tonumber),
@@ -121,6 +158,7 @@ XrayAddOutbound()
                 return 1
             fi
             inquirer text_input "$(gettext "加密方式 method")" method "2022-blake3-aes-256-gcm"
+            method=$(ProxyNormalizeSsMethod "$method")
             inquirer text_input "$(gettext "密钥 password")" password ""
             JQs build settings_json '{
                 "address": $addr,
@@ -177,7 +215,7 @@ XrayAddOutbound()
             }' --arg sk "$sk" --arg addr "$addr" --arg ep "$endpoint" --arg pk "$pk"
         ;;
         masque)
-            local m_addr m_port m_user m_pass m_mtu
+            local m_addr m_port m_host="" m_path="" m_user="" m_pass=""
             inquirer text_input "$(gettext "服务端地址 address")" m_addr ""
             inquirer text_input "$(gettext "服务端端口 port")" m_port "443"
             if [[ ! $m_port =~ ^[0-9]+$ ]] || [ "$m_port" -lt 1 ] || [ "$m_port" -gt 65535 ]
@@ -185,21 +223,14 @@ XrayAddOutbound()
                 Println "$(eval_gettext "\$error 服务端端口必须为 1-65535 的整数")\n"
                 return 1
             fi
-            inquirer text_input "$(gettext "用户 email (可留空)")" m_user ""
-            inquirer text_input "$(gettext "用户 pass (可留空)")" m_pass ""
-            inquirer text_input "MTU" m_mtu "1280"
-            if [[ ! $m_mtu =~ ^[0-9]+$ ]]
-            then
-                Println "$(eval_gettext "\$error MTU 必须为正整数")\n"
-                return 1
-            fi
+            inquirer text_input "$(gettext "MASQUE host (可留空)")" m_host ""
+            inquirer text_input "$(gettext "MASQUE path (如 /.well-known/masque/ip/{target}/{ipproto}/)")" m_path ""
+            inquirer text_input "$(gettext "认证 user (可留空)")" m_user ""
+            inquirer text_input "$(gettext "认证 pass (可留空)")" m_pass ""
             JQs build settings_json '{
                 "address": $addr,
-                "port": ($port | tonumber),
-                "email": $email,
-                "pass": $pass,
-                "mtu": ($mtu | tonumber)
-            }' --arg addr "$m_addr" --arg port "$m_port" --arg email "$m_user" --arg pass "$m_pass" --arg mtu "$m_mtu"
+                "port": ($port | tonumber)
+            }' --arg addr "$m_addr" --arg port "$m_port"
         ;;
     esac
 
@@ -331,17 +362,88 @@ XrayAddOutbound()
 
     if [ "$network" == "masque" ]
     then
-        outbound_json=$($JQ_FILE -c '
+        outbound_json=$($JQ_FILE -c \
+            --arg mh "${m_host:-}" --arg mp "${m_path:-}" --arg mu "${m_user:-}" --arg mpass "${m_pass:-}" '
             .streamSettings = (.streamSettings // {})
-            | .streamSettings.masqueSettings = (.streamSettings.masqueSettings // {})
+            | .streamSettings.masqueSettings = (
+                {}
+                + (if $mh != "" then {host: $mh} else {} end)
+                + (if $mp != "" then {path: $mp} else {} end)
+                + (if $mu != "" then {user: $mu} else {} end)
+                + (if $mpass != "" then {pass: $mpass} else {} end)
+            )
         ' <<< "$outbound_json")
     fi
 
+    local target_ver=""
+    target_ver=$(ProxyGetTargetVersion "xray")
+    local has_flat=0 has_method=0 has_rewrite=0
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "flatOutbounds" && has_flat=1
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "streamMethodKey" && has_method=1
+    ProxyCoreHasFeature "xray" "$target_ver" "json" "dnsRewriteKeys" && has_rewrite=1
+
+    if ProxyCoreHasFeature "xray" "$target_ver" "json" "requireTlsPublicVlessTrojan"
+    then
+        if { [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]; } && { [ -z "$security" ] || [ "$security" == "none" ]; }
+        then
+            local out_addr="" out_enc=""
+            SetDelimiters
+            IFS="$field_sep" read -r out_addr out_enc < <($JQ_FILE -r --arg sep "$field_sep" '
+                [
+                    (.settings.address // .settings.vnext[0].address // .settings.servers[0].address // "" | tostring),
+                    (.settings.encryption // .settings.vnext[0].users[0].encryption // "none" | tostring)
+                ] | join($sep)
+            ' <<< "$outbound_json")
+            if [ -n "$out_addr" ] && { [ "$protocol" == "trojan" ] || [ "$out_enc" == "none" ]; } && ProxyIsPublicTargetAddress "$out_addr"
+            then
+                Println "$(eval_gettext "\$error Xray \${target_ver} 禁止公网明文 \${protocol} 出站 (\$out_addr), 请启用 TLS/REALITY 或 VLESS Encryption")\n"
+                return 1
+            fi
+        fi
+    fi
+
+    outbound_json=$($JQ_FILE -c \
+        --arg proto "$protocol" \
+        --argjson has_flat "$has_flat" \
+        --argjson has_method "$has_method" \
+        --argjson has_rewrite "$has_rewrite" '
+        if $has_flat == 0 and (.settings | type) == "object" and (.settings | has("address")) then
+            if ($proto == "vless" or $proto == "vmess") and (.settings | has("vnext") | not) then
+                .settings as $s | .settings = ({vnext: [{address: $s.address, port: $s.port, users: [($s | del(.address, .port, .reverse))]}]} + (if ($s.reverse | type) == "object" then {reverse: $s.reverse} else {} end))
+            elif ($proto == "trojan" or $proto == "shadowsocks") and (.settings | has("servers") | not) then
+                .settings = {servers: [.settings]}
+            elif ($proto == "socks" or $proto == "http") and (.settings | has("servers") | not) then
+                .settings as $s | .settings = {servers: ([{address: $s.address, port: $s.port} + (if ($s.user // "") != "" then {users: [{user: $s.user, pass: ($s.pass // "")}]} else {} end)])}
+            else . end
+        else . end
+        | if $proto == "dns" and (.settings | type) == "object" then
+            if $has_rewrite == 1 then
+                .settings |= (
+                    (if has("network") then (if has("rewriteNetwork") | not then .rewriteNetwork = .network else . end) | del(.network) else . end)
+                    | (if has("address") then (if has("rewriteAddress") | not then .rewriteAddress = .address else . end) | del(.address) else . end)
+                    | (if has("port") then (if has("rewritePort") | not then .rewritePort = .port else . end) | del(.port) else . end)
+                )
+            else
+                .settings |= (
+                    (if has("rewriteNetwork") then .network = .rewriteNetwork | del(.rewriteNetwork) else . end)
+                    | (if has("rewriteAddress") then .address = .rewriteAddress | del(.rewriteAddress) else . end)
+                    | (if has("rewritePort") then .port = .rewritePort | del(.rewritePort) else . end)
+                )
+            end
+          else . end
+        | if (.streamSettings | type) == "object" then
+            (.streamSettings.method // .streamSettings.network // null) as $m
+            | if $m == null then .
+              elif $has_method == 1 then .streamSettings |= (del(.network) | .method = $m)
+              else .streamSettings |= (del(.method) | .network = $m) end
+          else . end
+    ' <<< "$outbound_json")
+
     if ! ProxyAddBound "$X_CONFIG" outbounds "$outbound_json"
     then
-        Println "$(eval_gettext "\$error 添加 Xray 出站 \${tag} 失败")\n"
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 添加 Xray 出站 \${tag} 失败: \$err_detail")\n"
         return 1
     fi
-    ProxyRestartIfActive xray
     Println "$(eval_gettext "\$info 已添加 Xray 出站 \${green}\${tag}\${normal} (\${protocol})")\n"
 }

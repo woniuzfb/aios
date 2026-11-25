@@ -42,14 +42,14 @@ EditDefaultMenu()
         "$i18n_anti_ddos_port"
         "$i18n_anti_ddos_syn_flood"
         "$i18n_anti_ddos"
-        "$i18n_anti_leech"
+        "$i18n_anti_leech_default"
         "$i18n_recheck_period"
     )
 
     GetDefault
 
     echo
-    inquirer checkbox_input_indices "$(gettext "选择修改内容")" edit_options edit_options_indices
+    inquirer checkbox_input_indices "$i18n_select_edit" edit_options edit_options_indices
 
     for edit_options_index in "${edit_options_indices[@]}"
     do

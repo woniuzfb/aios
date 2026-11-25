@@ -19,15 +19,20 @@ RcloneMountView()
 
     rclone_remote_mount_options=()
     local i rclone_remote_mount_list=""
+    local i18n_remote_path i18n_mount_point i18n_mounted i18n_mount_cmd
+    i18n_remote_path=$(gettext "远端路径")
+    i18n_mount_point=$(gettext "挂载点")
+    i18n_mounted=$(gettext "已挂载")
+    i18n_mount_cmd=$(gettext "挂载命令")
 
     for((i=0;i<rclone_remote_mount_count;i++));
     do
         if ServiceControl is-active "${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
         then
-            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} $(gettext "远端路径"): ${rclone_remote_paths[i]}\n$(gettext "挂载点"): ${rclone_remote_mount_paths[i]} ${green}($(gettext "已挂载"))${normal}\n$(gettext "挂载命令"): ${rclone_remote_mount_flags[i]:-$(gettext "无")}\n\n"
-            rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]} ${green}($(gettext "已挂载"))${normal}")
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} ${i18n_remote_path}: ${rclone_remote_paths[i]}\n${i18n_mount_point}: ${rclone_remote_mount_paths[i]} ${green}(${i18n_mounted})${normal}\n${i18n_mount_cmd}: ${rclone_remote_mount_flags[i]:-$i18n_none}\n\n"
+            rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]} ${green}(${i18n_mounted})${normal}")
         else
-            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} $(gettext "远端路径"): ${rclone_remote_paths[i]}\n$(gettext "挂载点"): ${rclone_remote_mount_paths[i]}\n$(gettext "挂载命令"): ${rclone_remote_mount_flags[i]:-$(gettext "无")}\n\n"
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} ${i18n_remote_path}: ${rclone_remote_paths[i]}\n${i18n_mount_point}: ${rclone_remote_mount_paths[i]}\n${i18n_mount_cmd}: ${rclone_remote_mount_flags[i]:-$i18n_none}\n\n"
             rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}")
         fi
     done
@@ -81,7 +86,7 @@ RcloneMountEdit()
         echo "${rclone_remote_mount_options[rclone_remote_mount_index]}"
 
         echo
-        inquirer list_input_index "$(gettext "选择修改")" rclone_remote_mount_edit_options rclone_remote_mount_edit_options_index
+        inquirer list_input_index "$i18n_select_edit" rclone_remote_mount_edit_options rclone_remote_mount_edit_options_index
 
         if [ "$rclone_remote_mount_edit_options_index" == "0" ] 
         then
@@ -128,13 +133,16 @@ RcloneMountDel()
     inquirer checkbox_input_indices "$(gettext "选择删除的挂载")" rclone_remote_mount_options rclone_remote_mount_indices
 
     local rclone_remote_mount_index_offset=0 i active_indices=()
+    local i18n_pause_mount i18n_deleting_mount
+    i18n_pause_mount=$(gettext "暂停挂载")
+    i18n_deleting_mount=$(gettext "正在删除挂载")
 
     for((i=0;i<rclone_remote_mount_count;i++));
     do
         if ServiceControl is-active "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
         then
             active_indices+=("$i")
-            Println "$info $(gettext "暂停挂载") ${rclone_remote_mount_options[i]}"
+            Println "$info $i18n_pause_mount ${rclone_remote_mount_options[i]}"
             ServiceControl stop "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
         fi
     done
@@ -144,7 +152,7 @@ RcloneMountDel()
         service_name="rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((rclone_remote_mount_index+1))"
         if ServiceControl is-enabled "$service_name"
         then
-            Println "$info $(gettext "正在删除挂载") ${rclone_remote_mount_options[rclone_remote_mount_index]}"
+            Println "$info $i18n_deleting_mount ${rclone_remote_mount_options[rclone_remote_mount_index]}"
             if ! err_msg=$(ServiceControl disable "$service_name")
             then
                 Println "$(eval_gettext "\$error 删除挂载失败, \$err_msg")\n"
@@ -183,10 +191,12 @@ RcloneMountDel()
     then
         rclone_remote_paths=("${rclone_remote_paths[@]}")
         rclone_remote_mount_paths=("${rclone_remote_mount_paths[@]}")
+        local i18n_resume_mount
+        i18n_resume_mount=$(gettext "恢复挂载")
 
         for i in "${active_indices[@]}"
         do
-            Println "$info $(gettext "恢复挂载") ${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}"
+            Println "$info $i18n_resume_mount ${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}"
             ServiceControl start "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
         done
     fi

@@ -36,10 +36,10 @@ VipSetHostStatus()
     if [[ $vip_host_status == "$i18n_yes" ]] 
     then
         vip_host_status="on"
-        vip_host_status_text="${green}$(gettext "启用")${normal}"
+        vip_host_status_text="${green}$i18n_enabled${normal}"
     else
         vip_host_status="off"
-        vip_host_status_text="${red}$(gettext "禁用")${normal}"
+        vip_host_status_text="${red}$i18n_disabled${normal}"
     fi
     Println "  $(eval_gettext "VIP 服务器状态: \$vip_host_status_text")\n"
 }

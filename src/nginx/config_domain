@@ -6,7 +6,7 @@ NginxConfigDomain()
 
     echo
     domain_server_options=( "$(gettext "修改指令")" "$(gettext "更新证书")" "$(gettext "添加 flv 设置")" "$(gettext "添加 nodejs 设置")" )
-    inquirer list_input_index "$(gettext "选择操作")" domain_server_options domain_server_options_index
+    inquirer list_input_index "$i18n_select_action" domain_server_options domain_server_options_index
 
     if [ "$domain_server_options_index" -eq 0 ] 
     then

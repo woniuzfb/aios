@@ -36,8 +36,7 @@ V2raySetRouting()
                 fi
                 local rule_json=""
                 JQs build rule_json '{"type": "field", "inboundTag": [$it], "outboundTag": $ot}' --arg it "$in_tag" --arg ot "$out_tag"
-                jq_path='["routing","rules"]'
-                JQ add "$V2_CONFIG" "[$rule_json]"
+                ProxyMutateConfigTx "v2ray" '.routing = ((.routing // {}) | .rules = ((.rules // []) + [$item]))' --argjson item "$rule_json" || return 1
                 Println "$(eval_gettext "\$info 快捷路由添加成功: \${green}\${in_tag} => \${out_tag}\${normal}")\n"
             else
                 local net_opts=( 'tcp,udp' 'tcp' 'udp' "$(gettext "不限")" )
@@ -103,8 +102,7 @@ V2raySetRouting()
                     --arg usr "$users" --arg proto "$proto_csv" --arg attrs "$attrs" \
                     --arg itag "$inb_tag" --arg otag "$out_tag" --arg btag "$bal_tag"
 
-                jq_path='["routing","rules"]'
-                JQ add "$V2_CONFIG" "[$rule_json]"
+                ProxyMutateConfigTx "v2ray" '.routing = ((.routing // {}) | .rules = ((.rules // []) + [$item]))' --argjson item "$rule_json" || return 1
                 Println "$(eval_gettext "\$info 已添加 V2Ray 路由规则")\n"
             fi
         ;;
@@ -124,8 +122,7 @@ V2raySetRouting()
                     "strategy": {"type": $st}
                 }' --arg tag "$b_tag" --arg sel "$b_sel" --arg st "$b_strat"
 
-            jq_path='["routing","balancers"]'
-            JQ add "$V2_CONFIG" "[$bal_json]"
+            ProxyMutateConfigTx "v2ray" '.routing = ((.routing // {}) | .balancers = ((.balancers // []) + [$item]))' --argjson item "$bal_json" || return 1
             Println "$(eval_gettext "\$info 已添加 V2Ray 负载均衡 \${green}\${b_tag}\${normal}")\n"
         ;;
         2)
@@ -135,9 +132,7 @@ V2raySetRouting()
             inquirer list_input "$(gettext "选择域名解析策略 domainStrategy")" ds_opts ds
             inquirer list_input "$(gettext "选择域名匹配算法 domainMatcher")" dm_opts dm
             JQs build strat_json '{"domainStrategy": $ds, "domainMatcher": $dm}' --arg ds "$ds" --arg dm "$dm"
-            jq_merge=true
-            jq_path='["routing"]'
-            JQ update "$V2_CONFIG" "$strat_json"
+            ProxyMutateConfigTx "v2ray" '.routing = ((.routing // {}) + $patch)' --argjson patch "$strat_json" || return 1
             Println "$(eval_gettext "\$info 已更新 V2Ray 路由策略")\n"
         ;;
         3)
@@ -154,8 +149,7 @@ V2raySetRouting()
             fi
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的路由规则")" rule_opts del_idx
-            jq_path='["routing","rules",'"$del_idx"']'
-            JQ delete "$V2_CONFIG"
+            ProxyMutateConfigTx "v2ray" 'del(.routing.rules[$i])' --argjson i "$del_idx" || return 1
             Println "$(eval_gettext "\$info 已删除路由规则:") ${green}${rule_opts[$del_idx]}${normal}\n"
         ;;
         4)
@@ -172,8 +166,7 @@ V2raySetRouting()
             fi
             local del_idx=0
             inquirer list_input_index "$(gettext "选择要删除的负载均衡器")" bal_opts del_idx
-            jq_path='["routing","balancers",'"$del_idx"']'
-            JQ delete "$V2_CONFIG"
+            ProxyMutateConfigTx "v2ray" 'del(.routing.balancers[$i])' --argjson i "$del_idx" || return 1
             Println "$(eval_gettext "\$info 已删除负载均衡器:") ${green}${bal_opts[$del_idx]}${normal}\n"
         ;;
         5)
@@ -195,13 +188,11 @@ V2raySetRouting()
             inquirer list_input "$(gettext "选择规则级 domainMatcher")" rdm_opts rdm_choice
             if [ "$rdm_choice" == "$(gettext "清除")" ]
             then
-                JQ mutate "$V2_CONFIG" 'del(.routing.rules[$i].domainMatcher)' --argjson i "$rule_idx"
+                ProxyMutateConfigTx "v2ray" 'del(.routing.rules[$i].domainMatcher)' --argjson i "$rule_idx" || return 1
             else
-                JQ mutate "$V2_CONFIG" '.routing.rules[$i].domainMatcher = $dm' --argjson i "$rule_idx" --arg dm "$rdm_choice"
+                ProxyMutateConfigTx "v2ray" '.routing.rules[$i].domainMatcher = $dm' --argjson i "$rule_idx" --arg dm "$rdm_choice" || return 1
             fi
             Println "$(eval_gettext "\$info 已更新规则级 domainMatcher: \${green}\${rdm_choice}\${normal}")\n"
         ;;
     esac
-
-    ProxyRestartIfActive v2ray
 }

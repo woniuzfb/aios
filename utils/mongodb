@@ -24,7 +24,7 @@ MongodbInstall()
     then
         arch_path="$arch"
     else
-        Println "$(eval_gettext "\$error 不支持当前系统")\n"
+        Println "$(eval_gettext "\$error 不支持的系统")\n"
         return 1
     fi
 

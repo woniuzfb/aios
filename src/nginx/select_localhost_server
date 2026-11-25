@@ -1,6 +1,6 @@
 NginxSelectLocalhostServer()
 {
-    echo "`gettext \"输入序号\"`"
+    echo "$i18n_input_no"
     while read -p "$i18n_default_cancel" nginx_localhost_server_num
     do
         case "$nginx_localhost_server_num" in

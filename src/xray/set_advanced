@@ -1,0 +1,155 @@
+XraySetAdvanced()
+{
+    local actions=(
+        "$(gettext "设置日志级别 (log)")"
+        "$(gettext "配置 Observatory 测速 (observatory)")"
+        "$(gettext "配置 BurstObservatory 并发测速 (burstObservatory)")"
+        "$(gettext "配置 Metrics 指标 (metrics)")"
+        "$(gettext "配置 API 服务 (api)")"
+        "$(gettext "配置版本限制 (version)")"
+        "$(gettext "配置环境变量 (env)")"
+    )
+    local act_idx=0
+    inquirer list_input_index "$(gettext "选择 Xray 高级配置项")" actions act_idx
+
+    case "$act_idx" in
+        0)
+            local levels=( "debug" "info" "warning" "error" "none" )
+            local lv_idx=2
+            inquirer list_input_index "$(gettext "选择日志级别 logLevel")" levels lv_idx
+            local lv="${levels[lv_idx]}"
+            if ! ProxyMutateConfigTx "xray" '.log = ((.log // {}) + {logLevel: $lv})' --arg lv "$lv"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 更新日志级别失败: \$err_detail")\n"
+                return 1
+            fi
+            Println "$(eval_gettext "\$info 已更新 Xray logLevel 为 \$lv")\n"
+        ;;
+        1)
+            local probe_url="" probe_interval="" selectors=""
+            inquirer text_input "$(gettext "探测 URL probeURL")" probe_url "https://www.gstatic.com/generate_204"
+            inquirer text_input "$(gettext "探测间隔 probeInterval (如 1m)")" probe_interval "1m"
+            inquirer text_input "$(gettext "目标出站前缀 subjectSelector (逗号分隔)")" selectors "proxy"
+            if ! ProxyMutateConfigTx "xray" '
+                .observatory = {
+                    subjectSelector: ($sel | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+                    probeURL: $url,
+                    probeInterval: $intv
+                }
+            ' --arg sel "$selectors" --arg url "$probe_url" --arg intv "$probe_interval"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 observatory 失败: \$err_detail")\n"
+                return 1
+            fi
+            Println "$(eval_gettext "\$info 已更新 Xray observatory")\n"
+        ;;
+        2)
+            local dest_url="" interval="" selectors=""
+            inquirer text_input "$(gettext "目标 URL destination")" dest_url "https://www.gstatic.com/generate_204"
+            inquirer text_input "$(gettext "探测间隔 interval (如 5m)")" interval "5m"
+            inquirer text_input "$(gettext "目标出站前缀 subjectSelector (逗号分隔)")" selectors "proxy"
+            if ! ProxyMutateConfigTx "xray" '
+                .burstObservatory = {
+                    subjectSelector: ($sel | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))),
+                    pingConfig: {destination: $url, interval: $intv}
+                }
+            ' --arg sel "$selectors" --arg url "$dest_url" --arg intv "$interval"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 burstObservatory 失败: \$err_detail")\n"
+                return 1
+            fi
+            Println "$(eval_gettext "\$info 已更新 Xray burstObservatory")\n"
+        ;;
+        3)
+            local m_tag="" m_listen=""
+            inquirer text_input "$(gettext "Metrics tag")" m_tag "metrics_out"
+            inquirer text_input "$(gettext "Metrics listen (如 127.0.0.1:11111, 可留空)")" m_listen ""
+            if ! ProxyMutateConfigTx "xray" '
+                .metrics = ({tag: $tag} + (if $listen != "" then {listen: $listen} else {} end))
+            ' --arg tag "$m_tag" --arg listen "$m_listen"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 metrics 失败: \$err_detail")\n"
+                return 1
+            fi
+            Println "$(eval_gettext "\$info 已更新 Xray metrics")\n"
+        ;;
+        4)
+            local api_tag="" api_listen=""
+            inquirer text_input "$(gettext "API tag")" api_tag "api"
+            inquirer text_input "$(gettext "API listen (如 127.0.0.1:10085)")" api_listen "127.0.0.1:10085"
+            if ! ProxyMutateConfigTx "xray" '
+                .api = ({tag: $tag, services: ["StatsService", "HandlerService", "LoggerService"]} + (if $listen != "" then {listen: $listen} else {} end))
+                | .stats = (.stats // {})
+            ' --arg tag "$api_tag" --arg listen "$api_listen"
+            then
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 配置 api 失败: \$err_detail")\n"
+                return 1
+            fi
+            Println "$(eval_gettext "\$info 已更新 Xray api")\n"
+        ;;
+        5)
+            local ver_min="" ver_max=""
+            inquirer text_input "$(gettext "最低版本 version.min (可留空)")" ver_min ""
+            inquirer text_input "$(gettext "最高版本 version.max (可留空)")" ver_max ""
+            if [ -z "$ver_min" ] && [ -z "$ver_max" ]
+            then
+                if ! ProxyMutateConfigTx "xray" 'del(.version)'
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 清除 version 失败: \$err_detail")\n"
+                    return 1
+                fi
+                Println "$(eval_gettext "\$info 已清除 Xray version 限制")\n"
+            else
+                if ! ProxyMutateConfigTx "xray" '
+                    .version = ({} + (if $min != "" then {min: $min} else {} end) + (if $max != "" then {max: $max} else {} end))
+                ' --arg min "$ver_min" --arg max "$ver_max"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 配置 version 失败: \$err_detail")\n"
+                    return 1
+                fi
+                Println "$(eval_gettext "\$info 已更新 Xray version")\n"
+            fi
+        ;;
+        6)
+            local env_key="" env_val=""
+            inquirer text_input "$(gettext "环境变量名 (如 XRAY_LOCATION_ASSET)")" env_key ""
+            if [ -z "$env_key" ]
+            then
+                Println "$(eval_gettext "\$error 环境变量名不能为空")\n"
+                return 1
+            fi
+            inquirer text_input "$(gettext "环境变量值 (留空则删除该键)")" env_val ""
+            if [ -z "$env_val" ]
+            then
+                if ! ProxyMutateConfigTx "xray" '
+                    if (.env | type) == "object" then
+                        del(.env[$k]) | if (.env | length) == 0 then del(.env) else . end
+                    else . end
+                ' --arg k "$env_key"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 删除 env 键失败: \$err_detail")\n"
+                    return 1
+                fi
+                Println "$(eval_gettext "\$info 已删除 Xray env 键: \${green}\${env_key}\${normal}")\n"
+            else
+                if ! ProxyMutateConfigTx "xray" '
+                    .env = ((if (.env | type) == "object" then .env else {} end) + {($k): $v})
+                ' --arg k "$env_key" --arg v "$env_val"
+                then
+                    local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                    Println "$(eval_gettext "\$error 配置 env 失败: \$err_detail")\n"
+                    return 1
+                fi
+                Println "$(eval_gettext "\$info 已更新 Xray env: \${green}\${env_key}\${normal}")\n"
+            fi
+        ;;
+    esac
+}

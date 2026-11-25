@@ -9,9 +9,11 @@ esac
 
 ProxyDetectNginx
 
-Println "  $(gettext "v2ray 管理面板") ${normal}${red}[v$sh_ver]${normal}
-
-  ${green}1.${normal} $(gettext "安装")
+if [ "${V2RAY_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${V2RAY_MENU_TEXT:-}" ]
+then
+    V2RAY_MENU_TITLE="$(gettext "v2ray 管理面板")"
+    V2RAY_MENU_TEXT="
+  ${green}1.${normal} ${i18n_install}
   ${green}2.${normal} $(gettext "升级")
   ${green}3.${normal} $(gettext "配置域名")
   ${green}4.${normal} $(gettext "查看状态")
@@ -46,10 +48,20 @@ Println "  $(gettext "v2ray 管理面板") ${normal}${red}[v$sh_ver]${normal}
 ————————————
  ${green}25.${normal} $(gettext "开关")
  ${green}26.${normal} $(gettext "重启")
+————————————
+ ${green}27.${normal} $(gettext "内核与版本管理 (多版本/格式切换/GeoData)")
+ ${green}28.${normal} $(gettext "高级顶层配置 (log/api/fakedns/observatory/tun)")
+ ${green}29.${normal} $(gettext "从 URI 分享链接导入出站")
+ ${green}30.${normal} $(gettext "应用配置预设模板")
 
  $(eval_gettext "\${tip} 输入: v2 打开面板")
 "
-read -p "$(gettext "输入序号") [1-26]: " v2ray_num
+    V2RAY_MENU_LOCALE="${sh_locale:-zh_CN}"
+fi
+
+Println "  ${V2RAY_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+${V2RAY_MENU_TEXT}"
+read -p "$i18n_input_no [1-30]: " v2ray_num
 case $v2ray_num in
     1)
         V2rayInstall
@@ -61,7 +73,7 @@ case $v2ray_num in
         V2rayConfigDomain
     ;;
     4)
-        ServiceControl status v2ray
+        ServiceControl status aios-v2ray
     ;;
     5)
         V2rayListInboundAccounts && V2rayListInboundShare
@@ -124,12 +136,24 @@ case $v2ray_num in
         V2rayDeleteOutboundAccount
     ;;
     25)
-        ProxyToggleService v2ray "$V2_CONFIG"
+        ProxyToggleService aios-v2ray "$V2_CONFIG"
     ;;
     26)
-        ProxyRestartService v2ray "$V2_CONFIG"
+        ProxyRestartService aios-v2ray "$V2_CONFIG"
     ;;
-    *) Println "$error $i18n_input_correct_number [1-26]\n"
+    27)
+        ProxyCoreMenu "v2ray"
+    ;;
+    28)
+        V2raySetAdvanced
+    ;;
+    29)
+        ProxyImportUrisInteractive "v2ray"
+    ;;
+    30)
+        ProxyApplyPresetInteractive "v2ray"
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-30]\n"
     ;;
 esac
 

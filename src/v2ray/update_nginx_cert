@@ -1,6 +1,6 @@
 V2rayNginxDomainServerUpdateCert()
 {
-    v2ray_name="${v2ray_name:-v2ray}"
+    local cert_dir="$V2_ROOT/certs"
     v2ray_nginx_domain_server_name=${v2ray_nginx_domain_servers_name[v2ray_nginx_domain_servers_index]}
 
     AcmeCheck
@@ -17,10 +17,10 @@ V2rayNginxDomainServerUpdateCert()
             V2rayDomainUpdateCert "$domain"
             if [ -d "$nginx_prefix/conf/sites_crt" ]
             then
-                cp -f "/usr/local/share/$v2ray_name/$domain.crt" "$nginx_prefix/conf/sites_crt/$domain.crt"
-                cp -f "/usr/local/share/$v2ray_name/$domain.key" "$nginx_prefix/conf/sites_crt/$domain.key"
+                cp -f "$cert_dir/$domain.crt" "$nginx_prefix/conf/sites_crt/$domain.crt"
+                cp -f "$cert_dir/$domain.key" "$nginx_prefix/conf/sites_crt/$domain.key"
             fi
-            chown "$v2ray_name:$v2ray_name" "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/share/$v2ray_name/$domain.key"
+            ProxySyncCertPerms "v2ray" "$cert_dir/$domain.crt" "$cert_dir/$domain.key"
         done
 
         return 0
@@ -29,8 +29,8 @@ V2rayNginxDomainServerUpdateCert()
     V2rayDomainUpdateCert "$v2ray_nginx_domain_server_name"
     if [ -d "$nginx_prefix/conf/sites_crt" ]
     then
-        cp -f "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.crt"
-        cp -f "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.key"
+        cp -f "$cert_dir/$v2ray_nginx_domain_server_name.crt" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.crt"
+        cp -f "$cert_dir/$v2ray_nginx_domain_server_name.key" "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.key"
     fi
-    chown "$v2ray_name:$v2ray_name" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key"
+    ProxySyncCertPerms "v2ray" "$cert_dir/$v2ray_nginx_domain_server_name.crt" "$cert_dir/$v2ray_nginx_domain_server_name.key"
 }

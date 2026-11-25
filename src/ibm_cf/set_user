@@ -23,7 +23,7 @@ IbmSetUserRegion()
 {
     ibmcloud regions
     Println "$(gettext "请输入账号所在区域名称")"
-    read -p "($(gettext "默认"): us-south): " ibm_user_region
+    read -p "($i18n_default: us-south): " ibm_user_region
     ibm_user_region=${ibm_user_region:-us-south}
     Println "  $(eval_gettext "区域: \${green} \$ibm_user_region \${normal}")\n"
 }
@@ -32,7 +32,7 @@ IbmSetUserResourceGroup()
 {
     ibmcloud resource groups
     Println "$(gettext "请输入资源组名称")"
-    read -p "($(gettext "默认"): Default): " ibm_user_resource_group
+    read -p "($i18n_default: Default): " ibm_user_resource_group
     ibm_user_resource_group=${ibm_user_resource_group:-Default}
     Println "  $(eval_gettext "资源组: \${green} \$ibm_user_resource_group \${normal}")\n"
 }
@@ -41,7 +41,7 @@ IbmSetUserOrg()
 {
     ibmcloud account orgs
     Println "$(gettext "请输入组织名称")"
-    read -p "($(gettext "默认"): $ibm_user_email): " ibm_user_org
+    read -p "($i18n_default: $ibm_user_email): " ibm_user_org
     ibm_user_org=${ibm_user_org:-$ibm_user_email}
     Println "  $(eval_gettext "组织: \${green} \$ibm_user_org \${normal}")\n"
 }
@@ -50,7 +50,7 @@ IbmSetUserSpace()
 {
     ibmcloud account spaces
     Println "$(gettext "请输入空间名称")"
-    read -p "($(gettext "默认"): dev): " ibm_user_space
+    read -p "($i18n_default: dev): " ibm_user_space
     ibm_user_space=${ibm_user_space:-dev}
     Println "  $(eval_gettext "空间: \${green} \$ibm_user_space \${normal}")\n"
 }

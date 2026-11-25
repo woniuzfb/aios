@@ -12,7 +12,7 @@ ViewChannelLog()
         then
             tail -n 10 "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         else
-            echo "$(gettext "无")"
+            echo "$i18n_none"
         fi
 
         Println "${red}$(gettext "错误日志"):${normal}\n"
@@ -20,7 +20,7 @@ ViewChannelLog()
         then
             cat "$FFMPEG_LOG_ROOT/$chnl_pid.err"
         else
-            echo "$(gettext "无")"
+            echo "$i18n_none"
         fi
         echo
     done

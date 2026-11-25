@@ -2,7 +2,13 @@ XrayDeleteOutbound()
 {
     ProxySelectBound "$X_CONFIG" outbounds "$(gettext "选择要删除的出站")" || return 1
     local target_tag="${outbounds_tag[selected_bound_index]}"
-    ProxyDeleteBound "$X_CONFIG" outbounds "$selected_bound_index"
-    ProxyRestartIfActive xray
+
+    if ! ProxyDeleteBound "$X_CONFIG" outbounds "$selected_bound_index"
+    then
+        local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+        Println "$(eval_gettext "\$error 删除出站 \${target_tag} 失败: \$err_detail")\n"
+        return 1
+    fi
+
     Println "$(eval_gettext "\$info 已删除出站 \${green}\${target_tag}\${normal}")\n"
 }

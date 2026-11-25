@@ -15,9 +15,42 @@ XrayListInboundShare()
         Println "\n$(gettext "=== Xray 分享链接 ===")\n$links\n"
         if [ "${3:-}" == "qr" ]
         then
-            local first_link
-            first_link=$(printf '%s\n' "$links" | head -n 1)
-            ProxyPrintQrCode "$first_link"
+            local link_arr=()
+            local link_labels=()
+            local line idx_num=0 remark
+            while IFS= read -r line
+            do
+                [ -z "$line" ] && continue
+                link_arr+=("$line")
+                idx_num=$((idx_num + 1))
+                remark=""
+                if [[ "$line" == *"#"* ]]
+                then
+                    remark="${line##*#}"
+                fi
+                if [ -n "$remark" ]
+                then
+                    link_labels+=("${idx_num}. ${remark} (${line:0:32}...)")
+                else
+                    link_labels+=("${idx_num}. ${line:0:48}...")
+                fi
+            done <<< "$links"
+
+            local target_link=""
+            if [ "${#link_arr[@]}" -eq 1 ]
+            then
+                target_link="${link_arr[0]}"
+            elif [ "${#link_arr[@]}" -gt 1 ]
+            then
+                local qr_idx=0
+                inquirer list_input_index "$(gettext "选择要打印二维码的账号链接")" link_labels qr_idx
+                target_link="${link_arr[$qr_idx]}"
+            fi
+
+            if [ -n "$target_link" ]
+            then
+                ProxyPrintQrCode "$target_link"
+            fi
         fi
     fi
 }

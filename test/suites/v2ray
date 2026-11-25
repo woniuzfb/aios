@@ -4,6 +4,10 @@ RunSuiteV2ray()
 
     local tmpdir
     tmpdir=$(mktemp -d)
+    local orig_v2_root="${V2_ROOT:-}" orig_v2_backup="${V2_BACKUP_ROOT:-}" orig_proxy_lock="${PROXY_LOCK_FILE:-}"
+    V2_ROOT="$tmpdir"
+    V2_BACKUP_ROOT="$tmpdir/backups"
+    PROXY_LOCK_FILE="$tmpdir/proxy.lock"
     V2_CONFIG="$tmpdir/v2ray.json"
 
     cat > "$V2_CONFIG" <<'EOF'
@@ -332,5 +336,8 @@ V2SEOF
 
     ShowCaptured "Final Generated V2Ray Config JSON" "$(cat "$V2_CONFIG")"
 
+    V2_ROOT="${orig_v2_root}"
+    V2_BACKUP_ROOT="${orig_v2_backup}"
+    PROXY_LOCK_FILE="${orig_proxy_lock}"
     rm -rf "$tmpdir"
 }

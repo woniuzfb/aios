@@ -152,7 +152,11 @@ Schedule()
             ScheduleOther
         ;;
         "")
-            Println "$(gettext "节目表计划任务面板")
+            local menu_key="${sh_locale:-zh_CN}"
+
+            if [ "${_menu_listings_cache_key:-}" != "$menu_key" ]
+            then
+                _menu_listings_cache="$(gettext "节目表计划任务面板")
 
   ${green}1.${normal} $(gettext "查看频道")
   ${green}2.${normal} $(gettext "添加频道")
@@ -168,6 +172,10 @@ Schedule()
  ${green}12.${normal} $(gettext "删除备份")
 
 "
+                _menu_listings_cache_key="$menu_key"
+            fi
+
+            Println "$_menu_listings_cache"
             read -p "$i18n_default_cancel" cron_num
             [ -z "$cron_num" ] && Println "$i18n_canceled...\n" && exit 1
 
@@ -201,11 +209,14 @@ Schedule()
             esac
         ;;
         "-")
+            local lbl_err_tag lbl_err_word
+            lbl_err_tag=$(gettext "[错误]")
+            lbl_err_word=$(gettext "错误")
             while IFS= read -r line
             do
-                if [[ $line == *"$(gettext "[错误]")"* ]] || [[ $line == *"$(gettext "错误")"* ]] || [[ $line == *"错误"* ]]
+                if [[ $line == *"$lbl_err_tag"* ]] || [[ $line == *"$lbl_err_word"* ]] || [[ $line == *"错误"* ]]
                 then
-                    Println "$(gettext "错误"): ${line#* }"
+                    Println "$lbl_err_word: ${line#* }"
                 fi
             done < <(ScheduleExec)
         ;;

@@ -1,10 +1,10 @@
 NodejsConfig()
 {
     echo
-    nodejs_options=( "$(gettext "域名")" "$(gettext "本地")" )
+    nodejs_options=( "$i18n_domain" "$(gettext "本地")" )
     inquirer list_input "$(gettext "选择使用 nodejs 的对象")" nodejs_options nodejs_option
 
-    if [ "$nodejs_option" == "$(gettext "域名")" ] 
+    if [ "$nodejs_option" == "$i18n_domain" ] 
     then
         NginxListDomain
         NginxSelectDomainServer
@@ -37,7 +37,7 @@ NodejsConfig()
         Println "$(eval_gettext "\$info nodejs 配置添加成功")"
     fi
 
-    if [ "$nodejs_option" == "$(gettext "域名")" ] 
+    if [ "$nodejs_option" == "$i18n_domain" ] 
     then
         NginxCheckLocalhost
         NginxAddHttp

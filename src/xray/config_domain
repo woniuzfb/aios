@@ -104,10 +104,12 @@ XrayConfigDomain()
             local new_crt=""
             inquirer text_input "$(gettext "输入新的证书文件路径 (certificateFile): ")" new_crt
             [ -z "$new_crt" ] && return 1
-            jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"',"certificateFile"]'
-            if ! JQ update "$X_CONFIG" "$new_crt"
+            ProxySyncCertPerms "xray" "$new_crt" ""
+            if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$c].certificateFile = $v' \
+                --argjson i "$ib_idx" --argjson c "$target_c" --arg v "$new_crt"
             then
-                Println "$(eval_gettext "\$error 证书路径修改失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 证书路径修改失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 证书路径修改成功")\n"
@@ -127,10 +129,12 @@ XrayConfigDomain()
             local new_key=""
             inquirer text_input "$(gettext "输入新的密钥文件路径 (keyFile): ")" new_key
             [ -z "$new_key" ] && return 1
-            jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"',"keyFile"]'
-            if ! JQ update "$X_CONFIG" "$new_key"
+            ProxySyncCertPerms "xray" "" "$new_key"
+            if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$c].keyFile = $v' \
+                --argjson i "$ib_idx" --argjson c "$target_c" --arg v "$new_key"
             then
-                Println "$(eval_gettext "\$error 密钥路径修改失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 密钥路径修改失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 密钥路径修改成功")\n"
@@ -149,7 +153,7 @@ XrayConfigDomain()
             local target_c="${cert_indices[$sel_c]}"
             local usage_opts=( "encipherment" "verify" "issue" )
             local usage_idx=""
-            inquirer list_input_index "$(gettext "选择证书用途 (usage)")" usage_opts usage_idx
+            inquirer list_input_index "$(gettext "选择证书用途")" usage_opts usage_idx
             local new_usage="${usage_opts[$usage_idx]}"
             local new_ocsp="" cert_patch=""
             inquirer text_input "$(gettext "OCSP Stapling 间隔秒数 (默认 0 不启用, 留空不修改): ")" new_ocsp
@@ -160,11 +164,11 @@ XrayConfigDomain()
             fi
             JQs build cert_patch '{"usage": $u, "ocspStapling": (if $o != "" then ($o | tonumber) else null end)}' \
                 --arg u "$new_usage" --arg o "$new_ocsp"
-            jq_merge=true
-            jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"']'
-            if ! JQ update "$X_CONFIG" "$cert_patch"
+            if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates[$c] = ((.inbounds[$i].streamSettings.tlsSettings.certificates[$c] // {}) + $patch)' \
+                --argjson i "$ib_idx" --argjson c "$target_c" --argjson patch "$cert_patch"
             then
-                Println "$(eval_gettext "\$error 证书用途 / OCSP 更新失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 证书用途 / OCSP 更新失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 证书用途 / OCSP 更新成功")\n"
@@ -172,7 +176,7 @@ XrayConfigDomain()
         3)
             local usage_opts=( "encipherment" "verify" "issue" )
             local usage_idx=""
-            inquirer list_input_index "$(gettext "选择证书用途 (usage)")" usage_opts usage_idx
+            inquirer list_input_index "$(gettext "选择证书用途")" usage_opts usage_idx
             local new_usage="${usage_opts[$usage_idx]}"
             local new_crt="" new_key="" new_ocsp="" cert_json=""
             inquirer text_input "$(gettext "证书文件路径 (certificateFile): ")" new_crt
@@ -199,10 +203,12 @@ XrayConfigDomain()
                 "keyFile": $k,
                 "ocspStapling": (if $o != "" then ($o | tonumber) else null end)
             }' --arg u "$new_usage" --arg c "$new_crt" --arg k "$new_key" --arg o "$new_ocsp"
-            jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates"]'
-            if ! JQ add "$X_CONFIG" "[$cert_json]"
+            ProxySyncCertPerms "xray" "$new_crt" "$new_key"
+            if ! ProxyMutateConfigTx "xray" '.inbounds[$i].streamSettings.tlsSettings.certificates = ((.inbounds[$i].streamSettings.tlsSettings.certificates // []) + [$item])' \
+                --argjson i "$ib_idx" --argjson item "$cert_json"
             then
-                Println "$(eval_gettext "\$error 添加证书条目失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 添加证书条目失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已添加证书条目")\n"
@@ -219,15 +225,14 @@ XrayConfigDomain()
                 inquirer list_input_index "$(gettext "选择要删除的证书条目")" cert_labels sel_c
             fi
             local target_c="${cert_indices[$sel_c]}"
-            jq_path='["inbounds",'"$ib_idx"',"streamSettings","tlsSettings","certificates",'"$target_c"']'
-            if ! JQ delete "$X_CONFIG"
+            if ! ProxyMutateConfigTx "xray" 'del(.inbounds[$i].streamSettings.tlsSettings.certificates[$c])' \
+                --argjson i "$ib_idx" --argjson c "$target_c"
             then
-                Println "$(eval_gettext "\$error 删除证书条目失败")\n"
+                local err_detail="${PROXY_LAST_VALIDATE_ERROR:-unknown}"
+                Println "$(eval_gettext "\$error 删除证书条目失败: \$err_detail")\n"
                 return 1
             fi
             Println "$(eval_gettext "\$info 已删除证书条目")\n"
         ;;
     esac
-
-    ProxyRestartIfActive xray
 }

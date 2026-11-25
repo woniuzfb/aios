@@ -138,7 +138,7 @@ ProxyInitI18nJson()
         --arg yes "$(gettext "是")" \
         --arg no "$(gettext "否")" \
         --arg configured "$(gettext "已配置")" \
-        --arg enabled "$(gettext "已启用")" \
+        --arg enabled "$(gettext "已开启")" \
         --arg sniffing "$(gettext "流量探测")" \
         --arg metadata_only "$(gettext "仅元数据")" \
         --arg dest_override "$(gettext "目标重置")" \
@@ -360,14 +360,14 @@ ProxyRenderInbounds()
                     line("masquerade"; (if ($st.hysteriaSettings.masquerade | type) == "object" then $st.hysteriaSettings.masquerade.type else null end))
                 ] | join(" "))
             else empty end),
-            (if (($st.hysteria2Settings // $st.hy2steriaSettings) | type) == "object" then
-                ($st.hysteria2Settings // $st.hy2steriaSettings) as $hy2
+            (if (($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) | type) == "object" then
+                ($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) as $hy2
                 | (if ($hy2.congestion | type) == "object" then $hy2.congestion else {} end) as $cg
                 | "Hysteria2: " + ([line("password"; $hy2.password), line("congestion"; $cg.type), line("up_mbps"; $cg.up_mbps), line("down_mbps"; $cg.down_mbps), bline("use_udp_extension"; $hy2.use_udp_extension)] | join(" "))
             else empty end),
             (if ($st.masqueSettings | type) == "object" then
                 ($st.masqueSettings) as $mq
-                | "MASQUE: " + ([line("uri"; $mq.uri), line("mtu"; $mq.mtu), bline("enableUdp"; $mq.enableUdp)] | join(" "))
+                | "MASQUE: " + ([line("host"; $mq.host), line("path"; $mq.path), line("user"; $mq.user), line("headers"; kv($mq.headers))] | join(" "))
             else empty end),
             (if ($st.finalmask | type) == "object" then
                 "Finalmask: " + ([
@@ -536,8 +536,11 @@ ProxyRenderOutbounds()
     '
     def cv($v): "\($g)\($v)\($n)";
     def bv($v): if $v == true then "\($g)\($i18n.on)\($n)" else "\($r)\($i18n.off)\($n)" end;
+    def yv($v): if $v == true then "\($g)\($i18n.yes)\($n)" else "\($r)\($i18n.no)\($n)" end;
     def arr($a): if ($a | type) == "array" then ($a | map(tostring) | join(", ")) else ($a // "" | tostring) end;
+    def kv($obj): if ($obj | type) == "object" then ($obj | to_entries | map("\(.key) => \(.value | tostring)") | join(", ")) else "" end;
     def line($label; $val): if ($val // "" | tostring) != "" then "\($label): \(cv($val))" else empty end;
+    def bline($label; $val): if $val != null then "\($label): \(yv($val))" else empty end;
 
     def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
 
@@ -626,6 +629,28 @@ ProxyRenderOutbounds()
                         (if ($rl.publicKey // $rl.password // "") != "" then "publicKey: \(cv($i18n.configured))" else empty end)
                       ] | join(" ")) as $rsum
                     | if $rsum != "" then "REALITY: \($rsum)" else empty end
+                 else empty end),
+                (if (($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) | type) == "object" then
+                    ($st.hy2Settings // $st.hysteria2Settings // $st.hy2steriaSettings) as $hy2
+                    | (if ($hy2.congestion | type) == "object" then $hy2.congestion else {} end) as $cg
+                    | ([
+                        line("password"; $hy2.password),
+                        line("congestion"; $cg.type),
+                        line("up_mbps"; $cg.up_mbps),
+                        line("down_mbps"; $cg.down_mbps),
+                        bline("use_udp_extension"; $hy2.use_udp_extension)
+                      ] | join(" ")) as $hsum
+                    | if $hsum != "" then "Hysteria2: \($hsum)" else empty end
+                 else empty end),
+                (if ($st.masqueSettings | type) == "object" then
+                    ($st.masqueSettings) as $mq
+                    | ([
+                        line("host"; $mq.host),
+                        line("path"; $mq.path),
+                        line("user"; $mq.user),
+                        line("headers"; kv($mq.headers))
+                      ] | join(" ")) as $msum
+                    | if $msum != "" then "MASQUE: \($msum)" else empty end
                  else empty end),
                 (if ($st.sockopt | type) == "object" and ($st.sockopt.dialerProxy // "") != "" then "dialerProxy: \(cv($st.sockopt.dialerProxy))" else empty end)
             ]
@@ -736,12 +761,9 @@ ProxyRenderShareLinks()
     SetDelimiters
 
     local xray_bin=""
-    if [ -n "${XRAY_FILE:-}" ] && [ -x "$XRAY_FILE" ]
+    if [ -n "${AIOS_XRAY_BIN:-}" ] && [ -x "$AIOS_XRAY_BIN" ]
     then
-        xray_bin="$XRAY_FILE"
-    elif command -v xray > /dev/null 2>&1
-    then
-        xray_bin="xray"
+        xray_bin="$AIOS_XRAY_BIN"
     fi
 
     local pbk_map="{}"
@@ -766,7 +788,7 @@ ProxyRenderShareLinks()
             do
                 [ -z "$priv_key" ] && continue
                 pub_out=$("$xray_bin" x25519 -i "$priv_key" 2> /dev/null) || continue
-                pub_val=$(printf '%s\n' "$pub_out" | awk '/^(Password|Public key):/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); print; exit}')
+                pub_val=$(printf '%s\n' "$pub_out" | awk '/^(Password([[:space:]]*\(PublicKey\))?|Public[[:space:]]?[Kk]ey):/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); print; exit}')
                 if [ -n "$pub_val" ]
                 then
                     pbk_pairs="${pbk_pairs}${priv_key}${field_sep}${pub_val}"$'\n'
@@ -784,8 +806,44 @@ ProxyRenderShareLinks()
         fi
     fi
 
+    local pqv_map="{}"
+    if [ -n "$xray_bin" ] && [ -s "$config_file" ]
+    then
+        local mldsa_seeds=""
+        mldsa_seeds=$($JQ_FILE -r '
+            (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+            | select(type == "object")
+            | (.streamSettings.realitySettings.mldsa65Seed // empty)
+            | select(type == "string" and length > 0)
+        ' "$config_file" 2> /dev/null | sort -u)
+
+        if [ -n "$mldsa_seeds" ]
+        then
+            local seed_val pqv_out pqv_val pqv_pairs=""
+            while IFS= read -r seed_val
+            do
+                [ -z "$seed_val" ] && continue
+                pqv_out=$("$xray_bin" mldsa65 -i "$seed_val" 2> /dev/null) || continue
+                pqv_val=$(printf '%s\n' "$pqv_out" | awk '/^(Verify|Public[[:space:]]?[Kk]ey):/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/[[:space:]]*$/, ""); print; exit}')
+                if [ -n "$pqv_val" ]
+                then
+                    pqv_pairs="${pqv_pairs}${seed_val}${field_sep}${pqv_val}"$'\n'
+                fi
+            done <<< "$mldsa_seeds"
+
+            if [ -n "$pqv_pairs" ]
+            then
+                pqv_map=$($JQ_FILE -Rn --arg sep "$field_sep" '
+                    [inputs | select(length > 0) | split($sep) | select(length >= 2) | {key: .[0], value: .[1]}]
+                    | from_entries
+                ' <<< "$pqv_pairs")
+                [ -z "$pqv_map" ] && pqv_map="{}"
+            fi
+        fi
+    fi
+
     local raw_lines
-    raw_lines=$($JQ_FILE -r --arg sep "$field_sep" --arg host "$host" --arg only "$only_idx" --arg core "$core_type" --argjson pbk_map "$pbk_map" '
+    raw_lines=$($JQ_FILE -r --arg sep "$field_sep" --arg host "$host" --arg only "$only_idx" --arg core "$core_type" --argjson pbk_map "$pbk_map" --argjson pqv_map "$pqv_map" '
         def q($k; $v): if (($v | type) == "string" or ($v | type) == "number" or ($v | type) == "boolean") and ($v | tostring) != "" then "\($k)=\($v | tostring | @uri)" else empty end;
         def obj($x): if ($x | type) == "object" then $x else {} end;
         def arr_objs($x): if ($x | type) == "array" then ($x | map(select(type == "object"))) else [] end;
@@ -820,12 +878,15 @@ ProxyRenderShareLinks()
                     ($rl.privateKey // "" | tostring) as $priv
                     | (if $priv != "" and ($pbk_map[$priv] // "") != "" then $pbk_map[$priv]
                        else ($rl.publicKey // $rl.password // "") end) as $pbk
+                    | ($rl.mldsa65Seed // "" | tostring) as $mseed
+                    | (if $mseed != "" and ($pqv_map[$mseed] // "") != "" then $pqv_map[$mseed]
+                       else ($rl.mldsa65Verify // "") end) as $pqv
                     | q("pbk"; $pbk),
                       q("sni"; first_str($rl.serverNames)),
                       q("sid"; first_str($rl.shortIds)),
                       q("fp"; ($rl.fingerprint // "chrome")),
                       q("spx"; ($rl.spiderX // "")),
-                      q("pqv"; ($rl.mldsa65Verify // ""))
+                      q("pqv"; $pqv)
                 elif $sec == "tls" then
                     q("sni"; ($tls.serverName // "")),
                     q("alpn"; (if ($tls.alpn | type) == "array" and ($tls.alpn | length) > 0 then ($tls.alpn | map(tostring) | join(",")) else "" end))
@@ -1329,8 +1390,20 @@ ProxyAddBound()
     local config_file="$1"
     local bound_type="$2"
     local bound_json="$3"
-    local rc=0
 
+    if [ "$config_file" == "${X_CONFIG:-}" ]
+    then
+        ProxyMutateConfigTx "xray" '.[$bt] = ((if (.[$bt] | type) == "array" then .[$bt] else [] end) + [$item])' \
+            --arg bt "$bound_type" --argjson item "$bound_json"
+        return $?
+    elif [ "$config_file" == "${V2_CONFIG:-}" ]
+    then
+        ProxyMutateConfigTx "v2ray" '.[$bt] = ((if (.[$bt] | type) == "array" then .[$bt] else [] end) + [$item])' \
+            --arg bt "$bound_type" --argjson item "$bound_json"
+        return $?
+    fi
+
+    local rc=0
     jq_path='["'"$bound_type"'"]'
     JQ add "$config_file" "[$bound_json]" || rc=$?
     jq_path=""
@@ -1342,8 +1415,20 @@ ProxyDeleteBound()
     local config_file="$1"
     local bound_type="$2"
     local bound_index="$3"
-    local rc=0
 
+    if [ "$config_file" == "${X_CONFIG:-}" ]
+    then
+        ProxyMutateConfigTx "xray" 'if (.[$bt] | type) == "array" then del(.[$bt][$idx]) else . end' \
+            --arg bt "$bound_type" --argjson idx "$bound_index"
+        return $?
+    elif [ "$config_file" == "${V2_CONFIG:-}" ]
+    then
+        ProxyMutateConfigTx "v2ray" 'if (.[$bt] | type) == "array" then del(.[$bt][$idx]) else . end' \
+            --arg bt "$bound_type" --argjson idx "$bound_index"
+        return $?
+    fi
+
+    local rc=0
     jq_path='["'"$bound_type"'",'"$bound_index"']'
     JQ delete "$config_file" || rc=$?
     jq_path=""
@@ -1396,6 +1481,8 @@ ProxyToggleService()
 {
     local service_name="$1"
     local config_file="$2"
+    [ "$service_name" == "xray" ] && service_name="aios-xray"
+    [ "$service_name" == "v2ray" ] && service_name="aios-v2ray"
 
     if [ ! -e "$config_file" ]
     then
@@ -1431,6 +1518,8 @@ ProxyRestartService()
 {
     local service_name="$1"
     local config_file="$2"
+    [ "$service_name" == "xray" ] && service_name="aios-xray"
+    [ "$service_name" == "v2ray" ] && service_name="aios-v2ray"
 
     if [ ! -e "$config_file" ]
     then
@@ -1451,6 +1540,8 @@ ProxyRestartService()
 ProxyRestartIfActive()
 {
     local service_name="$1"
+    [ "$service_name" == "xray" ] && service_name="aios-xray"
+    [ "$service_name" == "v2ray" ] && service_name="aios-v2ray"
     if ServiceControl is-active "$service_name"
     then
         local err_msg=""

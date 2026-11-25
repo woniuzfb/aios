@@ -1,7 +1,9 @@
 CloudflareWorkersMenu()
 {
-    Println "  $(gettext "cloudflare 面板") ${normal}${red}[v$sh_ver]${normal}
-
+    if [ "${CLOUDFLARE_WORKERS_MENU_LOCALE:-}" != "${sh_locale:-zh_CN}" ] || [ -z "${CLOUDFLARE_WORKERS_MENU_TEXT:-}" ]
+    then
+        CLOUDFLARE_WORKERS_MENU_TITLE="$(gettext "cloudflare 面板")"
+        CLOUDFLARE_WORKERS_MENU_TEXT="
   ${green}1.${normal} $(gettext "安装 wrangler")
   ${green}2.${normal} $(gettext "更新 wrangler")
   ${green}3.${normal} $(gettext "查看 worker")
@@ -15,7 +17,12 @@ CloudflareWorkersMenu()
 
  ${tip} $(gettext "当前"): ${green}workers${normal} $(gettext "面板")
  ${tip} $(gettext "输入: c 切换到 partner 面板")\n\n"
-    read -p "`gettext \"输入序号\"` [1-10]: " cloudflare_workers_num
+        CLOUDFLARE_WORKERS_MENU_LOCALE="${sh_locale:-zh_CN}"
+    fi
+
+    Println "  ${CLOUDFLARE_WORKERS_MENU_TITLE} ${normal}${red}[v$sh_ver]${normal}
+${CLOUDFLARE_WORKERS_MENU_TEXT}"
+    read -p "$i18n_input_no [1-10]: " cloudflare_workers_num
     case $cloudflare_workers_num in
         c)
             CloudflarePartnerMenu

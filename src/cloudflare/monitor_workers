@@ -576,7 +576,7 @@ CloudflareWorkersMonitor()
                             CloudflareWorkersMonitorGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
                             if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                             then
-                                MonitorErr "request_count : ${request_count:-$(gettext "无")}"
+                                MonitorErr "request_count : ${request_count:-$i18n_none}"
                                 sleep 10
                             else
                                 if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
@@ -728,7 +728,7 @@ CloudflareWorkersMonitor()
                                 CloudflareWorkersMonitorGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
                                 if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                                 then
-                                    MonitorErr "request_count 2 : ${request_count:-$(gettext "无")}"
+                                    MonitorErr "request_count 2 : ${request_count:-$i18n_none}"
                                     sleep 10
                                 else
                                     if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 

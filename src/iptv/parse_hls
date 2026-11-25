@@ -263,7 +263,7 @@ ParseHlsPlaylist()
     if [ "$choose" -eq 1 ]
     then
         stream_urls_select_all=$((stream_urls_count+1))
-        stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}$(gettext "全部")\n"
+        stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}$i18n_all\n"
         Println "$stream_urls_list"
         echo "$(gettext "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)")"
 
@@ -391,7 +391,7 @@ ParseHlsPlaylist()
                 then
                     stream_audio_num_default=$((i+1))
                 fi
-                stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}$(gettext "音轨组"): ${green}${stream_audio_group_id[i]}${normal} $(gettext "名称"): ${green}${stream_audio_name[i]}${normal} $(gettext "语言"): ${green}${stream_audio_language[i]}${normal}\n\n"
+                stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}$(gettext "音轨组"): ${green}${stream_audio_group_id[i]}${normal} $i18n_name: ${green}${stream_audio_name[i]}${normal} $(gettext "语言"): ${green}${stream_audio_language[i]}${normal}\n\n"
             done
 
             stream_audio_unselect_all=$((stream_audio_count+1))
@@ -551,7 +551,7 @@ ParseHlsPlaylist()
                 then
                     stream_subtitles_num_default=$((i+1))
                 fi
-                stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$(gettext "字幕组"): ${green}${stream_subtitles_group_id[i]}${normal} $(gettext "名称"): ${green}${stream_subtitles_name[i]}${normal} $(gettext "语言"): ${green}${stream_subtitles_language[i]}${normal}\n\n"
+                stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}$(gettext "字幕组"): ${green}${stream_subtitles_group_id[i]}${normal} $i18n_name: ${green}${stream_subtitles_name[i]}${normal} $(gettext "语言"): ${green}${stream_subtitles_language[i]}${normal}\n\n"
             done
 
             stream_subtitles_unselect_all=$((stream_subtitles_count+1))

@@ -158,7 +158,7 @@ ListChannels()
             else
                 chnls_flv_status_text="${red}$i18n_stopped${normal}"
             fi
-            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-$(gettext "无")}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-$(gettext "无")}\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-$i18n_none}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-$i18n_none}\n\n"
         fi
     done
 

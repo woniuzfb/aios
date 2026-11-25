@@ -195,11 +195,11 @@ XtreamCodesList()
                 then
                     ips_mac+=("$i")
                     ips_mac_count=$((ips_mac_count+1))
-                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $(gettext "域名"): ${green}${new_domains[i]//|/, }${normal} $(gettext "mac 地址个数"): ${green}$macs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $i18n_domain: ${green}${new_domains[i]//|/, }${normal} $(gettext "mac 地址个数"): ${green}$macs_num${normal}\n\n"
                 else
                     ips_acc+=("$i")
                     ips_acc_count=$((ips_acc_count+1))
-                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $(gettext "域名"): ${green}${new_domains[i]//|/, }${normal} $(gettext "账号个数"): ${green}$accs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} $i18n_domain: ${green}${new_domains[i]//|/, }${normal} $(gettext "账号个数"): ${green}$accs_num${normal}\n\n"
                 fi
             fi
         done

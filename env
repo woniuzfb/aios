@@ -76,19 +76,56 @@ USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTM
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 
-# v2ray
-V2_FILE="$AIOS_PREFIX"/bin/v2
-V2_LINK=https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
-V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/v2ray_install-release.sh
-V2CTL_FILE="$AIOS_PREFIX"/bin/v2ctl
-V2_CONFIG="$AIOS_PREFIX"/etc/v2ray/config.json
+# proxy (isolated under PROXY_ROOT=$AIOS_ROOT/proxy)
+PROXY_ROOT="$AIOS_ROOT"/proxy
+PROXY_CORES_ROOT="$PROXY_ROOT"/cores
+PROXY_CORES_MANIFEST="$PROXY_CORES_ROOT"/manifest.json
+PROXY_GEODATA_ROOT="$PROXY_ROOT"/geodata
+PROXY_GEODATA_CURRENT="$PROXY_GEODATA_ROOT"/current
+PROXY_XDG_ROOT="$PROXY_ROOT"/xdg
+PROXY_TMP_ROOT="$PROXY_ROOT"/.tmp
+PROXY_LOCK_FILE="$PROXY_ROOT"/lock
+PROXY_BACKUP_KEEP=20
+PROXY_OBSERVE_SECONDS=3
 
-# xray
+AIOS_XRAY_BIN="$AIOS_PREFIX"/bin/aios-xray
+AIOS_V2RAY_BIN="$AIOS_PREFIX"/bin/aios-v2ray
+
+# v2ray (isolated)
+V2_FILE="$AIOS_PREFIX"/bin/v2
+V2_ROOT="$PROXY_ROOT"/v2ray
+V2_CONFIG="$V2_ROOT"/config.json
+V2_META="$V2_ROOT"/meta.json
+V2_TX_STATE="$V2_ROOT"/tx_state.json
+V2_BACKUP_ROOT="$V2_ROOT"/backups
+V2_LOG_ROOT="$V2_ROOT"/logs
+V2_LKG_LINK="$V2_BACKUP_ROOT"/last-known-good
+V2RAY_REPO="v2fly/v2ray-core"
+V2RAY_MIN_VER="5.18.0"
+V2RAY_LATEST_TESTED_VER="5.56.0"
+V2RAY_DEFAULT_API="127.0.0.1:10086"
+
+# xray (isolated)
 X_FILE="$AIOS_PREFIX"/bin/x
-X_LINK=https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh
-X_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
-XCTL_FILE="$AIOS_PREFIX"/bin/xray
-X_CONFIG="$AIOS_PREFIX"/etc/xray/config.json
+X_ROOT="$PROXY_ROOT"/xray
+X_CONFIG="$X_ROOT"/config.json
+X_META="$X_ROOT"/meta.json
+X_TX_STATE="$X_ROOT"/tx_state.json
+X_BACKUP_ROOT="$X_ROOT"/backups
+X_LOG_ROOT="$X_ROOT"/logs
+X_LKG_LINK="$X_BACKUP_ROOT"/last-known-good
+XRAY_REPO="XTLS/Xray-core"
+XRAY_MIN_VER="25.9.11"
+XRAY_LATEST_TESTED_VER="26.11.9"
+
+# shared geodata & mirror multi-version config
+PROXY_GEODATA_REPO="Loyalsoldier/v2ray-rules-dat"
+PROXY_GEODATA_API="https://api.github.com/repos/$PROXY_GEODATA_REPO/releases/latest"
+PROXY_GEODATA_LINK="https://github.com/$PROXY_GEODATA_REPO/releases/download"
+PROXY_GEODATA_MIRROR_LINK="$FFMPEG_MIRROR_LINK"/geodata
+PROXY_MIRROR_RECENT_COUNT=5
+XRAY_MIRROR_PINNED_VERSIONS="v25.9.11 v26.5.3 v26.5.9 v26.6.22 v26.6.27"
+V2RAY_MIRROR_PINNED_VERSIONS="v5.18.0"
 
 # cloudflare
 CF_FILE="$AIOS_PREFIX"/bin/cf

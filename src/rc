@@ -10,15 +10,20 @@ Include src/rclone/sync "$@"
 Include utils/openssl "$@"
 Include utils/htpasswd "$@"
 
+if [ "${rc_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+then
+    rclone_options=( "$(gettext "远端")" "$(gettext "挂载")" "$(gettext "服务")" "$(gettext "服务账号")" "$(gettext "同步")" "$(gettext "安装/更新")" )
+    rc_menu_locale="${sh_locale:-zh_CN}"
+fi
+
 echo
-rclone_options=( "$(gettext "远端")" "$(gettext "挂载")" "$(gettext "服务")" "$(gettext "服务账号")" "$(gettext "同步")" "$(gettext "安装/更新")" )
-inquirer list_input_index "$(gettext "请选择")" rclone_options rclone_options_index
+inquirer list_input_index "$i18n_please_select" rclone_options rclone_options_index
 
 case $rclone_options_index in
     0) 
         echo
-        rclone_remote_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" )
-        inquirer list_input_index "$(gettext "选择操作")" rclone_remote_options rclone_remote_options_index
+        rclone_remote_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" )
+        inquirer list_input_index "$i18n_select_action" rclone_remote_options rclone_remote_options_index
 
         case $rclone_remote_options_index in
             0) RcloneRemoteView
@@ -32,9 +37,14 @@ case $rclone_options_index in
         esac
     ;;
     1) 
+        if [ "${rc_mount_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+        then
+            rclone_mount_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" "$(gettext "执行挂载")" "$(gettext "取消挂载")" )
+            rc_mount_menu_locale="${sh_locale:-zh_CN}"
+        fi
+
         echo
-        rclone_mount_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "执行挂载")" "$(gettext "取消挂载")" )
-        inquirer list_input_index "$(gettext "选择操作")" rclone_mount_options rclone_mount_options_index
+        inquirer list_input_index "$i18n_select_action" rclone_mount_options rclone_mount_options_index
 
         case $rclone_mount_options_index in
             0) RcloneMountView
@@ -52,9 +62,14 @@ case $rclone_options_index in
         esac
     ;;
     2) 
+        if [ "${rc_serve_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+        then
+            rclone_serve_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" "$(gettext "执行服务")" "$(gettext "取消服务")" )
+            rc_serve_menu_locale="${sh_locale:-zh_CN}"
+        fi
+
         echo
-        rclone_serve_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "执行服务")" "$(gettext "取消服务")" )
-        inquirer list_input_index "$(gettext "选择操作")" rclone_serve_options rclone_serve_options_index
+        inquirer list_input_index "$i18n_select_action" rclone_serve_options rclone_serve_options_index
 
         case $rclone_serve_options_index in
             0) RcloneServeView
@@ -73,8 +88,8 @@ case $rclone_options_index in
     ;;
     3) 
         echo
-        rclone_serve_acc_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" )
-        inquirer list_input_index "$(gettext "选择操作")" rclone_serve_acc_options rclone_serve_acc_options_index
+        rclone_serve_acc_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" )
+        inquirer list_input_index "$i18n_select_action" rclone_serve_acc_options rclone_serve_acc_options_index
 
         case $rclone_serve_acc_options_index in
             0) RcloneServeAccView
@@ -88,9 +103,14 @@ case $rclone_options_index in
         esac
     ;;
     4)
+        if [ "${rc_sync_menu_locale:-}" != "${sh_locale:-zh_CN}" ]
+        then
+            rclone_sync_options=( "$i18n_view" "$i18n_add" "$i18n_edit" "$i18n_delete" "$(gettext "执行")" )
+            rc_sync_menu_locale="${sh_locale:-zh_CN}"
+        fi
+
         echo
-        rclone_sync_options=( "$(gettext "查看")" "$(gettext "添加")" "$(gettext "修改")" "$(gettext "删除")" "$(gettext "执行")" )
-        inquirer list_input_index "$(gettext "选择操作")" rclone_sync_options rclone_sync_options_index
+        inquirer list_input_index "$i18n_select_action" rclone_sync_options rclone_sync_options_index
 
         case $rclone_sync_options_index in
             0) RcloneSyncView

@@ -1,0 +1,155 @@
+V2rayGetApiServer()
+{
+    local api_server=""
+    api_server=$(JQs query "$V2_CONFIG" '
+        def normalize_host($h):
+            if $h == "" or $h == "0.0.0.0" or $h == "::" or $h == "[::]" then "127.0.0.1" else $h end;
+        ((if (.api | type) == "object" and (.api.tag | type) == "string" then .api.tag else "api" end) as $api_tag
+        | first(
+            (if (.routing.rules | type) == "array" then .routing.rules else [] end)[]
+            | select(type == "object" and .outboundTag == $api_tag)
+            | (.inboundTag // [])[]
+        ) // $api_tag) as $in_tag
+        | first(
+            (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+            | select(type == "object" and .tag == $in_tag)
+            | "\(normalize_host(.listen // "127.0.0.1")):\(.port // 10086)"
+        ) // $def_api
+    ' --arg def_api "${V2RAY_DEFAULT_API:-127.0.0.1:10086}" | head -n 1)
+    printf '%s' "${api_server:-${V2RAY_DEFAULT_API:-127.0.0.1:10086}}"
+}
+
+V2rayListStats()
+{
+    local target_email="${1:-}"
+    local api_server
+    api_server=$(V2rayGetApiServer)
+
+    local bin
+    bin=$(ProxyDetectCoreBin "v2ray")
+    if [ ! -x "$bin" ]
+    then
+        Println "$(eval_gettext "\$error 未找到隔离版 aios-v2ray (\$bin)")\n"
+        return 1
+    fi
+
+    if [ -z "$target_email" ] && [ -t 0 ] && [ -s "$V2_CONFIG" ]
+    then
+        ProxyLoadInboundsIndex "$V2_CONFIG"
+
+        local user_emails=()
+        local email_line=""
+        if [ "$inbounds_count" -gt 0 ]
+        then
+            while IFS= read -r email_line
+            do
+                [ -z "$email_line" ] && continue
+                user_emails+=("$email_line")
+            done < <($JQ_FILE -r '
+                (if (.inbounds | type) == "array" then .inbounds else [] end)[]
+                | select(type == "object")
+                | (
+                    ((.settings.clients // [])[]? | select(type == "object") | .email // empty),
+                    ((.settings.users // [])[]? | select(type == "object") | .email // empty),
+                    (.settings.email // empty)
+                  )
+                | select(type == "string" and length > 0)
+            ' "$V2_CONFIG" | sort -u)
+        fi
+
+        if [ "${#user_emails[@]}" -gt 0 ]
+        then
+            local query_opts=( "$(gettext "查询全部流量")" "$(gettext "按单个用户查询")" )
+            local query_idx=0
+            echo
+            inquirer list_input_index "$(gettext "选择流量查询方式")" query_opts query_idx
+
+            if [ "$query_idx" -eq 1 ]
+            then
+                echo
+                inquirer list_input "$(gettext "选择要查询的用户")" user_emails target_email
+            fi
+        fi
+    fi
+
+    local raw_stats=""
+    if ! raw_stats=$("$bin" api stats -s "$api_server" -json 2>&1)
+    then
+        Println "$(eval_gettext "\$error 无法连接 V2Ray API (\$api_server), 请确认已开启 api 与 stats: \${raw_stats}")\n"
+        return 1
+    fi
+
+    if ! printf '%s' "$raw_stats" | $JQ_FILE -e . > /dev/null 2>&1
+    then
+        Println "$(eval_gettext "\$error V2Ray API 返回非合法 JSON (\$api_server): \${raw_stats}")\n"
+        return 1
+    fi
+
+    if [ -n "$target_email" ]
+    then
+        raw_stats=$($JQ_FILE -c --arg em "$target_email" '
+            if (.stat | type) == "array" then
+                .stat |= map(select((.name // "") | startswith("user>>>" + $em + ">>>")))
+            else
+                .
+            end
+        ' <<< "$raw_stats")
+    fi
+
+    local formatted=""
+    formatted=$(ProxyFormatStatsJson "$raw_stats")
+
+    if [ -z "$formatted" ]
+    then
+        if [ -n "$target_email" ]
+        then
+            Println "$(eval_gettext "\$info 用户 \$target_email 暂无流量统计数据")\n"
+        else
+            Println "$(eval_gettext "\$info 暂无流量统计数据")\n"
+        fi
+        return 0
+    fi
+
+    if [ -n "$target_email" ]
+    then
+        Println "\n$(eval_gettext "=== V2Ray 用户 \$target_email 流量统计 ===")\n$formatted\n"
+    else
+        Println "\n$(gettext "=== V2Ray 流量统计 ===")\n$formatted\n"
+    fi
+}
+
+V2rayResetStats()
+{
+    if [ "${1:-}" != "-y" ] && [ "${1:-}" != "--yes" ] && [ -t 0 ]
+    then
+        local confirm_opts=( "$i18n_no" "$i18n_yes" )
+        local confirm_idx=0
+        echo
+        inquirer list_input_index "$(gettext "确认重置 V2Ray 所有流量统计?")" confirm_opts confirm_idx
+        if [ "$confirm_idx" -ne 1 ]
+        then
+            Println "$(eval_gettext "\$info 已取消重置流量统计")\n"
+            return 0
+        fi
+    fi
+
+    local api_server
+    api_server=$(V2rayGetApiServer)
+
+    local bin
+    bin=$(ProxyDetectCoreBin "v2ray")
+    if [ ! -x "$bin" ]
+    then
+        Println "$(eval_gettext "\$error 未找到隔离版 aios-v2ray (\$bin)")\n"
+        return 1
+    fi
+
+    local err_msg=""
+    if err_msg=$("$bin" api stats -s "$api_server" -json -reset 2>&1)
+    then
+        Println "$(eval_gettext "\$info 已重置 V2Ray 流量统计")\n"
+    else
+        Println "$(eval_gettext "\$error 重置 V2Ray 流量统计失败 (\$api_server): \${err_msg}")\n"
+        return 1
+    fi
+}
