@@ -311,12 +311,14 @@ EOF
     out=$(XrayAddInbound)
     AssertInquirerDrained "XrayAddInbound (direct VLESS+XHTTP+REALITY) drained"
     ShowCaptured "XrayAddInbound (VLESS+XHTTP+REALITY)" "$out"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].protocol' "vless" "XrayAddInbound writes protocol=vless"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].port' "443" "XrayAddInbound writes numeric port"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].settings.users[0].id' "00000000-0000-4000-8000-000000000099" "XrayAddInbound writes settings.users[0].id"
-    AssertJsonEq "$X_CONFIG" '(.inbounds[0].streamSettings.method // .inbounds[0].streamSettings.network)' "xhttp" "XrayAddInbound writes method/network=xhttp"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].streamSettings.realitySettings.serverNames | length' "2" "XrayAddInbound splits serverNames"
-    AssertJsonEq "$X_CONFIG" '.inbounds[0].sniffing.routeOnly' "true" "XrayAddInbound writes sniffing.routeOnly"
+    local x_in0_proto x_in0_port x_in0_uid x_in0_net x_in0_sni_len x_in0_ro
+    IFS=$'\x1f' read -r x_in0_proto x_in0_port x_in0_uid x_in0_net x_in0_sni_len x_in0_ro <<< "$($JQ_FILE -r '[.inbounds[0].protocol, (.inbounds[0].port | tostring), .inbounds[0].settings.users[0].id, (.inbounds[0].streamSettings.method // .inbounds[0].streamSettings.network), (.inbounds[0].streamSettings.realitySettings.serverNames | length | tostring), (.inbounds[0].sniffing.routeOnly | tostring)] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "vless" "$x_in0_proto" "XrayAddInbound writes protocol=vless"
+    AssertEq "443" "$x_in0_port" "XrayAddInbound writes numeric port"
+    AssertEq "00000000-0000-4000-8000-000000000099" "$x_in0_uid" "XrayAddInbound writes settings.users[0].id"
+    AssertEq "xhttp" "$x_in0_net" "XrayAddInbound writes method/network=xhttp"
+    AssertEq "2" "$x_in0_sni_len" "XrayAddInbound splits serverNames"
+    AssertEq "true" "$x_in0_ro" "XrayAddInbound writes sniffing.routeOnly"
 
     # 6a2. XrayAddInbound (本地 nginx 反代入站: 自动加 nginx- 前缀 + VMess)
     MockInquirerReset
@@ -355,10 +357,12 @@ EOF
         "0" "0"
     XrayAddOutbound > /dev/null
     AssertInquirerDrained "XrayAddOutbound drained"
-    AssertJsonEq "$X_CONFIG" '.outbounds[0].protocol' "vless" "XrayAddOutbound writes protocol=vless"
-    AssertJsonEq "$X_CONFIG" '.outbounds[0].settings.address' "127.0.0.1" "XrayAddOutbound writes flat settings.address"
-    AssertJsonEq "$X_CONFIG" '.outbounds[0].targetStrategy' "UseIPv4" "XrayAddOutbound writes targetStrategy"
-    AssertJsonEq "$X_CONFIG" '.outbounds[0].streamSettings.sockopt.dialerProxy' "direct" "XrayAddOutbound writes sockopt.dialerProxy"
+    local x_out0_proto x_out0_addr x_out0_ts x_out0_dp
+    IFS=$'\x1f' read -r x_out0_proto x_out0_addr x_out0_ts x_out0_dp <<< "$($JQ_FILE -r '[.outbounds[0].protocol, .outbounds[0].settings.address, .outbounds[0].targetStrategy, .outbounds[0].streamSettings.sockopt.dialerProxy] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "vless" "$x_out0_proto" "XrayAddOutbound writes protocol=vless"
+    AssertEq "127.0.0.1" "$x_out0_addr" "XrayAddOutbound writes flat settings.address"
+    AssertEq "UseIPv4" "$x_out0_ts" "XrayAddOutbound writes targetStrategy"
+    AssertEq "direct" "$x_out0_dp" "XrayAddOutbound writes sockopt.dialerProxy"
 
     MockInquirerReset
     MockInquirerPush "0"
@@ -378,8 +382,10 @@ EOF
     MockInquirerPush "1" "223.5.5.5" "53" "" "geosite:cn" "geoip:cn" "geoip:private" "5000" "1" "1"
     XraySetDns > /dev/null
     AssertInquirerDrained "XraySetDns add server drained"
-    AssertJsonEq "$X_CONFIG" '.dns.servers[0].expectedIPs[0]' "geoip:cn" "XraySetDns writes expectedIPs"
-    AssertJsonEq "$X_CONFIG" '.dns.servers[0].finalQuery' "true" "XraySetDns writes finalQuery"
+    local x_dns0_exp x_dns0_fq
+    IFS=$'\x1f' read -r x_dns0_exp x_dns0_fq <<< "$($JQ_FILE -r '[.dns.servers[0].expectedIPs[0], (.dns.servers[0].finalQuery | tostring)] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "geoip:cn" "$x_dns0_exp" "XraySetDns writes expectedIPs"
+    AssertEq "true" "$x_dns0_fq" "XraySetDns writes finalQuery"
 
     MockInquirerReset
     MockInquirerPush "4" "UseSystem"
@@ -398,16 +404,20 @@ EOF
     MockInquirerPush "0" "0" "0" "0"
     XraySetRouting > /dev/null
     AssertInquirerDrained "XraySetRouting shortcut drained"
-    AssertJsonEq "$X_CONFIG" '.routing.rules[0].inboundTag[0]' "vless-new" "XraySetRouting shortcut links inbound"
-    AssertJsonEq "$X_CONFIG" '.routing.rules[0].outboundTag' "proxy-new" "XraySetRouting shortcut links outbound"
+    local x_r0_in x_r0_out
+    IFS=$'\x1f' read -r x_r0_in x_r0_out <<< "$($JQ_FILE -r '[.routing.rules[0].inboundTag[0], .routing.rules[0].outboundTag] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "vless-new" "$x_r0_in" "XraySetRouting shortcut links inbound"
+    AssertEq "proxy-new" "$x_r0_out" "XraySetRouting shortcut links outbound"
 
     MockInquirerReset
     MockInquirerPush "0" "1" "tcp" "rule-1" "geosite:cn" "" "443" "" "" "10.0.0.0/8" "" "" "http,tls" "vless-new" "" "" "" "proxy-new" ""
     XraySetRouting > /dev/null
     AssertInquirerDrained "XraySetRouting custom drained"
-    AssertJsonEq "$X_CONFIG" '.routing.rules[1].ruleTag' "rule-1" "XraySetRouting writes ruleTag"
-    AssertJsonEq "$X_CONFIG" '.routing.rules[1].domain[0]' "geosite:cn" "XraySetRouting writes singular domain"
-    AssertJsonEq "$X_CONFIG" '.routing.rules[1].sourceIP[0]' "10.0.0.0/8" "XraySetRouting writes sourceIP"
+    local x_r1_tag x_r1_dom x_r1_sip
+    IFS=$'\x1f' read -r x_r1_tag x_r1_dom x_r1_sip <<< "$($JQ_FILE -r '[.routing.rules[1].ruleTag, .routing.rules[1].domain[0], .routing.rules[1].sourceIP[0]] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "rule-1" "$x_r1_tag" "XraySetRouting writes ruleTag"
+    AssertEq "geosite:cn" "$x_r1_dom" "XraySetRouting writes singular domain"
+    AssertEq "10.0.0.0/8" "$x_r1_sip" "XraySetRouting writes sourceIP"
 
     MockInquirerReset
     MockInquirerPush "3" "0"
@@ -420,9 +430,11 @@ EOF
     MockInquirerPush "0" "" "60" "300" "1" "1" "512" "1" "1" "1"
     XraySetPolicy > /dev/null
     AssertInquirerDrained "XraySetPolicy auto level drained"
-    AssertJsonEq "$X_CONFIG" '.policy.levels["0"].bufferSize' "512" "XraySetPolicy writes levels.bufferSize"
-    AssertJsonEq "$X_CONFIG" '.policy.levels["0"].statsUserOnline' "true" "XraySetPolicy writes levels.statsUserOnline"
-    AssertJsonEq "$X_CONFIG" '.policy | has("level")' "false" "XraySetPolicy does not write invalid singular .policy.level"
+    local x_pol_buf x_pol_on x_pol_has_lvl
+    IFS=$'\x1f' read -r x_pol_buf x_pol_on x_pol_has_lvl <<< "$($JQ_FILE -r '[(.policy.levels["0"].bufferSize | tostring), (.policy.levels["0"].statsUserOnline | tostring), (.policy | has("level") | tostring)] | map(. // "" | tostring) | join("\u001f")' "$X_CONFIG")"
+    AssertEq "512" "$x_pol_buf" "XraySetPolicy writes levels.bufferSize"
+    AssertEq "true" "$x_pol_on" "XraySetPolicy writes levels.statsUserOnline"
+    AssertEq "false" "$x_pol_has_lvl" "XraySetPolicy does not write invalid singular .policy.level"
 
     MockInquirerReset
     MockInquirerPush "2" "1"

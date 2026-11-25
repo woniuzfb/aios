@@ -383,12 +383,8 @@ RunSuiteCoreMatrix()
         AssertOk "QUAL-04: reality preset #1 passes real xray v26.11.9 -test" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.11.9/xray" "$reality_cfg_1" "json" "$geodata_dir"
         AssertOk "QUAL-04: reality preset #2 passes real xray v26.11.9 -test" ProxyTestConfigWithBinary "xray" "${cores_dir}/xray/v26.11.9/xray" "$reality_cfg_2" "json" "$geodata_dir"
         local r_uuid_1 r_uuid_2 r_sid_1 r_sid_2 r_pk_1 r_pk_2
-        r_uuid_1=$($JQ_FILE -r '.inbounds[0].settings.users[0].id // ""' "$reality_cfg_1")
-        r_uuid_2=$($JQ_FILE -r '.inbounds[0].settings.users[0].id // ""' "$reality_cfg_2")
-        r_sid_1=$($JQ_FILE -r '.inbounds[0].streamSettings.realitySettings.shortIds[0] // ""' "$reality_cfg_1")
-        r_sid_2=$($JQ_FILE -r '.inbounds[0].streamSettings.realitySettings.shortIds[0] // ""' "$reality_cfg_2")
-        r_pk_1=$($JQ_FILE -r '.inbounds[0].streamSettings.realitySettings.privateKey // ""' "$reality_cfg_1")
-        r_pk_2=$($JQ_FILE -r '.inbounds[0].streamSettings.realitySettings.privateKey // ""' "$reality_cfg_2")
+        IFS=$'\x1f' read -r r_uuid_1 r_sid_1 r_pk_1 <<< "$($JQ_FILE -r '[(.inbounds[0].settings.users[0].id // ""), (.inbounds[0].streamSettings.realitySettings.shortIds[0] // ""), (.inbounds[0].streamSettings.realitySettings.privateKey // "")] | map(. // "" | tostring) | join("\u001f")' "$reality_cfg_1")"
+        IFS=$'\x1f' read -r r_uuid_2 r_sid_2 r_pk_2 <<< "$($JQ_FILE -r '[(.inbounds[0].settings.users[0].id // ""), (.inbounds[0].streamSettings.realitySettings.shortIds[0] // ""), (.inbounds[0].streamSettings.realitySettings.privateKey // "")] | map(. // "" | tostring) | join("\u001f")' "$reality_cfg_2")"
         AssertOk "QUAL-04: generated UUID is valid and non-hardcoded" test -n "$r_uuid_1" -a "$r_uuid_1" != "00000000-0000-4000-8000-000000000000" -a "$r_uuid_1" != "$r_uuid_2"
         AssertOk "QUAL-04: generated shortId is random 8-hex and non-hardcoded" test "${#r_sid_1}" -eq 8 -a "$r_sid_1" != "01234567" -a "$r_sid_1" != "$r_sid_2"
         AssertOk "QUAL-04: generated REALITY privateKey is random per call" test -n "$r_pk_1" -a "$r_pk_1" != "$r_pk_2"
@@ -749,12 +745,13 @@ RunSuiteCoreMatrix()
             local arch01_xdg="$tmpd/arch01_xdg"
 
             # ARCH-01a: jsonv5 WebSocket transport alias is "ws"
-            local ws_v5_st1 ws_v5_st2
+            local ws_v5_st1 ws_v5_st2 ws_v5_tr1 ws_v5_np1
             ws_v5_st1=$(ProxyBuildStreamSettings "v2ray" "5.56.0" "jsonv5" "ws" "tls" '{"path":"/ws-v5","sni":"ws.example.test","alpn":["h2"]}')
             ws_v5_st2=$(ProxyBuildStreamSettings "v2ray" "5.56.0" "jsonv5" "websocket" "none" '{"path":"/ws-v5b"}')
-            AssertEq "ws" "$(printf '%s' "$ws_v5_st1" | $JQ_FILE -r '.transport')" "ARCH-01: jsonv5 ws stream uses transport=ws"
+            IFS=$'\x1f' read -r ws_v5_tr1 ws_v5_np1 <<< "$(printf '%s' "$ws_v5_st1" | $JQ_FILE -r '[.transport, .securitySettings.nextProtocol[0]] | map(. // "" | tostring) | join("\u001f")')"
+            AssertEq "ws" "$ws_v5_tr1" "ARCH-01: jsonv5 ws stream uses transport=ws"
             AssertEq "ws" "$(printf '%s' "$ws_v5_st2" | $JQ_FILE -r '.transport')" "ARCH-01: jsonv5 websocket alias maps to transport=ws"
-            AssertEq "h2" "$(printf '%s' "$ws_v5_st1" | $JQ_FILE -r '.securitySettings.nextProtocol[0]')" "ARCH-01: jsonv5 maps alpn to securitySettings.nextProtocol"
+            AssertEq "h2" "$ws_v5_np1" "ARCH-01: jsonv5 maps alpn to securitySettings.nextProtocol"
 
             # ARCH-01b: jsonv4 <-> jsonv5 bidirectional conversion with tlsSettings <-> securitySettings & regular protocols + real v2ray v5.56.0 test
             local test_crt="$tmpd/arch01.crt" test_key="$tmpd/arch01.key"
@@ -796,19 +793,23 @@ RunSuiteCoreMatrix()
             }' > "$bi_v4"
             AssertOk "ARCH-01: source jsonv4 passes real v2ray v5.56.0 test (-format json)" ProxyTestConfigWithBinary "v2ray" "$v5_bin" "$bi_v4" "jsonv4" "$geodata_dir" "$arch01_xdg"
             AssertOk "ARCH-01: ProxyAdaptConfigForTarget converts jsonv4 -> jsonv5" ProxyAdaptConfigForTarget "v2ray" "$bi_v4" "$bi_v5" "5.56.0" "jsonv5"
-            AssertJsonEq "$bi_v5" '.inbounds[0].streamSettings.transport' "ws" "ARCH-01: jsonv4 -> jsonv5 maps ws to transport=ws"
-            AssertJsonEq "$bi_v5" '.inbounds[0].streamSettings.securitySettings.serverName' "ws.example.test" "ARCH-01: jsonv4 -> jsonv5 maps tlsSettings to securitySettings"
-            AssertJsonEq "$bi_v5" '.inbounds[0].streamSettings.securitySettings.nextProtocol[0]' "h2" "ARCH-01: jsonv4 -> jsonv5 maps alpn to nextProtocol"
-            AssertJsonEq "$bi_v5" '.inbounds[0].streamSettings.securitySettings.certificate[0].certificateFile' "$test_crt" "ARCH-01: jsonv4 -> jsonv5 maps certificates to certificate"
-            AssertJsonEq "$bi_v5" '.outbounds[3].settings.server[0].address' "127.0.0.1" "ARCH-01: jsonv4 -> jsonv5 maps hysteria2 servers to server"
+            local bi5_tr bi5_sni bi5_np bi5_crt bi5_hy2
+            IFS=$'\x1f' read -r bi5_tr bi5_sni bi5_np bi5_crt bi5_hy2 <<< "$($JQ_FILE -r '[.inbounds[0].streamSettings.transport, .inbounds[0].streamSettings.securitySettings.serverName, .inbounds[0].streamSettings.securitySettings.nextProtocol[0], .inbounds[0].streamSettings.securitySettings.certificate[0].certificateFile, .outbounds[3].settings.server[0].address] | map(. // "" | tostring) | join("\u001f")' "$bi_v5")"
+            AssertEq "ws" "$bi5_tr" "ARCH-01: jsonv4 -> jsonv5 maps ws to transport=ws"
+            AssertEq "ws.example.test" "$bi5_sni" "ARCH-01: jsonv4 -> jsonv5 maps tlsSettings to securitySettings"
+            AssertEq "h2" "$bi5_np" "ARCH-01: jsonv4 -> jsonv5 maps alpn to nextProtocol"
+            AssertEq "$test_crt" "$bi5_crt" "ARCH-01: jsonv4 -> jsonv5 maps certificates to certificate"
+            AssertEq "127.0.0.1" "$bi5_hy2" "ARCH-01: jsonv4 -> jsonv5 maps hysteria2 servers to server"
             AssertOk "ARCH-01: converted jsonv5 passes real v2ray v5.56.0 test (-format jsonv5)" ProxyTestConfigWithBinary "v2ray" "$v5_bin" "$bi_v5" "jsonv5" "$geodata_dir" "$arch01_xdg"
 
             AssertOk "ARCH-01: ProxyAdaptConfigForTarget converts jsonv5 -> jsonv4" ProxyAdaptConfigForTarget "v2ray" "$bi_v5" "$bi_rt_v4" "5.56.0" "jsonv4"
-            AssertJsonEq "$bi_rt_v4" '.inbounds[0].streamSettings.network' "ws" "ARCH-01: jsonv5 -> jsonv4 restores network=ws"
-            AssertJsonEq "$bi_rt_v4" '.inbounds[0].streamSettings.tlsSettings.serverName' "ws.example.test" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.serverName"
-            AssertJsonEq "$bi_rt_v4" '.inbounds[0].streamSettings.tlsSettings.alpn[0]' "h2" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.alpn"
-            AssertJsonEq "$bi_rt_v4" '.inbounds[0].streamSettings.tlsSettings.certificates[0].certificateFile' "$test_crt" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.certificates"
-            AssertJsonEq "$bi_rt_v4" '.outbounds[3].settings.servers[0].address' "127.0.0.1" "ARCH-01: jsonv5 -> jsonv4 restores hysteria2 servers"
+            local bi4_net bi4_sni bi4_alpn bi4_crt bi4_hy2
+            IFS=$'\x1f' read -r bi4_net bi4_sni bi4_alpn bi4_crt bi4_hy2 <<< "$($JQ_FILE -r '[.inbounds[0].streamSettings.network, .inbounds[0].streamSettings.tlsSettings.serverName, .inbounds[0].streamSettings.tlsSettings.alpn[0], .inbounds[0].streamSettings.tlsSettings.certificates[0].certificateFile, .outbounds[3].settings.servers[0].address] | map(. // "" | tostring) | join("\u001f")' "$bi_rt_v4")"
+            AssertEq "ws" "$bi4_net" "ARCH-01: jsonv5 -> jsonv4 restores network=ws"
+            AssertEq "ws.example.test" "$bi4_sni" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.serverName"
+            AssertEq "h2" "$bi4_alpn" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.alpn"
+            AssertEq "$test_crt" "$bi4_crt" "ARCH-01: jsonv5 -> jsonv4 restores tlsSettings.certificates"
+            AssertEq "127.0.0.1" "$bi4_hy2" "ARCH-01: jsonv5 -> jsonv4 restores hysteria2 servers"
             AssertOk "ARCH-01: round-tripped jsonv4 passes real v2ray v5.56.0 test (-format json)" ProxyTestConfigWithBinary "v2ray" "$v5_bin" "$bi_rt_v4" "jsonv4" "$geodata_dir" "$arch01_xdg"
 
             # ARCH-02: jsonv5 inbound menu excludes shadowsocks2022; vmess/vless/trojan/http/socks inbounds + hysteria2 outbound (incl. uri_codec) pass real v2ray v5.56.0 test -format jsonv5; delete_inbound_account & delete_outbound_account compatible with jsonv5

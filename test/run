@@ -594,16 +594,57 @@ FormatElapsedMs()
     awk -v v="$ms" 'BEGIN { printf "%.1fs", v / 1000 }'
 }
 
+ArrayContains()
+{
+    local needle="$1"
+    shift
+    local item=""
+
+    for item in "$@"
+    do
+        if [ "$item" == "$needle" ]
+        then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 BASH_BIN="${BASH:-bash}"
 SCRIPT_PATH="$0"
+SCHEDULE_SUITES=("${SUITES[@]}")
+
+if [ "$TARGET_SUITE" == "all" ] && [ "$JOBS" -gt 1 ]
+then
+    lpt_priority=(e2e core_matrix matrix xray v2ray types core iptv nginx)
+    SCHEDULE_SUITES=()
+
+    for p_suite in "${lpt_priority[@]}"
+    do
+        if ArrayContains "$p_suite" "${SUITES[@]}" && ! ArrayContains "$p_suite" ${SCHEDULE_SUITES[@]+"${SCHEDULE_SUITES[@]}"}
+        then
+            SCHEDULE_SUITES+=("$p_suite")
+        fi
+    done
+
+    for s_item in "${SUITES[@]}"
+    do
+        if ! ArrayContains "$s_item" ${SCHEDULE_SUITES[@]+"${SCHEDULE_SUITES[@]}"}
+        then
+            SCHEDULE_SUITES+=("$s_item")
+        fi
+    done
+fi
+
 NEXT_IDX=0
-TOTAL_SUITES="${#SUITES[@]}"
+TOTAL_SUITES="${#SCHEDULE_SUITES[@]}"
 
 while [ "$NEXT_IDX" -lt "$TOTAL_SUITES" ] || [ "${#ACTIVE_PIDS[@]}" -gt 0 ]
 do
     while [ "$NEXT_IDX" -lt "$TOTAL_SUITES" ] && [ "${#ACTIVE_PIDS[@]}" -lt "$JOBS" ]
     do
-        suite="${SUITES[$NEXT_IDX]}"
+        suite="${SCHEDULE_SUITES[$NEXT_IDX]}"
         wdir="$AIOS_TEST_RUN_DIR/$suite"
         mkdir -p "$wdir"
 
@@ -619,7 +660,7 @@ do
             worker_args+=(--show-output)
         fi
 
-        "$BASH_BIN" "$SCRIPT_PATH" "${worker_args[@]}" > "$wdir/stdout.log" 2> "$wdir/stderr.log" &
+        AIOS_TEST_WORKER_JOBS="$JOBS" "$BASH_BIN" "$SCRIPT_PATH" "${worker_args[@]}" > "$wdir/stdout.log" 2> "$wdir/stderr.log" &
         wpid=$!
 
         ACTIVE_PIDS+=("$wpid")

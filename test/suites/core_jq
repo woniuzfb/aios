@@ -1,20 +1,56 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2030,SC2031,SC2034,SC2329
 
+_CoreJqAssertSyntaxGroup()
+{
+    local group_label="$1"
+    shift
+    local total="$#"
+    local failed_count=0
+    local group_errs=""
+    local f syntax_err
+
+    for f in "$@"
+    do
+        syntax_err=""
+
+        if ! syntax_err=$(bash -n "$f" 2>&1)
+        then
+            failed_count=$((failed_count + 1))
+            group_errs="${group_errs}  ${f#"$DEV_PATH/"}: ${syntax_err}"$'\n'
+        fi
+    done
+
+    if [ "$failed_count" -eq 0 ]
+    then
+        RecordPass "syntax: ${group_label} (${total} files)"
+    else
+        RecordFail "syntax: ${group_label} (${failed_count}/${total} failed)" "$group_errs"
+    fi
+}
+
 RunSuiteCoreJq()
 {
     printf '\n=== Suite: core & utils/jq ===\n'
 
-    local f
-    for f in \
+    _CoreJqAssertSyntaxGroup "core & build" \
         "$DEV_PATH/core" "$DEV_PATH/env" "$DEV_PATH/ver" \
         "$DEV_PATH/build" "$DEV_PATH/make" "$DEV_PATH/debug" \
-        "$DEV_PATH/utils/jq" "$DEV_PATH/src/proxy/common" \
-        "$DEV_PATH/src/v2" "$DEV_PATH/src/x" \
+        "$DEV_PATH/utils/jq" "$DEV_PATH/src/v2" "$DEV_PATH/src/x"
+
+    _CoreJqAssertSyntaxGroup "proxy core" \
+        "$DEV_PATH/src/proxy/common" "$DEV_PATH/src/proxy/core_features" \
+        "$DEV_PATH/src/proxy/validate" "$DEV_PATH/src/proxy/core_manager" \
+        "$DEV_PATH/src/proxy/stream_editor" "$DEV_PATH/src/proxy/uri_codec" \
+        "$DEV_PATH/src/proxy/presets"
+
+    _CoreJqAssertSyntaxGroup "nginx" \
         "$DEV_PATH/src/nginx/get_config" "$DEV_PATH/src/nginx/list_domain" \
         "$DEV_PATH/src/nginx/list_localhost" "$DEV_PATH/src/nginx/get_stream" \
         "$DEV_PATH/src/nginx/check_localhost" "$DEV_PATH/src/nginx/config_directive" \
-        "$DEV_PATH/src/v2ray/list_nginx_domain" \
+        "$DEV_PATH/src/v2ray/list_nginx_domain"
+
+    _CoreJqAssertSyntaxGroup "xray" \
         "$DEV_PATH/src/xray/get_inbounds" "$DEV_PATH/src/xray/list_inbounds" \
         "$DEV_PATH/src/xray/get_outbounds" "$DEV_PATH/src/xray/list_outbounds" \
         "$DEV_PATH/src/xray/get_routing" "$DEV_PATH/src/xray/get_burstObservatory" \
@@ -28,6 +64,9 @@ RunSuiteCoreJq()
         "$DEV_PATH/src/xray/list_inbound_accounts" "$DEV_PATH/src/xray/list_outbound_accounts" \
         "$DEV_PATH/src/xray/stats" "$DEV_PATH/src/xray/list_inbound_share" \
         "$DEV_PATH/src/xray/config_domain" "$DEV_PATH/src/xray/menu" \
+        "$DEV_PATH/src/xray/set_advanced"
+
+    _CoreJqAssertSyntaxGroup "v2ray" \
         "$DEV_PATH/src/v2ray/get_inbounds" "$DEV_PATH/src/v2ray/list_inbounds" \
         "$DEV_PATH/src/v2ray/list_inbound_accounts" "$DEV_PATH/src/v2ray/list_inbound_share" \
         "$DEV_PATH/src/v2ray/add_inbound_account" "$DEV_PATH/src/v2ray/delete_inbound_account" \
@@ -40,24 +79,12 @@ RunSuiteCoreJq()
         "$DEV_PATH/src/v2ray/list_policy" "$DEV_PATH/src/v2ray/set_policy" \
         "$DEV_PATH/src/v2ray/list_reverse" "$DEV_PATH/src/v2ray/set_reverse" \
         "$DEV_PATH/src/v2ray/stats" "$DEV_PATH/src/v2ray/set_advanced" \
-        "$DEV_PATH/src/xray/set_advanced" \
-        "$DEV_PATH/src/proxy/core_features" "$DEV_PATH/src/proxy/validate" \
-        "$DEV_PATH/src/proxy/core_manager" "$DEV_PATH/src/proxy/stream_editor" \
-        "$DEV_PATH/src/proxy/uri_codec" "$DEV_PATH/src/proxy/presets" \
-        "$DEV_PATH/src/v2ray/menu" \
+        "$DEV_PATH/src/v2ray/menu"
+
+    _CoreJqAssertSyntaxGroup "openlist, cloudflare & lhh" \
         "$DEV_PATH/src/openlist/api" "$DEV_PATH/src/openlist/app" "$DEV_PATH/src/openlist/acc" \
         "$DEV_PATH/src/cloudflare/get_workers" "$DEV_PATH/src/cloudflare/list_user" \
         "$DEV_PATH/src/cloudflare/monitor_workers" "$DEV_PATH/src/lhh"
-    do
-        local syntax_err=""
-
-        if syntax_err=$(bash -n "$f" 2>&1)
-        then
-            RecordPass "syntax: ${f#"$DEV_PATH/"}"
-        else
-            RecordFail "syntax: ${f#"$DEV_PATH/"}" "$syntax_err"
-        fi
-    done
 
     local sh_files
     sh_files=$(find "$DEV_PATH/test" "$DEV_PATH/src" "$DEV_PATH/utils" -name '*.sh' 2> /dev/null || true)

@@ -282,15 +282,19 @@ EOF
     MockInquirerPush "0" "0" "0" "0"
     V2raySetRouting > /dev/null
     AssertInquirerDrained "V2raySetRouting shortcut drained"
-    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].type' "field" "V2raySetRouting shortcut writes type=field"
-    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].inboundTag[0]' "vmess-ws" "V2raySetRouting shortcut links inbound"
+    local v2_r_type v2_r_in
+    IFS=$'\x1f' read -r v2_r_type v2_r_in <<< "$($JQ_FILE -r '[.routing.rules[-1].type, .routing.rules[-1].inboundTag[0]] | map(. // "" | tostring) | join("\u001f")' "$V2_CONFIG")"
+    AssertEq "field" "$v2_r_type" "V2raySetRouting shortcut writes type=field"
+    AssertEq "vmess-ws" "$v2_r_in" "V2raySetRouting shortcut links inbound"
 
     MockInquirerReset
     MockInquirerPush "0" "1" "tcp" "geosite:cn" "" "443" "" "10.0.0.0/8" "" "http,tls" "" "vmess-ws" "proxy-vmess" ""
     V2raySetRouting > /dev/null
     AssertInquirerDrained "V2raySetRouting custom drained"
-    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].domains[0]' "geosite:cn" "V2raySetRouting writes plural domains"
-    AssertJsonEq "$V2_CONFIG" '.routing.rules[-1].source[0]' "10.0.0.0/8" "V2raySetRouting writes source"
+    local v2_r_dom v2_r_src
+    IFS=$'\x1f' read -r v2_r_dom v2_r_src <<< "$($JQ_FILE -r '[.routing.rules[-1].domains[0], .routing.rules[-1].source[0]] | map(. // "" | tostring) | join("\u001f")' "$V2_CONFIG")"
+    AssertEq "geosite:cn" "$v2_r_dom" "V2raySetRouting writes plural domains"
+    AssertEq "10.0.0.0/8" "$v2_r_src" "V2raySetRouting writes source"
 
     MockInquirerReset
     MockInquirerPush "2" "IPIfNonMatch" "mph"
@@ -302,9 +306,11 @@ EOF
     MockInquirerPush "0" "1" "4" "300" "2" "5" "512" "1" "0"
     V2raySetPolicy > /dev/null
     AssertInquirerDrained "V2raySetPolicy add level drained"
-    AssertJsonEq "$V2_CONFIG" '.policy.levels["1"].bufferSize' "512" "V2raySetPolicy writes levels.bufferSize"
-    AssertJsonEq "$V2_CONFIG" '.policy.levels["1"] | has("statsUserOnline")' "false" "V2raySetPolicy omits Xray-only statsUserOnline"
-    AssertJsonEq "$V2_CONFIG" '.policy | has("level")' "false" "V2raySetPolicy does not write invalid singular .policy.level"
+    local v2_pol_buf v2_pol_has_on v2_pol_has_lvl
+    IFS=$'\x1f' read -r v2_pol_buf v2_pol_has_on v2_pol_has_lvl <<< "$($JQ_FILE -r '[(.policy.levels["1"].bufferSize | tostring), (.policy.levels["1"] | has("statsUserOnline") | tostring), (.policy | has("level") | tostring)] | map(. // "" | tostring) | join("\u001f")' "$V2_CONFIG")"
+    AssertEq "512" "$v2_pol_buf" "V2raySetPolicy writes levels.bufferSize"
+    AssertEq "false" "$v2_pol_has_on" "V2raySetPolicy omits Xray-only statsUserOnline"
+    AssertEq "false" "$v2_pol_has_lvl" "V2raySetPolicy does not write invalid singular .policy.level"
 
     MockInquirerReset
     MockInquirerPush "1" "1"

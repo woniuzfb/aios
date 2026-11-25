@@ -1,84 +1,13 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2030,SC2031
 
-RunSuiteE2eAios()
+_E2eRunXrayPhase()
 {
-    printf '\n=== Suite: e2e (real generated aios.sh via PTY) ===\n'
+    local built_aios="$1"
+    local pty_mode="$2"
 
-    # Build aios.sh into a temporary file so running tests never mutates the repo working tree
-    local e2e_built_aios e2e_build_err e2e_build_rc=0
-    e2e_built_aios=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build.XXXXXX")
-    e2e_build_err=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build-err.XXXXXX")
-    (
-        set -euo pipefail
-        DEV_PATH="$REPO_ROOT"
-        BUILD_LIBRARY_ONLY=true
-        # shellcheck disable=SC2329
-        Include()
-        {
-            local p="$DEV_PATH" n="$1"
-            while [[ $n =~ \/ ]]
-            do
-                p="$p/${n%%/*}"
-                n="${n#*/}"
-            done
-            shift
-            # shellcheck disable=SC1090
-            . "$p/$n" "$@"
-        }
-        # shellcheck disable=SC1091
-        . "$REPO_ROOT/ver"
-        # shellcheck disable=SC1091
-        . "$REPO_ROOT/env"
-        info="[INFO]"
-        Println()
-        {
-            printf '%b\n' "$*"
-        }
-        # shellcheck disable=SC1091
-        . "$REPO_ROOT/utils/shfile"
-        Spinner()
-        {
-            shift
-            "$@"
-        }
-        # shellcheck disable=SC1091
-        . "$REPO_ROOT/build"
-        BuildShFile "$e2e_built_aios" > /dev/null
-    ) 2> "$e2e_build_err" || e2e_build_rc=$?
-
-    if [ "$e2e_build_rc" -ne 0 ] || [ -s "$e2e_build_err" ]
-    then
-        local build_detail=""
-        build_detail=$(head -n 20 "$e2e_build_err")
-        RecordFail "e2e: BuildShFile exited ${e2e_build_rc}" "$build_detail"
-        rm -f "$e2e_built_aios" "$e2e_build_err"
-        return 1
-    fi
-    rm -f "$e2e_build_err"
-
-    local syntax_err=""
-
-    if syntax_err=$(bash -n "$e2e_built_aios" 2>&1)
-    then
-        RecordPass "e2e: rebuilt aios.sh passes bash -n"
-    else
-        RecordFail "e2e: rebuilt aios.sh failed bash -n" "$syntax_err"
-        rm -f "$e2e_built_aios"
-        return 1
-    fi
-
-    local dup_funcs
-    dup_funcs=$(grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_:]*\(\)[[:space:]]*$' "$e2e_built_aios" \
-        | sed -E 's/^[[:space:]]+//; s/\(\)[[:space:]]*$//' \
-        | sort | uniq -d)
-    AssertEq "" "$dup_funcs" "e2e: rebuilt aios.sh has zero duplicate function definitions"
-
-    E2eSandboxInit "$e2e_built_aios"
-    rm -f "$e2e_built_aios"
+    E2eSandboxInit "$built_aios"
     local x_cfg="$E2E_SANDBOX_DIR/aios/proxy/xray/config.json"
-    local v2_cfg="$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
-    local pty_mode=""
-    [ "$SHOW_OUTPUT" -eq 1 ] && pty_mode="--verbose"
 
     # ------------------------------------------------------------------
     # XRAY E2E — Multi-inbound matrix (xray_full_matrix.json)
@@ -174,12 +103,160 @@ RunSuiteE2eAios()
     out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
     AssertContains "$out" "请先添加入站" "e2e x empty config: handles empty inbounds without crash"
 
+    # 16a. Dynamic generated-config multi-inbound matrix through real aios.sh (Xray 6 protocols in 3 PTY launches)
+    cat > "$x_cfg" <<'XDYNJSON'
+{
+  "inbounds": [
+    {
+      "tag": "dyn-vless",
+      "listen": "0.0.0.0",
+      "port": 15000,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "users": [{"id": "11111111-1111-4111-8111-111111111111", "email": "u1@matrix.test", "level": 0}]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {"path": "/xhttp-m", "mode": "auto", "host": "xh.matrix.test"},
+        "realitySettings": {"target": "www.example.com:443", "serverNames": ["www.example.com"], "privateKey": "priv-m", "shortIds": ["abcd1234"], "mldsa65Seed": "seed-m"}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    },
+    {
+      "tag": "dyn-vmess",
+      "listen": "0.0.0.0",
+      "port": 15001,
+      "protocol": "vmess",
+      "settings": {
+        "users": [{"id": "33333333-3333-4333-8333-333333333333", "email": "vm@matrix.test", "level": 0}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {"path": "/ws-m", "host": "ws.matrix.test", "heartbeatPeriod": 30},
+        "tlsSettings": {"serverName": "tls.matrix.test", "alpn": ["h2", "http/1.1"], "certificates": [{"usage": "encipherment", "certificateFile": "/etc/ssl/m.crt", "keyFile": "/etc/ssl/m.key", "ocspStapling": 3600}]}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    },
+    {
+      "tag": "dyn-trojan",
+      "listen": "0.0.0.0",
+      "port": 15002,
+      "protocol": "trojan",
+      "settings": {
+        "users": [{"password": "trj-pass-123", "email": "tr@matrix.test", "level": 0}],
+        "fallbacks": [{"dest": 8080, "xver": 1}]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "tls",
+        "grpcSettings": {"serviceName": "grpc-m", "multiMode": true},
+        "tlsSettings": {"serverName": "tls.matrix.test", "alpn": ["h2", "http/1.1"], "certificates": [{"usage": "encipherment", "certificateFile": "/etc/ssl/m.crt", "keyFile": "/etc/ssl/m.key", "ocspStapling": 3600}]}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    },
+    {
+      "tag": "dyn-shadowsocks",
+      "listen": "0.0.0.0",
+      "port": 15003,
+      "protocol": "shadowsocks",
+      "settings": {
+        "method": "2022-blake3-aes-256-gcm",
+        "password": "ss-password-base64==",
+        "network": "tcp,udp",
+        "ivCheck": true
+      },
+      "streamSettings": {"network": "raw", "security": "none", "rawSettings": {"header": {"type": "none"}}},
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    },
+    {
+      "tag": "dyn-hysteria",
+      "listen": "0.0.0.0",
+      "port": 15004,
+      "protocol": "hysteria",
+      "settings": {
+        "version": 2,
+        "users": [{"auth": "hy2-secret-token", "email": "hy2@matrix.test"}]
+      },
+      "streamSettings": {
+        "network": "hysteria",
+        "security": "tls",
+        "hysteriaSettings": {"version": 2, "congestion": "bbr"},
+        "tlsSettings": {"serverName": "tls.matrix.test", "alpn": ["h2", "http/1.1"], "certificates": [{"usage": "encipherment", "certificateFile": "/etc/ssl/m.crt", "keyFile": "/etc/ssl/m.key", "ocspStapling": 3600}]}
+      },
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    },
+    {
+      "tag": "dyn-wireguard",
+      "listen": "0.0.0.0",
+      "port": 15005,
+      "protocol": "wireguard",
+      "settings": {
+        "mtu": 1420,
+        "secretKey": "wg-priv-key",
+        "peers": [{"publicKey": "wg-pub-1", "allowedIPs": ["10.0.0.2/32"], "keepAlive": 25}]
+      },
+      "streamSettings": {"network": "raw", "security": "none", "rawSettings": {"header": {"type": "none"}}},
+      "sniffing": {"enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": true}
+    }
+  ]
+}
+XDYNJSON
+
+    local dyn_spec d_proto d_net d_sec d_expect
+
+    out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
+    ShowCaptured "E2E dynamic x (6-protocol multi-inbound vless share)" "$out"
+
+    local vmess_out="" trojan_out=""
+    vmess_out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
+    ShowCaptured "E2E dynamic x (6-protocol multi-inbound vmess share)" "$vmess_out"
+
+    trojan_out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<DOWN><DOWN><ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
+    ShowCaptured "E2E dynamic x (6-protocol multi-inbound trojan share)" "$trojan_out"
+
+    for dyn_spec in \
+        "vless|xhttp|reality|vless://" \
+        "vmess|ws|tls|vmess://" \
+        "trojan|grpc|tls|trojan://" \
+        "shadowsocks|raw|none|2022-blake3" \
+        "hysteria|hysteria|tls|hysteria" \
+        "wireguard|raw|none|wg-pub-1"
+    do
+        IFS="|" read -r d_proto d_net d_sec d_expect <<< "$dyn_spec"
+        AssertContains "$out" "dyn-${d_proto}" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders tag"
+
+        if [ "$d_proto" == "vmess" ]
+        then
+            AssertContains "$vmess_out" "$d_expect" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
+        elif [ "$d_proto" == "trojan" ]
+        then
+            AssertContains "$trojan_out" "$d_expect" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
+        else
+            AssertContains "$out" "$d_expect" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
+        fi
+    done
+
+    E2eSandboxCleanup
+}
+
+_E2eRunV2rayPhase()
+{
+    local built_aios="$1"
+    local pty_mode="$2"
+
+    E2eSandboxInit "$built_aios"
+    local v2_cfg="$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
+
     # ------------------------------------------------------------------
     # V2RAY E2E — Multi-inbound matrix (v2ray_full_matrix.json)
     # ------------------------------------------------------------------
     E2eLoadFixture v2ray v2ray_full_matrix.json
 
     # 12. V2Ray Menu 5: 选择入站 1 (vmess-direct) -> 只输出 vmess 分享链接
+    local out
     out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
     ShowCaptured "E2E v2 menu 5 (inbound 1: vmess-direct)" "$out"
     AssertContains "$out" "v2-alice@example.test" "e2e v2 menu 5: inbound 1 shows v2-alice"
@@ -212,22 +289,62 @@ RunSuiteE2eAios()
     out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"21<ENTER>"},{"wait":"选择要删除的入站","send":"<DOWN><ENTER>"}]' "$pty_mode")
     AssertJsonEq "$v2_cfg" '.inbounds | length' "1" "e2e v2 menu 21: deletes inbound 2"
 
-    # 16. Dynamic generated-config rotation through real aios.sh (Xray + V2Ray diverse protocols)
+    # 16b. Dynamic generated-config multi-inbound matrix through real aios.sh (V2Ray 3 protocols in 1 launch)
+    cat > "$v2_cfg" <<'V2DYNJSON'
+{
+  "inbounds": [
+    {
+      "tag": "v2-vmess",
+      "listen": "0.0.0.0",
+      "port": 16000,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [{"id": "44444444-4444-4444-8444-444444444444", "email": "v2m@matrix.test", "level": 0}]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {"path": "/v2-ws", "headers": {"Host": "v2.matrix.test"}},
+        "tlsSettings": {"serverName": "v2.matrix.test", "certificates": [{"certificateFile": "/etc/ssl/v2.crt", "keyFile": "/etc/ssl/v2.key"}]}
+      }
+    },
+    {
+      "tag": "v2-vless",
+      "listen": "0.0.0.0",
+      "port": 16001,
+      "protocol": "vless",
+      "settings": {
+        "decryption": "none",
+        "clients": [{"id": "55555555-5555-4555-8555-555555555555", "email": "v2vl@matrix.test", "level": 0}]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "none",
+        "grpcSettings": {"serviceName": "v2-grpc"}
+      }
+    },
+    {
+      "tag": "v2-hysteria2",
+      "listen": "0.0.0.0",
+      "port": 16002,
+      "protocol": "hysteria2",
+      "settings": {
+        "users": [{"password": "v2-hy2-pass", "email": "v2hy2@matrix.test"}]
+      },
+      "streamSettings": {
+        "network": "hysteria2",
+        "security": "tls",
+        "tlsSettings": {"serverName": "v2.matrix.test", "certificates": [{"certificateFile": "/etc/ssl/v2.crt", "keyFile": "/etc/ssl/v2.key"}]}
+      }
+    }
+  ]
+}
+V2DYNJSON
+
     local dyn_spec d_proto d_net d_sec d_expect
-    for dyn_spec in \
-        "vless|xhttp|reality|vless://" \
-        "vmess|ws|tls|vmess://" \
-        "trojan|grpc|tls|trojan://" \
-        "shadowsocks|raw|none|2022-blake3" \
-        "hysteria|hysteria|tls|hysteria" \
-        "wireguard|raw|none|wg-pub-1"
-    do
-        IFS="|" read -r d_proto d_net d_sec d_expect <<< "$dyn_spec"
-        _MatrixBuildXrayInbound "$d_proto" "$d_net" "$d_sec" "dyn-${d_proto}" 15000 > "$x_cfg"
-        out=$(E2eRunPty x '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
-        AssertContains "$out" "dyn-${d_proto}" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders tag"
-        AssertContains "$out" "$d_expect" "e2e dynamic x (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
-    done
+
+    out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"},{"wait":"选择查看账号明细的入站","send":"<ENTER>"},{"wait":"分享链接","send":""}]' "$pty_mode")
+    ShowCaptured "E2E dynamic v2 (3-protocol multi-inbound)" "$out"
 
     for dyn_spec in \
         "vmess|ws|tls|vmess://" \
@@ -235,11 +352,220 @@ RunSuiteE2eAios()
         "hysteria2|hysteria2|tls|hysteria2"
     do
         IFS="|" read -r d_proto d_net d_sec d_expect <<< "$dyn_spec"
-        _MatrixBuildV2rayConfig "$d_proto" "$d_net" "$d_sec" "v2-${d_proto}" 16000 > "$v2_cfg"
-        out=$(E2eRunPty v2 '[{"wait":"打开面板","send":"5<ENTER>"},{"wait":"选择显示的范围","send":"<ENTER>"}]' "$pty_mode")
         AssertContains "$out" "v2-${d_proto}" "e2e dynamic v2 (${d_proto}/${d_net}/${d_sec}) renders tag"
         AssertContains "$out" "$d_expect" "e2e dynamic v2 (${d_proto}/${d_net}/${d_sec}) renders ${d_expect}"
     done
 
     E2eSandboxCleanup
+}
+
+_E2eRunPhaseSubshell()
+{
+    local phase_fn="$1"
+    local built_aios="$2"
+    local pty_mode="$3"
+    local pdir="$4"
+
+    mkdir -p "$pdir"
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+    then
+        chmod 755 "$pdir"
+    fi
+    : > "$pdir/cases.tsv"
+    : > "$pdir/events.log"
+    : > "$pdir/fail.log"
+    : > "$pdir/stdout.log"
+    : > "$pdir/stderr.log"
+
+    (
+        trap 'E2eSandboxCleanup' EXIT
+        AIOS_TEST_CASES_FILE="$pdir/cases.tsv"
+        AIOS_TEST_EVENTS_FILE="$pdir/events.log"
+        AIOS_TEST_FAIL_LOG="$pdir/fail.log"
+        PASS_COUNT=0
+        FAIL_COUNT=0
+        SKIP_PLATFORM_COUNT=0
+        SKIP_PRIVILEGE_COUNT=0
+        SKIP_DEPENDENCY_COUNT=0
+
+        "$phase_fn" "$built_aios" "$pty_mode" > "$pdir/stdout.log" 2> "$pdir/stderr.log"
+        {
+            printf 'PHASE_STATUS=DONE\n'
+            printf 'PHASE_PASS=%d\n' "$PASS_COUNT"
+            printf 'PHASE_FAIL=%d\n' "$FAIL_COUNT"
+            printf 'PHASE_SKIP_PLATFORM=%d\n' "$SKIP_PLATFORM_COUNT"
+            printf 'PHASE_SKIP_PRIVILEGE=%d\n' "$SKIP_PRIVILEGE_COUNT"
+            printf 'PHASE_SKIP_DEPENDENCY=%d\n' "$SKIP_DEPENDENCY_COUNT"
+        } > "$pdir/counts.env.tmp"
+        mv -f "$pdir/counts.env.tmp" "$pdir/counts.env"
+    )
+}
+
+_E2eReplayPhaseResult()
+{
+    local phase_name="$1"
+    local pdir="$2"
+    local phase_rc="$3"
+    local PHASE_STATUS="" PHASE_PASS=0 PHASE_FAIL=0 PHASE_SKIP_PLATFORM=0 PHASE_SKIP_PRIVILEGE=0 PHASE_SKIP_DEPENDENCY=0
+    local counts_missing=0
+
+    if [ -f "$pdir/counts.env" ]
+    then
+        # shellcheck disable=SC1091
+        . "$pdir/counts.env"
+    else
+        counts_missing=1
+    fi
+
+    PASS_COUNT=$((PASS_COUNT + PHASE_PASS))
+    FAIL_COUNT=$((FAIL_COUNT + PHASE_FAIL))
+    SKIP_PLATFORM_COUNT=$((SKIP_PLATFORM_COUNT + PHASE_SKIP_PLATFORM))
+    SKIP_PRIVILEGE_COUNT=$((SKIP_PRIVILEGE_COUNT + PHASE_SKIP_PRIVILEGE))
+    SKIP_DEPENDENCY_COUNT=$((SKIP_DEPENDENCY_COUNT + PHASE_SKIP_DEPENDENCY))
+
+    if [ -n "${AIOS_TEST_CASES_FILE:-}" ] && [ -s "$pdir/cases.tsv" ]
+    then
+        cat "$pdir/cases.tsv" >> "$AIOS_TEST_CASES_FILE"
+    fi
+
+    if [ -n "${AIOS_TEST_EVENTS_FILE:-}" ] && [ -s "$pdir/events.log" ]
+    then
+        cat "$pdir/events.log" >> "$AIOS_TEST_EVENTS_FILE"
+    fi
+
+    if [ -n "${AIOS_TEST_FAIL_LOG:-}" ] && [ -s "$pdir/fail.log" ]
+    then
+        cat "$pdir/fail.log" >> "$AIOS_TEST_FAIL_LOG"
+    fi
+
+    if [ -s "$pdir/stdout.log" ]
+    then
+        cat "$pdir/stdout.log"
+    fi
+
+    if [ -s "$pdir/stderr.log" ]
+    then
+        cat "$pdir/stderr.log" >&2
+    fi
+
+    local total_cases=$((PHASE_PASS + PHASE_FAIL + PHASE_SKIP_PLATFORM + PHASE_SKIP_PRIVILEGE + PHASE_SKIP_DEPENDENCY))
+
+    if [ "$phase_rc" -ne 0 ] || [ "$counts_missing" -eq 1 ] || [ "$PHASE_STATUS" != "DONE" ] || [ "$total_cases" -eq 0 ]
+    then
+        local diag=""
+        diag=$(printf '  phase=%s rc=%d counts_missing=%d status=%s total_cases=%d' \
+            "$phase_name" "$phase_rc" "$counts_missing" "${PHASE_STATUS:-MISSING}" "$total_cases")
+        RecordFail "e2e phase ${phase_name}: incomplete or failed execution" "$diag"
+    fi
+}
+
+RunSuiteE2eAios()
+{
+    printf '\n=== Suite: e2e (real generated aios.sh via PTY) ===\n'
+
+    # Build aios.sh into a temporary file so running tests never mutates the repo working tree
+    local e2e_built_aios e2e_build_err e2e_build_rc=0
+    e2e_built_aios=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build.XXXXXX")
+    e2e_build_err=$(mktemp "${TMPDIR:-/tmp}/aios-e2e-build-err.XXXXXX")
+    (
+        set -euo pipefail
+        DEV_PATH="$REPO_ROOT"
+        BUILD_LIBRARY_ONLY=true
+        # shellcheck disable=SC2329
+        Include()
+        {
+            local p="$DEV_PATH" n="$1"
+            while [[ $n =~ \/ ]]
+            do
+                p="$p/${n%%/*}"
+                n="${n#*/}"
+            done
+            shift
+            # shellcheck disable=SC1090
+            . "$p/$n" "$@"
+        }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/ver"
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/env"
+        info="[INFO]"
+        Println()
+        {
+            printf '%b\n' "$*"
+        }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/utils/shfile"
+        Spinner()
+        {
+            shift
+            "$@"
+        }
+        # shellcheck disable=SC1091
+        . "$REPO_ROOT/build"
+        BuildShFile "$e2e_built_aios" > /dev/null
+    ) 2> "$e2e_build_err" || e2e_build_rc=$?
+
+    if [ "$e2e_build_rc" -ne 0 ] || [ -s "$e2e_build_err" ]
+    then
+        local build_detail=""
+        build_detail=$(head -n 20 "$e2e_build_err")
+        RecordFail "e2e: BuildShFile exited ${e2e_build_rc}" "$build_detail"
+        rm -f "$e2e_built_aios" "$e2e_build_err"
+        return 1
+    fi
+    rm -f "$e2e_build_err"
+
+    local syntax_err=""
+
+    if syntax_err=$(bash -n "$e2e_built_aios" 2>&1)
+    then
+        RecordPass "e2e: rebuilt aios.sh passes bash -n"
+    else
+        RecordFail "e2e: rebuilt aios.sh failed bash -n" "$syntax_err"
+        rm -f "$e2e_built_aios"
+        return 1
+    fi
+
+    local dup_funcs
+    dup_funcs=$(grep -E '^[[:space:]]*[A-Za-z_][A-Za-z0-9_:]*\(\)[[:space:]]*$' "$e2e_built_aios" \
+        | sed -E 's/^[[:space:]]+//; s/\(\)[[:space:]]*$//' \
+        | sort | uniq -d)
+    AssertEq "" "$dup_funcs" "e2e: rebuilt aios.sh has zero duplicate function definitions"
+
+    local pty_mode=""
+    [ "$SHOW_OUTPUT" -eq 1 ] && pty_mode="--verbose"
+
+    if [ "${AIOS_TEST_WORKER_JOBS:-1}" -gt 1 ]
+    then
+        local phase_dir x_pid v2_pid x_rc=0 v2_rc=0
+        phase_dir=$(mktemp -d "${TMPDIR:-/tmp}/aios-e2e-phases.XXXXXX")
+
+        if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+        then
+            chmod 755 "$phase_dir"
+        fi
+
+        _E2eRunPhaseSubshell _E2eRunXrayPhase "$e2e_built_aios" "$pty_mode" "$phase_dir/xray" &
+        x_pid=$!
+        _E2eRunPhaseSubshell _E2eRunV2rayPhase "$e2e_built_aios" "$pty_mode" "$phase_dir/v2ray" &
+        v2_pid=$!
+
+        wait "$x_pid" || x_rc=$?
+        wait "$v2_pid" || v2_rc=$?
+
+        _E2eReplayPhaseResult "xray" "$phase_dir/xray" "$x_rc"
+        _E2eReplayPhaseResult "v2ray" "$phase_dir/v2ray" "$v2_rc"
+
+        rm -rf "$phase_dir" "$e2e_built_aios"
+
+        if [ "$x_rc" -ne 0 ] || [ "$v2_rc" -ne 0 ]
+        then
+            return 1
+        fi
+    else
+        _E2eRunXrayPhase "$e2e_built_aios" "$pty_mode"
+        _E2eRunV2rayPhase "$e2e_built_aios" "$pty_mode"
+        rm -f "$e2e_built_aios"
+    fi
 }
