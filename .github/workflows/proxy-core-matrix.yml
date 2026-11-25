@@ -210,11 +210,15 @@ jobs:
               if not os.path.isfile(log_path):
                   errors.append(f"missing log file: {label}")
                   continue
+              matched_pats = set()
               with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
-                  content = fh.read()
-              for pat in forbidden_patterns:
-                  if pat in content:
-                      errors.append(f"forbidden pattern {pat!r} found in {label}")
+                  for lineno, raw_line in enumerate(fh, 1):
+                      if raw_line.startswith("[PASS] "):
+                          continue
+                      for pat in forbidden_patterns:
+                          if pat not in matched_pats and pat in raw_line:
+                              matched_pats.add(pat)
+                              errors.append(f"forbidden pattern {pat!r} found in {label}:{lineno}")
 
           status_label = "PASS" if not errors else "FAIL"
           summary_env = {
@@ -468,8 +472,6 @@ jobs:
                   errors.append(f"expected TOTAL_SKIP_DEPENDENCY=0, got {meta.get('TOTAL_SKIP_DEPENDENCY')}")
 
           if os.path.isfile(log_path):
-              with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
-                  log_content = fh.read()
               forbidden_patterns = (
                   "Reload daemon failed",
                   "Interactive authentication",
@@ -478,9 +480,15 @@ jobs:
                   "[SKIP][privilege]",
                   "[SKIP][dependency]",
               )
-              for pat in forbidden_patterns:
-                  if pat in log_content:
-                      errors.append(f"forbidden pattern {pat!r} found in systemd-test.log")
+              matched_pats = set()
+              with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                  for lineno, raw_line in enumerate(fh, 1):
+                      if raw_line.startswith("[PASS] "):
+                          continue
+                      for pat in forbidden_patterns:
+                          if pat not in matched_pats and pat in raw_line:
+                              matched_pats.add(pat)
+                              errors.append(f"forbidden pattern {pat!r} found in systemd-test.log:{lineno}")
           else:
               errors.append("missing systemd-test.log")
 

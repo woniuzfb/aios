@@ -403,10 +403,19 @@ RunSuiteCoreMatrix()
         then
             expected_cfg_perm="640"
         fi
-        p_cfg=$(stat -f %Lp "$X_CONFIG" 2> /dev/null || stat -c %a "$X_CONFIG" 2> /dev/null || echo "")
-        p_tx=$(stat -f %Lp "$X_TX_STATE" 2> /dev/null || stat -c %a "$X_TX_STATE" 2> /dev/null || echo "")
-        p_meta=$(stat -f %Lp "$X_META" 2> /dev/null || stat -c %a "$X_META" 2> /dev/null || echo "")
-        p_man=$(stat -f %Lp "$PROXY_CORES_MANIFEST" 2> /dev/null || stat -c %a "$PROXY_CORES_MANIFEST" 2> /dev/null || echo "")
+
+        if [ "${AIOS_TEST_HOST_OS:-}" == "mac" ]
+        then
+            p_cfg=$(stat -f %Lp "$X_CONFIG" 2> /dev/null || echo "")
+            p_tx=$(stat -f %Lp "$X_TX_STATE" 2> /dev/null || echo "")
+            p_meta=$(stat -f %Lp "$X_META" 2> /dev/null || echo "")
+            p_man=$(stat -f %Lp "$PROXY_CORES_MANIFEST" 2> /dev/null || echo "")
+        else
+            p_cfg=$(stat -c %a "$X_CONFIG" 2> /dev/null || echo "")
+            p_tx=$(stat -c %a "$X_TX_STATE" 2> /dev/null || echo "")
+            p_meta=$(stat -c %a "$X_META" 2> /dev/null || echo "")
+            p_man=$(stat -c %a "$PROXY_CORES_MANIFEST" 2> /dev/null || echo "")
+        fi
         AssertEq "$expected_cfg_perm" "$p_cfg" "QUAL-05: ProxyConfigTx writes config.json with ${expected_cfg_perm} permissions"
         AssertEq "600" "$p_tx" "QUAL-05: ProxyTxWriteState writes tx_state.json with 0600 permissions"
         AssertEq "600" "$p_meta" "QUAL-05: ProxyCoreSwitch writes meta.json with 0600 permissions"
@@ -665,7 +674,7 @@ RunSuiteCoreMatrix()
             local reg3_out="" reg3_rc=0
             reg3_out=$( { ProxyWriteServiceUnit "xray" && ProxyConfigTx "xray" "$valid_tx_cfg" 1; } 2>&1 ) || reg3_rc=$?
             AssertEq "0" "$reg3_rc" "POLKIT-REG-03: sandbox unit write and ProxyConfigTx succeed via Linux stub"
-            AssertNotContains "$reg3_out" "Reload daemon failed" "POLKIT-REG-03: no host Reload daemon failed error"
+            AssertNotContains "$reg3_out" "Reload daemon failed" "POLKIT-REG-03: sandbox unit write avoids host systemctl reload failure"
             AssertNotContains "$reg3_out" "Interactive authentication required" "POLKIT-REG-03: no Polkit authentication error"
             AssertContains "$(cat "$reg_log")" "daemon-reload" "POLKIT-REG-03: all daemon-reload calls captured by Linux stub"
 
@@ -750,6 +759,7 @@ RunSuiteCoreMatrix()
             # ARCH-01b: jsonv4 <-> jsonv5 bidirectional conversion with tlsSettings <-> securitySettings & regular protocols + real v2ray v5.56.0 test
             local test_crt="$tmpd/arch01.crt" test_key="$tmpd/arch01.key"
             openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout "$test_key" -out "$test_crt" -days 1 -subj "/CN=ws.example.test" > /dev/null 2>&1
+            chmod 644 "$test_crt" "$test_key"
             local bi_v4="$tmpd/bi_src_v4.json" bi_v5="$tmpd/bi_dst_v5.json" bi_rt_v4="$tmpd/bi_rt_v4.json"
             $JQ_FILE -n --arg crt "$test_crt" --arg key "$test_key" '{
                 log: {loglevel: "warning"},

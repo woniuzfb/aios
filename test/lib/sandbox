@@ -151,6 +151,13 @@ do
 done
 MOCKSS
     chmod +x "$E2E_SANDBOX_DIR/bin/ss"
+    chmod 700 "$E2E_SANDBOX_DIR/home"
+
+    if [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+    then
+        chmod 755 "$E2E_SANDBOX_DIR"
+        chmod -R a+rX "$E2E_SANDBOX_DIR/bin" "$E2E_SANDBOX_DIR/aios" "$E2E_SANDBOX_DIR/mock_svc_state"
+    fi
 }
 
 E2eSandboxCleanup()
@@ -166,13 +173,21 @@ E2eLoadFixture()
 {
     local target="$1"
     local fixture_file="$2"
+    local dest_cfg=""
 
     if [ "$target" == "xray" ]
     then
-        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/aios/proxy/xray/config.json"
+        dest_cfg="$E2E_SANDBOX_DIR/aios/proxy/xray/config.json"
+        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$dest_cfg"
     elif [ "$target" == "v2ray" ]
     then
-        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
+        dest_cfg="$E2E_SANDBOX_DIR/aios/proxy/v2ray/config.json"
+        cp "$REPO_ROOT/test/fixtures/$fixture_file" "$dest_cfg"
+    fi
+
+    if [ -n "$dest_cfg" ] && [ "${AIOS_TEST_HOST_OS:-}" == "linux" ] && [ "${AIOS_TEST_IS_ROOT:-0}" == "1" ]
+    then
+        chmod 644 "$dest_cfg"
     fi
 }
 
